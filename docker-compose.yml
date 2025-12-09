@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  line-bot:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - LINE_CHANNEL_SECRET=${LINE_CHANNEL_SECRET}
+      - LINE_CHANNEL_ACCESS_TOKEN=${LINE_CHANNEL_ACCESS_TOKEN}
+      - LIBRETRANSLATE_API_URL=${LIBRETRANSLATE_API_URL}
+      - LIBRETRANSLATE_API_KEY=${LIBRETRANSLATE_API_KEY}
+      - MCP_SERVER_URL=${MCP_SERVER_URL}
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src
+    restart: unless-stopped

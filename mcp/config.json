@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "line-bot-mcp-server": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--network", "host",
+        "line-bot-mcp-server"
+      ],
+      "env": {
+        "LINE_CHANNEL_SECRET": "${LINE_CHANNEL_SECRET}",
+        "LINE_CHANNEL_ACCESS_TOKEN": "${LINE_CHANNEL_ACCESS_TOKEN}"
+      }
+    }
+  }
+}
