@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 @pytest.fixture
 def mock_settings():
     """Mock settings for testing."""
-    with patch('src.main.settings') as mock:
+    with patch("src.main.settings") as mock:
         mock.line_channel_secret = "test_secret"
         mock.line_channel_access_token = "test_token"
         mock.debug = False
@@ -19,6 +19,7 @@ def mock_settings():
 def client(mock_settings):
     """Create a test client."""
     from src.main import app
+
     return TestClient(app)
 
 
@@ -43,16 +44,13 @@ def test_webhook_invalid_signature(client):
     response = client.post(
         "/webhook",
         json={"events": []},
-        headers={"X-Line-Signature": "invalid_signature"}
+        headers={"X-Line-Signature": "invalid_signature"},
     )
     assert response.status_code == 400
 
 
 def test_webhook_missing_signature(client):
     """Test webhook without signature header."""
-    response = client.post(
-        "/webhook",
-        json={"events": []}
-    )
+    response = client.post("/webhook", json={"events": []})
     # Should return 400 for invalid signature
     assert response.status_code == 400
