@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
 import logging
 
 from src.config import settings
@@ -71,7 +71,9 @@ def handle_message(event):
         logger.error(f"Error handling message: {str(e)}")
         line_bot_api.reply_message(
             event.reply_token,
-            TextMessage(text="Sorry, an error occurred while processing your message."),
+            TextSendMessage(
+                text="Sorry, an error occurred while processing your message."
+            ),
         )
 
 
