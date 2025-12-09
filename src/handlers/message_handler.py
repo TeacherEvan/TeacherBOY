@@ -1,10 +1,12 @@
 """Handler for processing incoming LINE text messages."""
 
 import logging
+import asyncio
 from linebot import LineBotApi
-from linebot.models import TextSendMessage
+from linebot.models import TextSendMessage, FlexSendMessage
 
 from src.services.translation_service import translation_service
+from src.utils.flex import create_translation_flex
 
 logger = logging.getLogger(__name__)
 
@@ -12,44 +14,42 @@ logger = logging.getLogger(__name__)
 async def handle_text_message(event, line_bot_api: LineBotApi):
     """
     Handle incoming text messages and provide translation.
-
+    
     Args:
         event: LINE message event
         line_bot_api: LINE Bot API instance
     """
     user_message = event.message.text
     logger.info(f"Received message: {user_message}")
-
+    
     # Auto-translate the message
-    translated_text, detected_lang = await translation_service.auto_translate(
-        user_message
-    )
-
-    if translated_text:
-        # Format response with detected language info
-        lang_name = "Thai" if detected_lang == "th" else "English"
-        target_lang_name = "English" if detected_lang == "th" else "Thai"
-
-        response = f"🌐 Detected: {lang_name}\n📝 {target_lang_name} Translation:\n\n{translated_text}"
-
+    translated_text, detected_lang = await translation_service.auto_translate(user_message)
+    
+    if translated_text and detected_lang:
+        # Create Flex Message
+        target_lang = "en" if detected_lang == "th" else "th"
+        flex_content = create_translation_flex(
+            user_message, 
+            translated_text, 
+            detected_lang, 
+            target_lang
+        )
+        
+        message = FlexSendMessage(
+            alt_text=f"Translation: {translated_text[:20]}...",
+            contents=flex_content
+        )
         logger.info(f"Sending translation: {translated_text}")
     else:
-        response = "Sorry, I couldn't translate your message. Please try again."
+        message = TextSendMessage(text="Sorry, I couldn't translate your message. Please try again.")
         logger.warning("Translation failed")
-
-    # Reply to user
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response))
-
-
-# Synchronous wrapper for the handler (LINE SDK expects sync function)
-def handle_text_message_sync(event, line_bot_api: LineBotApi):
-    """Synchronous wrapper for async handler."""
-    import asyncio
-
+    
+    # Reply to user (Run sync API call in thread pool)
     try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-    loop.run_until_complete(handle_text_message(event, line_bot_api))
+        await asyncio.to_thread(
+            line_bot_api.reply_message,
+            event.reply_token,
+            message
+        )
+    except Exception as e:
+        logger.error(f"Error sending reply: {str(e)}")
