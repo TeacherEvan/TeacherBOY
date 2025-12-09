@@ -1,5 +1,17 @@
 """Init file for handlers module."""
 
-from src.handlers.message_handler import handle_text_message_sync
+from src.handlers.message_handler import (
+    handle_text_message,
+    handle_join_event,
+    handle_leave_event,
+    handle_member_joined_event,
+    handle_member_left_event
+)
 
-__all__ = ["handle_text_message_sync"]
+__all__ = [
+    "handle_text_message",
+    "handle_join_event",
+    "handle_leave_event",
+    "handle_member_joined_event",
+    "handle_member_left_event"
+]

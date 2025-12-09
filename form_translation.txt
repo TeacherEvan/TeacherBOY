@@ -1,0 +1,89 @@
+LINE OFFICIAL ACCOUNT REGISTRATION FORM - TRANSLATION
+====================================================
+
+Field 1: ประเทศที่ใช้บริการ (Country of Service)
+Value shown: ไทย
+Translation: Thailand
+Helper text: คุณสามารถเลือกใช้งานจากส่วนขยายในประเทศไทย
+Translation: You can select to use from the extension in Thailand
+
+Field 2: ข้อมูลบัญชี (Account Information)
+Section header
+
+Field 3: ชื่อบัญชี (Account Name) *Required*
+Value entered: Brown
+Character limit: 5/20
+Helper text: ชื่อที่จะแสดงในการเชื่อมต่อ LINE และบนหน้าจอแชท
+Translation: The name that will be displayed in LINE connections and on the chat screen
+
+Field 4: อีเมล (Email) *Required*
+Value entered: naascascasc dsvvad asadqwc
+Character limit: 27/240
+ERROR MESSAGE (red text): ไม่สามารถใช้อีเมลเดเซตในการส่งสาธารณ อีเมลเดเซตดังกล่าวไม่ถูกต้อง
+Translation: Cannot use disposable email for sending publicly. The disposable email is invalid.
+
+Field 5: ประเทศที่ตั้งบริษัท & ธุรกิจ (Company & Business Location) *Required*
+Value: ไทย (Thailand)
+Helper text: ประเทศที่ตั้งสำนักงานหลักของคุณในการทำธุรกิจในสิ่งผู้ให้บริการนี้งใช้ เพื่อ เราจำนำไปใช้ต้องเป็นกริจกการ
+Translation: The country where your main office is located for conducting business. This information will be used for administrative purposes.
+
+Field 6: ชื่อบริษัท/ธุรกิจ (Company/Business Name)
+Value entered: as
+Character limit: 2/100
+
+Field 7: ประเภทธุรกิจ (Business Type) *Required*
+Left dropdown: เลือกประเภทหลัก (Select main category)
+Right dropdown: เลือกประเภทย่อย (Select sub-category)
+ERROR MESSAGE (red text): โปรดเลือกคำตอบ (Please select an option)
+
+Bottom section:
+ข้อกำหนดการใช้บริการ LINE Official Account
+Translation: Terms of Use for LINE Official Account
+
+LY Corporation นโยบายความเป็นส่วนตัว
+Translation: LY Corporation Privacy Policy
+
+Final text at bottom:
+เมื่อคุณคลิก "ตกลง" หมายความว่าคุณยอมรับข้อกำหนดการใช้บริการและรับทราบนโยบายความเป็นส่วนตัว
+Translation: When you click "OK", it means you accept the terms of service and acknowledge the privacy policy.
+
+====================================================
+WHAT YOU NEED TO FIX:
+====================================================
+
+1. EMAIL FIELD (อีเมล):
+   Problem: "naascascasc dsvvad asadqwc" is detected as a disposable/invalid email
+   Solution: Enter a REAL email address like: ewaldt91@gmail.com or your actual email
+   
+2. BUSINESS TYPE DROPDOWNS (ประเภทธุรกิจ):
+   Problem: Both dropdowns show placeholder text and need selections
+   Solution: 
+   - Left dropdown: Click and select a main category (examples):
+     * บุคคล (Individual/Personal)
+     * การศึกษา (Education)
+     * บริการ (Service)
+     * อื่นๆ (Other)
+   - Right dropdown: After selecting left, pick matching sub-category
+
+3. ACCOUNT NAME (optional improvement):
+   Current: "Brown" (valid but short)
+   Suggestion: Use "TeacherBOY" or "Teacher Brown" (more descriptive)
+
+4. COMPANY NAME (optional):
+   Current: "as" (very short but possibly valid)
+   Suggestion: Use "TeacherBOY Education" or your preferred business name
+
+====================================================
+STEP-BY-STEP TO COMPLETE:
+====================================================
+
+1. Clear the email field completely
+2. Type your REAL email address (e.g., ewaldt91@gmail.com)
+3. Click the LEFT dropdown under "ประเภทธุรกิจ"
+4. Select an appropriate category (suggest: บุคคล or การศึกษา)
+5. Click the RIGHT dropdown
+6. Select any available sub-category
+7. Scroll down and click the green "ตกลง" (OK) button
+8. Proceed to LINE Developers Console to get your tokens
+
+====================================================

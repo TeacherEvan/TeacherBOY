@@ -5,13 +5,37 @@ import httpx
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
-from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage
+
+# LINE Bot SDK v3 imports
+import linebot.v3
+from linebot.v3.webhooks import (
+    MessageEvent,
+    TextMessageContent,
+    JoinEvent,
+    LeaveEvent,
+    MemberJoinedEvent,
+    MemberLeftEvent
+)
+from linebot.v3.messaging import (
+    Configuration,
+    ApiClient,
+    MessagingApi,
+    ReplyMessageRequest,
+    TextMessage,
+    FlexMessage,
+    FlexBubble,
+)
+from linebot.v3.exceptions import InvalidSignatureError
 
 from src.config import settings
 from src.services.translation_service import translation_service
-from src.handlers.message_handler import handle_text_message
+from src.handlers.message_handler import (
+    handle_text_message,
+    handle_join_event,
+    handle_leave_event,
+    handle_member_joined_event,
+    handle_member_left_event
+)
 
 # Configure logging
 logging.basicConfig(
@@ -20,10 +44,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# LINE Bot SDK v3 Configuration
+configuration = Configuration(access_token=settings.line_channel_access_token)
+parser = linebot.v3.WebhookParser(settings.line_channel_secret)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle and resources."""
-    # Startup: Initialize HTTP client
+    # Startup: Initialize HTTP client for translation service
     logger.info("Starting up TeacherBOY...")
     client = httpx.AsyncClient(timeout=30.0)
     translation_service.set_client(client)
@@ -34,6 +63,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down TeacherBOY...")
     await client.aclose()
 
+
 # Initialize FastAPI app
 app = FastAPI(
     title="TeacherBOY - Thai/English Translation Bot",
@@ -41,10 +71,6 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan
 )
-
-# Initialize LINE Bot API
-line_bot_api = LineBotApi(settings.line_channel_access_token)
-handler = WebhookHandler(settings.line_channel_secret)
 
 
 @app.get("/")
@@ -73,18 +99,34 @@ async def webhook(request: Request):
     logger.info("Received webhook request")
     
     try:
-        # Parse events manually to allow async handling
-        # handler.parser is available in standard line-bot-sdk v2/v3
-        events = handler.parser.parse(body_text, signature)
+        # Parse events using v3 SDK (returns list of events)
+        events = parser.parse(body_text, signature)  # type: ignore[union-attr]
 
-        for event in events:
-            if isinstance(event, MessageEvent) and isinstance(event.message, TextMessage):
-                # Handle message asynchronously
-                await handle_text_message(event, line_bot_api)
+        # Create API client for replies
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            
+            for event in events:  # type: ignore[union-attr]
+                if isinstance(event, MessageEvent):
+                    if isinstance(event.message, TextMessageContent):
+                        # Handle text message asynchronously
+                        await handle_text_message(event, line_bot_api)
+                elif isinstance(event, JoinEvent):
+                    # Handle bot joining a group
+                    await handle_join_event(event, line_bot_api)
+                elif isinstance(event, LeaveEvent):
+                    # Handle bot leaving a group
+                    await handle_leave_event(event, line_bot_api)
+                elif isinstance(event, MemberJoinedEvent):
+                    # Handle new member joining
+                    await handle_member_joined_event(event, line_bot_api)
+                elif isinstance(event, MemberLeftEvent):
+                    # Handle member leaving
+                    await handle_member_left_event(event, line_bot_api)
                 
-    except InvalidSignatureError as e:
+    except InvalidSignatureError:
         logger.error("Invalid signature")
-        raise HTTPException(status_code=400, detail="Invalid signature") from e
+        raise HTTPException(status_code=400, detail="Invalid signature")
     except Exception as e:
         logger.error(f"Error handling webhook: {str(e)}")
         return JSONResponse(content={"status": "error", "detail": str(e)}, status_code=500)
