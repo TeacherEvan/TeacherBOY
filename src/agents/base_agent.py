@@ -72,3 +72,7 @@ class BaseAgent(ABC):
         """Disable this agent."""
         self.enabled = False
         logger.warning(f"❌ Disabled {self.name}")
+    
+    def is_enabled(self) -> bool:
+        """Check if this agent is enabled."""
+        return self.enabled

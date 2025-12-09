@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     # Google Cloud Translation API (Primary - Higher Quality)
     google_translate_api_key: Optional[str] = None
 
+    # Google Calendar Configuration
+    google_calendar_group_id: Optional[str] = None  # LINE Group ID for calendar reminders
+    calendar_timezone: str = "Asia/Bangkok"  # Timezone for scheduled reminders
+    calendar_morning_hour: int = 7  # Hour for morning reminder (07:00)
+    calendar_afternoon_hour: int = 14  # Hour for afternoon reminder (14:00)
+
     # Server Configuration
     host: str = "0.0.0.0"
     port: int = 8000

@@ -30,8 +30,10 @@ from linebot.v3.exceptions import InvalidSignatureError
 from src.config import settings
 from src.services.translation_service import translation_service
 from src.services.google_translation import google_translation_service
+from src.services.scheduler_service import scheduler_service
 from src.agents.agent_router import AgentRouter
 from src.agents.translation_agent import TranslationAgent
+from src.agents.calendar_agent import CalendarAgent
 from src.handlers.message_handler import (
     handle_join_event,
     handle_leave_event,
@@ -53,10 +55,16 @@ parser = linebot.v3.WebhookParser(settings.line_channel_secret)
 # Initialize Agent Router (global singleton)
 agent_router = AgentRouter()
 
+# Global references for scheduler callbacks
+calendar_agent: CalendarAgent = None  # type: ignore
+line_bot_api_global: MessagingApi = None  # type: ignore
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle and resources."""
+    global calendar_agent, line_bot_api_global
+    
     # Startup: Initialize HTTP client for translation services
     logger.info("🚀 Starting up TeacherBOY Multi-Agent System...")
     client = httpx.AsyncClient(timeout=30.0)
@@ -77,6 +85,46 @@ async def lifespan(app: FastAPI):
     translation_agent = TranslationAgent()
     agent_router.register_agent(translation_agent)
     
+    # Initialize Calendar Agent if group ID is configured
+    if settings.google_calendar_group_id:
+        calendar_agent = CalendarAgent(group_chat_id=settings.google_calendar_group_id)
+        agent_router.register_agent(calendar_agent)
+        
+        # Create global LINE API client for scheduler callbacks
+        with ApiClient(configuration) as api_client:
+            line_bot_api_global = MessagingApi(api_client)
+        
+        # Start scheduler and add calendar jobs
+        scheduler_service.start()
+        
+        # Schedule morning reminder at 07:00
+        async def morning_reminder():
+            if calendar_agent and line_bot_api_global:
+                await calendar_agent.send_daily_reminder(line_bot_api_global)
+        
+        scheduler_service.add_daily_job(
+            morning_reminder,
+            hour=settings.calendar_morning_hour,
+            minute=0,
+            name="daily_morning_reminder"
+        )
+        
+        # Schedule afternoon overview at 14:00
+        async def afternoon_overview():
+            if calendar_agent and line_bot_api_global:
+                await calendar_agent.send_weekly_overview(line_bot_api_global)
+        
+        scheduler_service.add_daily_job(
+            afternoon_overview,
+            hour=settings.calendar_afternoon_hour,
+            minute=0,
+            name="weekly_afternoon_overview"
+        )
+        
+        logger.info(f"📅 Calendar reminders scheduled: {settings.calendar_morning_hour:02d}:00 and {settings.calendar_afternoon_hour:02d}:00")
+    else:
+        logger.info("📅 Calendar Agent not configured (GOOGLE_CALENDAR_GROUP_ID not set)")
+    
     # Log registered agents
     agents_info = agent_router.list_agents()
     logger.info(f"✅ Registered {len(agents_info)} agent(s):")
@@ -85,8 +133,9 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # Shutdown: Close HTTP client
+    # Shutdown: Stop scheduler and close HTTP client
     logger.info("Shutting down TeacherBOY...")
+    scheduler_service.stop()
     await client.aclose()
 
 
@@ -113,6 +162,42 @@ async def root():
 async def health_check():
     """Health check endpoint for monitoring."""
     return {"status": "healthy"}
+
+
+@app.get("/calendar/test-daily")
+async def test_daily_reminder():
+    """Test endpoint to manually trigger daily reminder (for debugging)."""
+    global calendar_agent, line_bot_api_global
+    
+    if not calendar_agent:
+        return {"status": "error", "message": "Calendar agent not configured"}
+    
+    if not line_bot_api_global:
+        return {"status": "error", "message": "LINE API not initialized"}
+    
+    try:
+        await calendar_agent.send_daily_reminder(line_bot_api_global)
+        return {"status": "ok", "message": "Daily reminder sent"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/calendar/test-weekly")
+async def test_weekly_overview():
+    """Test endpoint to manually trigger weekly overview (for debugging)."""
+    global calendar_agent, line_bot_api_global
+    
+    if not calendar_agent:
+        return {"status": "error", "message": "Calendar agent not configured"}
+    
+    if not line_bot_api_global:
+        return {"status": "error", "message": "LINE API not initialized"}
+    
+    try:
+        await calendar_agent.send_weekly_overview(line_bot_api_global)
+        return {"status": "ok", "message": "Weekly overview sent"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 @app.post("/webhook")
