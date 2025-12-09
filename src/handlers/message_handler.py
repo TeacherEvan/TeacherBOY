@@ -2,6 +2,7 @@
 
 import logging
 import asyncio
+import re
 from linebot.v3.messaging import (
     MessagingApi,
     ReplyMessageRequest,
@@ -11,8 +12,29 @@ from linebot.v3.messaging import (
 )
 
 from src.services.translation_service import translation_service
+from src.services.google_translation import google_translation_service
+from src.services.session_manager import session_manager
 
 logger = logging.getLogger(__name__)
+
+
+def contains_thai(text: str) -> bool:
+    """Check if text contains Thai characters."""
+    return bool(re.search(r'[\u0E00-\u0E7F]', text))
+
+
+def is_exit_command(text: str) -> bool:
+    """Check if text is an exit command (thanks Brown, thank you Brown, etc.)."""
+    text_lower = text.lower().strip()
+    exit_patterns = [
+        r'thanks?\s+brown',
+        r'thank\s+you\s+brown',
+        r'thx\s+brown',
+        r'ty\s+brown',
+        r'ขอบคุณ\s*brown',  # Thai "thank you"
+        r'ขอบใจ\s*brown',    # Thai "thanks"
+    ]
+    return any(re.search(pattern, text_lower) for pattern in exit_patterns)
 
 
 def create_translation_flex_dict(
@@ -117,11 +139,16 @@ async def handle_join_event(event, line_bot_api: MessagingApi):
         logger.info(f"Bot joined unknown chat type: {source_type}")
     
     welcome_text = (
-        "👋 Hello! I'm TeacherBOY 🇹🇭↔️🇬🇧\n\n"
-        "I automatically translate:\n"
-        "• Thai → English\n"
-        "• English → Thai\n\n"
-        "Just send any message and I'll translate it!"
+        "👋 สวัสดีครับ! I'm TeacherBOY 🇹🇭↔️🇬🇧\n\n"
+        "🔥 SMART TRANSLATION MODE:\n"
+        "• Send ANY Thai text → I start translating EVERYTHING\n"
+        "• I translate EVERY message until you say:\n"
+        "  'thanks Brown' or 'ขอบคุณ Brown'\n\n"
+        "📖 How it works:\n"
+        "1. Someone sends Thai → Translation mode ON\n"
+        "2. I translate ALL messages (Thai→EN, EN→TH)\n"
+        "3. Say 'thanks Brown' → I stop\n\n"
+        "Try sending something in Thai now! 🚀"
     )
     
     try:
@@ -169,46 +196,120 @@ async def handle_member_left_event(event, line_bot_api: MessagingApi):
 
 async def handle_text_message(event, line_bot_api: MessagingApi):
     """
-    Handle incoming text messages and provide translation.
+    Handle incoming text messages with smart Thai detection and session management.
+    
+    Features:
+    - Auto-detects Thai characters and starts translation mode
+    - Continuous translation until "thanks Brown" is said  
+    - Uses Google Translate if configured, falls back to LibreTranslate
+    - Sends response as Flex Message
     
     Args:
         event: LINE message event
         line_bot_api: MessagingApi instance (v3)
     """
-    user_message = event.message.text
-    logger.info(f"Received message: {user_message}")
+    text = event.message.text
+    reply_token = event.reply_token
     
-    # Auto-translate the message
-    translated_text, detected_lang = await translation_service.auto_translate(user_message)
-    
-    if translated_text and detected_lang:
-        # Create Flex Message dict
-        target_lang = "en" if detected_lang == "th" else "th"
-        flex_dict = create_translation_flex_dict(
-            user_message, 
-            translated_text, 
-            detected_lang, 
-            target_lang
-        )
-        
-        alt_text = f"Translation: {translated_text[:40]}..."
-        message = FlexMessage(  # type: ignore[call-arg]
-            altText=alt_text, 
-            contents=FlexContainer.from_dict(flex_dict)
-        )
-        logger.info(f"Sending translation: {translated_text}")
+    # Get chat ID (works for 1-on-1, group, and room chats)
+    source = event.source
+    if source.type == "group":
+        chat_id = source.group_id
+    elif source.type == "room":
+        chat_id = source.room_id
     else:
-        message = TextMessage(text="Sorry, I couldn't translate your message. Please try again.")  # type: ignore[call-arg]
-        logger.warning("Translation failed")
+        chat_id = source.user_id
     
-    # Reply to user using v3 SDK
+    logger.info(f"Message from chat {chat_id}: {text[:50]}...")
+    
+    # Check for exit command
+    if is_exit_command(text):
+        if session_manager.is_session_active(chat_id):
+            session_manager.end_session(chat_id)
+            goodbye_messages = [
+                TextMessage(text="ลาก่อน 👋 (Goodbye!)"),  # type: ignore[call-arg]
+                TextMessage(text="Translation mode ended. Send Thai text to start again!")  # type: ignore[call-arg]
+            ]
+            try:
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
+                    ReplyMessageRequest(  # type: ignore[call-arg]
+                        replyToken=reply_token,
+                        messages=goodbye_messages
+                    )
+                )
+                logger.info(f"Ended translation session for chat {chat_id}")
+            except Exception as e:
+                logger.error(f"Error sending goodbye: {str(e)}")
+            return
+        else:
+            # Not in a session, just ignore
+            return
+    
+    # Auto-detect Thai and start session if not active
+    if contains_thai(text) and not session_manager.is_session_active(chat_id):
+        session_manager.start_session(chat_id, source.user_id)
+        logger.info(f"Auto-started translation mode for chat {chat_id} (Thai detected)")
+    
+    # Only translate if session is active
+    if not session_manager.is_session_active(chat_id):
+        # Not in translation mode, ignore silently
+        return
+    
+    # Increment message counter
+    session_manager.increment_message_count(chat_id)
+    
+    # Try Google Translate first, fall back to LibreTranslate
+    translated_text = None
+    source_lang = None
+    
+    if google_translation_service.is_configured():
+        logger.info("Using Google Cloud Translation API")
+        translated_text, source_lang = await google_translation_service.auto_translate(text)
+    
+    if not translated_text:
+        logger.info("Using LibreTranslate (fallback)")
+        translated_text, source_lang = await translation_service.auto_translate(text)
+    
+    if not translated_text or not source_lang:
+        error_msg = TextMessage(text="Sorry, translation failed. Please try again.")  # type: ignore[call-arg]
+        try:
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(  # type: ignore[call-arg]
+                    replyToken=reply_token,
+                    messages=[error_msg]
+                )
+            )
+        except Exception as e:
+            logger.error(f"Error sending error message: {str(e)}")
+        return
+    
+    target_lang = "en" if source_lang == "th" else "th"
+    
+    # Create Flex Message
+    flex_dict = create_translation_flex_dict(
+        original_text=text,
+        translated_text=translated_text,
+        source_lang=source_lang,
+        target_lang=target_lang
+    )
+    
+    # Use FlexContainer.from_dict (SDK v3)
+    flex_container = FlexContainer.from_dict(flex_dict)
+    flex_message = FlexMessage(  # type: ignore[call-arg]
+        altText=f"Translation: {translated_text[:50]}...",
+        contents=flex_container
+    )
+    
     try:
         await asyncio.to_thread(
             line_bot_api.reply_message,
             ReplyMessageRequest(  # type: ignore[call-arg]
-                replyToken=event.reply_token,
-                messages=[message]
+                replyToken=reply_token,
+                messages=[flex_message]
             )
         )
+        logger.info(f"Translation sent: {source_lang} -> {target_lang}")
     except Exception as e:
-        logger.error(f"Error sending reply: {str(e)}")
+        logger.error(f"Error sending translation: {str(e)}")

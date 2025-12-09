@@ -29,8 +29,10 @@ from linebot.v3.exceptions import InvalidSignatureError
 
 from src.config import settings
 from src.services.translation_service import translation_service
+from src.services.google_translation import google_translation_service
+from src.agents.agent_router import AgentRouter
+from src.agents.translation_agent import TranslationAgent
 from src.handlers.message_handler import (
-    handle_text_message,
     handle_join_event,
     handle_leave_event,
     handle_member_joined_event,
@@ -48,14 +50,38 @@ logger = logging.getLogger(__name__)
 configuration = Configuration(access_token=settings.line_channel_access_token)
 parser = linebot.v3.WebhookParser(settings.line_channel_secret)
 
+# Initialize Agent Router (global singleton)
+agent_router = AgentRouter()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle and resources."""
-    # Startup: Initialize HTTP client for translation service
-    logger.info("Starting up TeacherBOY...")
+    # Startup: Initialize HTTP client for translation services
+    logger.info("🚀 Starting up TeacherBOY Multi-Agent System...")
     client = httpx.AsyncClient(timeout=30.0)
     translation_service.set_client(client)
+    
+    # Initialize Google Translate if API key is provided
+    if settings.google_translate_api_key:
+        google_translation_service.api_key = settings.google_translate_api_key
+        google_translation_service.set_client(client)
+        logger.info("✅ Google Cloud Translation API configured (primary)")
+    else:
+        logger.warning("⚠️  Google Translate API key not found - using LibreTranslate only")
+    
+    logger.info("✅ LibreTranslate configured (fallback)")
+    
+    # Register agents
+    logger.info("📋 Registering agents...")
+    translation_agent = TranslationAgent()
+    agent_router.register_agent(translation_agent)
+    
+    # Log registered agents
+    agents_info = agent_router.list_agents()
+    logger.info(f"✅ Registered {len(agents_info)} agent(s):")
+    for agent_info in agents_info:
+        logger.info(f"   - {agent_info['name']}: {agent_info['description']} (priority: {agent_info['priority']})")
     
     yield
     
@@ -109,8 +135,8 @@ async def webhook(request: Request):
             for event in events:  # type: ignore[union-attr]
                 if isinstance(event, MessageEvent):
                     if isinstance(event.message, TextMessageContent):
-                        # Handle text message asynchronously
-                        await handle_text_message(event, line_bot_api)
+                        # Route message to appropriate agent
+                        await agent_router.route_message(event, line_bot_api)
                 elif isinstance(event, JoinEvent):
                     # Handle bot joining a group
                     await handle_join_event(event, line_bot_api)
