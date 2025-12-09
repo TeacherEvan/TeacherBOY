@@ -2,14 +2,21 @@
 
 ## Project Overview
 
-TeacherBOY is a Thai/English automatic translation bot for LINE messaging platform. The bot detects the language of incoming messages and automatically translates between Thai and English.
+TeacherBOY is a **multi-agent LINE bot** with the following capabilities:
+- **Thai/English Translation**: Auto-detects and translates between Thai and English
+- **Google Calendar Reminders**: Scheduled reminders at 07:00 (daily) and 14:00 (weekly)
+
+The bot uses a modular agent-based architecture where each agent handles specific triggers and tasks.
 
 ## Tech Stack
 
 - **Python 3.11**: Primary programming language
 - **FastAPI**: Web framework for handling webhooks
-- **LINE Bot SDK**: Integration with LINE Messaging API
-- **LibreTranslate API**: Translation service
+- **LINE Bot SDK v3**: Integration with LINE Messaging API
+- **Google Cloud Translation API**: Primary translation service
+- **LibreTranslate API**: Fallback translation service
+- **Google Calendar API**: Calendar event fetching
+- **APScheduler**: Background task scheduling
 - **langdetect**: Language detection library
 - **Docker**: Containerization
 - **MCP**: line-bot-mcp-server for Docker integration
@@ -20,14 +27,23 @@ TeacherBOY is a Thai/English automatic translation bot for LINE messaging platfo
 TeacherBOY/
 ├── src/
 │   ├── __init__.py
-│   ├── main.py              # FastAPI application and webhook handling
+│   ├── main.py              # FastAPI app, webhook handling, scheduler setup
 │   ├── config.py            # Configuration and settings
+│   ├── agents/              # Multi-agent system
+│   │   ├── __init__.py
+│   │   ├── base_agent.py       # Abstract base class for agents
+│   │   ├── agent_router.py     # Routes messages to appropriate agent
+│   │   ├── translation_agent.py # Handles Thai/English translation
+│   │   └── calendar_agent.py    # Google Calendar reminders
 │   ├── handlers/
 │   │   ├── __init__.py
-│   │   └── message_handler.py  # LINE message processing
+│   │   └── message_handler.py  # LINE event handlers (join, leave, etc.)
 │   └── services/
 │       ├── __init__.py
-│       └── translation_service.py  # Translation logic
+│       ├── translation_service.py  # LibreTranslate integration
+│       ├── google_translation.py   # Google Cloud Translation
+│       ├── scheduler_service.py    # APScheduler for timed events
+│       └── session_manager.py      # Translation session management
 ├── tests/
 │   ├── __init__.py
 │   ├── test_translation_service.py
@@ -40,6 +56,8 @@ TeacherBOY/
 │   ├── workflows/
 │   │   └── ci.yml           # CI/CD pipeline
 │   └── copilot-instructions.md  # This file
+├── credentials.json         # Google Calendar OAuth credentials (not committed)
+├── token.json               # Google Calendar token (not committed)
 ├── .env.example             # Environment variables template
 ├── requirements.txt         # Python dependencies
 ├── Dockerfile              # Docker image definition
@@ -48,23 +66,39 @@ TeacherBOY/
 
 ## Key Components
 
-### 1. Main Application (`src/main.py`)
+### 1. Agent System (`src/agents/`)
+
+#### BaseAgent (`base_agent.py`)
+- Abstract base class for all agents
+- Methods: `should_handle()`, `handle()`, `get_priority()`
+- Enable/disable functionality
+
+#### AgentRouter (`agent_router.py`)
+- Routes incoming messages to appropriate agent
+- Priority-based selection (lower number = higher priority)
+- Handles agent registration and listing
+
+#### TranslationAgent (`translation_agent.py`) - Priority: 10
+- Triggers: Thai text detected OR active session
+- Features: Session management, exit command ("thanks Brown")
+- Uses Google Translate (primary) or LibreTranslate (fallback)
+
+#### CalendarAgent (`calendar_agent.py`) - Priority: 20
+- Triggers: Scheduled at 07:00 and 14:00 (not user messages)
+- Features: Daily reminders, weekly overview
+- Uses Google Calendar API with OAuth2
+
+### 2. Main Application (`src/main.py`)
 - FastAPI application with webhook endpoint
 - LINE Bot API initialization
-- Health check endpoints
-- Message event handling
+- Agent registration and scheduler setup
+- Health check and test endpoints
 
-### 2. Translation Service (`src/services/translation_service.py`)
-- Language detection using langdetect
-- Translation via LibreTranslate API
-- Auto-detection of Thai/English
-- Async HTTP requests with httpx
-
-### 3. Message Handler (`src/handlers/message_handler.py`)
-- Processes incoming LINE messages
-- Calls translation service
-- Formats response messages
-- Error handling
+### 3. Services (`src/services/`)
+- **translation_service.py**: LibreTranslate API integration
+- **google_translation.py**: Google Cloud Translation API
+- **scheduler_service.py**: APScheduler for timed tasks
+- **session_manager.py**: Translation session state
 
 ## Coding Standards
 
