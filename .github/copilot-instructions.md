@@ -3,6 +3,7 @@
 ## Project Overview
 
 TeacherBOY is a **multi-agent LINE bot** with the following capabilities:
+
 - **Thai/English Translation**: Auto-detects and translates between Thai and English
 - **Google Calendar Reminders**: Scheduled reminders at 07:00 (daily) and 14:00 (weekly)
 
@@ -69,32 +70,38 @@ TeacherBOY/
 ### 1. Agent System (`src/agents/`)
 
 #### BaseAgent (`base_agent.py`)
+
 - Abstract base class for all agents
 - Methods: `should_handle()`, `handle()`, `get_priority()`
 - Enable/disable functionality
 
 #### AgentRouter (`agent_router.py`)
+
 - Routes incoming messages to appropriate agent
 - Priority-based selection (lower number = higher priority)
 - Handles agent registration and listing
 
 #### TranslationAgent (`translation_agent.py`) - Priority: 10
+
 - Triggers: Thai text detected OR active session
 - Features: Session management, exit command ("thanks Brown")
 - Uses Google Translate (primary) or LibreTranslate (fallback)
 
 #### CalendarAgent (`calendar_agent.py`) - Priority: 20
+
 - Triggers: Scheduled at 07:00 and 14:00 (not user messages)
 - Features: Daily reminders, weekly overview
 - Uses Google Calendar API with OAuth2
 
 ### 2. Main Application (`src/main.py`)
+
 - FastAPI application with webhook endpoint
 - LINE Bot API initialization
 - Agent registration and scheduler setup
 - Health check and test endpoints
 
 ### 3. Services (`src/services/`)
+
 - **translation_service.py**: LibreTranslate API integration
 - **google_translation.py**: Google Cloud Translation API
 - **scheduler_service.py**: APScheduler for timed tasks
@@ -103,6 +110,7 @@ TeacherBOY/
 ## Coding Standards
 
 ### Python Style
+
 - Follow PEP 8 style guidelines
 - Use type hints for function parameters and return values
 - Use async/await for I/O operations
@@ -110,18 +118,21 @@ TeacherBOY/
 - Keep functions small and focused
 
 ### Error Handling
+
 - Always log errors with appropriate level
 - Provide user-friendly error messages
 - Never expose sensitive information in errors
 - Use try-except blocks for external API calls
 
 ### Testing
+
 - Write unit tests for all services
 - Use pytest for test framework
 - Mock external API calls
 - Aim for high test coverage
 
 ### Environment Variables
+
 - Never commit `.env` file
 - Update `.env.example` for new variables
 - Use pydantic-settings for configuration
@@ -130,6 +141,7 @@ TeacherBOY/
 ## Development Workflow
 
 ### Local Development
+
 ```bash
 # Set up virtual environment
 python -m venv venv
@@ -143,6 +155,7 @@ python -m src.main
 ```
 
 ### Docker Development
+
 ```bash
 # Build and run with Docker Compose
 docker-compose up --build
@@ -155,6 +168,7 @@ docker-compose down
 ```
 
 ### Testing
+
 ```bash
 # Run all tests
 pytest
@@ -167,6 +181,7 @@ pytest tests/test_translation_service.py
 ```
 
 ### Code Quality
+
 ```bash
 # Format code
 black src/ tests/
@@ -181,6 +196,7 @@ mypy src/
 ## LINE Bot Integration
 
 ### Webhook Flow
+
 1. User sends message to LINE bot
 2. LINE sends POST request to `/webhook`
 3. Signature verification
@@ -189,6 +205,7 @@ mypy src/
 6. Translation returned to user
 
 ### Message Format
+
 - Detection indicator: 🌐 Detected: [Language]
 - Translation label: 📝 [Target Language] Translation:
 - Clear separation between labels and content
@@ -196,11 +213,13 @@ mypy src/
 ## Translation Logic
 
 ### Language Detection
+
 - Uses langdetect library
 - Supports Thai (`th`) and English (`en`)
 - Falls back to English for undetected languages
 
 ### Translation Rules
+
 - Thai → English
 - English → Thai
 - All other languages → Thai (default)
@@ -208,16 +227,19 @@ mypy src/
 ## Security Considerations
 
 ### API Keys
+
 - Store in environment variables only
 - Never log sensitive tokens
 - Use `.env.example` as template
 
 ### Webhook Security
+
 - Validate LINE signature on all webhook requests
 - Return 400 for invalid signatures
 - Log security events
 
 ### Data Privacy
+
 - Don't store user messages
 - Don't log personal information
 - Process messages in memory only
@@ -225,6 +247,7 @@ mypy src/
 ## MCP Integration
 
 The project uses line-bot-mcp-server for Docker MCP integration:
+
 - Configuration in `mcp/config.json`
 - Environment variables passed through Docker
 - Network mode: host for local development
@@ -232,6 +255,7 @@ The project uses line-bot-mcp-server for Docker MCP integration:
 ## Common Tasks
 
 ### Adding a New Feature
+
 1. Update relevant service or handler
 2. Add tests for new functionality
 3. Update documentation
@@ -239,12 +263,14 @@ The project uses line-bot-mcp-server for Docker MCP integration:
 5. Submit PR with description
 
 ### Updating Dependencies
+
 1. Update `requirements.txt`
 2. Rebuild Docker image
 3. Run full test suite
 4. Update documentation if needed
 
 ### Debugging Issues
+
 1. Check application logs
 2. Verify environment variables
 3. Test webhook connectivity
@@ -254,6 +280,7 @@ The project uses line-bot-mcp-server for Docker MCP integration:
 ## CI/CD Pipeline
 
 The GitHub Actions workflow:
+
 - Runs on push and pull requests
 - Executes linting (flake8, black)
 - Runs test suite with coverage
