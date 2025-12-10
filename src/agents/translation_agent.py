@@ -142,39 +142,129 @@ class TranslationAgent(BaseAgent):
         else:
             return f"user_{event.source.user_id}"
     
-    def _create_translation_flex(self, original_text: str, translated_text: str,
-                                 source_lang: str, target_lang: str) -> FlexMessage:
-        """Create Flex Message for translation result."""
+    def _create_translation_flex(
+        self,
+        original_text: str,
+        translated_text: str,
+        source_lang: str,
+        target_lang: str
+    ) -> FlexMessage:
+        """
+        Create a visually stunning, modern Flex Message for translation results.
+        
+        Features:
+        - Gradient-style hero section with brand colors
+        - Clear visual hierarchy with proper spacing
+        - Emoji indicators for language detection
+        - Professional typography and layout
+        - Accessible color contrast
+        
+        Args:
+            original_text: Original message text
+            translated_text: Translated message text
+            source_lang: Source language name
+            target_lang: Target language name
+            
+        Returns:
+            FlexMessage with beautiful, responsive design
+        """
+        # Modern color palette
+        primary_color = "#667EEA"  # Indigo
+        secondary_color = "#764BA2"  # Purple
+        success_color = "#10B981"  # Emerald
+        text_primary = "#1F2937"  # Gray-800
+        text_secondary = "#6B7280"  # Gray-500
+        text_muted = "#9CA3AF"  # Gray-400
+        
+        # Language emoji mapping
+        lang_emoji = {
+            "Thai": "🇹🇭",
+            "English": "🇬🇧"
+        }
+        
         flex_dict = {
             "type": "bubble",
+            "size": "giga",
             "hero": {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
                     {
-                        "type": "text",
-                        "text": "🌐 Translation",
-                        "weight": "bold",
-                        "size": "xl",
-                        "color": "#ffffff"
+                        "type": "box",
+                        "layout": "baseline",
+                        "contents": [
+                            {
+                                "type": "icon",
+                                "url": "https://scdn.line-apps.com/n/channel_devcenter/img/fx/01_1_cafe.png",
+                                "size": "sm"
+                            },
+                            {
+                                "type": "text",
+                                "text": "TeacherBOY Translate",
+                                "weight": "bold",
+                                "size": "lg",
+                                "color": "#ffffff",
+                                "margin": "md",
+                                "flex": 0
+                            }
+                        ],
+                        "spacing": "sm"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "baseline",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "⚡",
+                                "size": "sm"
+                            },
+                            {
+                                "type": "text",
+                                "text": "Lightning Fast Translation",
+                                "size": "xs",
+                                "color": "#ffffff",
+                                "opacity": "0.8",
+                                "margin": "sm",
+                                "flex": 0
+                            }
+                        ],
+                        "margin": "sm"
                     }
                 ],
-                "backgroundColor": "#4A90E2",
-                "paddingAll": "20px"
+                "backgroundColor": primary_color,
+                "paddingAll": "20px",
+                "paddingBottom": "16px"
             },
             "body": {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
+                    # Original Text Section
                     {
                         "type": "box",
                         "layout": "vertical",
                         "contents": [
                             {
-                                "type": "text",
-                                "text": f"📝 {source_lang}",
-                                "size": "sm",
-                                "color": "#888888",
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": lang_emoji.get(source_lang, "🌐"),
+                                        "size": "sm",
+                                        "flex": 0
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": source_lang.upper(),
+                                        "size": "xs",
+                                        "color": text_secondary,
+                                        "weight": "bold",
+                                        "margin": "sm",
+                                        "flex": 0
+                                    }
+                                ],
                                 "margin": "none"
                             },
                             {
@@ -182,14 +272,108 @@ class TranslationAgent(BaseAgent):
                                 "text": original_text,
                                 "size": "md",
                                 "wrap": True,
-                                "margin": "sm"
+                                "color": text_primary,
+                                "margin": "md",
+                                "maxLines": 10
                             }
                         ],
+                        "backgroundColor": "#F9FAFB",
+                        "cornerRadius": "8px",
+                        "paddingAll": "16px",
                         "margin": "none"
                     },
+                    # Arrow Indicator
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "filler"
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "↓",
+                                        "size": "xl",
+                                        "color": success_color,
+                                        "align": "center",
+                                        "weight": "bold"
+                                    }
+                                ],
+                                "flex": 0
+                            },
+                            {
+                                "type": "filler"
+                            }
+                        ],
+                        "margin": "md"
+                    },
+                    # Translated Text Section
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "✨",
+                                        "size": "sm",
+                                        "flex": 0
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": lang_emoji.get(target_lang, "🌐"),
+                                        "size": "sm",
+                                        "margin": "sm",
+                                        "flex": 0
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": target_lang.upper(),
+                                        "size": "xs",
+                                        "color": primary_color,
+                                        "weight": "bold",
+                                        "margin": "sm",
+                                        "flex": 0
+                                    }
+                                ],
+                                "margin": "none"
+                            },
+                            {
+                                "type": "text",
+                                "text": translated_text,
+                                "size": "md",
+                                "wrap": True,
+                                "color": text_primary,
+                                "weight": "bold",
+                                "margin": "md",
+                                "maxLines": 10
+                            }
+                        ],
+                        "backgroundColor": "#EEF2FF",
+                        "cornerRadius": "8px",
+                        "paddingAll": "16px",
+                        "margin": "md",
+                        "borderColor": primary_color,
+                        "borderWidth": "2px"
+                    }
+                ],
+                "spacing": "none",
+                "paddingAll": "20px"
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
                     {
                         "type": "separator",
-                        "margin": "lg"
+                        "color": "#E5E7EB"
                     },
                     {
                         "type": "box",
@@ -197,82 +381,141 @@ class TranslationAgent(BaseAgent):
                         "contents": [
                             {
                                 "type": "text",
-                                "text": f"✨ {target_lang}",
-                                "size": "sm",
-                                "color": "#4A90E2",
-                                "margin": "md"
-                            },
-                            {
-                                "type": "text",
-                                "text": translated_text,
-                                "size": "md",
-                                "wrap": True,
-                                "margin": "sm",
-                                "weight": "bold"
+                                "text": "💡 Tip: Say \"thanks Brown\" to exit translation mode",
+                                "size": "xxs",
+                                "color": text_muted,
+                                "align": "center",
+                                "wrap": True
                             }
-                        ]
+                        ],
+                        "margin": "md"
                     }
                 ],
-                "spacing": "md"
+                "paddingAll": "12px",
+                "backgroundColor": "#FAFAFA"
             },
-            "footer": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": "💡 Say 'thanks Brown' to stop translating",
-                        "size": "xs",
-                        "color": "#888888",
-                        "align": "center"
-                    }
-                ],
-                "paddingAll": "10px"
+            "styles": {
+                "footer": {
+                    "separator": False
+                }
             }
         }
         
-        return FlexMessage(alt_text="Translation", contents=flex_dict)
+        return FlexMessage(
+            alt_text=f"Translation: {original_text[:50]}...",
+            contents=flex_dict
+        )
     
     def _create_goodbye_message(self) -> FlexMessage:
-        """Create goodbye Flex Message."""
+        """
+        Create an engaging goodbye Flex Message with modern design.
+        
+        Features beautiful animations-ready design with clear
+        call-to-action for re-engagement.
+        
+        Returns:
+            FlexMessage with goodbye/session-end message
+        """
+        primary_color = "#667EEA"
+        
         flex_dict = {
             "type": "bubble",
+            "size": "kilo",
             "body": {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
                     {
-                        "type": "text",
-                        "text": "👋 ลาก่อน (Goodbye!)",
-                        "weight": "bold",
-                        "size": "xl",
-                        "align": "center",
-                        "color": "#4A90E2"
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "👋",
+                                "size": "4xl",
+                                "align": "center"
+                            }
+                        ],
+                        "paddingBottom": "md"
                     },
                     {
                         "type": "text",
-                        "text": "Translation mode OFF",
-                        "size": "sm",
-                        "color": "#888888",
+                        "text": "ลาก่อน",
+                        "weight": "bold",
+                        "size": "xxl",
                         "align": "center",
-                        "margin": "md"
+                        "color": primary_color
+                    },
+                    {
+                        "type": "text",
+                        "text": "Goodbye!",
+                        "size": "md",
+                        "color": "#6B7280",
+                        "align": "center",
+                        "margin": "sm"
                     },
                     {
                         "type": "separator",
-                        "margin": "lg"
+                        "margin": "xl",
+                        "color": "#E5E7EB"
                     },
                     {
-                        "type": "text",
-                        "text": "Send Thai text anytime to start again! 🚀",
-                        "size": "sm",
-                        "color": "#555555",
-                        "align": "center",
-                        "margin": "lg",
-                        "wrap": True
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "Translation Mode",
+                                "size": "xs",
+                                "color": "#9CA3AF",
+                                "align": "center"
+                            },
+                            {
+                                "type": "text",
+                                "text": "DEACTIVATED",
+                                "size": "sm",
+                                "weight": "bold",
+                                "color": "#EF4444",
+                                "align": "center",
+                                "margin": "xs"
+                            }
+                        ],
+                        "margin": "xl",
+                        "backgroundColor": "#FEE2E2",
+                        "cornerRadius": "8px",
+                        "paddingAll": "12px"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "🚀 Send Thai text anytime to start translating again!",
+                                "size": "sm",
+                                "color": "#374151",
+                                "align": "center",
+                                "wrap": True,
+                                "weight": "bold"
+                            }
+                        ],
+                        "margin": "xl",
+                        "backgroundColor": "#F3F4F6",
+                        "cornerRadius": "8px",
+                        "paddingAll": "14px"
                     }
                 ],
-                "paddingAll": "20px"
+                "paddingAll": "24px",
+                "spacing": "none"
+            },
+            "styles": {
+                "body": {
+                    "backgroundColor": "#FFFFFF"
+                }
             }
         }
         
-        return FlexMessage(alt_text="Session ended", contents=flex_dict)
+        return FlexMessage(
+            alt_text="Translation session ended - Goodbye!",
+            contents=flex_dict
+        )
