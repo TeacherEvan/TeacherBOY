@@ -14,25 +14,29 @@ from functools import wraps
 logger = logging.getLogger(__name__)
 
 
-def with_retry(max_retries: int = 3, backoff_factor: float = 0.5):
+def with_retry(max_retries: Optional[int] = None, backoff_factor: float = 0.5):
     """
     Decorator for retrying async functions with exponential backoff.
 
     Args:
-        max_retries: Maximum number of retry attempts
+        max_retries: Maximum number of retry attempts (uses settings if None)
         backoff_factor: Multiplier for exponential backoff delay
     """
 
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
+            from src.config import settings
+
+            retries = max_retries if max_retries is not None else settings.translation_max_retries
+
             last_exception = None
-            for attempt in range(max_retries):
+            for attempt in range(retries):
                 try:
                     return await func(*args, **kwargs)
                 except (httpx.HTTPError, asyncio.TimeoutError) as e:
                     last_exception = e
-                    if attempt < max_retries - 1:
+                    if attempt < retries - 1:
                         delay = backoff_factor * (2**attempt)
                         logger.warning(
                             f"Translation attempt {attempt + 1} failed: {e}. "
@@ -40,7 +44,7 @@ def with_retry(max_retries: int = 3, backoff_factor: float = 0.5):
                         )
                         await asyncio.sleep(delay)
                     else:
-                        logger.error(f"Translation failed after {max_retries} attempts: {e}")
+                        logger.error(f"Translation failed after {retries} attempts: {e}")
             raise last_exception
 
         return wrapper
@@ -72,7 +76,7 @@ class GoogleTranslationService:
         """Check if Google Translate API is properly configured."""
         return bool(self.api_key)
 
-    @with_retry(max_retries=3, backoff_factor=0.5)
+    @with_retry()  # Uses settings.translation_max_retries
     async def translate(
         self, text: str, target_lang: str, source_lang: Optional[str] = None
     ) -> Optional[str]:

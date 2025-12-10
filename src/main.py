@@ -7,11 +7,12 @@ high-performance async I/O, and production-ready error handling.
 
 import logging
 import httpx
+from datetime import datetime
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 # LINE Bot SDK v3 imports
 import linebot.v3
@@ -68,9 +69,9 @@ webhook_parser = linebot.v3.WebhookParser(settings.line_channel_secret)
 # ============================================================================
 agent_router = AgentRouter()
 
-# Global references for scheduler callbacks
-calendar_agent_instance: CalendarAgent = None  # type: ignore
-line_bot_api_global: MessagingApi = None  # type: ignore
+# Global references for scheduler callbacks (properly typed)
+calendar_agent_instance: Optional[CalendarAgent] = None
+line_bot_api_global: Optional[MessagingApi] = None
 
 
 def create_optimized_http_client() -> httpx.AsyncClient:
@@ -294,7 +295,7 @@ async def health_check() -> Dict[str, str]:
     Returns HTTP 200 if the service is healthy and ready to serve traffic.
     """
     # TODO: [OPTIMIZATION] Add actual health checks (DB connection, external APIs, etc.)
-    return {"status": "healthy", "timestamp": __import__("datetime").datetime.utcnow().isoformat()}
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.get("/readiness", tags=["Health"])

@@ -60,9 +60,10 @@ class Settings(BaseSettings):
         default=None, description="LibreTranslate API key (optional, for rate limit increases)"
     )
 
-    # Translation caching and retry configuration
+    # Translation Performance Optimization
+    # NOTE: Caching implementation is planned for future release
     translation_cache_ttl_seconds: int = Field(
-        default=3600, ge=0, description="TTL for translation cache in seconds (0 to disable)"
+        default=3600, ge=0, description="TTL for translation cache in seconds (0 to disable) - TODO"
     )
     translation_max_retries: int = Field(
         default=3, ge=0, le=10, description="Maximum retry attempts for failed translation requests"
