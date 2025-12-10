@@ -21,7 +21,7 @@ from linebot.v3.webhooks import (
     JoinEvent,
     LeaveEvent,
     MemberJoinedEvent,
-    MemberLeftEvent
+    MemberLeftEvent,
 )
 from linebot.v3.messaging import (
     Configuration,
@@ -45,7 +45,7 @@ from src.handlers.message_handler import (
     handle_join_event,
     handle_leave_event,
     handle_member_joined_event,
-    handle_member_left_event
+    handle_member_left_event,
 )
 
 # ============================================================================
@@ -53,7 +53,7 @@ from src.handlers.message_handler import (
 # ============================================================================
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -76,27 +76,27 @@ line_bot_api_global: MessagingApi = None  # type: ignore
 def create_optimized_http_client() -> httpx.AsyncClient:
     """
     Create a production-optimized HTTP client with connection pooling.
-    
+
     Features:
     - HTTP/2 support for better performance
     - Connection pooling to reduce latency
     - Configurable timeouts
     - Keep-alive connections
-    
+
     Returns:
         Configured httpx.AsyncClient instance
     """
     client_config = settings.get_http_client_config()
     limits = httpx.Limits(
         max_connections=client_config["limits"]["max_connections"],
-        max_keepalive_connections=client_config["limits"]["max_keepalive_connections"]
+        max_keepalive_connections=client_config["limits"]["max_keepalive_connections"],
     )
-    
+
     return httpx.AsyncClient(
         timeout=client_config["timeout"],
         limits=limits,
         http2=client_config["http2"],
-        follow_redirects=True
+        follow_redirects=True,
     )
 
 
@@ -104,7 +104,7 @@ def create_optimized_http_client() -> httpx.AsyncClient:
 async def lifespan(app: FastAPI):
     """
     Manage application lifecycle with proper resource initialization and cleanup.
-    
+
     This context manager handles:
     - HTTP client pool initialization
     - Translation services setup
@@ -113,11 +113,11 @@ async def lifespan(app: FastAPI):
     - Graceful shutdown
     """
     global calendar_agent_instance, line_bot_api_global
-    
+
     logger.info("=" * 80)
     logger.info("🚀 TeacherBOY Multi-Agent System - Starting Up")
     logger.info("=" * 80)
-    
+
     # ========================================================================
     # PHASE 1: HTTP Client Initialization
     # ========================================================================
@@ -125,7 +125,7 @@ async def lifespan(app: FastAPI):
     http_client_pool = create_optimized_http_client()
     translation_service.set_client(http_client_pool)
     logger.info("✅ HTTP client pool ready with connection pooling enabled")
-    
+
     # ========================================================================
     # PHASE 2: Translation Services Configuration
     # ========================================================================
@@ -135,34 +135,32 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Google Cloud Translation API configured (PRIMARY)")
     else:
         logger.warning("⚠️  Google Translate API not configured - using LibreTranslate only")
-    
+
     logger.info("✅ LibreTranslate configured (FALLBACK)")
-    
+
     # ========================================================================
     # PHASE 3: Agent Registration
     # ========================================================================
     logger.info("📋 Registering intelligent agents...")
-    
+
     # Register Translation Agent (Priority: 10)
     translation_agent = TranslationAgent()
     agent_router.register_agent(translation_agent)
-    
+
     # Register Calendar Agent if configured (Priority: 20)
     if settings.is_calendar_configured():
-        calendar_agent_instance = CalendarAgent(
-            group_chat_id=settings.google_calendar_group_id
-        )
+        calendar_agent_instance = CalendarAgent(group_chat_id=settings.google_calendar_group_id)
         agent_router.register_agent(calendar_agent_instance)
-        
+
         # Initialize global LINE API client for scheduler
         with ApiClient(configuration) as api_client:
             line_bot_api_global = MessagingApi(api_client)
-        
+
         # ====================================================================
         # PHASE 4: Scheduler Configuration
         # ====================================================================
         scheduler_service.start()
-        
+
         # Morning reminder job (07:00 by default)
         async def execute_morning_reminder():
             """Execute daily morning calendar reminder."""
@@ -172,14 +170,14 @@ async def lifespan(app: FastAPI):
                     logger.info("✅ Morning reminder sent successfully")
                 except Exception as e:
                     logger.error(f"❌ Morning reminder failed: {e}", exc_info=True)
-        
+
         scheduler_service.add_daily_job(
             execute_morning_reminder,
             hour=settings.calendar_morning_hour,
             minute=0,
-            name="daily_morning_calendar_reminder"
+            name="daily_morning_calendar_reminder",
         )
-        
+
         # Afternoon overview job (14:00 by default)
         async def execute_afternoon_overview():
             """Execute weekly afternoon calendar overview."""
@@ -189,14 +187,14 @@ async def lifespan(app: FastAPI):
                     logger.info("✅ Afternoon overview sent successfully")
                 except Exception as e:
                     logger.error(f"❌ Afternoon overview failed: {e}", exc_info=True)
-        
+
         scheduler_service.add_daily_job(
             execute_afternoon_overview,
             hour=settings.calendar_afternoon_hour,
             minute=0,
-            name="weekly_afternoon_calendar_overview"
+            name="weekly_afternoon_calendar_overview",
         )
-        
+
         logger.info(
             f"📅 Calendar reminders scheduled: "
             f"{settings.calendar_morning_hour:02d}:00 and "
@@ -204,38 +202,38 @@ async def lifespan(app: FastAPI):
         )
     else:
         logger.info("📅 Calendar Agent not configured (GOOGLE_CALENDAR_GROUP_ID not set)")
-    
+
     # ========================================================================
     # PHASE 5: Startup Summary
     # ========================================================================
     agents_info = agent_router.list_agents()
     logger.info(f"✅ Registered {len(agents_info)} agent(s):")
     for agent_info in agents_info:
-        status = "🟢 ENABLED" if agent_info['enabled'] else "🔴 DISABLED"
+        status = "🟢 ENABLED" if agent_info["enabled"] else "🔴 DISABLED"
         logger.info(
             f"   {status} | {agent_info['name']}: {agent_info['description']} "
             f"(priority: {agent_info['priority']})"
         )
-    
+
     logger.info("=" * 80)
     logger.info("✅ TeacherBOY is READY to serve! 🎉")
     logger.info("=" * 80)
-    
+
     yield
-    
+
     # ========================================================================
     # GRACEFUL SHUTDOWN
     # ========================================================================
     logger.info("=" * 80)
     logger.info("🛑 TeacherBOY - Shutting down gracefully...")
     logger.info("=" * 80)
-    
+
     scheduler_service.stop()
     logger.info("✅ Scheduler stopped")
-    
+
     await http_client_pool.aclose()
     logger.info("✅ HTTP client pool closed")
-    
+
     logger.info("👋 TeacherBOY shutdown complete. Goodbye!")
     logger.info("=" * 80)
 
@@ -267,11 +265,12 @@ if settings.debug:
 # Health Check & Monitoring Endpoints
 # ============================================================================
 
+
 @app.get("/", tags=["Health"])
 async def root() -> Dict[str, Any]:
     """
     Root endpoint with service information.
-    
+
     Returns basic information about the service status and version.
     """
     return {
@@ -282,8 +281,8 @@ async def root() -> Dict[str, Any]:
         "features": {
             "translation": "Thai ↔ English",
             "calendar_reminders": settings.is_calendar_configured(),
-            "google_translate": settings.is_google_translate_configured()
-        }
+            "google_translate": settings.is_google_translate_configured(),
+        },
     }
 
 
@@ -291,25 +290,22 @@ async def root() -> Dict[str, Any]:
 async def health_check() -> Dict[str, str]:
     """
     Kubernetes-style health check endpoint.
-    
+
     Returns HTTP 200 if the service is healthy and ready to serve traffic.
     """
     # TODO: [OPTIMIZATION] Add actual health checks (DB connection, external APIs, etc.)
-    return {
-        "status": "healthy",
-        "timestamp": __import__("datetime").datetime.utcnow().isoformat()
-    }
+    return {"status": "healthy", "timestamp": __import__("datetime").datetime.utcnow().isoformat()}
 
 
 @app.get("/readiness", tags=["Health"])
 async def readiness_check() -> Dict[str, Any]:
     """
     Readiness probe for orchestration systems.
-    
+
     Returns detailed status of critical dependencies.
     """
     agents_status = agent_router.list_agents()
-    
+
     return {
         "ready": True,
         "agents_registered": len(agents_status),
@@ -322,21 +318,22 @@ async def readiness_check() -> Dict[str, Any]:
 # Debug/Testing Endpoints (Calendar)
 # ============================================================================
 
+
 @app.get("/calendar/test-daily", tags=["Debug"])
 async def test_daily_reminder() -> Dict[str, str]:
     """
     Test endpoint to manually trigger daily calendar reminder.
-    
+
     For debugging and testing the calendar integration.
     """
     global calendar_agent_instance, line_bot_api_global
-    
+
     if not calendar_agent_instance:
         raise HTTPException(status_code=503, detail="Calendar agent not configured")
-    
+
     if not line_bot_api_global:
         raise HTTPException(status_code=503, detail="LINE API not initialized")
-    
+
     try:
         await calendar_agent_instance.send_daily_reminder(line_bot_api_global)
         return {"status": "success", "message": "Daily reminder sent"}
@@ -349,17 +346,17 @@ async def test_daily_reminder() -> Dict[str, str]:
 async def test_weekly_overview() -> Dict[str, str]:
     """
     Test endpoint to manually trigger weekly calendar overview.
-    
+
     For debugging and testing the calendar integration.
     """
     global calendar_agent_instance, line_bot_api_global
-    
+
     if not calendar_agent_instance:
         raise HTTPException(status_code=503, detail="Calendar agent not configured")
-    
+
     if not line_bot_api_global:
         raise HTTPException(status_code=503, detail="LINE API not initialized")
-    
+
     try:
         await calendar_agent_instance.send_weekly_overview(line_bot_api_global)
         return {"status": "success", "message": "Weekly overview sent"}
@@ -372,33 +369,34 @@ async def test_weekly_overview() -> Dict[str, str]:
 # LINE Webhook Endpoint
 # ============================================================================
 
+
 @app.post("/webhook", tags=["LINE Bot"])
 async def webhook(request: Request) -> JSONResponse:
     """
     LINE Bot webhook endpoint for receiving messages and events.
-    
+
     This endpoint:
     1. Validates LINE signature for security
     2. Parses incoming events
     3. Routes messages to appropriate agents
     4. Handles group/member events
-    
+
     Args:
         request: FastAPI request object containing LINE webhook data
-        
+
     Returns:
         JSON response with processing status
-        
+
     Raises:
         HTTPException: If signature validation fails
     """
     # Extract signature and body
-    signature = request.headers.get('X-Line-Signature', '')
+    signature = request.headers.get("X-Line-Signature", "")
     body = await request.body()
-    body_text = body.decode('utf-8')
-    
+    body_text = body.decode("utf-8")
+
     logger.info(f"📨 Received webhook request ({len(body_text)} bytes)")
-    
+
     try:
         # Parse and validate events using LINE SDK v3
         events = webhook_parser.parse(body_text, signature)  # type: ignore[union-attr]
@@ -406,7 +404,7 @@ async def webhook(request: Request) -> JSONResponse:
         # Create API client for sending replies
         with ApiClient(configuration) as api_client:
             line_bot_api = MessagingApi(api_client)
-            
+
             # Process each event
             for event in events:  # type: ignore[union-attr]
                 try:
@@ -414,56 +412,48 @@ async def webhook(request: Request) -> JSONResponse:
                         if isinstance(event.message, TextMessageContent):
                             # Route text message to appropriate agent
                             await agent_router.route_message(event, line_bot_api)
-                            
+
                     elif isinstance(event, JoinEvent):
                         # Bot joined a group/room
                         await handle_join_event(event, line_bot_api)
-                        
+
                     elif isinstance(event, LeaveEvent):
                         # Bot left a group/room
                         await handle_leave_event(event, line_bot_api)
-                        
+
                     elif isinstance(event, MemberJoinedEvent):
                         # New member joined group/room
                         await handle_member_joined_event(event, line_bot_api)
-                        
+
                     elif isinstance(event, MemberLeftEvent):
                         # Member left group/room
                         await handle_member_left_event(event, line_bot_api)
-                        
+
                     else:
                         logger.debug(f"Unhandled event type: {type(event).__name__}")
-                        
+
                 except Exception as event_error:
                     logger.error(
                         f"❌ Error processing event {type(event).__name__}: {event_error}",
-                        exc_info=True
+                        exc_info=True,
                     )
                     # Continue processing other events even if one fails
                     continue
-        
+
         return JSONResponse(content={"status": "success", "processed": len(events)})
-                
+
     except InvalidSignatureError:
         logger.error("❌ Invalid LINE signature - possible security threat!")
         raise HTTPException(
-            status_code=400,
-            detail="Invalid signature. Request rejected for security."
+            status_code=400, detail="Invalid signature. Request rejected for security."
         )
-        
+
     except Exception as e:
         logger.error(f"❌ Webhook processing error: {str(e)}", exc_info=True)
-        return JSONResponse(
-            content={"status": "error", "detail": str(e)},
-            status_code=500
-        )
+        return JSONResponse(content={"status": "error", "detail": str(e)}, status_code=500)
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "src.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.debug
-    )
+
+    uvicorn.run("src.main:app", host=settings.host, port=settings.port, reload=settings.debug)

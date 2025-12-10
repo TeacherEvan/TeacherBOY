@@ -5,7 +5,7 @@ from src.handlers.message_handler import (
     handle_join_event,
     handle_leave_event,
     handle_member_joined_event,
-    handle_member_left_event
+    handle_member_left_event,
 )
 
 __all__ = [
@@ -13,5 +13,5 @@ __all__ = [
     "handle_join_event",
     "handle_leave_event",
     "handle_member_joined_event",
-    "handle_member_left_event"
+    "handle_member_left_event",
 ]

@@ -5,4 +5,4 @@ from .translation_agent import TranslationAgent
 from .calendar_agent import CalendarAgent
 from .agent_router import AgentRouter
 
-__all__ = ['BaseAgent', 'TranslationAgent', 'CalendarAgent', 'AgentRouter']
+__all__ = ["BaseAgent", "TranslationAgent", "CalendarAgent", "AgentRouter"]

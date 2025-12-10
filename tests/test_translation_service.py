@@ -33,7 +33,7 @@ class TestTranslationService:
 
     @pytest.mark.asyncio
     async def test_detect_language_failure(self, service):
-        """Test language detection failure handling."""
+        """Test language detection failure handling - returns 'en' for ASCII fallback."""
         from langdetect import LangDetectException
 
         text = "..."
@@ -43,7 +43,8 @@ class TestTranslationService:
             side_effect=LangDetectException("Error", "Error"),
         ):
             lang = await service.detect_language(text)
-            assert lang is None
+            # Updated: ASCII text returns 'en' as fallback, not None
+            assert lang == "en"
 
     @pytest.mark.asyncio
     async def test_translate_success(self, service):

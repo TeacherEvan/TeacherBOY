@@ -11,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 class SchedulerService:
     """Service for managing scheduled background tasks."""
-    
+
     def __init__(self):
         """Initialize the scheduler service."""
         self.scheduler: Optional[AsyncIOScheduler] = None
-        self.timezone = pytz.timezone('Asia/Bangkok')  # Adjust timezone as needed
-    
+        self.timezone = pytz.timezone("Asia/Bangkok")  # Adjust timezone as needed
+
     def start(self):
         """Start the scheduler."""
         if self.scheduler is None:
@@ -25,18 +25,18 @@ class SchedulerService:
             logger.info("✅ Scheduler service started")
         else:
             logger.warning("⚠️  Scheduler already running")
-    
+
     def stop(self):
         """Stop the scheduler."""
         if self.scheduler:
             self.scheduler.shutdown()
             self.scheduler = None
             logger.info("✅ Scheduler service stopped")
-    
+
     def add_daily_job(self, func, hour: int, minute: int, name: str):
         """
         Add a daily scheduled job.
-        
+
         Args:
             func: The async function to execute
             hour: Hour of day (0-23)
@@ -46,20 +46,14 @@ class SchedulerService:
         if not self.scheduler:
             logger.error("❌ Scheduler not started, cannot add job")
             return
-        
+
         try:
             trigger = CronTrigger(hour=hour, minute=minute, timezone=self.timezone)
-            self.scheduler.add_job(
-                func,
-                trigger=trigger,
-                id=name,
-                name=name,
-                replace_existing=True
-            )
+            self.scheduler.add_job(func, trigger=trigger, id=name, name=name, replace_existing=True)
             logger.info(f"✅ Scheduled daily job '{name}' at {hour:02d}:{minute:02d}")
         except Exception as e:
             logger.error(f"❌ Error adding scheduled job '{name}': {e}")
-    
+
     def remove_job(self, name: str):
         """Remove a scheduled job by name."""
         if self.scheduler:
@@ -68,7 +62,7 @@ class SchedulerService:
                 logger.info(f"✅ Removed scheduled job '{name}'")
             except Exception as e:
                 logger.error(f"❌ Error removing job '{name}': {e}")
-    
+
     def list_jobs(self):
         """List all scheduled jobs."""
         if self.scheduler:
