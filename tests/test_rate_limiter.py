@@ -1,6 +1,5 @@
 """Unit tests for rate limiter service."""
 
-import pytest
 from datetime import datetime, timedelta
 from src.services.rate_limiter import RateLimiter
 
