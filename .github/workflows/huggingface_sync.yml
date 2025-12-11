@@ -18,4 +18,4 @@ jobs:
             - name: Push to hub
               env:
                   HF_TOKEN: ${{ secrets.HF_TOKEN }}
-              run: git push https://TeacherEvan:$HF_TOKEN@huggingface.co/spaces/TeacherEvan/TeacherBOY main
+              run: git push https://TeacherEvan:$HF_TOKEN@huggingface.co/spaces/EvilEvan/TeacherBOY main
