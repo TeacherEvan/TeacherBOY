@@ -11,17 +11,23 @@ logger = logging.getLogger(__name__)
 class SessionManager:
     """Manages translation session state for chats with deduplication."""
 
-    def __init__(self):
+    def __init__(self, dedup_window_seconds: int = 60, max_history_size: int = 50):
+        """
+        Initialize session manager.
+        
+        Args:
+            dedup_window_seconds: Time window for duplicate detection (default: 60s)
+            max_history_size: Maximum messages to track per chat (default: 50)
+        """
         # Dictionary: {chat_id: {user_id, started_at, message_count}}
         self._active_sessions: Dict[str, dict] = {}
         # Set of chat IDs where translation is always on
         self._always_on_chats: Set[str] = set()
         # Message deduplication: {chat_id: [(message_hash, timestamp), ...]}
         self._message_history: Dict[str, List[Tuple[str, datetime]]] = {}
-        # Keep last 50 messages per chat for deduplication
-        self._max_history_size = 50
-        # Consider messages duplicate if within 60 seconds
-        self._dedup_window_seconds = 60
+        # Configuration
+        self._max_history_size = max_history_size
+        self._dedup_window_seconds = dedup_window_seconds
 
     def is_session_active(self, chat_id: str) -> bool:
         """Check if translation session is active for a chat."""

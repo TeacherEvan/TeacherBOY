@@ -39,14 +39,13 @@ class TestSessionManagerDeduplication:
         assert manager.is_duplicate_message(chat_id, "Message 2") is False
         assert manager.is_duplicate_message(chat_id, "Message 3") is False
 
-    def test_duplicate_expires_after_window(self, manager):
+    def test_duplicate_expires_after_window(self):
         """Test that duplicate detection expires after time window."""
         import time
+        # Create manager with 1-second window for testing
+        manager = SessionManager(dedup_window_seconds=1)
         chat_id = "test_chat_4"
         text = "Test message"
-        
-        # Reduce dedup window for testing
-        manager._dedup_window_seconds = 1
         
         # First message
         assert manager.is_duplicate_message(chat_id, text) is False
@@ -85,10 +84,11 @@ class TestSessionManagerDeduplication:
         # Same message should not be duplicate after clearing
         assert manager.is_duplicate_message(chat_id, text) is False
 
-    def test_history_size_limit(self, manager):
+    def test_history_size_limit(self):
         """Test that history is limited to max size."""
+        # Create manager with small history size for testing
+        manager = SessionManager(max_history_size=5)
         chat_id = "test_chat_8"
-        manager._max_history_size = 5
         
         # Add more messages than max size
         for i in range(10):
