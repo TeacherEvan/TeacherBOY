@@ -1,20 +1,27 @@
 """Session state management for tracking active translation sessions."""
 
 import logging
-from typing import Dict, Set
+import hashlib
+from typing import Dict, Set, List, Tuple
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
 
 class SessionManager:
-    """Manages translation session state for chats."""
+    """Manages translation session state for chats with deduplication."""
 
     def __init__(self):
         # Dictionary: {chat_id: {user_id, started_at, message_count}}
         self._active_sessions: Dict[str, dict] = {}
         # Set of chat IDs where translation is always on
         self._always_on_chats: Set[str] = set()
+        # Message deduplication: {chat_id: [(message_hash, timestamp), ...]}
+        self._message_history: Dict[str, List[Tuple[str, datetime]]] = {}
+        # Keep last 50 messages per chat for deduplication
+        self._max_history_size = 50
+        # Consider messages duplicate if within 60 seconds
+        self._dedup_window_seconds = 60
 
     def is_session_active(self, chat_id: str) -> bool:
         """Check if translation session is active for a chat."""
@@ -71,6 +78,74 @@ class SessionManager:
         """Remove always-on status from a chat."""
         self._always_on_chats.discard(chat_id)
         logger.info(f"Removed always-on status from chat {chat_id}")
+
+    def _hash_message(self, text: str) -> str:
+        """
+        Create a hash of message text for deduplication.
+        
+        Args:
+            text: Message text to hash
+            
+        Returns:
+            SHA256 hash of the message (first 16 chars for efficiency)
+        """
+        return hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]
+
+    def is_duplicate_message(self, chat_id: str, text: str) -> bool:
+        """
+        Check if message is a duplicate (same content within dedup window).
+        
+        Args:
+            chat_id: Chat identifier
+            text: Message text to check
+            
+        Returns:
+            True if message is a duplicate, False otherwise
+        """
+        now = datetime.now()
+        message_hash = self._hash_message(text)
+        
+        # Initialize history for new chats
+        if chat_id not in self._message_history:
+            self._message_history[chat_id] = []
+        
+        # Clean up old messages outside dedup window
+        cutoff_time = now - timedelta(seconds=self._dedup_window_seconds)
+        self._message_history[chat_id] = [
+            (hash_val, ts) 
+            for hash_val, ts in self._message_history[chat_id] 
+            if ts > cutoff_time
+        ]
+        
+        # Check for duplicate
+        for hash_val, timestamp in self._message_history[chat_id]:
+            if hash_val == message_hash:
+                age_seconds = (now - timestamp).total_seconds()
+                logger.warning(
+                    f"🔁 Duplicate message detected in chat {chat_id} "
+                    f"(last seen {age_seconds:.1f}s ago)"
+                )
+                return True
+        
+        # Not a duplicate - record this message
+        self._message_history[chat_id].append((message_hash, now))
+        
+        # Trim history to max size (keep most recent)
+        if len(self._message_history[chat_id]) > self._max_history_size:
+            self._message_history[chat_id] = self._message_history[chat_id][-self._max_history_size:]
+        
+        return False
+
+    def clear_message_history(self, chat_id: str):
+        """
+        Clear message history for a chat.
+        
+        Args:
+            chat_id: Chat identifier
+        """
+        if chat_id in self._message_history:
+            del self._message_history[chat_id]
+            logger.info(f"🧹 Cleared message history for chat {chat_id}")
 
 
 # Singleton instance

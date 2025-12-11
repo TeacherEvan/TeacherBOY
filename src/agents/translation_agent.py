@@ -14,6 +14,7 @@ from .base_agent import BaseAgent
 from src.services.translation_service import translation_service
 from src.services.google_translation import google_translation_service
 from src.services.session_manager import session_manager
+from src.services.rate_limiter import rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,22 @@ class TranslationAgent(BaseAgent):
                     ReplyMessageRequest(reply_token=event.reply_token, messages=[goodbye_message])
                 )
                 logger.info(f"✅ Translation session ended for chat {chat_id}")
+                return True
+
+            # Check for rate limiting
+            if not rate_limiter.is_allowed(chat_id):
+                reset_seconds = rate_limiter.get_reset_time(chat_id)
+                rate_limit_message = self._create_rate_limit_message(reset_seconds)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(reply_token=event.reply_token, messages=[rate_limit_message])
+                )
+                logger.warning(f"⚠️  Rate limited chat {chat_id}")
+                return True
+
+            # Check for duplicate message
+            if session_manager.is_duplicate_message(chat_id, text):
+                logger.info(f"🔁 Skipping duplicate message in chat {chat_id}")
+                # Silently skip duplicate - no need to reply
                 return True
 
             # Start session if Thai detected
@@ -467,3 +484,96 @@ class TranslationAgent(BaseAgent):
         }
 
         return FlexMessage(alt_text="Translation session ended - Goodbye!", contents=flex_dict)
+
+    def _create_rate_limit_message(self, reset_seconds: int) -> FlexMessage:
+        """
+        Create a friendly rate limit notification Flex Message.
+        
+        Args:
+            reset_seconds: Seconds until rate limit resets
+            
+        Returns:
+            FlexMessage with rate limit notification
+        """
+        warning_color = "#F59E0B"  # Amber
+        
+        flex_dict = {
+            "type": "bubble",
+            "size": "kilo",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {"type": "text", "text": "⏳", "size": "4xl", "align": "center"}
+                        ],
+                        "paddingBottom": "md",
+                    },
+                    {
+                        "type": "text",
+                        "text": "Rate Limit Reached",
+                        "weight": "bold",
+                        "size": "xl",
+                        "align": "center",
+                        "color": warning_color,
+                    },
+                    {
+                        "type": "text",
+                        "text": "คุณแปลเร็วเกินไปค่ะ!",
+                        "size": "sm",
+                        "color": "#6B7280",
+                        "align": "center",
+                        "margin": "sm",
+                    },
+                    {"type": "separator", "margin": "xl", "color": "#E5E7EB"},
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": f"Please wait {reset_seconds} seconds",
+                                "size": "sm",
+                                "color": "#374151",
+                                "align": "center",
+                                "wrap": True,
+                            },
+                            {
+                                "type": "text",
+                                "text": "กรุณารอสักครู่นะคะ 😊",
+                                "size": "xs",
+                                "color": "#9CA3AF",
+                                "align": "center",
+                                "margin": "sm",
+                            },
+                        ],
+                        "margin": "xl",
+                        "backgroundColor": "#FEF3C7",
+                        "cornerRadius": "8px",
+                        "paddingAll": "14px",
+                    },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "💡 Limit: 10 translations per minute",
+                                "size": "xxs",
+                                "color": "#9CA3AF",
+                                "align": "center",
+                            }
+                        ],
+                        "margin": "xl",
+                    },
+                ],
+                "paddingAll": "24px",
+                "spacing": "none",
+            },
+            "styles": {"body": {"backgroundColor": "#FFFFFF"}},
+        }
+        
+        return FlexMessage(alt_text="Rate limit reached - please wait", contents=flex_dict)
