@@ -101,6 +101,11 @@ class RateLimiter:
             logger.info(f"🔄 Rate limit reset for chat {chat_id}")
 
 
-# Singleton instance with production-safe defaults
-# 10 requests per 60 seconds = reasonable for interactive translation
-rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
+# Singleton instance with configurable defaults from settings
+# This is initialized here, but can be reconfigured in main.py if needed
+from src.config import settings
+
+rate_limiter = RateLimiter(
+    max_requests=settings.rate_limit_max_requests,
+    window_seconds=settings.rate_limit_window_seconds,
+)

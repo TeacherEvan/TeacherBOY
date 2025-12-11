@@ -143,10 +143,6 @@ async def lifespan(app: FastAPI):
         )
         bot_user_id = None
 
-    logger.info("=" * 80)
-    logger.info("🚀 TeacherBOY Multi-Agent System - Starting Up")
-    logger.info("=" * 80)
-
     # ========================================================================
     # PHASE 1: HTTP Client Initialization
     # ========================================================================

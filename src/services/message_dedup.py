@@ -34,8 +34,9 @@ class MessageDeduplicator:
         """
         Check if a message is a duplicate within the TTL window.
 
-        Uses MD5 hash for efficient message comparison while protecting
-        user privacy (we don't store actual message content).
+        Uses SHA-256 hash for efficient message comparison while protecting
+        user privacy (we don't store actual message content). SHA-256 provides
+        better collision resistance than MD5.
 
         Args:
             chat_id: Unique identifier for the chat/group
@@ -44,8 +45,8 @@ class MessageDeduplicator:
         Returns:
             True if message is a duplicate, False if it's new
         """
-        # Create a short hash of the message (16 chars is sufficient for collision resistance)
-        msg_hash = hashlib.md5(text.encode()).hexdigest()[:16]
+        # Create a hash of the message (16 chars is sufficient for collision resistance)
+        msg_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
         now = datetime.now()
 
         # Clean up expired entries for this chat
@@ -108,6 +109,8 @@ class MessageDeduplicator:
             )
 
 
-# Singleton instance with 60-second TTL
-# This prevents duplicate translations within 1 minute
-message_dedup = MessageDeduplicator(ttl_seconds=60)
+# Singleton instance with configurable TTL from settings
+# This is initialized here, but can be reconfigured in main.py if needed
+from src.config import settings
+
+message_dedup = MessageDeduplicator(ttl_seconds=settings.message_dedup_ttl_seconds)
