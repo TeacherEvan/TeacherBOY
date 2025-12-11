@@ -91,7 +91,7 @@ class TranslationAgent(BaseAgent):
                         reply_token=event.reply_token, messages=[rate_limit_msg]
                     )
                 )
-                return False
+                return True
 
             # ================================================================
             # SAFETY CHECK 2: Message Deduplication
