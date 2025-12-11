@@ -148,7 +148,8 @@ class TestMessageDeduplicator:
     def test_singleton_import(self):
         """Test that singleton instance can be imported."""
         from src.services.message_dedup import message_dedup
+        from src.config import settings
 
         assert message_dedup is not None
         assert isinstance(message_dedup, MessageDeduplicator)
-        assert message_dedup.ttl == timedelta(seconds=60)
+        assert message_dedup.ttl == timedelta(seconds=settings.message_dedup_ttl_seconds)
