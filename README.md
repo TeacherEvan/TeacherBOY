@@ -1,3 +1,12 @@
+---
+title: TeacherBOY
+emoji: 👨‍🏫
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 8000
+---
+
 # TeacherBOY 👨‍🏫
 
 **SMOOTH automatic Thai - English translator with Multi-Agent Architecture for LINE.**
