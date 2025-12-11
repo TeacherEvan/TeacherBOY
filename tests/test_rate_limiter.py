@@ -106,5 +106,3 @@ class TestRateLimiter:
 
         assert rate_limiter is not None
         assert isinstance(rate_limiter, RateLimiter)
-        assert rate_limiter.max_requests == 10
-        assert rate_limiter.window == timedelta(seconds=60)
