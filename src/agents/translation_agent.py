@@ -36,30 +36,57 @@ class TranslationAgent(BaseAgent):
         """Check if text contains Thai characters."""
         return bool(re.search(r"[\u0E00-\u0E7F]", text))
 
-    def is_exit_command(self, text: str) -> bool:
-        """Check if text is an exit command."""
+    def is_sleep_command(self, text: str) -> bool:
+        """
+        Check if text is a sleep command (puts bot to sleep for 24 hours).
+
+        Sleep patterns: "Thank you TeacherBoy", "Thanks TeacherBoy", etc.
+        """
         text_lower = text.lower().strip()
-        exit_patterns = [
-            r"thanks?\s+brown",
-            r"thank\s+you\s+brown",
-            r"thx\s+brown",
-            r"ty\s+brown",
-            r"ขอบคุณ\s*brown",
-            r"ขอบใจ\s*brown",
+        sleep_patterns = [
+            r"^thanks?\s+teacherboy$",
+            r"^thank\s+you\s+teacherboy$",
+            r"^thx\s+teacherboy$",
+            r"^ty\s+teacherboy$",
+            r"^ขอบคุณ\s*teacherboy$",
+            r"^ขอบใจ\s*teacherboy$",
         ]
-        return any(re.search(pattern, text_lower) for pattern in exit_patterns)
+        return any(re.search(pattern, text_lower) for pattern in sleep_patterns)
+
+    def is_wake_command(self, text: str) -> bool:
+        """
+        Check if text is a wake command (wakes bot from sleep).
+
+        Wake pattern: "TeacherBoy" alone (exact match, not among other text)
+        """
+        text_lower = text.lower().strip()
+        return text_lower == "teacherboy"
+
+    def is_exit_command(self, text: str) -> bool:
+        """Check if text is an exit command (ends session but doesn't sleep)."""
+        # Sleep command is now the primary way to exit
+        return self.is_sleep_command(text)
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
         Handle if:
-        1. Thai text detected (auto-start session)
-        2. Session is active for this chat
-        3. Exit command (to properly close session)
+        1. Wake command when sleeping (to reactivate)
+        2. Thai text detected (auto-start session)
+        3. Session is active for this chat
+        4. Sleep command (to properly put bot to sleep)
         """
         chat_id = self._get_chat_id(event)
 
-        # Always handle exit commands if session is active
-        if self.is_exit_command(text):
+        # Always handle wake command when sleeping
+        if self.is_wake_command(text) and session_manager.is_sleeping(chat_id):
+            return True
+
+        # Don't handle anything else if sleeping
+        if session_manager.is_sleeping(chat_id):
+            return False
+
+        # Always handle sleep commands if session is active
+        if self.is_sleep_command(text):
             return session_manager.is_session_active(chat_id)
 
         # Handle if Thai detected or session is active
@@ -71,15 +98,24 @@ class TranslationAgent(BaseAgent):
         user_id = event.source.user_id
 
         try:
-            # Handle exit command
-            if self.is_exit_command(text):
-                session_manager.end_session(chat_id)
-                goodbye_message = self._create_goodbye_message()
-
+            # Handle wake command (when sleeping)
+            if self.is_wake_command(text) and session_manager.is_sleeping(chat_id):
+                session_manager.wake_chat(chat_id)
+                wake_message = self._create_wake_message()
                 line_bot_api.reply_message(
-                    ReplyMessageRequest(reply_token=event.reply_token, messages=[goodbye_message])
+                    ReplyMessageRequest(reply_token=event.reply_token, messages=[wake_message])
                 )
-                logger.info(f"✅ Translation session ended for chat {chat_id}")
+                logger.info(f"☀️ Chat {chat_id} woken up by user")
+                return True
+
+            # Handle sleep command
+            if self.is_sleep_command(text):
+                session_manager.sleep_chat(chat_id, hours=24)
+                sleep_message = self._create_sleep_message()
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(reply_token=event.reply_token, messages=[sleep_message])
+                )
+                logger.info(f"😴 Chat {chat_id} put to sleep for 24 hours")
                 return True
 
             # Check for rate limiting
@@ -87,7 +123,9 @@ class TranslationAgent(BaseAgent):
                 reset_seconds = rate_limiter.get_reset_time(chat_id)
                 rate_limit_message = self._create_rate_limit_message(reset_seconds)
                 line_bot_api.reply_message(
-                    ReplyMessageRequest(reply_token=event.reply_token, messages=[rate_limit_message])
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token, messages=[rate_limit_message]
+                    )
                 )
                 logger.warning(f"⚠️  Rate limited chat {chat_id}")
                 return True
@@ -369,7 +407,7 @@ class TranslationAgent(BaseAgent):
                         "contents": [
                             {
                                 "type": "text",
-                                "text": '💡 Tip: Say "thanks Brown" to exit translation mode',
+                                "text": '💡 Tip: Say "Thank you TeacherBoy" to sleep for 24h',
                                 "size": "xxs",
                                 "color": text_muted,
                                 "align": "center",
@@ -488,15 +526,15 @@ class TranslationAgent(BaseAgent):
     def _create_rate_limit_message(self, reset_seconds: int) -> FlexMessage:
         """
         Create a friendly rate limit notification Flex Message.
-        
+
         Args:
             reset_seconds: Seconds until rate limit resets
-            
+
         Returns:
             FlexMessage with rate limit notification
         """
         warning_color = "#F59E0B"  # Amber
-        
+
         flex_dict = {
             "type": "bubble",
             "size": "kilo",
@@ -575,5 +613,199 @@ class TranslationAgent(BaseAgent):
             },
             "styles": {"body": {"backgroundColor": "#FFFFFF"}},
         }
-        
+
         return FlexMessage(alt_text="Rate limit reached - please wait", contents=flex_dict)
+
+    def _create_sleep_message(self) -> FlexMessage:
+        """
+        Create a sleep notification Flex Message.
+
+        Shows that the bot is going to sleep for 24 hours and how to wake it.
+
+        Returns:
+            FlexMessage with sleep notification
+        """
+        sleep_color = "#6366F1"  # Indigo
+
+        flex_dict = {
+            "type": "bubble",
+            "size": "kilo",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {"type": "text", "text": "😴", "size": "4xl", "align": "center"}
+                        ],
+                        "paddingBottom": "md",
+                    },
+                    {
+                        "type": "text",
+                        "text": "ราตรีสวัสดิ์",
+                        "weight": "bold",
+                        "size": "xxl",
+                        "align": "center",
+                        "color": sleep_color,
+                    },
+                    {
+                        "type": "text",
+                        "text": "Good Night!",
+                        "size": "md",
+                        "color": "#6B7280",
+                        "align": "center",
+                        "margin": "sm",
+                    },
+                    {"type": "separator", "margin": "xl", "color": "#E5E7EB"},
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "TeacherBOY",
+                                "size": "xs",
+                                "color": "#9CA3AF",
+                                "align": "center",
+                            },
+                            {
+                                "type": "text",
+                                "text": "SLEEPING FOR 24 HOURS",
+                                "size": "sm",
+                                "weight": "bold",
+                                "color": sleep_color,
+                                "align": "center",
+                                "margin": "xs",
+                            },
+                        ],
+                        "margin": "xl",
+                        "backgroundColor": "#EEF2FF",
+                        "cornerRadius": "8px",
+                        "paddingAll": "12px",
+                    },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": '☀️ Say "TeacherBoy" to wake me up anytime!',
+                                "size": "sm",
+                                "color": "#374151",
+                                "align": "center",
+                                "wrap": True,
+                                "weight": "bold",
+                            }
+                        ],
+                        "margin": "xl",
+                        "backgroundColor": "#F3F4F6",
+                        "cornerRadius": "8px",
+                        "paddingAll": "14px",
+                    },
+                ],
+                "paddingAll": "24px",
+                "spacing": "none",
+            },
+            "styles": {"body": {"backgroundColor": "#FFFFFF"}},
+        }
+
+        return FlexMessage(alt_text="TeacherBOY sleeping for 24 hours", contents=flex_dict)
+
+    def _create_wake_message(self) -> FlexMessage:
+        """
+        Create a wake notification Flex Message.
+
+        Shows that the bot is now awake and ready to translate.
+
+        Returns:
+            FlexMessage with wake notification
+        """
+        wake_color = "#10B981"  # Emerald
+
+        flex_dict = {
+            "type": "bubble",
+            "size": "kilo",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {"type": "text", "text": "☀️", "size": "4xl", "align": "center"}
+                        ],
+                        "paddingBottom": "md",
+                    },
+                    {
+                        "type": "text",
+                        "text": "สวัสดี!",
+                        "weight": "bold",
+                        "size": "xxl",
+                        "align": "center",
+                        "color": wake_color,
+                    },
+                    {
+                        "type": "text",
+                        "text": "Good Morning!",
+                        "size": "md",
+                        "color": "#6B7280",
+                        "align": "center",
+                        "margin": "sm",
+                    },
+                    {"type": "separator", "margin": "xl", "color": "#E5E7EB"},
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "TeacherBOY",
+                                "size": "xs",
+                                "color": "#9CA3AF",
+                                "align": "center",
+                            },
+                            {
+                                "type": "text",
+                                "text": "AWAKE & READY!",
+                                "size": "sm",
+                                "weight": "bold",
+                                "color": wake_color,
+                                "align": "center",
+                                "margin": "xs",
+                            },
+                        ],
+                        "margin": "xl",
+                        "backgroundColor": "#D1FAE5",
+                        "cornerRadius": "8px",
+                        "paddingAll": "12px",
+                    },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "🚀 Send Thai text to start translating!",
+                                "size": "sm",
+                                "color": "#374151",
+                                "align": "center",
+                                "wrap": True,
+                                "weight": "bold",
+                            }
+                        ],
+                        "margin": "xl",
+                        "backgroundColor": "#F3F4F6",
+                        "cornerRadius": "8px",
+                        "paddingAll": "14px",
+                    },
+                ],
+                "paddingAll": "24px",
+                "spacing": "none",
+            },
+            "styles": {"body": {"backgroundColor": "#FFFFFF"}},
+        }
+
+        return FlexMessage(alt_text="TeacherBOY is awake!", contents=flex_dict)

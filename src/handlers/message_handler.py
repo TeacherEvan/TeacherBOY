@@ -23,18 +23,28 @@ def contains_thai(text: str) -> bool:
     return bool(re.search(r"[\u0E00-\u0E7F]", text))
 
 
-def is_exit_command(text: str) -> bool:
-    """Check if text is an exit command (thanks Brown, thank you Brown, etc.)."""
+def is_sleep_command(text: str) -> bool:
+    """Check if text is a sleep command (Thank you TeacherBoy, etc.)."""
     text_lower = text.lower().strip()
-    exit_patterns = [
-        r"thanks?\s+brown",
-        r"thank\s+you\s+brown",
-        r"thx\s+brown",
-        r"ty\s+brown",
-        r"ขอบคุณ\s*brown",  # Thai "thank you"
-        r"ขอบใจ\s*brown",  # Thai "thanks"
+    sleep_patterns = [
+        r"^thanks?\s+teacherboy$",
+        r"^thank\s+you\s+teacherboy$",
+        r"^thx\s+teacherboy$",
+        r"^ty\s+teacherboy$",
+        r"^ขอบคุณ\s*teacherboy$",  # Thai "thank you"
+        r"^ขอบใจ\s*teacherboy$",  # Thai "thanks"
     ]
-    return any(re.search(pattern, text_lower) for pattern in exit_patterns)
+    return any(re.search(pattern, text_lower) for pattern in sleep_patterns)
+
+
+def is_wake_command(text: str) -> bool:
+    """Check if text is a wake command (TeacherBoy alone)."""
+    return text.lower().strip() == "teacherboy"
+
+
+def is_exit_command(text: str) -> bool:
+    """Check if text is an exit command (same as sleep command)."""
+    return is_sleep_command(text)
 
 
 def create_translation_flex_dict(
@@ -190,11 +200,12 @@ async def handle_join_event(event, line_bot_api: MessagingApi):
         "🔥 SMART TRANSLATION MODE:\n"
         "• Send ANY Thai text → I start translating EVERYTHING\n"
         "• I translate EVERY message until you say:\n"
-        "  'thanks Brown' or 'ขอบคุณ Brown'\n\n"
+        "  'Thank you TeacherBoy' or 'ขอบคุณ TeacherBoy'\n\n"
         "📖 How it works:\n"
         "1. Someone sends Thai → Translation mode ON\n"
         "2. I translate ALL messages (Thai→EN, EN→TH)\n"
-        "3. Say 'thanks Brown' → I stop\n\n"
+        "3. Say 'Thank you TeacherBoy' → I sleep for 24h\n"
+        "4. Say 'TeacherBoy' alone → I wake up!\n\n"
         "Try sending something in Thai now! 🚀"
     )
 
@@ -247,7 +258,8 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
 
     Features:
     - Auto-detects Thai characters and starts translation mode
-    - Continuous translation until "thanks Brown" is said
+    - Continuous translation until "Thank you TeacherBoy" is said (sleeps for 24h)
+    - Say "TeacherBoy" alone to wake up
     - Uses Google Translate if configured, falls back to LibreTranslate
     - Sends response as Flex Message
 
