@@ -344,7 +344,7 @@ async def readiness_check() -> Dict[str, Any]:
     return {
         "ready": True,
         "agents_registered": len(agents_status),
-        "google_translate_enabled": (settings.is_google_translate_configured()),
+        "google_translate_enabled": settings.is_google_translate_configured(),
         "calendar_enabled": settings.is_calendar_configured(),
     }
 
