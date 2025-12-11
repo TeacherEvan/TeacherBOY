@@ -1,6 +1,6 @@
 """Unit tests for rate limiter service."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from src.services.rate_limiter import RateLimiter
 
 
