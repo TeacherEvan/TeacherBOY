@@ -1,6 +1,5 @@
 """Unit tests for message deduplication service."""
 
-import pytest
 from datetime import timedelta
 import time
 from src.services.message_dedup import MessageDeduplicator
