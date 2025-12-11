@@ -20,47 +20,44 @@ logger = logging.getLogger(__name__)
 
 def contains_thai(text: str) -> bool:
     """Check if text contains Thai characters."""
-    return bool(re.search(r'[\u0E00-\u0E7F]', text))
+    return bool(re.search(r"[\u0E00-\u0E7F]", text))
 
 
 def is_exit_command(text: str) -> bool:
     """Check if text is an exit command (thanks Brown, thank you Brown, etc.)."""
     text_lower = text.lower().strip()
     exit_patterns = [
-        r'thanks?\s+brown',
-        r'thank\s+you\s+brown',
-        r'thx\s+brown',
-        r'ty\s+brown',
-        r'ขอบคุณ\s*brown',  # Thai "thank you"
-        r'ขอบใจ\s*brown',    # Thai "thanks"
+        r"thanks?\s+brown",
+        r"thank\s+you\s+brown",
+        r"thx\s+brown",
+        r"ty\s+brown",
+        r"ขอบคุณ\s*brown",  # Thai "thank you"
+        r"ขอบใจ\s*brown",  # Thai "thanks"
     ]
     return any(re.search(pattern, text_lower) for pattern in exit_patterns)
 
 
 def create_translation_flex_dict(
-    original_text: str,
-    translated_text: str,
-    source_lang: str,
-    target_lang: str
+    original_text: str, translated_text: str, source_lang: str, target_lang: str
 ) -> dict:
     """
     Create a Flex Message bubble dict for translation result.
-    
+
     Args:
         original_text: The original message text
         translated_text: The translated text
         source_lang: Source language code ('th' or 'en')
         target_lang: Target language code ('th' or 'en')
-        
+
     Returns:
         Dict representing FlexBubble
     """
     primary_color = "#0D8186"
     secondary_color = "#aaaaaa"
-    
+
     source_label = "Thai" if source_lang == "th" else "English"
     target_label = "English" if source_lang == "th" else "Thai"
-    
+
     source_flag = "🇹🇭" if source_lang == "th" else "🇬🇧"
     target_flag = "🇬🇧" if source_lang == "th" else "🇹🇭"
 
@@ -75,11 +72,25 @@ def create_translation_flex_dict(
                     "type": "box",
                     "layout": "horizontal",
                     "contents": [
-                        {"type": "text", "text": "TeacherBOY", "weight": "bold", "color": primary_color, "size": "sm"},
-                        {"type": "text", "text": "TRANSLATOR", "weight": "bold", "color": secondary_color, "size": "xxs", "align": "end", "gravity": "center"}
-                    ]
+                        {
+                            "type": "text",
+                            "text": "TeacherBOY",
+                            "weight": "bold",
+                            "color": primary_color,
+                            "size": "sm",
+                        },
+                        {
+                            "type": "text",
+                            "text": "TRANSLATOR",
+                            "weight": "bold",
+                            "color": secondary_color,
+                            "size": "xxs",
+                            "align": "end",
+                            "gravity": "center",
+                        },
+                    ],
                 }
-            ]
+            ],
         },
         "body": {
             "type": "box",
@@ -91,10 +102,24 @@ def create_translation_flex_dict(
                     "margin": "md",
                     "contents": [
                         {"type": "text", "text": source_flag, "size": "lg", "flex": 0},
-                        {"type": "text", "text": source_label, "weight": "bold", "size": "sm", "margin": "sm", "gravity": "center"}
-                    ]
+                        {
+                            "type": "text",
+                            "text": source_label,
+                            "weight": "bold",
+                            "size": "sm",
+                            "margin": "sm",
+                            "gravity": "center",
+                        },
+                    ],
                 },
-                {"type": "text", "text": original_text, "wrap": True, "color": "#555555", "size": "sm", "margin": "sm"},
+                {
+                    "type": "text",
+                    "text": original_text,
+                    "wrap": True,
+                    "color": "#555555",
+                    "size": "sm",
+                    "margin": "sm",
+                },
                 {"type": "separator", "margin": "xl", "color": "#eeeeee"},
                 {
                     "type": "box",
@@ -102,32 +127,54 @@ def create_translation_flex_dict(
                     "margin": "xl",
                     "contents": [
                         {"type": "text", "text": target_flag, "size": "lg", "flex": 0},
-                        {"type": "text", "text": target_label, "weight": "bold", "size": "sm", "margin": "sm", "gravity": "center", "color": primary_color}
-                    ]
+                        {
+                            "type": "text",
+                            "text": target_label,
+                            "weight": "bold",
+                            "size": "sm",
+                            "margin": "sm",
+                            "gravity": "center",
+                            "color": primary_color,
+                        },
+                    ],
                 },
-                {"type": "text", "text": translated_text, "wrap": True, "weight": "regular", "size": "md", "margin": "sm", "color": "#000000"}
-            ]
+                {
+                    "type": "text",
+                    "text": translated_text,
+                    "wrap": True,
+                    "weight": "regular",
+                    "size": "md",
+                    "margin": "sm",
+                    "color": "#000000",
+                },
+            ],
         },
         "footer": {
             "type": "box",
             "layout": "vertical",
             "contents": [
-                {"type": "text", "text": "Powered by LibreTranslate", "size": "xxs", "color": "#aaaaaa", "align": "center"}
-            ]
-        }
+                {
+                    "type": "text",
+                    "text": "Powered by LibreTranslate",
+                    "size": "xxs",
+                    "color": "#aaaaaa",
+                    "align": "center",
+                }
+            ],
+        },
     }
 
 
 async def handle_join_event(event, line_bot_api: MessagingApi):
     """
     Handle bot joining a group or multi-person chat.
-    
+
     Args:
         event: LINE join event
         line_bot_api: MessagingApi instance (v3)
     """
     source_type = event.source.type
-    
+
     if source_type == "group":
         chat_id = event.source.group_id
         logger.info(f"Bot joined group: {chat_id}")
@@ -137,7 +184,7 @@ async def handle_join_event(event, line_bot_api: MessagingApi):
     else:
         chat_id = "unknown"
         logger.info(f"Bot joined unknown chat type: {source_type}")
-    
+
     welcome_text = (
         "👋 สวัสดีครับ! I'm TeacherBOY 🇹🇭↔️🇬🇧\n\n"
         "🔥 SMART TRANSLATION MODE:\n"
@@ -150,14 +197,14 @@ async def handle_join_event(event, line_bot_api: MessagingApi):
         "3. Say 'thanks Brown' → I stop\n\n"
         "Try sending something in Thai now! 🚀"
     )
-    
+
     try:
         await asyncio.to_thread(
             line_bot_api.reply_message,
             ReplyMessageRequest(  # type: ignore[call-arg]
                 replyToken=event.reply_token,
-                messages=[TextMessage(text=welcome_text)]  # type: ignore[call-arg]
-            )
+                messages=[TextMessage(text=welcome_text)],  # type: ignore[call-arg]
+            ),
         )
     except Exception as e:
         logger.error(f"Error sending welcome message: {str(e)}")
@@ -175,15 +222,15 @@ async def handle_leave_event(event, line_bot_api: MessagingApi):
 async def handle_member_joined_event(event, line_bot_api: MessagingApi):
     """Handle new member joining the group."""
     logger.info(f"Member joined: {event.joined.members}")
-    
+
     welcome_text = "Welcome! 👋 I can translate Thai ↔️ English for you."
     try:
         await asyncio.to_thread(
             line_bot_api.reply_message,
             ReplyMessageRequest(  # type: ignore[call-arg]
                 replyToken=event.reply_token,
-                messages=[TextMessage(text=welcome_text)]  # type: ignore[call-arg]
-            )
+                messages=[TextMessage(text=welcome_text)],  # type: ignore[call-arg]
+            ),
         )
     except Exception as e:
         logger.error(f"Error sending member welcome: {str(e)}")
@@ -197,20 +244,20 @@ async def handle_member_left_event(event, line_bot_api: MessagingApi):
 async def handle_text_message(event, line_bot_api: MessagingApi):
     """
     Handle incoming text messages with smart Thai detection and session management.
-    
+
     Features:
     - Auto-detects Thai characters and starts translation mode
-    - Continuous translation until "thanks Brown" is said  
+    - Continuous translation until "thanks Brown" is said
     - Uses Google Translate if configured, falls back to LibreTranslate
     - Sends response as Flex Message
-    
+
     Args:
         event: LINE message event
         line_bot_api: MessagingApi instance (v3)
     """
     text = event.message.text
     reply_token = event.reply_token
-    
+
     # Get chat ID (works for 1-on-1, group, and room chats)
     source = event.source
     if source.type == "group":
@@ -219,24 +266,23 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
         chat_id = source.room_id
     else:
         chat_id = source.user_id
-    
+
     logger.info(f"Message from chat {chat_id}: {text[:50]}...")
-    
+
     # Check for exit command
     if is_exit_command(text):
         if session_manager.is_session_active(chat_id):
             session_manager.end_session(chat_id)
             goodbye_messages = [
                 TextMessage(text="ลาก่อน 👋 (Goodbye!)"),  # type: ignore[call-arg]
-                TextMessage(text="Translation mode ended. Send Thai text to start again!")  # type: ignore[call-arg]
+                TextMessage(text="Translation mode ended. Send Thai text to start again!"),  # type: ignore[call-arg]
             ]
             try:
                 await asyncio.to_thread(
                     line_bot_api.reply_message,
                     ReplyMessageRequest(  # type: ignore[call-arg]
-                        replyToken=reply_token,
-                        messages=goodbye_messages
-                    )
+                        replyToken=reply_token, messages=goodbye_messages
+                    ),
                 )
                 logger.info(f"Ended translation session for chat {chat_id}")
             except Exception as e:
@@ -245,70 +291,67 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
         else:
             # Not in a session, just ignore
             return
-    
+
     # Auto-detect Thai and start session if not active
     if contains_thai(text) and not session_manager.is_session_active(chat_id):
         session_manager.start_session(chat_id, source.user_id)
         logger.info(f"Auto-started translation mode for chat {chat_id} (Thai detected)")
-    
+
     # Only translate if session is active
     if not session_manager.is_session_active(chat_id):
         # Not in translation mode, ignore silently
         return
-    
+
     # Increment message counter
     session_manager.increment_message_count(chat_id)
-    
+
     # Try Google Translate first, fall back to LibreTranslate
     translated_text = None
     source_lang = None
-    
+
     if google_translation_service.is_configured():
         logger.info("Using Google Cloud Translation API")
         translated_text, source_lang = await google_translation_service.auto_translate(text)
-    
+
     if not translated_text:
         logger.info("Using LibreTranslate (fallback)")
         translated_text, source_lang = await translation_service.auto_translate(text)
-    
+
     if not translated_text or not source_lang:
         error_msg = TextMessage(text="Sorry, translation failed. Please try again.")  # type: ignore[call-arg]
         try:
             await asyncio.to_thread(
                 line_bot_api.reply_message,
                 ReplyMessageRequest(  # type: ignore[call-arg]
-                    replyToken=reply_token,
-                    messages=[error_msg]
-                )
+                    replyToken=reply_token, messages=[error_msg]
+                ),
             )
         except Exception as e:
             logger.error(f"Error sending error message: {str(e)}")
         return
-    
+
     target_lang = "en" if source_lang == "th" else "th"
-    
+
     # Create Flex Message
     flex_dict = create_translation_flex_dict(
         original_text=text,
         translated_text=translated_text,
         source_lang=source_lang,
-        target_lang=target_lang
+        target_lang=target_lang,
     )
-    
+
     # Use FlexContainer.from_dict (SDK v3)
     flex_container = FlexContainer.from_dict(flex_dict)
     flex_message = FlexMessage(  # type: ignore[call-arg]
-        altText=f"Translation: {translated_text[:50]}...",
-        contents=flex_container
+        altText=f"Translation: {translated_text[:50]}...", contents=flex_container
     )
-    
+
     try:
         await asyncio.to_thread(
             line_bot_api.reply_message,
             ReplyMessageRequest(  # type: ignore[call-arg]
-                replyToken=reply_token,
-                messages=[flex_message]
-            )
+                replyToken=reply_token, messages=[flex_message]
+            ),
         )
         logger.info(f"Translation sent: {source_lang} -> {target_lang}")
     except Exception as e:

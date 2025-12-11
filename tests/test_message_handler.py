@@ -40,9 +40,7 @@ class TestMessageHandler:
             assert "สวัสดี" in args[0][1].text
 
     @pytest.mark.asyncio
-    async def test_handle_text_message_translation_failure(
-        self, mock_event, mock_line_bot_api
-    ):
+    async def test_handle_text_message_translation_failure(self, mock_event, mock_line_bot_api):
         """Test message handling when translation fails."""
         from src.handlers.message_handler import handle_text_message
 

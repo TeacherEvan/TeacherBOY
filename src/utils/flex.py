@@ -1,30 +1,28 @@
 """Flex Message templates for TeacherBOY."""
 
+
 def create_translation_flex(
-    original_text: str,
-    translated_text: str,
-    source_lang: str,
-    target_lang: str
+    original_text: str, translated_text: str, source_lang: str, target_lang: str
 ) -> dict:
     """
     Create a Flex Message bubble for translation result.
-    
+
     Args:
         original_text: The original message text
         translated_text: The translated text
         source_lang: Source language code ('th' or 'en')
         target_lang: Target language code ('th' or 'en')
-        
+
     Returns:
         Flex Message Bubble dictionary
     """
     # Determine colors and labels
     primary_color = "#0D8186"  # Teal
     secondary_color = "#aaaaaa"
-    
+
     source_label = "Thai" if source_lang == "th" else "English"
     target_label = "English" if source_lang == "th" else "Thai"
-    
+
     source_flag = "🇹🇭" if source_lang == "th" else "🇬🇧"
     target_flag = "🇬🇧" if source_lang == "th" else "🇹🇭"
 
@@ -44,7 +42,7 @@ def create_translation_flex(
                             "text": "TeacherBOY",
                             "weight": "bold",
                             "color": primary_color,
-                            "size": "sm"
+                            "size": "sm",
                         },
                         {
                             "type": "text",
@@ -53,11 +51,11 @@ def create_translation_flex(
                             "color": secondary_color,
                             "size": "xxs",
                             "align": "end",
-                            "gravity": "center"
-                        }
-                    ]
+                            "gravity": "center",
+                        },
+                    ],
                 }
-            ]
+            ],
         },
         "body": {
             "type": "box",
@@ -68,22 +66,17 @@ def create_translation_flex(
                     "type": "box",
                     "layout": "horizontal",
                     "contents": [
-                        {
-                            "type": "text",
-                            "text": source_flag,
-                            "size": "lg",
-                            "flex": 0
-                        },
+                        {"type": "text", "text": source_flag, "size": "lg", "flex": 0},
                         {
                             "type": "text",
                             "text": source_label,
                             "weight": "bold",
                             "size": "sm",
                             "margin": "sm",
-                            "gravity": "center"
-                        }
+                            "gravity": "center",
+                        },
                     ],
-                    "margin": "md"
+                    "margin": "md",
                 },
                 {
                     "type": "text",
@@ -91,25 +84,16 @@ def create_translation_flex(
                     "wrap": True,
                     "color": "#555555",
                     "size": "sm",
-                    "margin": "sm"
+                    "margin": "sm",
                 },
                 # Divider
-                {
-                    "type": "separator",
-                    "margin": "xl",
-                    "color": "#eeeeee"
-                },
+                {"type": "separator", "margin": "xl", "color": "#eeeeee"},
                 # Target Language Section
                 {
                     "type": "box",
                     "layout": "horizontal",
                     "contents": [
-                        {
-                            "type": "text",
-                            "text": target_flag,
-                            "size": "lg",
-                            "flex": 0
-                        },
+                        {"type": "text", "text": target_flag, "size": "lg", "flex": 0},
                         {
                             "type": "text",
                             "text": target_label,
@@ -117,10 +101,10 @@ def create_translation_flex(
                             "size": "sm",
                             "margin": "sm",
                             "gravity": "center",
-                            "color": primary_color
-                        }
+                            "color": primary_color,
+                        },
                     ],
-                    "margin": "xl"
+                    "margin": "xl",
                 },
                 {
                     "type": "text",
@@ -129,9 +113,9 @@ def create_translation_flex(
                     "weight": "regular",
                     "size": "md",
                     "margin": "sm",
-                    "color": "#000000"
-                }
-            ]
+                    "color": "#000000",
+                },
+            ],
         },
         "footer": {
             "type": "box",
@@ -142,8 +126,8 @@ def create_translation_flex(
                     "text": "Powered by LibreTranslate",
                     "size": "xxs",
                     "color": "#aaaaaa",
-                    "align": "center"
+                    "align": "center",
                 }
-            ]
-        }
+            ],
+        },
     }
