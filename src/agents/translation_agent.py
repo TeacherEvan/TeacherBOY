@@ -42,15 +42,18 @@ class TranslationAgent(BaseAgent):
         Check if text is a sleep command (puts bot to sleep for 24 hours).
 
         Sleep patterns: "Thank you TeacherBoy", "Thanks TeacherBoy", etc.
+        Handles common typos: teacherboi, teacherboy, teacherbiy, etc.
         """
         text_lower = text.lower().strip()
+        # Flexible pattern for "teacherboy" with common typos: boy/boi/biy/boj
+        teacher_pattern = r"teacher(?:boy|boi|biy|boj|boii)"
         sleep_patterns = [
-            r"^thanks?\s+teacherboy[\s.!]*$",
-            r"^thank\s+you\s+teacherboy[\s.!]*$",
-            r"^thx\s+teacherboy[\s.!]*$",
-            r"^ty\s+teacherboy[\s.!]*$",
-            r"^ขอบคุณ\s*teacherboy[\s.!]*$",
-            r"^ขอบใจ\s*teacherboy[\s.!]*$",
+            rf"^thanks?\s+{teacher_pattern}[\s.!]*$",
+            rf"^thank\s+you\s+{teacher_pattern}[\s.!]*$",
+            rf"^thx\s+{teacher_pattern}[\s.!]*$",
+            rf"^ty\s+{teacher_pattern}[\s.!]*$",
+            rf"^ขอบคุณ\s*{teacher_pattern}[\s.!]*$",
+            rf"^ขอบใจ\s*{teacher_pattern}[\s.!]*$",
         ]
         return any(re.search(pattern, text_lower) for pattern in sleep_patterns)
 
@@ -59,9 +62,11 @@ class TranslationAgent(BaseAgent):
         Check if text is a wake command (wakes bot from sleep).
 
         Wake pattern: "TeacherBoy" alone (exact match, not among other text)
+        Handles common typos: teacherboi, teacherboy, teacherbiy, etc.
         """
-        # Allow for case-insensitive "teacherboy" with optional trailing punctuation/whitespace
-        return bool(re.match(r"^teacherboy[\s.!]*$", text.lower().strip()))
+        # Allow for case-insensitive "teacherboy" with common typos and optional trailing punctuation/whitespace
+        teacher_pattern = r"^teacher(?:boy|boi|biy|boj|boii)[\s.!]*$"
+        return bool(re.match(teacher_pattern, text.lower().strip()))
 
     def is_exit_command(self, text: str) -> bool:
         """Check if text is an exit command (ends session but doesn't sleep)."""
