@@ -18,7 +18,8 @@ TeacherBOY is a high-performance, asynchronous LINE Bot featuring a modular mult
 ### Translation Agent (Primary)
 
 - **🔥 Smart Auto-Detection:** Automatically starts when Thai text is detected
-- **🔄 Continuous Mode:** Translates EVERY message until you say "thanks Brown"
+- **🔄 Continuous Mode:** Translates EVERY message until you say "Thank you TeacherBoy"
+- **😴 Sleep Mode:** Bot sleeps for 24 hours - say "TeacherBoy" alone to wake up
 - **🌐 Professional Quality:** Google Translate (primary) + LibreTranslate (fallback)
 - **💬 Bi-directional:** Thai 🇹🇭 → English 🇬🇧 and English 🇬🇧 → Thai 🇹🇭
 - **👥 Group Chat Support:** Works in 1-on-1, groups, and multi-person chats
@@ -57,7 +58,7 @@ See **[LINE Setup Guide](docs/LINE_SETUP.md)** for detailed instructions.
 **Already have tokens?** Create a `.env` file:
 
 ```env
-# Primary Agent - Brown (Translation)
+# Primary Agent - TeacherBOY (Translation)
 LINE_CHANNEL_SECRET=your_channel_secret
 LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
 
@@ -105,9 +106,10 @@ ngrok http 8000
 - Send: `สวัสดีครับ` → Translation mode starts! 🔥
 - Send: `Hello` → Translates to Thai automatically
 - Send: `How are you?` → Keeps translating
-- Say: `thanks Brown` → Translation mode ends ✅
+- Say: `Thank you TeacherBoy` → Bot sleeps for 24 hours 😴
+- Say: `TeacherBoy` → Bot wakes up! ☀️
 
-**The bot will now translate EVERY message until you say "thanks Brown"!**
+**The bot will translate EVERY message until you say "Thank you TeacherBoy"!**
 
 **Need help?** See **[Quick Start Guide](QUICK_START.md)** or **[Deployment Guide](DEPLOYMENT_GUIDE.md)** for detailed instructions.
 
@@ -204,7 +206,9 @@ pytest --cov=src --cov-report=html
 - Continuous translation mode
 - Google Translate + LibreTranslate fallback
 - Session management per chat
-- "thanks Brown" exit command
+- "Thank you TeacherBoy" sleep command (24h)
+- "TeacherBoy" wake command
+- Rate limiting (10 translations/minute)
 
 ✅ **Group Chat Support:**
 

@@ -6,8 +6,10 @@
 
 - **Auto-starts** when Thai text is detected
 - **Continuous translation** of EVERY message
-- **Exit command**: Say "thanks Brown" or "ขอบคุณ Brown"
+- **Sleep command**: Say "Thank you TeacherBoy" (sleeps 24 hours)
+- **Wake command**: Say "TeacherBoy" alone to wake up
 - **Works everywhere**: 1-on-1 chats, groups, rooms
+- **Rate limiting**: 10 translations per minute
 
 ### Translation Quality
 
@@ -69,7 +71,8 @@ ngrok http 8000
 3. Bot enters translation mode ✅
 4. Send any English: Gets translated to Thai ✅
 5. Send any Thai: Gets translated to English ✅
-6. Say: `thanks Brown` → Bot exits translation mode ✅
+6. Say: `Thank you TeacherBoy` → Bot sleeps for 24 hours 😴
+7. Say: `TeacherBoy` → Bot wakes up! ☀️
 
 ## 🎨 How It Works
 
@@ -81,11 +84,13 @@ User sends Thai text → Bot detects Thai characters
     Every message gets translated
     (Thai → English, English → Thai)
                     ↓
-   User says "thanks Brown" or "ขอบคุณ Brown"
+   User says "Thank you TeacherBoy"
                     ↓
-    Bot replies "ลาก่อน 👋 (Goodbye!)"
+        Bot sleeps for 24 hours 😴
                     ↓
-          Translation mode OFF
+   User says "TeacherBoy" (alone)
+                    ↓
+          Bot wakes up! ☀️
 ```
 
 ## 💡 Tips
@@ -95,14 +100,18 @@ User sends Thai text → Bot detects Thai characters
 - Use Google Translate API (see setup above)
 - Falls back to LibreTranslate if no API key
 
-### Exit Commands
+### Sleep & Wake Commands
 
-All of these work:
+**Sleep commands** (put bot to sleep for 24 hours):
 
-- `thanks Brown`
-- `thank you Brown`
-- `thx Brown`
-- `ขอบคุณ Brown` (Thai "thank you")
+- `Thank you TeacherBoy`
+- `thanks TeacherBoy`
+- `thx TeacherBoy`
+- `ขอบคุณ TeacherBoy` (Thai "thank you")
+
+**Wake command** (wake bot immediately):
+
+- `TeacherBoy` (alone, not part of other text)
 
 ### Group Chats
 
@@ -113,8 +122,9 @@ All of these work:
 ### Performance
 
 - First message (Thai detection) starts mode
-- Session persists until "thanks Brown"
-- Old sessions auto-cleanup after 24h
+- Session persists until sleep command
+- Bot auto-wakes after 24 hours
+- Rate limit: 10 translations per minute
 
 ## 📊 Translation API Comparison
 
@@ -131,7 +141,8 @@ All of these work:
 ### Bot doesn't translate
 
 - Check if Thai text was sent (translation mode trigger)
-- Or say "thanks Brown" then send Thai again
+- If sleeping, say "TeacherBoy" to wake up
+- Check rate limit (10/min)
 
 ### Translation quality poor
 
@@ -159,6 +170,8 @@ Your bot now:
 - ✅ Uses professional Google Translate (if configured)
 - ✅ Works in groups and 1-on-1
 - ✅ Beautiful Flex Message cards
-- ✅ Smart exit command
+- ✅ Smart sleep/wake commands
+- ✅ Rate limiting (10/min)
+- ✅ 24-hour sleep mode
 
 Enjoy your smart translation bot! 🚀
