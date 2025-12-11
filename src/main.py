@@ -28,10 +28,6 @@ from linebot.v3.messaging import (
     Configuration,
     ApiClient,
     MessagingApi,
-    ReplyMessageRequest,
-    TextMessage,
-    FlexMessage,
-    FlexBubble,
 )
 from linebot.v3.exceptions import InvalidSignatureError
 
@@ -134,11 +130,17 @@ async def lifespan(app: FastAPI):
             temp_line_api = MessagingApi(api_client)
             bot_info = temp_line_api.get_bot_info()
             bot_user_id = bot_info.user_id
-            logger.info(f"✅ Bot User ID: {bot_user_id} (Display Name: {bot_info.display_name})")
-            logger.info("🛡️ Self-message detection ENABLED - Infinite loop prevention active")
+            logger.info(
+                f"✅ Bot User ID: {bot_user_id} (Display Name: {bot_info.display_name})"
+            )
+            logger.info(
+                "🛡️ Self-message detection ENABLED - Infinite loop prevention active"
+            )
     except Exception as e:
         logger.error(f"❌ Failed to fetch bot info: {e}", exc_info=True)
-        logger.warning("⚠️  Bot will continue without self-detection - MONITOR FOR LOOPS!")
+        logger.warning(
+            "⚠️  Bot will continue without self-detection - MONITOR FOR LOOPS!"
+        )
         bot_user_id = None
 
     logger.info("=" * 80)
@@ -161,7 +163,9 @@ async def lifespan(app: FastAPI):
         google_translation_service.set_client(http_client_pool)
         logger.info("✅ Google Cloud Translation API configured (PRIMARY)")
     else:
-        logger.warning("⚠️  Google Translate API not configured - using LibreTranslate only")
+        logger.warning(
+            "⚠️  Google Translate API not configured - using LibreTranslate only"
+        )
 
     logger.info("✅ LibreTranslate configured (FALLBACK)")
 
@@ -176,7 +180,9 @@ async def lifespan(app: FastAPI):
 
     # Register Calendar Agent if configured (Priority: 20)
     if settings.is_calendar_configured():
-        calendar_agent_instance = CalendarAgent(group_chat_id=settings.google_calendar_group_id)
+        calendar_agent_instance = CalendarAgent(
+            group_chat_id=settings.google_calendar_group_id
+        )
         agent_router.register_agent(calendar_agent_instance)
 
         # Initialize global LINE API client for scheduler
@@ -193,7 +199,9 @@ async def lifespan(app: FastAPI):
             """Execute daily morning calendar reminder."""
             if calendar_agent_instance and line_bot_api_global:
                 try:
-                    await calendar_agent_instance.send_daily_reminder(line_bot_api_global)
+                    await calendar_agent_instance.send_daily_reminder(
+                        line_bot_api_global
+                    )
                     logger.info("✅ Morning reminder sent successfully")
                 except Exception as e:
                     logger.error(f"❌ Morning reminder failed: {e}", exc_info=True)
@@ -210,7 +218,9 @@ async def lifespan(app: FastAPI):
             """Execute weekly afternoon calendar overview."""
             if calendar_agent_instance and line_bot_api_global:
                 try:
-                    await calendar_agent_instance.send_weekly_overview(line_bot_api_global)
+                    await calendar_agent_instance.send_weekly_overview(
+                        line_bot_api_global
+                    )
                     logger.info("✅ Afternoon overview sent successfully")
                 except Exception as e:
                     logger.error(f"❌ Afternoon overview failed: {e}", exc_info=True)
@@ -228,7 +238,9 @@ async def lifespan(app: FastAPI):
             f"{settings.calendar_afternoon_hour:02d}:00 ({settings.calendar_timezone})"
         )
     else:
-        logger.info("📅 Calendar Agent not configured (GOOGLE_CALENDAR_GROUP_ID not set)")
+        logger.info(
+            "📅 Calendar Agent not configured (GOOGLE_CALENDAR_GROUP_ID not set)"
+        )
 
     # ========================================================================
     # PHASE 5: Startup Summary
@@ -336,7 +348,7 @@ async def readiness_check() -> Dict[str, Any]:
     return {
         "ready": True,
         "agents_registered": len(agents_status),
-        "google_translate_enabled": settings.is_google_translate_configured(),
+        "google_translate_enabled": (settings.is_google_translate_configured()),
         "calendar_enabled": settings.is_calendar_configured(),
     }
 
@@ -366,7 +378,9 @@ async def test_daily_reminder() -> Dict[str, str]:
         return {"status": "success", "message": "Daily reminder sent"}
     except Exception as e:
         logger.error(f"Test daily reminder failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to send reminder: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to send reminder: {str(e)}"
+        )
 
 
 @app.get("/calendar/test-weekly", tags=["Debug"])
@@ -389,7 +403,9 @@ async def test_weekly_overview() -> Dict[str, str]:
         return {"status": "success", "message": "Weekly overview sent"}
     except Exception as e:
         logger.error(f"Test weekly overview failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to send overview: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to send overview: {str(e)}"
+        )
 
 
 # ============================================================================
@@ -490,10 +506,14 @@ async def webhook(request: Request) -> JSONResponse:
 
     except Exception as e:
         logger.error(f"❌ Webhook processing error: {str(e)}", exc_info=True)
-        return JSONResponse(content={"status": "error", "detail": str(e)}, status_code=500)
+        return JSONResponse(
+            content={"status": "error", "detail": str(e)}, status_code=500
+        )
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("src.main:app", host=settings.host, port=settings.port, reload=settings.debug)
+    uvicorn.run(
+        "src.main:app", host=settings.host, port=settings.port, reload=settings.debug
+    )

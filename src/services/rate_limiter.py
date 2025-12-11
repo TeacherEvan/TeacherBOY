@@ -47,14 +47,17 @@ class RateLimiter:
 
         # Clean up old requests outside the time window
         self.requests[chat_id] = [
-            timestamp for timestamp in self.requests[chat_id] if now - timestamp < self.window
+            timestamp
+            for timestamp in self.requests[chat_id]
+            if now - timestamp < self.window
         ]
 
         # Check if limit exceeded
         if len(self.requests[chat_id]) >= self.max_requests:
             logger.warning(
                 f"🚨 Rate limit exceeded for chat {chat_id}: "
-                f"{len(self.requests[chat_id])}/{self.max_requests} requests in {self.window.seconds}s"
+                f"{len(self.requests[chat_id])}/{self.max_requests} "
+                f"requests in {self.window.seconds}s"
             )
             return False
 
@@ -78,7 +81,9 @@ class RateLimiter:
         """
         now = datetime.now()
         self.requests[chat_id] = [
-            timestamp for timestamp in self.requests[chat_id] if now - timestamp < self.window
+            timestamp
+            for timestamp in self.requests[chat_id]
+            if now - timestamp < self.window
         ]
         return max(0, self.max_requests - len(self.requests[chat_id]))
 

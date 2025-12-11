@@ -66,7 +66,9 @@ class TranslationAgent(BaseAgent):
         # Handle if Thai detected or session is active
         return self.contains_thai(text) or session_manager.is_session_active(chat_id)
 
-    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
+    async def handle(
+        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
+    ) -> bool:
         """Process translation request with safety checks."""
         chat_id = self._get_chat_id(event)
         user_id = event.source.user_id
@@ -76,14 +78,18 @@ class TranslationAgent(BaseAgent):
             # SAFETY CHECK 1: Rate Limiting
             # ================================================================
             if not rate_limiter.is_allowed(chat_id):
-                logger.warning(f"🚨 Rate limit exceeded for chat {chat_id}, rejecting translation")
+                logger.warning(
+                    f"🚨 Rate limit exceeded for chat {chat_id}, rejecting translation"
+                )
                 # Send friendly rate limit message
                 rate_limit_msg = TextMessage(
                     text="⏱️ Whoa! Slow down a bit! You're sending messages too quickly. "
                     "Please wait a moment before trying again. 🙏"
                 )
                 line_bot_api.reply_message(
-                    ReplyMessageRequest(reply_token=event.reply_token, messages=[rate_limit_msg])
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token, messages=[rate_limit_msg]
+                    )
                 )
                 return False
 
@@ -91,7 +97,9 @@ class TranslationAgent(BaseAgent):
             # SAFETY CHECK 2: Message Deduplication
             # ================================================================
             if message_dedup.is_duplicate(chat_id, text):
-                logger.info(f"🔁 Duplicate message detected for chat {chat_id}, skipping translation")
+                logger.info(
+                    f"🔁 Duplicate message detected for chat {chat_id}, skipping translation"
+                )
                 # Silently ignore duplicates (already translated within TTL)
                 return True
 
@@ -103,7 +111,9 @@ class TranslationAgent(BaseAgent):
                 goodbye_message = self._create_goodbye_message()
 
                 line_bot_api.reply_message(
-                    ReplyMessageRequest(reply_token=event.reply_token, messages=[goodbye_message])
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token, messages=[goodbye_message]
+                    )
                 )
                 logger.info(f"✅ Translation session ended for chat {chat_id}")
                 return True
@@ -127,7 +137,9 @@ class TranslationAgent(BaseAgent):
                 )
 
                 line_bot_api.reply_message(
-                    ReplyMessageRequest(reply_token=event.reply_token, messages=[flex_message])
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token, messages=[flex_message]
+                    )
                 )
                 logger.info(f"✅ Translation sent for chat {chat_id}")
                 return True
@@ -164,7 +176,11 @@ class TranslationAgent(BaseAgent):
             return f"user_{event.source.user_id}"
 
     def _create_translation_flex(
-        self, original_text: str, translated_text: str, source_lang: str, target_lang: str
+        self,
+        original_text: str,
+        translated_text: str,
+        source_lang: str,
+        target_lang: str,
     ) -> FlexMessage:
         """
         Create a visually stunning, modern Flex Message for translation results.
@@ -187,7 +203,6 @@ class TranslationAgent(BaseAgent):
         """
         # Modern color palette
         primary_color = "#667EEA"  # Indigo
-        secondary_color = "#764BA2"  # Purple
         success_color = "#10B981"  # Emerald
         text_primary = "#1F2937"  # Gray-800
         text_secondary = "#6B7280"  # Gray-500
@@ -326,7 +341,12 @@ class TranslationAgent(BaseAgent):
                                 "type": "box",
                                 "layout": "baseline",
                                 "contents": [
-                                    {"type": "text", "text": "✨", "size": "sm", "flex": 0},
+                                    {
+                                        "type": "text",
+                                        "text": "✨",
+                                        "size": "sm",
+                                        "flex": 0,
+                                    },
                                     {
                                         "type": "text",
                                         "text": lang_emoji.get(target_lang, "🌐"),
@@ -395,7 +415,9 @@ class TranslationAgent(BaseAgent):
             "styles": {"footer": {"separator": False}},
         }
 
-        return FlexMessage(alt_text=f"Translation: {original_text[:50]}...", contents=flex_dict)
+        return FlexMessage(
+            alt_text=f"Translation: {original_text[:50]}...", contents=flex_dict
+        )
 
     def _create_goodbye_message(self) -> FlexMessage:
         """
@@ -420,7 +442,12 @@ class TranslationAgent(BaseAgent):
                         "type": "box",
                         "layout": "vertical",
                         "contents": [
-                            {"type": "text", "text": "👋", "size": "4xl", "align": "center"}
+                            {
+                                "type": "text",
+                                "text": "👋",
+                                "size": "4xl",
+                                "align": "center",
+                            }
                         ],
                         "paddingBottom": "md",
                     },
@@ -493,4 +520,6 @@ class TranslationAgent(BaseAgent):
             "styles": {"body": {"backgroundColor": "#FFFFFF"}},
         }
 
-        return FlexMessage(alt_text="Translation session ended - Goodbye!", contents=flex_dict)
+        return FlexMessage(
+            alt_text="Translation session ended - Goodbye!", contents=flex_dict
+        )
