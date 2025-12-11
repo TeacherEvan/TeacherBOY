@@ -73,6 +73,9 @@ agent_router = AgentRouter()
 calendar_agent_instance: Optional[CalendarAgent] = None
 line_bot_api_global: Optional[MessagingApi] = None
 
+# Bot's own user ID for self-message detection (prevents infinite loops)
+bot_user_id: Optional[str] = None
+
 
 def create_optimized_http_client() -> httpx.AsyncClient:
     """
@@ -113,14 +116,28 @@ async def lifespan(app: FastAPI):
     - Scheduler configuration
     - Graceful shutdown
     """
-    global calendar_agent_instance, line_bot_api_global
+    global calendar_agent_instance, line_bot_api_global, bot_user_id
 
     logger.info("=" * 80)
     logger.info("🚀 TeacherBOY Multi-Agent System - Starting Up")
     logger.info("=" * 80)
 
     # ========================================================================
-    # PHASE 1: HTTP Client Initialization
+    # PHASE 1: Bot Identity Detection (Prevent Infinite Loop)
+    # ========================================================================
+    try:
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            # Get bot's own profile to extract user ID
+            bot_info = line_bot_api.get_bot_info()
+            bot_user_id = bot_info.user_id
+            logger.info(f"🤖 Bot User ID: {bot_user_id} (self-message detection enabled)")
+    except Exception as e:
+        logger.error(f"❌ Failed to get bot user ID: {e}", exc_info=True)
+        logger.warning("⚠️  Bot will operate without self-message detection (RISKY!)")
+
+    # ========================================================================
+    # PHASE 2: HTTP Client Initialization
     # ========================================================================
     logger.info("📡 Initializing optimized HTTP client pool...")
     http_client_pool = create_optimized_http_client()
@@ -410,6 +427,11 @@ async def webhook(request: Request) -> JSONResponse:
             for event in events:  # type: ignore[union-attr]
                 try:
                     if isinstance(event, MessageEvent):
+                        # CRITICAL: Check if message is from bot itself (prevent infinite loop)
+                        if bot_user_id and hasattr(event.source, 'user_id') and event.source.user_id == bot_user_id:
+                            logger.info(f"🔒 Skipping bot's own message (self-message detection)")
+                            continue
+                        
                         if isinstance(event.message, TextMessageContent):
                             # Route text message to appropriate agent
                             await agent_router.route_message(event, line_bot_api)
