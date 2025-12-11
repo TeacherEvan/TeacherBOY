@@ -174,6 +174,6 @@ class GoogleTranslationService:
             return await self.translate(text, target_lang="th", source_lang="en")
 
 
-# Singleton instance - API key loaded from settings during startup
-# DO NOT initialize with API key here - it's set in main.py lifespan
+# Singleton instance - API key is assigned via direct attribute assignment in main.py after instantiation.
+# DO NOT initialize with API key here; main.py sets it with: google_translation_service.api_key = settings.google_translate_api_key
 google_translation_service = GoogleTranslationService()
