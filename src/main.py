@@ -138,10 +138,10 @@ async def lifespan(app: FastAPI):
             )
     except Exception as e:
         logger.error(f"❌ Failed to fetch bot info: {e}", exc_info=True)
-        logger.warning(
-            "⚠️  Bot will continue without self-detection - MONITOR FOR LOOPS!"
+        logger.critical(
+            "🛑 Bot cannot start without self-detection. Aborting startup to prevent infinite loops."
         )
-        bot_user_id = None
+        raise RuntimeError("Failed to fetch bot info; cannot start without self-detection.")
 
     # ========================================================================
     # PHASE 1: HTTP Client Initialization
