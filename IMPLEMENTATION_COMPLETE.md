@@ -63,7 +63,7 @@ Message → Agent Router → Check each agent by priority → First match handle
 
 - Per-chat translation sessions
 - Auto-start when Thai text detected
-- "thanks Brown" exit command
+- "Thank you TeacherBoy" exit command
 - Independent sessions for groups/users
 
 ### 3. Extensibility
@@ -141,7 +141,7 @@ docker logs -f teacherboy
 
 - Send Thai text → Translation mode starts
 - Send English → Translates to Thai
-- Say "thanks Brown" → Session ends
+- Say "Thank you TeacherBoy" → Session ends
 
 ## 📝 New Agent Token Stored
 

@@ -57,7 +57,7 @@ The router:
 - **Features**:
   - Auto-detects Thai characters
   - Starts continuous translation session
-  - Exits with "thanks Brown"
+  - Exits with "Thank you TeacherBoy"
   - Uses Google Translate (primary) + LibreTranslate (fallback)
 
 ## 🔧 Adding New Agents

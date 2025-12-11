@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     """
 
     # ============================================================================
-    # LINE Bot Configuration - Primary Agent (Brown)
+    # LINE Bot Configuration - Primary Agent (TeacherBOY)
     # ============================================================================
     line_channel_secret: str = Field(
         default="test_secret_for_testing_only",
