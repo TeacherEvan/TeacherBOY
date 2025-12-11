@@ -73,6 +73,11 @@ agent_router = AgentRouter()
 calendar_agent_instance: Optional[CalendarAgent] = None
 line_bot_api_global: Optional[MessagingApi] = None
 
+# ============================================================================
+# Bot Self-Detection (Critical for preventing infinite loops)
+# ============================================================================
+bot_user_id: Optional[str] = None  # Bot's own user ID from LINE API
+
 
 def create_optimized_http_client() -> httpx.AsyncClient:
     """
@@ -109,11 +114,32 @@ async def lifespan(app: FastAPI):
     This context manager handles:
     - HTTP client pool initialization
     - Translation services setup
+    - Bot self-identification (CRITICAL for preventing infinite loops)
     - Agent registration
     - Scheduler configuration
     - Graceful shutdown
     """
-    global calendar_agent_instance, line_bot_api_global
+    global calendar_agent_instance, line_bot_api_global, bot_user_id
+
+    logger.info("=" * 80)
+    logger.info("🚀 TeacherBOY Multi-Agent System - Starting Up")
+    logger.info("=" * 80)
+
+    # ========================================================================
+    # PHASE 0: Bot Self-Identification (CRITICAL)
+    # ========================================================================
+    logger.info("🤖 Fetching bot's own user ID to prevent infinite loops...")
+    try:
+        with ApiClient(configuration) as api_client:
+            temp_line_api = MessagingApi(api_client)
+            bot_info = temp_line_api.get_bot_info()
+            bot_user_id = bot_info.user_id
+            logger.info(f"✅ Bot User ID: {bot_user_id} (Display Name: {bot_info.display_name})")
+            logger.info("🛡️ Self-message detection ENABLED - Infinite loop prevention active")
+    except Exception as e:
+        logger.error(f"❌ Failed to fetch bot info: {e}", exc_info=True)
+        logger.warning("⚠️  Bot will continue without self-detection - MONITOR FOR LOOPS!")
+        bot_user_id = None
 
     logger.info("=" * 80)
     logger.info("🚀 TeacherBOY Multi-Agent System - Starting Up")
@@ -409,6 +435,19 @@ async def webhook(request: Request) -> JSONResponse:
             # Process each event
             for event in events:  # type: ignore[union-attr]
                 try:
+                    # ============================================================
+                    # CRITICAL: Check if message is from bot itself
+                    # This prevents infinite translation loops
+                    # ============================================================
+                    if isinstance(event, MessageEvent):
+                        if hasattr(event.source, "user_id") and bot_user_id:
+                            if event.source.user_id == bot_user_id:
+                                logger.debug(
+                                    "🔇 Skipping own message to prevent infinite loop "
+                                    f"(bot_user_id: {bot_user_id})"
+                                )
+                                continue  # Skip this event entirely
+
                     if isinstance(event, MessageEvent):
                         if isinstance(event.message, TextMessageContent):
                             # Route text message to appropriate agent

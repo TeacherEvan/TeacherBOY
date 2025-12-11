@@ -14,6 +14,8 @@ from .base_agent import BaseAgent
 from src.services.translation_service import translation_service
 from src.services.google_translation import google_translation_service
 from src.services.session_manager import session_manager
+from src.services.rate_limiter import rate_limiter
+from src.services.message_dedup import message_dedup
 
 logger = logging.getLogger(__name__)
 
@@ -65,14 +67,39 @@ class TranslationAgent(BaseAgent):
         return self.contains_thai(text) or session_manager.is_session_active(chat_id)
 
     async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
-        """Process translation request."""
+        """Process translation request with safety checks."""
         chat_id = self._get_chat_id(event)
         user_id = event.source.user_id
 
         try:
+            # ================================================================
+            # SAFETY CHECK 1: Rate Limiting
+            # ================================================================
+            if not rate_limiter.is_allowed(chat_id):
+                logger.warning(f"🚨 Rate limit exceeded for chat {chat_id}, rejecting translation")
+                # Send friendly rate limit message
+                rate_limit_msg = TextMessage(
+                    text="⏱️ Whoa! Slow down a bit! You're sending messages too quickly. "
+                    "Please wait a moment before trying again. 🙏"
+                )
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(reply_token=event.reply_token, messages=[rate_limit_msg])
+                )
+                return False
+
+            # ================================================================
+            # SAFETY CHECK 2: Message Deduplication
+            # ================================================================
+            if message_dedup.is_duplicate(chat_id, text):
+                logger.info(f"🔁 Duplicate message detected for chat {chat_id}, skipping translation")
+                # Silently ignore duplicates (already translated within TTL)
+                return True
+
             # Handle exit command
             if self.is_exit_command(text):
                 session_manager.end_session(chat_id)
+                # Clear deduplication history when session ends
+                message_dedup.clear_chat_history(chat_id)
                 goodbye_message = self._create_goodbye_message()
 
                 line_bot_api.reply_message(

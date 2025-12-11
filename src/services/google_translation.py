@@ -159,5 +159,6 @@ class GoogleTranslationService:
             return await self.translate(text, target_lang="th", source_lang="en")
 
 
-# Singleton instance (optional, requires API key in config)
+# Singleton instance - API key loaded from settings during startup
+# DO NOT initialize with API key here - it's set in main.py lifespan
 google_translation_service = GoogleTranslationService()
