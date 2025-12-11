@@ -71,15 +71,15 @@ class TranslationAgent(BaseAgent):
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
         Handle if:
-        1. Wake command when sleeping (to reactivate)
+        1. Wake command (always, even if not sleeping - to confirm awake status)
         2. Thai text detected (auto-start session)
         3. Session is active for this chat
         4. Sleep command (to properly put bot to sleep)
         """
         chat_id = self._get_chat_id(event)
 
-        # Always handle wake command when sleeping
-        if self.is_wake_command(text) and session_manager.is_sleeping(chat_id):
+        # Always handle wake command (even if not sleeping)
+        if self.is_wake_command(text):
             return True
 
         # Don't handle anything else if sleeping
@@ -99,19 +99,36 @@ class TranslationAgent(BaseAgent):
         user_id = getattr(event.source, 'user_id', None) if event.source else None
 
         try:
-            # Handle wake command (when sleeping)
-            if self.is_wake_command(text) and session_manager.is_sleeping(chat_id):
-                session_manager.wake_chat(chat_id)
-                wake_message = self._create_wake_message()
-                if event.reply_token:
-                    line_bot_api.reply_message(
-                        ReplyMessageRequest(
-                            replyToken=event.reply_token,
-                            messages=[wake_message],
-                            notificationDisabled=False
+            # Handle wake command
+            if self.is_wake_command(text):
+                if session_manager.is_sleeping(chat_id):
+                    session_manager.wake_chat(chat_id)
+                    wake_message = self._create_wake_message()
+                    if event.reply_token:
+                        line_bot_api.reply_message(
+                            ReplyMessageRequest(
+                                replyToken=event.reply_token,
+                                messages=[wake_message],
+                                notificationDisabled=False
+                            )
                         )
+                    logger.info(f"☀️ Chat {chat_id} woken up by user")
+                else:
+                    # Already awake, confirm status
+                    already_awake_msg = TextMessage(
+                        text="I'm awake! 😊 and waiting!",
+                        quickReply=None,
+                        quoteToken=None
                     )
-                logger.info(f"☀️ Chat {chat_id} woken up by user")
+                    if event.reply_token:
+                        line_bot_api.reply_message(
+                            ReplyMessageRequest(
+                                replyToken=event.reply_token,
+                                messages=[already_awake_msg],
+                                notificationDisabled=False
+                            )
+                        )
+                    logger.info(f"✅ Chat {chat_id} confirmed awake status")
                 return True
 
             # Handle sleep command
