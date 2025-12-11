@@ -6,28 +6,17 @@ TeacherBOY is an **automatic translation bot** for LINE that translates messages
 
 ## 🔄 How the Translation Flow Works
 
-```
-User sends message in LINE
-        ↓
-LINE Platform receives message
-        ↓
-LINE sends webhook POST to your server → https://your-server.com/webhook
-        ↓
-TeacherBOY FastAPI receives webhook
-        ↓
-Validates LINE signature (security)
-        ↓
-Detects language (Thai or English)
-        ↓
-Sends text to LibreTranslate API
-        ↓
-Receives translation
-        ↓
-Creates beautiful Flex Message card
-        ↓
-Sends reply back to LINE Platform
-        ↓
-LINE delivers translated message to user
+```mermaid
+graph TD
+    User[User sends message in LINE] --> LINE[LINE Platform receives message]
+    LINE --> Webhook[LINE sends webhook POST to your server]
+    Webhook --> FastAPI[TeacherBOY FastAPI receives webhook]
+    FastAPI --> Validate[Validates LINE signature]
+    Validate --> Detect[Detects language]
+    Detect --> Translate[Sends text to LibreTranslate API]
+    Translate --> Receive[Receives translation]
+    Receive --> Reply[Sends simple text reply back to LINE Platform]
+    Reply --> Deliver[LINE delivers translated message to user]
 ```
 
 ## 🏗️ Architecture Components
@@ -48,12 +37,12 @@ LINE delivers translated message to user
 ### 3. **LibreTranslate API**
 
 - **What it does:** Performs the actual translation (Thai ↔ English)
-- **Default:** Uses public instance at https://libretranslate.de
+- **Default:** Uses public instance at <https://libretranslate.de>
 - **Alternative:** Can self-host for better privacy/performance
 
 ### 4. **Your Bot's Brain (Python Code)**
 
-```
+```text
 src/
 ├── main.py                    # FastAPI app (receives webhooks)
 ├── config.py                  # Loads .env configuration
@@ -69,13 +58,13 @@ src/
 
 A **webhook** is a URL on YOUR server that LINE calls when events happen.
 
-### Without a Webhook:
+### Without a Webhook
 
 ❌ Your bot can't receive messages  
 ❌ LINE doesn't know where to send events  
 ❌ No real-time interaction
 
-### With a Webhook:
+### With a Webhook
 
 ✅ LINE sends a POST request to `https://your-domain.com/webhook`  
 ✅ Your bot receives the message instantly  
@@ -168,17 +157,19 @@ ngrok http 8000
 
 ### Step 3: Configure LINE Webhook
 
-1. **Go to LINE Developers Console:** https://developers.line.biz/console/
+1. **Go to LINE Developers Console:** <https://developers.line.biz/console/>
 2. **Click your provider** (e.g., TeacherEvan)
 3. **Click your channel** (Brown @788hwhea)
 4. **Click "Messaging API" tab**
 5. **Find "Webhook URL" section**
 6. **Enter your URL:**
-   ```
+
+   ```text
    https://your-ngrok-url.ngrok.io/webhook
    OR
    https://your-domain.com/webhook
    ```
+
 7. **Click "Update"**
 8. **Click "Verify"** - Should show "Success"
 
@@ -267,7 +258,7 @@ async def webhook(request: Request):
 
 ## 📊 Data Flow Example
 
-```
+```json
 User: "สวัสดีครับ" (Hello in Thai)
                 ↓
         LINE Platform

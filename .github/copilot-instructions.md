@@ -2,318 +2,294 @@
 
 ## Project Overview
 
-TeacherBOY is a **multi-agent LINE bot** with the following capabilities:
+TeacherBOY is a **production-grade LINE bot for automatic Thai/English translation** with intelligent session management.
 
-- **Thai/English Translation**: Auto-detects and translates between Thai and English
-- **Google Calendar Reminders**: Scheduled reminders at 07:00 (daily) and 14:00 (weekly)
+**Primary Purpose: Translation**
+- Auto-start translation when Thai text detected
+- Session-based continuous translation mode with sleep/wake commands  
+- Rate limiting (10 translations/min) and deduplication (60s window)
+- Supports 1-on-1 chats, groups, and multi-person conversations
+- Google Cloud Translation API (primary) + LibreTranslate (fallback)
 
-The bot uses a modular agent-based architecture where each agent handles specific triggers and tasks.
+**Architecture:** Multi-agent system allows extensibility, but translation is the core feature.
+
+**Critical Design Pattern:** Agent-based routing with priority system - messages flow through `AgentRouter` to appropriate agent based on trigger patterns and priority.
 
 ## Tech Stack
 
-- **Python 3.11**: Primary programming language
-- **FastAPI**: Web framework for handling webhooks
-- **LINE Bot SDK v3**: Integration with LINE Messaging API
-- **Google Cloud Translation API**: Primary translation service
-- **LibreTranslate API**: Fallback translation service
-- **Google Calendar API**: Calendar event fetching
-- **APScheduler**: Background task scheduling
-- **langdetect**: Language detection library
-- **Docker**: Containerization
-- **MCP**: line-bot-mcp-server for Docker integration
+- **Python 3.11** + **FastAPI** with full async/await
+- **LINE Bot SDK v3** (webhooks + messaging API)
+- **Google Cloud Translation API** (primary) + **LibreTranslate** (fallback)
+- **APScheduler** (background tasks), **langdetect** (language detection)
+- **httpx** with HTTP/2 and connection pooling
+- **Pydantic Settings** for type-safe configuration
+- **Docker** + **Docker Compose** for deployment
 
-## Project Structure
+## Architecture: Multi-Agent System
 
+### Agent Flow (Priority-Based Routing)
 ```
-TeacherBOY/
-├── src/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI app, webhook handling, scheduler setup
-│   ├── config.py            # Configuration and settings
-│   ├── agents/              # Multi-agent system
-│   │   ├── __init__.py
-│   │   ├── base_agent.py       # Abstract base class for agents
-│   │   ├── agent_router.py     # Routes messages to appropriate agent
-│   │   ├── translation_agent.py # Handles Thai/English translation
-│   │   └── calendar_agent.py    # Google Calendar reminders
-│   ├── handlers/
-│   │   ├── __init__.py
-│   │   └── message_handler.py  # LINE event handlers (join, leave, etc.)
-│   └── services/
-│       ├── __init__.py
-│       ├── translation_service.py  # LibreTranslate integration
-│       ├── google_translation.py   # Google Cloud Translation
-│       ├── scheduler_service.py    # APScheduler for timed events
-│       └── session_manager.py      # Translation session management
-├── tests/
-│   ├── __init__.py
-│   ├── test_translation_service.py
-│   └── test_message_handler.py
-├── mcp/
-│   └── config.json          # MCP server configuration
-├── docs/
-│   └── LINE_SETUP.md        # LINE Bot setup documentation
-├── .github/
-│   ├── workflows/
-│   │   └── ci.yml           # CI/CD pipeline
-│   └── copilot-instructions.md  # This file
-├── credentials.json         # Google Calendar OAuth credentials (not committed)
-├── token.json               # Google Calendar token (not committed)
-├── .env.example             # Environment variables template
-├── requirements.txt         # Python dependencies
-├── Dockerfile              # Docker image definition
-└── docker-compose.yml      # Docker Compose configuration
+LINE Webhook → FastAPI /webhook → Signature Verification
+  → AgentRouter.route_message() → Iterates agents by priority
+    → agent.should_handle() → First match → agent.handle()
 ```
 
-## Key Components
+### Key Components
 
-### 1. Agent System (`src/agents/`)
+**1. Agent System** (`src/agents/`)
+- `base_agent.py`: Abstract base with `should_handle()`, `handle()`, `get_priority()`, `enable/disable()`
+- `agent_router.py`: Routes to first matching agent (sorted by priority, lower = higher)
+- `translation_agent.py`: **PRIMARY AGENT** - Priority 10, triggers on Thai text OR active session
+- `calendar_agent.py`: ⚠️ FROZEN/DEPRECATED - Optional scheduler, not core functionality
 
-#### BaseAgent (`base_agent.py`)
+**2. Application Lifecycle** (`src/main.py`)
+- FastAPI `lifespan` context manager handles startup/shutdown
+- Phase 1: Bot identity detection (prevents infinite loops)
+- Phase 2: HTTP client pool + translation services init
+- Phase 3: Agent registration (translation agent is primary)
+- Phase 4: Graceful shutdown (closes HTTP client)
 
-- Abstract base class for all agents
-- Methods: `should_handle()`, `handle()`, `get_priority()`
-- Enable/disable functionality
+**3. Services** (`src/services/`)
+- `translation_service.py`: LibreTranslate integration with `detect_language()` and `translate()`
+- `google_translation.py`: Google Cloud Translation API (preferred)
+- `session_manager.py`: Chat-level state (active sessions, sleep mode, deduplication)
+- `rate_limiter.py`: Per-chat request limiting (10/min default)
+- `scheduler_service.py`: APScheduler wrapper for timed jobs
 
-#### AgentRouter (`agent_router.py`)
-
-- Routes incoming messages to appropriate agent
-- Priority-based selection (lower number = higher priority)
-- Handles agent registration and listing
-
-#### TranslationAgent (`translation_agent.py`) - Priority: 10
-
-- Triggers: Thai text detected OR active session
-- Features: Session management, exit command ("thanks Brown")
-- Uses Google Translate (primary) or LibreTranslate (fallback)
-
-#### CalendarAgent (`calendar_agent.py`) - Priority: 20
-
-- Triggers: Scheduled at 07:00 and 14:00 (not user messages)
-- Features: Daily reminders, weekly overview
-- Uses Google Calendar API with OAuth2
-
-### 2. Main Application (`src/main.py`)
-
-- FastAPI application with webhook endpoint
-- LINE Bot API initialization
+**4. Configuration** (`src/config.py`)
+- Pydantic Settings with validation
+- All config from environment variables
+- Type-safe with defaults and constraints
 - Agent registration and scheduler setup
 - Health check and test endpoints
 
-### 3. Services (`src/services/`)
+## Critical Patterns & Conventions
 
-- **translation_service.py**: LibreTranslate API integration
-- **google_translation.py**: Google Cloud Translation API
-- **scheduler_service.py**: APScheduler for timed tasks
-- **session_manager.py**: Translation session state
+### 1. Translation Agent Session Management
+**Pattern:** State machine with 3 modes per chat
+- **Inactive:** Bot ignores messages until Thai text detected or "TeacherBoy" said
+- **Active:** Translates EVERY message (Thai→EN, EN→TH)
+- **Sleeping:** 24hr timeout after "Thank you TeacherBoy" - ignores all messages
 
-## Coding Standards
-
-### Python Style
-
-- Follow PEP 8 style guidelines
-- Use type hints for function parameters and return values
-- Use async/await for I/O operations
-- Add docstrings to all functions and classes
-- Keep functions small and focused
-
-### Error Handling
-
-- Always log errors with appropriate level
-- Provide user-friendly error messages
-- Never expose sensitive information in errors
-- Use try-except blocks for external API calls
-
-### Testing
-
-- Write unit tests for all services
-- Use pytest for test framework
-- Mock external API calls
-- Aim for high test coverage
-
-### Environment Variables
-
-- Never commit `.env` file
-- Update `.env.example` for new variables
-- Use pydantic-settings for configuration
-- Validate all required settings on startup
-
-## Development Workflow
-
-### Local Development
-
-```bash
-# Set up virtual environment
-python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run locally
-python -m src.main
+**Implementation:**
+```python
+# SessionManager tracks per-chat state (src/services/session_manager.py)
+session_manager.is_session_active(chat_id)  # Check active
+session_manager.is_sleeping(chat_id)        # Check sleeping
+session_manager.sleep_chat(chat_id, hours=24)  # Enter sleep
 ```
 
-### Docker Development
+### 2. Message Deduplication (Critical for LINE)
+**Why:** LINE webhooks sometimes deliver duplicate messages within seconds
 
+**Pattern:** Hash-based deduplication with 60s window
+```python
+# In SessionManager
+message_hash = hashlib.sha256(f"{chat_id}:{user_id}:{text}".encode()).hexdigest()[:16]
+if message_hash in recent_hashes:  # Skip duplicate
+    return False
+```
+
+### 3. Rate Limiting (Prevent API Quota Exhaustion)
+**Pattern:** Per-chat sliding window (10 requests/60s)
+```python
+# Check before translation
+if not rate_limiter.is_allowed(chat_id):
+    # Send rate limit message to user
+    remaining_seconds = rate_limiter.get_reset_time(chat_id)
+```
+
+### 4. Bot Self-Message Detection (Prevent Infinite Loops)
+**Critical:** Bot fetches its own `user_id` during startup and NEVER responds to its own messages
+```python
+# In main.py lifespan
+bot_info = line_bot_api.get_bot_info()
+bot_user_id = bot_info.user_id
+
+# In webhook handler
+if event.source.user_id == bot_user_id:
+    return  # Skip self-messages
+```
+
+### 5. HTTP Client Connection Pooling
+**Pattern:** Single global `httpx.AsyncClient` with HTTP/2 + keep-alive
+```python
+# Created once in lifespan, shared by all services
+http_client = httpx.AsyncClient(
+    timeout=30, 
+    limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+    http2=True
+)
+translation_service.set_client(http_client)
+```
+
+### 6. Agent Priority System
+**Rule:** Lower number = higher priority. Translation agent is THE primary agent.
+- **Translation: Priority 10** (core feature, handles all translation requests)
+- Custom agents: Use priority 15, 20, 25, etc. for additional features
+- Never create agents that interfere with translation workflow
+
+## Development Workflows
+
+### Running Locally
 ```bash
-# Build and run with Docker Compose
+# Preferred: Docker (consistent environment)
 docker-compose up --build
 
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
+# Direct Python (for debugging)
+python -m uvicorn src.main:app --reload --port 8000
 ```
 
 ### Testing
-
 ```bash
-# Run all tests
-pytest
-
-# Run with coverage
+# Run all tests with coverage
 pytest --cov=src --cov-report=html
 
-# Run specific test
-pytest tests/test_translation_service.py
+# Run specific test file
+pytest tests/test_translation_service.py -v
+
+# Test async functions
+pytest tests/test_translation_service.py::TestTranslationService::test_auto_translate_thai_to_english
 ```
 
-### Code Quality
+**Test Patterns:**
+- Mock `httpx.AsyncClient` for external API calls
+- Use `@pytest.mark.asyncio` for async tests
+- `pytest.ini` configures `asyncio_mode = auto`
 
+### Adding a New Agent
+1. **Create agent class** inheriting from `BaseAgent`:
+   ```python
+   class MathAgent(BaseAgent):
+       def __init__(self):
+           super().__init__(name="MathAgent", description="Solves math problems")
+       
+       def get_priority(self) -> int:
+           return 15  # Between Translation (10) and Calendar (20)
+       
+       async def should_handle(self, event, text) -> bool:
+           return text.startswith("calc:") or "solve:" in text.lower()
+       
+       async def handle(self, event, text, line_bot_api) -> bool:
+           # Process and reply
+           pass
+   ```
+
+2. **Register in `main.py` lifespan**:
+   ```python
+   math_agent = MathAgent()
+   agent_router.register_agent(math_agent)
+   ```
+
+3. **Add tests** in `tests/test_math_agent.py`
+
+### LINE Webhook Setup (ngrok for local testing)
 ```bash
-# Format code
-black src/ tests/
+# Terminal 1: Run bot
+docker-compose up
 
-# Lint code
-flake8 src/ tests/
-
-# Type checking
-mypy src/
-```
-
-## LINE Bot Integration
-
-### Webhook Flow
-
-1. User sends message to LINE bot
-2. LINE sends POST request to `/webhook`
-3. Signature verification
-4. Message event handled
-5. Text extracted and sent to translation service
-6. Translation returned to user
-
-### Message Format
-
-- Detection indicator: 🌐 Detected: [Language]
-- Translation label: 📝 [Target Language] Translation:
-- Clear separation between labels and content
-
-## Translation Logic
-
-### Language Detection
-
-- Uses langdetect library
-- Supports Thai (`th`) and English (`en`)
-- Falls back to English for undetected languages
-
-### Translation Rules
-
-- Thai → English
-- English → Thai
-- All other languages → Thai (default)
-
-## Security Considerations
-
-### API Keys
-
-- Store in environment variables only
-- Never log sensitive tokens
-- Use `.env.example` as template
-
-### Webhook Security
-
-- Validate LINE signature on all webhook requests
-- Return 400 for invalid signatures
-- Log security events
-
-### Data Privacy
-
-- Don't store user messages
-- Don't log personal information
-- Process messages in memory only
-
-## MCP Integration
-
-The project uses line-bot-mcp-server for Docker MCP integration:
-
-- Configuration in `mcp/config.json`
-- Environment variables passed through Docker
-- Network mode: host for local development
-
-## Common Tasks
-
-### Adding a New Feature
-
-1. Update relevant service or handler
-2. Add tests for new functionality
-3. Update documentation
-4. Test locally and with Docker
-5. Submit PR with description
-
-### Updating Dependencies
-
-1. Update `requirements.txt`
-2. Rebuild Docker image
-3. Run full test suite
-4. Update documentation if needed
-
-### Debugging Issues
-
-1. Check application logs
-2. Verify environment variables
-3. Test webhook connectivity
-4. Check LINE Developer Console
-5. Review LibreTranslate API status
-
-## CI/CD Pipeline
-
-The GitHub Actions workflow:
-
-- Runs on push and pull requests
-- Executes linting (flake8, black)
-- Runs test suite with coverage
-- Builds Docker image
-- Reports test results
-
-## Useful Commands
-
-```bash
-# Quick format and lint
-black src/ tests/ && flake8 src/ tests/
-
-# Run tests with verbose output
-pytest -v
-
-# Check type hints
-mypy src/ --strict
-
-# Build Docker image
-docker build -t teacherboy:latest .
-
-# Test webhook locally with ngrok
+# Terminal 2: Expose with ngrok
 ngrok http 8000
+
+# Copy HTTPS URL (e.g., https://abc123.ngrok.io)
+# Set in LINE Developers Console: https://abc123.ngrok.io/webhook
 ```
 
-## Resources
+### Environment Variables
+**Required:**
+- `LINE_CHANNEL_SECRET` - For webhook signature verification
+- `LINE_CHANNEL_ACCESS_TOKEN` - For sending messages
 
-- [LINE Messaging API Docs](https://developers.line.biz/en/docs/messaging-api/)
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [LibreTranslate API](https://libretranslate.com/docs/)
-- [Python asyncio Guide](https://docs.python.org/3/library/asyncio.html)
+**Recommended:**
+- `GOOGLE_TRANSLATE_API_KEY` - Much better quality than LibreTranslate
 
-## Contact
+**Optional:**
+- `DEBUG=True` - Enable FastAPI /docs endpoint and verbose logging
 
-- Project Owner: ewaldt91
-- Repository: https://github.com/TeacherEvan/TeacherBOY
+## Coding Standards (Project-Specific)
+
+### Async Everywhere
+**Pattern:** All I/O operations MUST be async (LINE API, translation APIs, HTTP calls)
+```python
+# ✅ Correct
+async def handle(self, event, text, line_bot_api):
+    translation = await translation_service.translate(text, "th", "en")
+
+# ❌ Wrong (blocks event loop)
+def handle(self, event, text, line_bot_api):
+    translation = translation_service.translate_sync(text, "th", "en")
+```
+
+### Error Handling with User Feedback
+**Pattern:** Always catch exceptions and send user-friendly LINE messages
+```python
+try:
+    translation = await google_translation_service.translate(text, "th", "en")
+except Exception as e:
+    logger.error(f"Translation failed: {e}", exc_info=True)
+    await line_bot_api.reply_message_async(
+        ReplyMessageRequest(
+            reply_token=event.reply_token,
+            messages=[TextMessage(text="⚠️ Translation temporarily unavailable")]
+        )
+    )
+    return False
+```
+
+### Logging Conventions
+- `logger.info()` - State changes, agent actions, successful operations
+- `logger.warning()` - Rate limits, sleep mode, non-critical issues
+- `logger.error()` - API failures, exceptions (with `exc_info=True`)
+- `logger.debug()` - Detailed flow (enabled via `DEBUG=True`)
+
+**Never log:** User message content (privacy), API keys, LINE tokens
+
+### Pydantic Validation for Config
+**Pattern:** All config uses Pydantic with constraints and defaults
+```python
+class Settings(BaseSettings):
+    line_channel_secret: str = Field(min_length=10, description="...")
+    rate_limit_max: int = Field(default=10, ge=1, le=100)  # 1-100 range
+```
+
+## Common Pitfalls & Solutions
+
+### Pitfall 1: Infinite Message Loops
+**Problem:** Bot responds to its own messages → triggers itself again
+**Solution:** Fetch `bot_user_id` at startup and skip self-messages (already implemented in `main.py`)
+
+### Pitfall 2: Duplicate Message Processing
+**Problem:** LINE webhooks occasionally send duplicates
+**Solution:** Use `SessionManager` deduplication (60s hash-based window)
+
+### Pitfall 3: Agent Order Matters
+**Problem:** Translation agent catches all messages before other agents run
+**Solution:** Use priority system - specific agents at lower priority (5-9), translation at 10
+
+### Pitfall 4: Blocking I/O in Async Context
+**Problem:** Using `requests` or sync libraries blocks the event loop
+**Solution:** Use `httpx.AsyncClient` for all HTTP calls, `await` all I/O
+
+### Pitfall 5: Rate Limit Confusion
+**Problem:** Users hit API quotas and get no feedback
+**Solution:** Check `rate_limiter.is_allowed()` before translation, send specific error message
+
+## Key Documentation Files
+- `ARCHITECTURE.md` - Detailed webhook flow and component explanations
+- `QUICK_START.md` - Google Translate API setup (HIGHLY RECOMMENDED)
+- `docs/LINE_SETUP.md` - Getting LINE credentials and webhook config
+- `MULTI_AGENT_GUIDE.md` - Guide to building custom agents (for extensibility)
+
+---
+
+## ⚠️ FROZEN FEATURES (Do Not Develop)
+
+### Calendar Integration (DEPRECATED)
+**Status:** Feature frozen until further notice. Focus is 100% on translation.
+
+- `calendar_agent.py` exists but is NOT the primary feature
+- `GOOGLE_CALENDAR_GROUP_ID` env var is optional and should be ignored
+- Scheduler setup in `main.py` is legacy code
+- If asked about calendar features, redirect focus to translation capabilities
+
+**Why frozen:** TeacherBOY is a **translation bot**, not a calendar bot. Calendar was an experimental feature that distracted from the core mission.

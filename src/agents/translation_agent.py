@@ -8,6 +8,7 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     TextMessage,
     FlexMessage,
+    FlexContainer,
 )
 
 from .base_agent import BaseAgent
@@ -44,12 +45,12 @@ class TranslationAgent(BaseAgent):
         """
         text_lower = text.lower().strip()
         sleep_patterns = [
-            r"^thanks?\s+teacherboy$",
-            r"^thank\s+you\s+teacherboy$",
-            r"^thx\s+teacherboy$",
-            r"^ty\s+teacherboy$",
-            r"^ขอบคุณ\s*teacherboy$",
-            r"^ขอบใจ\s*teacherboy$",
+            r"^thanks?\s+teacherboy[\s.!]*$",
+            r"^thank\s+you\s+teacherboy[\s.!]*$",
+            r"^thx\s+teacherboy[\s.!]*$",
+            r"^ty\s+teacherboy[\s.!]*$",
+            r"^ขอบคุณ\s*teacherboy[\s.!]*$",
+            r"^ขอบใจ\s*teacherboy[\s.!]*$",
         ]
         return any(re.search(pattern, text_lower) for pattern in sleep_patterns)
 
@@ -59,8 +60,8 @@ class TranslationAgent(BaseAgent):
 
         Wake pattern: "TeacherBoy" alone (exact match, not among other text)
         """
-        text_lower = text.lower().strip()
-        return text_lower == "teacherboy"
+        # Allow for case-insensitive "teacherboy" with optional trailing punctuation/whitespace
+        return bool(re.match(r"^teacherboy[\s.!]*$", text.lower().strip()))
 
     def is_exit_command(self, text: str) -> bool:
         """Check if text is an exit command (ends session but doesn't sleep)."""
@@ -146,16 +147,11 @@ class TranslationAgent(BaseAgent):
             translated_text = await self._translate_message(text)
 
             if translated_text:
-                # Create Flex Message
-                flex_message = self._create_translation_flex(
-                    original_text=text,
-                    translated_text=translated_text,
-                    source_lang="Thai" if self.contains_thai(text) else "English",
-                    target_lang="English" if self.contains_thai(text) else "Thai",
-                )
+                # Send simple text message as requested
+                text_message = TextMessage(text=translated_text)
 
                 line_bot_api.reply_message(
-                    ReplyMessageRequest(reply_token=event.reply_token, messages=[flex_message])
+                    ReplyMessageRequest(reply_token=event.reply_token, messages=[text_message])
                 )
                 logger.info(f"✅ Translation sent for chat {chat_id}")
                 return True
@@ -423,7 +419,10 @@ class TranslationAgent(BaseAgent):
             "styles": {"footer": {"separator": False}},
         }
 
-        return FlexMessage(alt_text=f"Translation: {original_text[:50]}...", contents=flex_dict)
+        return FlexMessage(
+            alt_text=f"Translation: {original_text[:50]}...",
+            contents=FlexContainer.from_dict(flex_dict),
+        )
 
     def _create_goodbye_message(self) -> FlexMessage:
         """
@@ -521,7 +520,10 @@ class TranslationAgent(BaseAgent):
             "styles": {"body": {"backgroundColor": "#FFFFFF"}},
         }
 
-        return FlexMessage(alt_text="Translation session ended - Goodbye!", contents=flex_dict)
+        return FlexMessage(
+            alt_text="Translation session ended - Goodbye!",
+            contents=FlexContainer.from_dict(flex_dict),
+        )
 
     def _create_rate_limit_message(self, reset_seconds: int) -> FlexMessage:
         """
@@ -614,7 +616,10 @@ class TranslationAgent(BaseAgent):
             "styles": {"body": {"backgroundColor": "#FFFFFF"}},
         }
 
-        return FlexMessage(alt_text="Rate limit reached - please wait", contents=flex_dict)
+        return FlexMessage(
+            alt_text="Rate limit reached - please wait",
+            contents=FlexContainer.from_dict(flex_dict),
+        )
 
     def _create_sleep_message(self) -> FlexMessage:
         """
@@ -711,7 +716,10 @@ class TranslationAgent(BaseAgent):
             "styles": {"body": {"backgroundColor": "#FFFFFF"}},
         }
 
-        return FlexMessage(alt_text="TeacherBOY sleeping for 24 hours", contents=flex_dict)
+        return FlexMessage(
+            alt_text="TeacherBOY sleeping for 24 hours",
+            contents=FlexContainer.from_dict(flex_dict),
+        )
 
     def _create_wake_message(self) -> FlexMessage:
         """
@@ -808,4 +816,7 @@ class TranslationAgent(BaseAgent):
             "styles": {"body": {"backgroundColor": "#FFFFFF"}},
         }
 
-        return FlexMessage(alt_text="TeacherBOY is awake!", contents=flex_dict)
+        return FlexMessage(
+            alt_text="TeacherBOY is awake!",
+            contents=FlexContainer.from_dict(flex_dict),
+        )

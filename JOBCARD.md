@@ -10,6 +10,14 @@ Comprehensive overhaul of the TeacherBOY LINE Bot to elevate it to production-gr
 
 ## 🔧 Changes Implemented
 
+### Phase 4: User Experience Refinement (Current)
+
+- **Silent Join:** Removed welcome message to reduce noise in groups.
+- **Silent Activation:** Bot only activates when Thai text is detected.
+- **Text-Only Responses:** Replaced Flex Messages with simple text for cleaner chat history.
+- **Docker Deployment:** Standardized on Docker for consistent runtime environment.
+- **Calendar Freeze:** Deprecated Calendar Agent to focus on core translation features.
+
 ### Phase 1: Discovery & Strategy
 
 - **Audit:** Identified blocking synchronous calls in `message_handler.py` and inefficient HTTP client usage in `translation_service.py`.

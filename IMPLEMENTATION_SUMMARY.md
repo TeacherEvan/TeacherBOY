@@ -12,13 +12,14 @@ Successfully implemented a complete Thai/English LINE translation bot with autom
 - ✅ **Bidirectional Translation** - Thai ↔ English translation using LibreTranslate API
 - ✅ **LINE Bot Integration** - Full LINE Messaging API v3 webhook handling
 - ✅ **FastAPI Backend** - Python 3.11+ with FastAPI for high-performance webhooks
-- ✅ **Beautiful Flex Messages** - Premium UI cards with flags and formatted translations
+- ✅ **Text-Only Responses** - Simple, clean text translations (replaced Flex Messages)
+- ✅ **Silent Operation** - Bot joins silently and only activates on Thai text
 
 ### Group Chat Support (NEW)
 
-- ✅ **Join Events** - Welcome message when bot joins a group
+- ✅ **Silent Join** - No welcome message when bot joins a group (reduces noise)
 - ✅ **Leave Events** - Cleanup and logging when bot is removed
-- ✅ **Member Join** - Greets new members in groups
+- ✅ **Member Join** - Silent logging of new members
 - ✅ **Member Leave** - Logs member departures
 
 ### Current Deployment Status

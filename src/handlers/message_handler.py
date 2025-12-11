@@ -195,30 +195,8 @@ async def handle_join_event(event, line_bot_api: MessagingApi):
         chat_id = "unknown"
         logger.info(f"Bot joined unknown chat type: {source_type}")
 
-    welcome_text = (
-        "👋 สวัสดีครับ! I'm TeacherBOY 🇹🇭↔️🇬🇧\n\n"
-        "🔥 SMART TRANSLATION MODE:\n"
-        "• Send ANY Thai text → I start translating EVERYTHING\n"
-        "• I translate EVERY message until you say:\n"
-        "  'Thank you TeacherBoy' or 'ขอบคุณ TeacherBoy'\n\n"
-        "📖 How it works:\n"
-        "1. Someone sends Thai → Translation mode ON\n"
-        "2. I translate ALL messages (Thai→EN, EN→TH)\n"
-        "3. Say 'Thank you TeacherBoy' → I sleep for 24h\n"
-        "4. Say 'TeacherBoy' alone → I wake up!\n\n"
-        "Try sending something in Thai now! 🚀"
-    )
-
-    try:
-        await asyncio.to_thread(
-            line_bot_api.reply_message,
-            ReplyMessageRequest(  # type: ignore[call-arg]
-                replyToken=event.reply_token,
-                messages=[TextMessage(text=welcome_text)],  # type: ignore[call-arg]
-            ),
-        )
-    except Exception as e:
-        logger.error(f"Error sending welcome message: {str(e)}")
+    # Silent join - only log
+    pass
 
 
 async def handle_leave_event(event, line_bot_api: MessagingApi):
@@ -234,17 +212,8 @@ async def handle_member_joined_event(event, line_bot_api: MessagingApi):
     """Handle new member joining the group."""
     logger.info(f"Member joined: {event.joined.members}")
 
-    welcome_text = "Welcome! 👋 I can translate Thai ↔️ English for you."
-    try:
-        await asyncio.to_thread(
-            line_bot_api.reply_message,
-            ReplyMessageRequest(  # type: ignore[call-arg]
-                replyToken=event.reply_token,
-                messages=[TextMessage(text=welcome_text)],  # type: ignore[call-arg]
-            ),
-        )
-    except Exception as e:
-        logger.error(f"Error sending member welcome: {str(e)}")
+    # Silent join - only log
+    pass
 
 
 async def handle_member_left_event(event, line_bot_api: MessagingApi):

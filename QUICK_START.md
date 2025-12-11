@@ -10,6 +10,8 @@
 - **Wake command**: Say "TeacherBoy" alone to wake up
 - **Works everywhere**: 1-on-1 chats, groups, rooms
 - **Rate limiting**: 10 translations per minute
+- **Silent Join**: Bot joins groups silently (no welcome message)
+- **Text-Only**: Simple text responses for translations
 
 ### Translation Quality
 

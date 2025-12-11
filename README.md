@@ -23,7 +23,8 @@ TeacherBOY is a high-performance, asynchronous LINE Bot featuring a modular mult
 - **🌐 Professional Quality:** Google Translate (primary) + LibreTranslate (fallback)
 - **💬 Bi-directional:** Thai 🇹🇭 → English 🇬🇧 and English 🇬🇧 → Thai 🇹🇭
 - **👥 Group Chat Support:** Works in 1-on-1, groups, and multi-person chats
-- **📱 Beautiful UI:** Flex Message cards with original and translated text
+- **� Text-Only Responses:** Clean, simple text translations (no distracting cards)
+- **🤫 Silent Join:** Bot joins groups silently - only speaks when Thai is detected
 - **🎯 Session Management:** Independent sessions per chat
 
 ### Multi-Agent Architecture **NEW!**
@@ -33,6 +34,7 @@ TeacherBOY is a high-performance, asynchronous LINE Bot featuring a modular mult
 - **🔌 Extensible:** Add math solver, code review, quiz agents, and more!
 - **🎨 Clean API:** Simple `BaseAgent` class to inherit from
 - **📊 Priority System:** Control which agent handles messages first
+- **❄️ Calendar Agent:** Currently frozen/deprecated (focus on translation)
 
 ### Performance & Scalability
 
