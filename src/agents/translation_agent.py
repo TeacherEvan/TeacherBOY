@@ -96,16 +96,21 @@ class TranslationAgent(BaseAgent):
     async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """Process translation request."""
         chat_id = self._get_chat_id(event)
-        user_id = event.source.user_id
+        user_id = getattr(event.source, 'user_id', None) if event.source else None
 
         try:
             # Handle wake command (when sleeping)
             if self.is_wake_command(text) and session_manager.is_sleeping(chat_id):
                 session_manager.wake_chat(chat_id)
                 wake_message = self._create_wake_message()
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(reply_token=event.reply_token, messages=[wake_message])
-                )
+                if event.reply_token:
+                    line_bot_api.reply_message(
+                        ReplyMessageRequest(
+                            replyToken=event.reply_token,
+                            messages=[wake_message],
+                            notificationDisabled=False
+                        )
+                    )
                 logger.info(f"☀️ Chat {chat_id} woken up by user")
                 return True
 
@@ -113,9 +118,14 @@ class TranslationAgent(BaseAgent):
             if self.is_sleep_command(text):
                 session_manager.sleep_chat(chat_id, hours=24)
                 sleep_message = self._create_sleep_message()
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(reply_token=event.reply_token, messages=[sleep_message])
-                )
+                if event.reply_token:
+                    line_bot_api.reply_message(
+                        ReplyMessageRequest(
+                            replyToken=event.reply_token,
+                            messages=[sleep_message],
+                            notificationDisabled=False
+                        )
+                    )
                 logger.info(f"😴 Chat {chat_id} put to sleep for 24 hours")
                 return True
 
@@ -123,11 +133,14 @@ class TranslationAgent(BaseAgent):
             if not rate_limiter.is_allowed(chat_id):
                 reset_seconds = rate_limiter.get_reset_time(chat_id)
                 rate_limit_message = self._create_rate_limit_message(reset_seconds)
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        reply_token=event.reply_token, messages=[rate_limit_message]
+                if event.reply_token:
+                    line_bot_api.reply_message(
+                        ReplyMessageRequest(
+                            replyToken=event.reply_token,
+                            messages=[rate_limit_message],
+                            notificationDisabled=False
+                        )
                     )
-                )
                 logger.warning(f"⚠️  Rate limited chat {chat_id}")
                 return True
 
@@ -140,7 +153,7 @@ class TranslationAgent(BaseAgent):
             # Start session if Thai detected
             if self.contains_thai(text):
                 if not session_manager.is_session_active(chat_id):
-                    session_manager.start_session(chat_id, user_id)
+                    session_manager.start_session(chat_id, user_id or "unknown")
                     logger.info(f"🔥 Translation session started for chat {chat_id}")
 
             # Translate the message
@@ -148,11 +161,16 @@ class TranslationAgent(BaseAgent):
 
             if translated_text:
                 # Send simple text message as requested
-                text_message = TextMessage(text=translated_text)
+                text_message = TextMessage(text=translated_text, quickReply=None, quoteToken=None)
 
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(reply_token=event.reply_token, messages=[text_message])
-                )
+                if event.reply_token:
+                    line_bot_api.reply_message(
+                        ReplyMessageRequest(
+                            replyToken=event.reply_token,
+                            messages=[text_message],
+                            notificationDisabled=False
+                        )
+                    )
                 logger.info(f"✅ Translation sent for chat {chat_id}")
                 return True
             else:
@@ -174,18 +192,26 @@ class TranslationAgent(BaseAgent):
 
         # Fallback to LibreTranslate
         if self.contains_thai(text):
-            return await translation_service.translate(text, "th", "en")
+            result = await translation_service.translate(text, "th", "en")
         else:
-            return await translation_service.translate(text, "en", "th")
+            result = await translation_service.translate(text, "en", "th")
+        
+        return result or "Translation failed"
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         """Extract chat ID from event."""
-        if hasattr(event.source, "group_id"):
-            return f"group_{event.source.group_id}"
-        elif hasattr(event.source, "room_id"):
-            return f"room_{event.source.room_id}"
-        else:
-            return f"user_{event.source.user_id}"
+        if event.source and hasattr(event.source, "group_id"):
+            group_id = getattr(event.source, "group_id", None)
+            if group_id:
+                return f"group_{group_id}"
+        if event.source and hasattr(event.source, "room_id"):
+            room_id = getattr(event.source, "room_id", None)
+            if room_id:
+                return f"room_{room_id}"
+        if event.source:
+            user_id = getattr(event.source, "user_id", "unknown")
+            return f"user_{user_id}"
+        return "user_unknown"
 
     def _create_translation_flex(
         self, original_text: str, translated_text: str, source_lang: str, target_lang: str
@@ -420,8 +446,9 @@ class TranslationAgent(BaseAgent):
         }
 
         return FlexMessage(
-            alt_text=f"Translation: {original_text[:50]}...",
+            altText=f"Translation: {original_text[:50]}...",
             contents=FlexContainer.from_dict(flex_dict),
+            quickReply=None
         )
 
     def _create_goodbye_message(self) -> FlexMessage:
@@ -521,302 +548,61 @@ class TranslationAgent(BaseAgent):
         }
 
         return FlexMessage(
-            alt_text="Translation session ended - Goodbye!",
+            altText="Translation session ended - Goodbye!",
             contents=FlexContainer.from_dict(flex_dict),
+            quickReply=None
         )
 
-    def _create_rate_limit_message(self, reset_seconds: int) -> FlexMessage:
+    def _create_rate_limit_message(self, reset_seconds: int) -> TextMessage:
         """
-        Create a friendly rate limit notification Flex Message.
+        Create a friendly rate limit notification message.
 
         Args:
             reset_seconds: Seconds until rate limit resets
 
         Returns:
-            FlexMessage with rate limit notification
+            TextMessage with rate limit notification
         """
-        warning_color = "#F59E0B"  # Amber
-
-        flex_dict = {
-            "type": "bubble",
-            "size": "kilo",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {"type": "text", "text": "⏳", "size": "4xl", "align": "center"}
-                        ],
-                        "paddingBottom": "md",
-                    },
-                    {
-                        "type": "text",
-                        "text": "Rate Limit Reached",
-                        "weight": "bold",
-                        "size": "xl",
-                        "align": "center",
-                        "color": warning_color,
-                    },
-                    {
-                        "type": "text",
-                        "text": "คุณแปลเร็วเกินไปค่ะ!",
-                        "size": "sm",
-                        "color": "#6B7280",
-                        "align": "center",
-                        "margin": "sm",
-                    },
-                    {"type": "separator", "margin": "xl", "color": "#E5E7EB"},
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": f"Please wait {reset_seconds} seconds",
-                                "size": "sm",
-                                "color": "#374151",
-                                "align": "center",
-                                "wrap": True,
-                            },
-                            {
-                                "type": "text",
-                                "text": "กรุณารอสักครู่นะคะ 😊",
-                                "size": "xs",
-                                "color": "#9CA3AF",
-                                "align": "center",
-                                "margin": "sm",
-                            },
-                        ],
-                        "margin": "xl",
-                        "backgroundColor": "#FEF3C7",
-                        "cornerRadius": "8px",
-                        "paddingAll": "14px",
-                    },
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "💡 Limit: 10 translations per minute",
-                                "size": "xxs",
-                                "color": "#9CA3AF",
-                                "align": "center",
-                            }
-                        ],
-                        "margin": "xl",
-                    },
-                ],
-                "paddingAll": "24px",
-                "spacing": "none",
-            },
-            "styles": {"body": {"backgroundColor": "#FFFFFF"}},
-        }
-
-        return FlexMessage(
-            alt_text="Rate limit reached - please wait",
-            contents=FlexContainer.from_dict(flex_dict),
+        message_text = (
+            "⏳ Rate Limit Reached\n"
+            "คุณแปลเร็วเกินไปค่ะ!\n\n"
+            f"Please wait {reset_seconds} seconds\n"
+            "กรุณารอสักครู่นะคะ 😊\n\n"
+            "💡 Limit: 10 translations per minute"
         )
+        
+        return TextMessage(text=message_text, quickReply=None, quoteToken=None)
 
-    def _create_sleep_message(self) -> FlexMessage:
+    def _create_sleep_message(self) -> TextMessage:
         """
-        Create a sleep notification Flex Message.
+        Create a sleep notification message.
 
         Shows that the bot is going to sleep for 24 hours and how to wake it.
 
         Returns:
-            FlexMessage with sleep notification
+            TextMessage with sleep notification
         """
-        sleep_color = "#6366F1"  # Indigo
-
-        flex_dict = {
-            "type": "bubble",
-            "size": "kilo",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {"type": "text", "text": "😴", "size": "4xl", "align": "center"}
-                        ],
-                        "paddingBottom": "md",
-                    },
-                    {
-                        "type": "text",
-                        "text": "ราตรีสวัสดิ์",
-                        "weight": "bold",
-                        "size": "xxl",
-                        "align": "center",
-                        "color": sleep_color,
-                    },
-                    {
-                        "type": "text",
-                        "text": "Good Night!",
-                        "size": "md",
-                        "color": "#6B7280",
-                        "align": "center",
-                        "margin": "sm",
-                    },
-                    {"type": "separator", "margin": "xl", "color": "#E5E7EB"},
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "TeacherBOY",
-                                "size": "xs",
-                                "color": "#9CA3AF",
-                                "align": "center",
-                            },
-                            {
-                                "type": "text",
-                                "text": "SLEEPING FOR 24 HOURS",
-                                "size": "sm",
-                                "weight": "bold",
-                                "color": sleep_color,
-                                "align": "center",
-                                "margin": "xs",
-                            },
-                        ],
-                        "margin": "xl",
-                        "backgroundColor": "#EEF2FF",
-                        "cornerRadius": "8px",
-                        "paddingAll": "12px",
-                    },
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": '☀️ Say "TeacherBoy" to wake me up anytime!',
-                                "size": "sm",
-                                "color": "#374151",
-                                "align": "center",
-                                "wrap": True,
-                                "weight": "bold",
-                            }
-                        ],
-                        "margin": "xl",
-                        "backgroundColor": "#F3F4F6",
-                        "cornerRadius": "8px",
-                        "paddingAll": "14px",
-                    },
-                ],
-                "paddingAll": "24px",
-                "spacing": "none",
-            },
-            "styles": {"body": {"backgroundColor": "#FFFFFF"}},
-        }
-
-        return FlexMessage(
-            alt_text="TeacherBOY sleeping for 24 hours",
-            contents=FlexContainer.from_dict(flex_dict),
+        message_text = (
+            "😴 ราตรีสวัสดิ์ Good Night!\n\n"
+            "TeacherBOY is sleeping for 24 hours.\n\n"
+            '☀️ Say "TeacherBoy" to wake me up anytime!'
         )
+        
+        return TextMessage(text=message_text, quickReply=None, quoteToken=None)
 
-    def _create_wake_message(self) -> FlexMessage:
+    def _create_wake_message(self) -> TextMessage:
         """
-        Create a wake notification Flex Message.
+        Create a wake notification message.
 
         Shows that the bot is now awake and ready to translate.
 
         Returns:
-            FlexMessage with wake notification
+            TextMessage with wake notification
         """
-        wake_color = "#10B981"  # Emerald
-
-        flex_dict = {
-            "type": "bubble",
-            "size": "kilo",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {"type": "text", "text": "☀️", "size": "4xl", "align": "center"}
-                        ],
-                        "paddingBottom": "md",
-                    },
-                    {
-                        "type": "text",
-                        "text": "สวัสดี!",
-                        "weight": "bold",
-                        "size": "xxl",
-                        "align": "center",
-                        "color": wake_color,
-                    },
-                    {
-                        "type": "text",
-                        "text": "Good Morning!",
-                        "size": "md",
-                        "color": "#6B7280",
-                        "align": "center",
-                        "margin": "sm",
-                    },
-                    {"type": "separator", "margin": "xl", "color": "#E5E7EB"},
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "TeacherBOY",
-                                "size": "xs",
-                                "color": "#9CA3AF",
-                                "align": "center",
-                            },
-                            {
-                                "type": "text",
-                                "text": "AWAKE & READY!",
-                                "size": "sm",
-                                "weight": "bold",
-                                "color": wake_color,
-                                "align": "center",
-                                "margin": "xs",
-                            },
-                        ],
-                        "margin": "xl",
-                        "backgroundColor": "#D1FAE5",
-                        "cornerRadius": "8px",
-                        "paddingAll": "12px",
-                    },
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "🚀 Send Thai text to start translating!",
-                                "size": "sm",
-                                "color": "#374151",
-                                "align": "center",
-                                "wrap": True,
-                                "weight": "bold",
-                            }
-                        ],
-                        "margin": "xl",
-                        "backgroundColor": "#F3F4F6",
-                        "cornerRadius": "8px",
-                        "paddingAll": "14px",
-                    },
-                ],
-                "paddingAll": "24px",
-                "spacing": "none",
-            },
-            "styles": {"body": {"backgroundColor": "#FFFFFF"}},
-        }
-
-        return FlexMessage(
-            alt_text="TeacherBOY is awake!",
-            contents=FlexContainer.from_dict(flex_dict),
+        message_text = (
+            "☀️ สวัสดี! Good Morning!\n\n"
+            "TeacherBOY is now awake and ready!\n\n"
+            "🚀 Send Thai text to start translating!"
         )
+        
+        return TextMessage(text=message_text, quickReply=None, quoteToken=None)
