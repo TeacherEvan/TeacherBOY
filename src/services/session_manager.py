@@ -241,6 +241,24 @@ class SessionManager:
             del self._message_history[chat_id]
             logger.info(f"🧹 Cleared message history for chat {chat_id}")
 
+    def get_active_sessions(self) -> dict:
+        """
+        Get all active translation sessions.
+
+        Returns:
+            Dictionary of active sessions {chat_id: session_info}
+        """
+        return self._active_sessions.copy()
+
+    def get_sleeping_chats(self) -> dict:
+        """
+        Get all sleeping chats.
+
+        Returns:
+            Dictionary of sleeping chats {chat_id: wake_at_datetime}
+        """
+        return self._sleeping_chats.copy()
+
 
 # Singleton instance
 session_manager = SessionManager()

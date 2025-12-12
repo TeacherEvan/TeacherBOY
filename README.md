@@ -18,6 +18,7 @@ TeacherBOY is a high-performance, asynchronous LINE Bot featuring a modular mult
 - **[🏗️ Architecture & How It Works](ARCHITECTURE.md)** - Complete explanation of how the bot works, data flow, and webhook concepts
 - **[🚀 Deployment Guide](DEPLOYMENT_GUIDE.md)** - Step-by-step deployment with ngrok, Heroku, VPS, or Render
 - **[🤖 Multi-Agent Guide](MULTI_AGENT_GUIDE.md)** - **NEW!** Build custom agents for math, code review, quizzes, and more
+- **[🔧 Admin Commands](docs/ADMIN_COMMANDS.md)** - **NEW!** In-chat control commands for authorized administrators
 - **[⚡ Quick Start](QUICK_START.md)** - Fast setup with Google Translate API integration
 - **[⚙️ LINE Setup Guide](docs/LINE_SETUP.md)** - Getting your LINE tokens and configuring webhooks
 - **[📋 Implementation Summary](IMPLEMENTATION_SUMMARY.md)** - Technical details and test results
@@ -43,6 +44,7 @@ TeacherBOY is a high-performance, asynchronous LINE Bot featuring a modular mult
 - **🔌 Extensible:** Add math solver, code review, quiz agents, and more!
 - **🎨 Clean API:** Simple `BaseAgent` class to inherit from
 - **📊 Priority System:** Control which agent handles messages first
+- **🔧 Admin Commands:** In-chat control commands for authorized admins **NEW!**
 - **❄️ Calendar Agent:** Currently frozen/deprecated (focus on translation)
 
 ### Performance & Scalability
@@ -79,6 +81,9 @@ LIBRETRANSLATE_API_URL=https://libretranslate.de/translate
 
 # Optional: Additional agents
 ADDITIONAL_AGENTS=
+
+# Admin Control (for bot management)
+ADMIN_USER_IDS=
 
 DEBUG=False
 ```
@@ -123,6 +128,17 @@ ngrok http 8000
 **The bot will translate EVERY message until you say "Thank you TeacherBoy"!**
 
 **Need help?** See **[Quick Start Guide](QUICK_START.md)** or **[Deployment Guide](DEPLOYMENT_GUIDE.md)** for detailed instructions.
+
+### 6. Admin Commands (Optional)
+
+For bot management and troubleshooting, set up admin commands:
+
+1. Get your LINE user ID from server logs
+2. Add to `.env`: `ADMIN_USER_IDS=U1234567890abcdef`
+3. Restart bot
+4. Use commands like `/admin status`, `/admin sleep`, `/admin wake`, `/admin reset`
+
+**See [Admin Commands Guide](docs/ADMIN_COMMANDS.md) for complete documentation.**
 
 ## 🏗️ Architecture
 
@@ -209,6 +225,7 @@ pytest --cov=src --cov-report=html
 - Modular agent architecture with base class
 - Smart message routing by priority
 - Translation Agent with session management
+- Admin Agent for in-chat bot management **NEW!**
 - Easy to extend with new agents
 
 ✅ **Translation Features:**

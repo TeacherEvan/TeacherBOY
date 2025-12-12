@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     )
 
     # ============================================================================
+    # Admin Control Configuration
+    # ============================================================================
+    admin_user_ids: Optional[str] = Field(
+        default=None, 
+        description="Comma-separated list of LINE user IDs authorized as admins"
+    )
+
+    # ============================================================================
     # Translation Service Configuration
     # ============================================================================
 
@@ -179,6 +187,17 @@ class Settings(BaseSettings):
     def is_calendar_configured(self) -> bool:
         """Check if Google Calendar integration is properly configured."""
         return bool(self.google_calendar_group_id)
+
+    def get_admin_user_ids(self) -> list[str]:
+        """
+        Get list of authorized admin user IDs.
+        
+        Returns:
+            List of LINE user IDs authorized as admins, or empty list if none configured.
+        """
+        if not self.admin_user_ids:
+            return []
+        return [uid.strip() for uid in self.admin_user_ids.split(",") if uid.strip()]
 
     def get_http_client_config(self) -> Dict[str, Any]:
         """
