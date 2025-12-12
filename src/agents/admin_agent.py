@@ -242,8 +242,8 @@ class AdminAgent(BaseAgent):
 
     def _list_sessions(self) -> str:
         """List all active sessions."""
-        sessions = session_manager._active_sessions
-        sleeping = session_manager._sleeping_chats
+        sessions = session_manager.get_active_sessions()
+        sleeping = session_manager.get_sleeping_chats()
         
         if not sessions and not sleeping:
             return "ℹ️  No active sessions or sleeping chats."

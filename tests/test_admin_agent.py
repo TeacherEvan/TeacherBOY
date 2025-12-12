@@ -171,11 +171,11 @@ class TestAdminAgent:
     async def test_handle_sessions_command(self, admin_agent, mock_event, mock_line_bot_api):
         """Test /admin sessions command."""
         with patch("src.agents.admin_agent.session_manager") as mock_session_mgr:
-            # Mock active sessions
-            mock_session_mgr._active_sessions = {
+            # Mock active sessions using public method
+            mock_session_mgr.get_active_sessions.return_value = {
                 "user_U123": {"user_id": "U123", "message_count": 5}
             }
-            mock_session_mgr._sleeping_chats = {}
+            mock_session_mgr.get_sleeping_chats.return_value = {}
             
             result = await admin_agent.handle(mock_event, "/admin sessions", mock_line_bot_api)
             
