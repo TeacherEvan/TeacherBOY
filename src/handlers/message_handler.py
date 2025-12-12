@@ -292,7 +292,9 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
 
     if google_translation_service.is_configured():
         logger.info("Using Google Cloud Translation API")
-        translated_text, source_lang = await google_translation_service.auto_translate(text)
+        translated_text, source_lang = await google_translation_service.auto_translate(
+            text
+        )
 
     if not translated_text:
         logger.info("Using LibreTranslate (fallback)")

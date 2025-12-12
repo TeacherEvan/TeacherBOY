@@ -103,7 +103,9 @@ class SessionManager:
         if chat_id in self._active_sessions:
             self._active_sessions.pop(chat_id)
 
-        logger.info(f"😴 Chat {chat_id} put to sleep for {hours} hours (wake at {wake_at})")
+        logger.info(
+            f"😴 Chat {chat_id} put to sleep for {hours} hours (wake at {wake_at})"
+        )
 
     def wake_chat(self, chat_id: str) -> bool:
         """
@@ -206,7 +208,9 @@ class SessionManager:
         # Clean up old messages outside dedup window
         cutoff_time = now - timedelta(seconds=self._dedup_window_seconds)
         self._message_history[chat_id] = [
-            (hash_val, ts) for hash_val, ts in self._message_history[chat_id] if ts > cutoff_time
+            (hash_val, ts)
+            for hash_val, ts in self._message_history[chat_id]
+            if ts > cutoff_time
         ]
 
         # Check for duplicate

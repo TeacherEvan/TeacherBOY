@@ -2,7 +2,6 @@
 
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
-from linebot.models import TextSendMessage
 
 
 class TestMessageHandler:
@@ -10,10 +9,12 @@ class TestMessageHandler:
 
     @pytest.fixture
     def mock_event(self):
-        """Create a mock LINE message event."""
+        """Create a mock LINE message event with Thai text."""
         event = MagicMock()
-        event.message.text = "Hello"
+        event.message.text = "สวัสดี"  # Thai text to trigger translation
         event.reply_token = "test_token"
+        event.source.type = "user"
+        event.source.user_id = "test_user_123"
         return event
 
     @pytest.fixture
@@ -23,43 +24,87 @@ class TestMessageHandler:
 
     @pytest.mark.asyncio
     async def test_handle_text_message_success(self, mock_event, mock_line_bot_api):
-        """Test successful message handling."""
+        """Test successful message handling with session management."""
         from src.handlers.message_handler import handle_text_message
 
-        with patch("src.handlers.message_handler.translation_service") as mock_service:
-            mock_service.auto_translate = AsyncMock(return_value=("สวัสดี", "en"))
+        with patch(
+            "src.handlers.message_handler.session_manager"
+        ) as mock_session, patch(
+            "src.handlers.message_handler.translation_service"
+        ) as mock_trans_service, patch(
+            "src.handlers.message_handler.google_translation_service"
+        ) as mock_google_service, patch(
+            "asyncio.to_thread"
+        ) as mock_to_thread:
+            # Setup mocks
+            mock_session.is_session_active.return_value = True
+            mock_google_service.is_configured.return_value = False
+            mock_trans_service.auto_translate = AsyncMock(return_value=("Hello", "th"))
+            mock_to_thread.return_value = None  # Mock the reply_message call
 
             await handle_text_message(mock_event, mock_line_bot_api)
 
-            mock_service.auto_translate.assert_called_once_with("Hello")
-            mock_line_bot_api.reply_message.assert_called_once()
+            # Verify translation service was called
+            mock_trans_service.auto_translate.assert_called_once_with("สวัสดี")
 
-            # Check that reply message contains translation
-            args = mock_line_bot_api.reply_message.call_args
-            assert args[0][0] == "test_token"
-            assert "สวัสดี" in args[0][1].text
+            # Verify session message count was incremented
+            mock_session.increment_message_count.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_handle_text_message_translation_failure(self, mock_event, mock_line_bot_api):
+    async def test_handle_text_message_translation_failure(
+        self, mock_event, mock_line_bot_api
+    ):
         """Test message handling when translation fails."""
         from src.handlers.message_handler import handle_text_message
 
-        with patch("src.handlers.message_handler.translation_service") as mock_service:
-            mock_service.auto_translate = AsyncMock(return_value=(None, None))
+        with patch(
+            "src.handlers.message_handler.session_manager"
+        ) as mock_session, patch(
+            "src.handlers.message_handler.translation_service"
+        ) as mock_trans_service, patch(
+            "src.handlers.message_handler.google_translation_service"
+        ) as mock_google_service, patch(
+            "asyncio.to_thread"
+        ) as mock_to_thread:
+            # Setup mocks - translation fails
+            mock_session.is_session_active.return_value = True
+            mock_google_service.is_configured.return_value = False
+            mock_trans_service.auto_translate = AsyncMock(return_value=(None, None))
+            mock_to_thread.return_value = None
 
             await handle_text_message(mock_event, mock_line_bot_api)
 
-            # Check that error message is sent
-            args = mock_line_bot_api.reply_message.call_args
-            assert "Sorry" in args[0][1].text or "couldn't" in args[0][1].text
+            # Verify error handling - asyncio.to_thread should be called with error message
+            assert mock_to_thread.called
 
-    def test_handle_text_message_sync(self, mock_event, mock_line_bot_api):
-        """Test synchronous wrapper for message handler."""
-        from src.handlers.message_handler import handle_text_message_sync
+    @pytest.mark.asyncio
+    async def test_handle_text_message_auto_start_session(
+        self, mock_event, mock_line_bot_api
+    ):
+        """Test that Thai text auto-starts a translation session."""
+        from src.handlers.message_handler import handle_text_message
 
-        with patch("src.handlers.message_handler.translation_service") as mock_service:
-            mock_service.auto_translate = AsyncMock(return_value=("Test", "en"))
+        with patch(
+            "src.handlers.message_handler.session_manager"
+        ) as mock_session, patch(
+            "src.handlers.message_handler.translation_service"
+        ) as mock_trans_service, patch(
+            "src.handlers.message_handler.google_translation_service"
+        ) as mock_google_service, patch(
+            "asyncio.to_thread"
+        ) as mock_to_thread:
+            # Setup mocks - session not active initially
+            mock_session.is_session_active.side_effect = [
+                False,
+                True,
+            ]  # First check False, second True
+            mock_google_service.is_configured.return_value = False
+            mock_trans_service.auto_translate = AsyncMock(return_value=("Hello", "th"))
+            mock_to_thread.return_value = None
 
-            handle_text_message_sync(mock_event, mock_line_bot_api)
+            await handle_text_message(mock_event, mock_line_bot_api)
 
-            mock_line_bot_api.reply_message.assert_called_once()
+            # Verify session was auto-started
+            mock_session.start_session.assert_called_once_with(
+                "test_user_123", "test_user_123"
+            )

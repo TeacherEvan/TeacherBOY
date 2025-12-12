@@ -50,7 +50,9 @@ class TranslationService:
             logger.error(f"Language detection error: {str(e)}")
             return None
 
-    async def translate(self, text: str, source_lang: str, target_lang: str) -> Optional[str]:
+    async def translate(
+        self, text: str, source_lang: str, target_lang: str
+    ) -> Optional[str]:
         """
         Translate text from source language to target language.
 
@@ -63,7 +65,12 @@ class TranslationService:
             Translated text or None if translation fails
         """
         try:
-            payload = {"q": text, "source": source_lang, "target": target_lang, "format": "text"}
+            payload = {
+                "q": text,
+                "source": source_lang,
+                "target": target_lang,
+                "format": "text",
+            }
 
             if self.api_key:
                 payload["api_key"] = self.api_key

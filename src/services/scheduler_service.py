@@ -49,7 +49,9 @@ class SchedulerService:
 
         try:
             trigger = CronTrigger(hour=hour, minute=minute, timezone=self.timezone)
-            self.scheduler.add_job(func, trigger=trigger, id=name, name=name, replace_existing=True)
+            self.scheduler.add_job(
+                func, trigger=trigger, id=name, name=name, replace_existing=True
+            )
             logger.info(f"✅ Scheduled daily job '{name}' at {hour:02d}:{minute:02d}")
         except Exception as e:
             logger.error(f"❌ Error adding scheduled job '{name}': {e}")

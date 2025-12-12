@@ -40,7 +40,9 @@ class BaseAgent(ABC):
         pass
 
     @abstractmethod
-    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
+    async def handle(
+        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
+    ) -> bool:
         """
         Process the message.
 

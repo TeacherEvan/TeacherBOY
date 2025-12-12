@@ -131,7 +131,9 @@ async def lifespan(app: FastAPI):
             # Get bot's own profile to extract user ID
             bot_info = line_bot_api.get_bot_info()
             bot_user_id = bot_info.user_id
-            logger.info(f"🤖 Bot User ID: {bot_user_id} (self-message detection enabled)")
+            logger.info(
+                f"🤖 Bot User ID: {bot_user_id} (self-message detection enabled)"
+            )
     except Exception as e:
         logger.error(f"❌ Failed to get bot user ID: {e}", exc_info=True)
         logger.warning("⚠️  Bot will operate without self-message detection (RISKY!)")
@@ -152,7 +154,9 @@ async def lifespan(app: FastAPI):
         google_translation_service.set_client(http_client_pool)
         logger.info("✅ Google Cloud Translation API configured (PRIMARY)")
     else:
-        logger.warning("⚠️  Google Translate API not configured - using LibreTranslate only")
+        logger.warning(
+            "⚠️  Google Translate API not configured - using LibreTranslate only"
+        )
 
     logger.info("✅ LibreTranslate configured (FALLBACK)")
 
@@ -167,7 +171,9 @@ async def lifespan(app: FastAPI):
 
     # Register Calendar Agent if configured (Priority: 20)
     if settings.is_calendar_configured():
-        calendar_agent_instance = CalendarAgent(group_chat_id=settings.google_calendar_group_id)
+        calendar_agent_instance = CalendarAgent(
+            group_chat_id=settings.google_calendar_group_id
+        )
         agent_router.register_agent(calendar_agent_instance)
 
         # Initialize global LINE API client for scheduler
@@ -184,7 +190,9 @@ async def lifespan(app: FastAPI):
             """Execute daily morning calendar reminder."""
             if calendar_agent_instance and line_bot_api_global:
                 try:
-                    await calendar_agent_instance.send_daily_reminder(line_bot_api_global)
+                    await calendar_agent_instance.send_daily_reminder(
+                        line_bot_api_global
+                    )
                     logger.info("✅ Morning reminder sent successfully")
                 except Exception as e:
                     logger.error(f"❌ Morning reminder failed: {e}", exc_info=True)
@@ -201,7 +209,9 @@ async def lifespan(app: FastAPI):
             """Execute weekly afternoon calendar overview."""
             if calendar_agent_instance and line_bot_api_global:
                 try:
-                    await calendar_agent_instance.send_weekly_overview(line_bot_api_global)
+                    await calendar_agent_instance.send_weekly_overview(
+                        line_bot_api_global
+                    )
                     logger.info("✅ Afternoon overview sent successfully")
                 except Exception as e:
                     logger.error(f"❌ Afternoon overview failed: {e}", exc_info=True)
@@ -219,7 +229,9 @@ async def lifespan(app: FastAPI):
             f"{settings.calendar_afternoon_hour:02d}:00 ({settings.calendar_timezone})"
         )
     else:
-        logger.info("📅 Calendar Agent not configured (GOOGLE_CALENDAR_GROUP_ID not set)")
+        logger.info(
+            "📅 Calendar Agent not configured (GOOGLE_CALENDAR_GROUP_ID not set)"
+        )
 
     # ========================================================================
     # PHASE 5: Startup Summary
@@ -357,7 +369,9 @@ async def test_daily_reminder() -> Dict[str, str]:
         return {"status": "success", "message": "Daily reminder sent"}
     except Exception as e:
         logger.error(f"Test daily reminder failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to send reminder: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to send reminder: {str(e)}"
+        )
 
 
 @app.get("/calendar/test-weekly", tags=["Debug"])
@@ -380,7 +394,9 @@ async def test_weekly_overview() -> Dict[str, str]:
         return {"status": "success", "message": "Weekly overview sent"}
     except Exception as e:
         logger.error(f"Test weekly overview failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to send overview: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to send overview: {str(e)}"
+        )
 
 
 # ============================================================================
@@ -428,10 +444,16 @@ async def webhook(request: Request) -> JSONResponse:
                 try:
                     if isinstance(event, MessageEvent):
                         # CRITICAL: Check if message is from bot itself (prevent infinite loop)
-                        if bot_user_id and hasattr(event.source, 'user_id') and event.source.user_id == bot_user_id:
-                            logger.info(f"🔒 Skipping bot's own message (self-message detection)")
+                        if (
+                            bot_user_id
+                            and hasattr(event.source, "user_id")
+                            and event.source.user_id == bot_user_id
+                        ):
+                            logger.info(
+                                f"🔒 Skipping bot's own message (self-message detection)"
+                            )
                             continue
-                        
+
                         if isinstance(event.message, TextMessageContent):
                             # Route text message to appropriate agent
                             await agent_router.route_message(event, line_bot_api)
@@ -473,10 +495,14 @@ async def webhook(request: Request) -> JSONResponse:
 
     except Exception as e:
         logger.error(f"❌ Webhook processing error: {str(e)}", exc_info=True)
-        return JSONResponse(content={"status": "error", "detail": str(e)}, status_code=500)
+        return JSONResponse(
+            content={"status": "error", "detail": str(e)}, status_code=500
+        )
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("src.main:app", host=settings.host, port=settings.port, reload=settings.debug)
+    uvicorn.run(
+        "src.main:app", host=settings.host, port=settings.port, reload=settings.debug
+    )

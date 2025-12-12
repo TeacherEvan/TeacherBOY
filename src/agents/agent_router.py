@@ -27,9 +27,13 @@ class AgentRouter:
         """
         self.agents.append(agent)
         self.agents.sort(key=lambda a: a.get_priority())  # Sort by priority
-        logger.info(f"✅ Registered agent: {agent.name} (priority: {agent.get_priority()})")
+        logger.info(
+            f"✅ Registered agent: {agent.name} (priority: {agent.get_priority()})"
+        )
 
-    async def route_message(self, event: MessageEvent, line_bot_api: MessagingApi) -> bool:
+    async def route_message(
+        self, event: MessageEvent, line_bot_api: MessagingApi
+    ) -> bool:
         """
         Route message to first matching agent.
 
@@ -61,7 +65,9 @@ class AgentRouter:
                         logger.info(f"✅ Message handled successfully by {agent.name}")
                         return True
                     else:
-                        logger.warning(f"⚠️  Agent {agent.name} failed to handle message")
+                        logger.warning(
+                            f"⚠️  Agent {agent.name} failed to handle message"
+                        )
 
             except Exception as e:
                 logger.error(f"❌ Agent {agent.name} error: {e}", exc_info=True)

@@ -98,10 +98,12 @@ class TranslationAgent(BaseAgent):
         # Handle if Thai detected or session is active
         return self.contains_thai(text) or session_manager.is_session_active(chat_id)
 
-    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
+    async def handle(
+        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
+    ) -> bool:
         """Process translation request."""
         chat_id = self._get_chat_id(event)
-        user_id = getattr(event.source, 'user_id', None) if event.source else None
+        user_id = getattr(event.source, "user_id", None) if event.source else None
 
         try:
             # Handle wake command
@@ -114,7 +116,7 @@ class TranslationAgent(BaseAgent):
                             ReplyMessageRequest(
                                 replyToken=event.reply_token,
                                 messages=[wake_message],
-                                notificationDisabled=False
+                                notificationDisabled=False,
                             )
                         )
                     logger.info(f"☀️ Chat {chat_id} woken up by user")
@@ -123,14 +125,14 @@ class TranslationAgent(BaseAgent):
                     already_awake_msg = TextMessage(
                         text="I'm awake! 😊 and waiting!",
                         quickReply=None,
-                        quoteToken=None
+                        quoteToken=None,
                     )
                     if event.reply_token:
                         line_bot_api.reply_message(
                             ReplyMessageRequest(
                                 replyToken=event.reply_token,
                                 messages=[already_awake_msg],
-                                notificationDisabled=False
+                                notificationDisabled=False,
                             )
                         )
                     logger.info(f"✅ Chat {chat_id} confirmed awake status")
@@ -145,7 +147,7 @@ class TranslationAgent(BaseAgent):
                         ReplyMessageRequest(
                             replyToken=event.reply_token,
                             messages=[sleep_message],
-                            notificationDisabled=False
+                            notificationDisabled=False,
                         )
                     )
                 logger.info(f"😴 Chat {chat_id} put to sleep for 24 hours")
@@ -160,7 +162,7 @@ class TranslationAgent(BaseAgent):
                         ReplyMessageRequest(
                             replyToken=event.reply_token,
                             messages=[rate_limit_message],
-                            notificationDisabled=False
+                            notificationDisabled=False,
                         )
                     )
                 logger.warning(f"⚠️  Rate limited chat {chat_id}")
@@ -183,14 +185,16 @@ class TranslationAgent(BaseAgent):
 
             if translated_text:
                 # Send simple text message as requested
-                text_message = TextMessage(text=translated_text, quickReply=None, quoteToken=None)
+                text_message = TextMessage(
+                    text=translated_text, quickReply=None, quoteToken=None
+                )
 
                 if event.reply_token:
                     line_bot_api.reply_message(
                         ReplyMessageRequest(
                             replyToken=event.reply_token,
                             messages=[text_message],
-                            notificationDisabled=False
+                            notificationDisabled=False,
                         )
                     )
                 logger.info(f"✅ Translation sent for chat {chat_id}")
@@ -217,7 +221,7 @@ class TranslationAgent(BaseAgent):
             result = await translation_service.translate(text, "th", "en")
         else:
             result = await translation_service.translate(text, "en", "th")
-        
+
         return result or "Translation failed"
 
     def _get_chat_id(self, event: MessageEvent) -> str:
@@ -236,7 +240,11 @@ class TranslationAgent(BaseAgent):
         return "user_unknown"
 
     def _create_translation_flex(
-        self, original_text: str, translated_text: str, source_lang: str, target_lang: str
+        self,
+        original_text: str,
+        translated_text: str,
+        source_lang: str,
+        target_lang: str,
     ) -> FlexMessage:
         """
         Create a visually stunning, modern Flex Message for translation results.
@@ -398,7 +406,12 @@ class TranslationAgent(BaseAgent):
                                 "type": "box",
                                 "layout": "baseline",
                                 "contents": [
-                                    {"type": "text", "text": "✨", "size": "sm", "flex": 0},
+                                    {
+                                        "type": "text",
+                                        "text": "✨",
+                                        "size": "sm",
+                                        "flex": 0,
+                                    },
                                     {
                                         "type": "text",
                                         "text": lang_emoji.get(target_lang, "🌐"),
@@ -470,7 +483,7 @@ class TranslationAgent(BaseAgent):
         return FlexMessage(
             altText=f"Translation: {original_text[:50]}...",
             contents=FlexContainer.from_dict(flex_dict),
-            quickReply=None
+            quickReply=None,
         )
 
     def _create_goodbye_message(self) -> FlexMessage:
@@ -496,7 +509,12 @@ class TranslationAgent(BaseAgent):
                         "type": "box",
                         "layout": "vertical",
                         "contents": [
-                            {"type": "text", "text": "👋", "size": "4xl", "align": "center"}
+                            {
+                                "type": "text",
+                                "text": "👋",
+                                "size": "4xl",
+                                "align": "center",
+                            }
                         ],
                         "paddingBottom": "md",
                     },
@@ -572,7 +590,7 @@ class TranslationAgent(BaseAgent):
         return FlexMessage(
             altText="Translation session ended - Goodbye!",
             contents=FlexContainer.from_dict(flex_dict),
-            quickReply=None
+            quickReply=None,
         )
 
     def _create_rate_limit_message(self, reset_seconds: int) -> TextMessage:
@@ -592,7 +610,7 @@ class TranslationAgent(BaseAgent):
             "กรุณารอสักครู่นะคะ 😊\n\n"
             "💡 Limit: 10 translations per minute"
         )
-        
+
         return TextMessage(text=message_text, quickReply=None, quoteToken=None)
 
     def _create_sleep_message(self) -> TextMessage:
@@ -609,7 +627,7 @@ class TranslationAgent(BaseAgent):
             "TeacherBOY is sleeping for 24 hours.\n\n"
             '☀️ Say "TeacherBoy" to wake me up anytime!'
         )
-        
+
         return TextMessage(text=message_text, quickReply=None, quoteToken=None)
 
     def _create_wake_message(self) -> TextMessage:
@@ -626,5 +644,5 @@ class TranslationAgent(BaseAgent):
             "TeacherBOY is now awake and ready!\n\n"
             "🚀 Send Thai text to start translating!"
         )
-        
+
         return TextMessage(text=message_text, quickReply=None, quoteToken=None)

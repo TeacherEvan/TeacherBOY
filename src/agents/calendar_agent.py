@@ -85,7 +85,9 @@ class CalendarAgent(BaseAgent):
                 if creds and creds.expired and creds.refresh_token:
                     creds.refresh(Request())
                 elif os.path.exists(credentials_path):
-                    flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        credentials_path, SCOPES
+                    )
                     # For headless environments, use console flow
                     creds = flow.run_local_server(port=0)
                 else:
@@ -114,7 +116,9 @@ class CalendarAgent(BaseAgent):
         """
         return False
 
-    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
+    async def handle(
+        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
+    ) -> bool:
         """
         This agent doesn't handle direct messages.
         Use send_daily_reminder() and send_weekly_overview() instead.
@@ -138,7 +142,9 @@ class CalendarAgent(BaseAgent):
         try:
             # Set time range for the target date (start of day to end of day)
             time_min = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
-            time_max = target_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+            time_max = target_date.replace(
+                hour=23, minute=59, second=59, microsecond=999999
+            )
 
             # Call the Calendar API
             events_result = (
@@ -305,7 +311,9 @@ class CalendarAgent(BaseAgent):
             },
         }
 
-        return FlexMessage(altText="Today's Schedule", contents=FlexContainer.from_dict(flex_dict))
+        return FlexMessage(
+            altText="Today's Schedule", contents=FlexContainer.from_dict(flex_dict)
+        )
 
     def _create_weekly_overview_flex(self, events: List[Dict[str, Any]]) -> FlexMessage:
         """Create a Flex Message for weekly overview using dict format."""
@@ -420,7 +428,9 @@ class CalendarAgent(BaseAgent):
             },
         }
 
-        return FlexMessage(altText="Week Overview", contents=FlexContainer.from_dict(flex_dict))
+        return FlexMessage(
+            altText="Week Overview", contents=FlexContainer.from_dict(flex_dict)
+        )
 
     async def send_daily_reminder(self, line_bot_api: MessagingApi):
         """
