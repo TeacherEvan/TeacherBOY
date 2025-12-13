@@ -10,7 +10,7 @@ TeacherBOY uses a **modular multi-agent architecture** that allows multiple spec
 
 ### Key Components
 
-```
+```text
 ┌─────────────────────────────────────────────────┐
 │                  LINE Platform                   │
 └───────────────────┬─────────────────────────────┘

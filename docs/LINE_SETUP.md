@@ -75,7 +75,7 @@ This guide will help you set up your LINE Bot and obtain the necessary tokens fo
 
 2. Edit `.env` and add your tokens:
 
-   ```
+   ```env
    LINE_CHANNEL_SECRET=your_channel_secret_here
    LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token_here
    ```
@@ -172,5 +172,5 @@ The bot is configured to work with `line-bot-mcp-server` for Docker MCP integrat
 
 For issues or questions:
 
-- GitHub Issues: https://github.com/TeacherEvan/TeacherBOY/issues
+- GitHub Issues: <https://github.com/TeacherEvan/TeacherBOY/issues>
 - User: ewaldt91

@@ -7,7 +7,7 @@ sdk: docker
 app_port: 8000
 ---
 
-# TeacherBOY 👨‍🏫
+## TeacherBOY 👨‍🏫
 
 **SMOOTH automatic Thai - English translator with Multi-Agent Architecture for LINE.**
 
@@ -119,7 +119,7 @@ ngrok http 8000
 4. Click **Verify** (should show success)
 5. Disable auto-reply in Response settings
 
-### 5. Test!
+### 5. Test
 
 - Scan QR code to add bot
 - Send: `สวัสดีครับ` → Translation mode starts! 🔥
@@ -147,7 +147,7 @@ For bot management and troubleshooting, set up admin commands:
 
 TeacherBOY uses a **modular multi-agent architecture** where messages are routed to specialized agents based on content and context.
 
-```
+```text
 LINE Webhook → Agent Router → [TranslationAgent | MathAgent | CodeAgent | ...]
 ```
 
@@ -160,7 +160,7 @@ LINE Webhook → Agent Router → [TranslationAgent | MathAgent | CodeAgent | ..
 
 **Project Structure:**
 
-```
+```text
 src/
 ├── agents/              # Multi-agent system (NEW!)
 │   ├── base_agent.py    # Base agent class
