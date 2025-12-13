@@ -16,8 +16,10 @@ from src.services.translation_service import translation_service
 from src.services.google_translation import google_translation_service
 from src.services.session_manager import session_manager
 from src.services.rate_limiter import rate_limiter
+from src.utils.tracing import get_tracer
 
 logger = logging.getLogger(__name__)
+tracer = get_tracer(__name__)
 
 
 class TranslationAgent(BaseAgent):
@@ -105,122 +107,138 @@ class TranslationAgent(BaseAgent):
         chat_id = self._get_chat_id(event)
         user_id = getattr(event.source, "user_id", None) if event.source else None
 
-        try:
-            # Handle wake command
-            if self.is_wake_command(text):
-                if session_manager.is_sleeping(chat_id):
-                    session_manager.wake_chat(chat_id)
-                    wake_message = self._create_wake_message()
+        with tracer.start_as_current_span("translation_agent.handle") as span:
+            span.set_attribute("chat.id", chat_id)
+            try:
+                # Handle wake command
+                if self.is_wake_command(text):
+                    span.set_attribute("translation.command", "wake")
+                    if session_manager.is_sleeping(chat_id):
+                        session_manager.wake_chat(chat_id)
+                        wake_message = self._create_wake_message()
+                        if event.reply_token:
+                            line_bot_api.reply_message(
+                                ReplyMessageRequest(
+                                    replyToken=event.reply_token,
+                                    messages=[wake_message],
+                                    notificationDisabled=False,
+                                )
+                            )
+                        logger.info(f"☀️ Chat {chat_id} woken up by user")
+                    else:
+                        # Already awake, confirm status
+                        already_awake_msg = TextMessage(
+                            text="I'm awake! 😊 and waiting!",
+                            quickReply=None,
+                            quoteToken=None,
+                        )
+                        if event.reply_token:
+                            line_bot_api.reply_message(
+                                ReplyMessageRequest(
+                                    replyToken=event.reply_token,
+                                    messages=[already_awake_msg],
+                                    notificationDisabled=False,
+                                )
+                            )
+                        logger.info(f"✅ Chat {chat_id} confirmed awake status")
+                    return True
+
+                # Handle sleep command
+                if self.is_sleep_command(text):
+                    span.set_attribute("translation.command", "sleep")
+                    session_manager.sleep_chat(chat_id, hours=24)
+                    sleep_message = self._create_sleep_message()
                     if event.reply_token:
                         line_bot_api.reply_message(
                             ReplyMessageRequest(
                                 replyToken=event.reply_token,
-                                messages=[wake_message],
+                                messages=[sleep_message],
                                 notificationDisabled=False,
                             )
                         )
-                    logger.info(f"☀️ Chat {chat_id} woken up by user")
+                    logger.info(f"😴 Chat {chat_id} put to sleep for 24 hours")
+                    return True
+
+                # Check for rate limiting
+                if not rate_limiter.is_allowed(chat_id):
+                    span.set_attribute("translation.rate_limited", True)
+                    reset_seconds = rate_limiter.get_reset_time(chat_id)
+                    rate_limit_message = self._create_rate_limit_message(reset_seconds)
+                    if event.reply_token:
+                        line_bot_api.reply_message(
+                            ReplyMessageRequest(
+                                replyToken=event.reply_token,
+                                messages=[rate_limit_message],
+                                notificationDisabled=False,
+                            )
+                        )
+                    logger.warning(f"⚠️  Rate limited chat {chat_id}")
+                    return True
+
+                # Check for duplicate message
+                if session_manager.is_duplicate_message(chat_id, text):
+                    span.set_attribute("translation.duplicate", True)
+                    logger.info(f"🔁 Skipping duplicate message in chat {chat_id}")
+                    # Silently skip duplicate - no need to reply
+                    return True
+
+                # Start session if Thai detected
+                if self.contains_thai(text):
+                    span.set_attribute("translation.detected", "th")
+                    if not session_manager.is_session_active(chat_id):
+                        session_manager.start_session(chat_id, user_id or "unknown")
+                        logger.info(f"🔥 Translation session started for chat {chat_id}")
                 else:
-                    # Already awake, confirm status
-                    already_awake_msg = TextMessage(
-                        text="I'm awake! 😊 and waiting!",
-                        quickReply=None,
-                        quoteToken=None,
+                    span.set_attribute("translation.detected", "en")
+
+                # Translate the message
+                translated_text = await self._translate_message(text)
+
+                if translated_text:
+                    # Send simple text message as requested
+                    text_message = TextMessage(
+                        text=translated_text, quickReply=None, quoteToken=None
                     )
+
                     if event.reply_token:
                         line_bot_api.reply_message(
                             ReplyMessageRequest(
                                 replyToken=event.reply_token,
-                                messages=[already_awake_msg],
+                                messages=[text_message],
                                 notificationDisabled=False,
                             )
                         )
-                    logger.info(f"✅ Chat {chat_id} confirmed awake status")
-                return True
+                    logger.info(f"✅ Translation sent for chat {chat_id}")
+                    span.set_attribute("translation.success", True)
+                    return True
+                else:
+                    logger.error("Translation failed - no result")
+                    span.set_attribute("translation.success", False)
+                    return False
 
-            # Handle sleep command
-            if self.is_sleep_command(text):
-                session_manager.sleep_chat(chat_id, hours=24)
-                sleep_message = self._create_sleep_message()
-                if event.reply_token:
-                    line_bot_api.reply_message(
-                        ReplyMessageRequest(
-                            replyToken=event.reply_token,
-                            messages=[sleep_message],
-                            notificationDisabled=False,
-                        )
-                    )
-                logger.info(f"😴 Chat {chat_id} put to sleep for 24 hours")
-                return True
-
-            # Check for rate limiting
-            if not rate_limiter.is_allowed(chat_id):
-                reset_seconds = rate_limiter.get_reset_time(chat_id)
-                rate_limit_message = self._create_rate_limit_message(reset_seconds)
-                if event.reply_token:
-                    line_bot_api.reply_message(
-                        ReplyMessageRequest(
-                            replyToken=event.reply_token,
-                            messages=[rate_limit_message],
-                            notificationDisabled=False,
-                        )
-                    )
-                logger.warning(f"⚠️  Rate limited chat {chat_id}")
-                return True
-
-            # Check for duplicate message
-            if session_manager.is_duplicate_message(chat_id, text):
-                logger.info(f"🔁 Skipping duplicate message in chat {chat_id}")
-                # Silently skip duplicate - no need to reply
-                return True
-
-            # Start session if Thai detected
-            if self.contains_thai(text):
-                if not session_manager.is_session_active(chat_id):
-                    session_manager.start_session(chat_id, user_id or "unknown")
-                    logger.info(f"🔥 Translation session started for chat {chat_id}")
-
-            # Translate the message
-            translated_text = await self._translate_message(text)
-
-            if translated_text:
-                # Send simple text message as requested
-                text_message = TextMessage(
-                    text=translated_text, quickReply=None, quoteToken=None
-                )
-
-                if event.reply_token:
-                    line_bot_api.reply_message(
-                        ReplyMessageRequest(
-                            replyToken=event.reply_token,
-                            messages=[text_message],
-                            notificationDisabled=False,
-                        )
-                    )
-                logger.info(f"✅ Translation sent for chat {chat_id}")
-                return True
-            else:
-                logger.error("Translation failed - no result")
+            except Exception as e:
+                logger.error(f"❌ Translation agent error: {e}", exc_info=True)
+                span.set_attribute("translation.error", True)
                 return False
-
-        except Exception as e:
-            logger.error(f"❌ Translation agent error: {e}", exc_info=True)
-            return False
 
     async def _translate_message(self, text: str) -> str:
         """Translate using Google (primary) or LibreTranslate (fallback)."""
         # Try Google Translate first
         if google_translation_service.is_configured():
-            result = await google_translation_service.auto_translate(text)
+            with tracer.start_as_current_span("translation.translate.google") as span:
+                span.set_attribute("translation.provider", "google")
+                result = await google_translation_service.auto_translate(text)
             if result:
                 return result
             logger.warning("⚠️  Google Translate failed, trying LibreTranslate...")
 
         # Fallback to LibreTranslate
-        if self.contains_thai(text):
-            result = await translation_service.translate(text, "th", "en")
-        else:
-            result = await translation_service.translate(text, "en", "th")
+        with tracer.start_as_current_span("translation.translate.libre") as span:
+            span.set_attribute("translation.provider", "libretranslate")
+            if self.contains_thai(text):
+                result = await translation_service.translate(text, "th", "en")
+            else:
+                result = await translation_service.translate(text, "en", "th")
 
         return result or "Translation failed"
 

@@ -6,8 +6,10 @@ from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.messaging import MessagingApi
 
 from .base_agent import BaseAgent
+from src.utils.tracing import get_tracer
 
 logger = logging.getLogger(__name__)
+tracer = get_tracer(__name__)
 
 
 class AgentRouter:
@@ -44,37 +46,47 @@ class AgentRouter:
         Returns:
             True if message was handled by any agent
         """
-        if not isinstance(event.message, TextMessageContent):
-            logger.debug("Skipping non-text message")
+        with tracer.start_as_current_span("agent_router.route_message") as span:
+            if not isinstance(event.message, TextMessageContent):
+                logger.debug("Skipping non-text message")
+                span.set_attribute("line.message.type", "non_text")
+                return False
+
+            text = event.message.text.strip()
+            logger.info(f"🔍 Routing message: '{text[:50]}...'")
+            span.set_attribute("line.message.type", "text")
+            span.set_attribute("message.length", len(text))
+
+            # Try each agent in priority order
+            for agent in self.agents:
+                if not agent.enabled:
+                    continue
+
+                try:
+                    if await agent.should_handle(event, text):
+                        logger.info(f"✅ Agent {agent.name} will handle this message")
+                        span.set_attribute("agent.selected", agent.name)
+                        success = await agent.handle(event, text, line_bot_api)
+                        span.set_attribute("agent.success", bool(success))
+
+                        if success:
+                            logger.info(
+                                f"✅ Message handled successfully by {agent.name}"
+                            )
+                            return True
+                        else:
+                            logger.warning(
+                                f"⚠️  Agent {agent.name} failed to handle message"
+                            )
+
+                except Exception as e:
+                    logger.error(f"❌ Agent {agent.name} error: {e}", exc_info=True)
+                    span.set_attribute("agent.error", True)
+                    continue
+
+            logger.warning("⚠️  No agent handled this message")
+            span.set_attribute("agent.handled", False)
             return False
-
-        text = event.message.text.strip()
-        logger.info(f"🔍 Routing message: '{text[:50]}...'")
-
-        # Try each agent in priority order
-        for agent in self.agents:
-            if not agent.enabled:
-                continue
-
-            try:
-                if await agent.should_handle(event, text):
-                    logger.info(f"✅ Agent {agent.name} will handle this message")
-                    success = await agent.handle(event, text, line_bot_api)
-
-                    if success:
-                        logger.info(f"✅ Message handled successfully by {agent.name}")
-                        return True
-                    else:
-                        logger.warning(
-                            f"⚠️  Agent {agent.name} failed to handle message"
-                        )
-
-            except Exception as e:
-                logger.error(f"❌ Agent {agent.name} error: {e}", exc_info=True)
-                continue
-
-        logger.warning("⚠️  No agent handled this message")
-        return False
 
     def list_agents(self) -> List[dict]:
         """

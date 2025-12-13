@@ -49,6 +49,7 @@ from src.handlers.message_handler import (
     handle_member_joined_event,
     handle_member_left_event,
 )
+from src.utils.tracing import setup_tracing
 
 # ============================================================================
 # Logging Configuration
@@ -122,6 +123,9 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 80)
     logger.info("🚀 TeacherBOY Multi-Agent System - Starting Up")
     logger.info("=" * 80)
+
+    # Tracing (OpenTelemetry) - optional, controlled by settings.enable_tracing
+    setup_tracing(app, settings)
 
     # ========================================================================
     # PHASE 1: Bot Identity Detection (Prevent Infinite Loop)

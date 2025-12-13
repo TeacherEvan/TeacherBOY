@@ -7,6 +7,13 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 langdetect==1.0.9
 
+# Tracing / Observability (OpenTelemetry)
+opentelemetry-api==1.29.0
+opentelemetry-sdk==1.29.0
+opentelemetry-exporter-otlp==1.29.0
+opentelemetry-instrumentation-fastapi==0.50b0
+opentelemetry-instrumentation-httpx==0.50b0
+
 # Google Calendar API
 google-api-python-client==2.108.0
 google-auth-httplib2==0.1.1

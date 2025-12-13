@@ -144,6 +144,26 @@ class Settings(BaseSettings):
     )
 
     # ============================================================================
+    # Tracing / Observability (OpenTelemetry)
+    # ============================================================================
+    enable_tracing: bool = Field(
+        default=False,
+        description="Enable OpenTelemetry tracing (OTLP export)",
+    )
+
+    otel_service_name: str = Field(
+        default="TeacherBOY",
+        description="OpenTelemetry service.name resource attribute",
+    )
+
+    otel_exporter_otlp_endpoint: str = Field(
+        default="http://localhost:4318",
+        description=(
+            "OTLP endpoint for exporting traces. AI Toolkit trace collector defaults to http://localhost:4318"
+        ),
+    )
+
+    # ============================================================================
     # MCP Configuration (Model Context Protocol)
     # ============================================================================
     mcp_server_url: Optional[str] = Field(
