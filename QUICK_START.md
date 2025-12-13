@@ -78,6 +78,7 @@ This repo already includes Spaces metadata in `README.md` (`sdk: docker`, `app_p
 To use `/admin ...` commands you must know your LINE user ID.
 
 Recommended bootstrap flow:
+
 - Set `ADMIN_SETUP_KEY` (random string) in your host environment.
 - After deploy, send: `/admin claim <ADMIN_SETUP_KEY>`
 - The bot replies with your LINE user ID; set `ADMIN_USER_IDS=<that id>` in host settings and restart.

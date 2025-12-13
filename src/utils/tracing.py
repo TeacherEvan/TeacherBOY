@@ -11,6 +11,7 @@ Tracing is intentionally optional and controlled by Settings.enable_tracing.
 from __future__ import annotations
 
 import logging
+import importlib
 from typing import Optional
 
 from fastapi import FastAPI
@@ -30,15 +31,28 @@ def setup_tracing(app: FastAPI, settings: Settings) -> None:
         return
 
     try:
-        from opentelemetry import trace
-        from opentelemetry.sdk.resources import Resource
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-            OTLPSpanExporter,
+        trace = importlib.import_module("opentelemetry.trace")
+        sdk_resources = importlib.import_module("opentelemetry.sdk.resources")
+        sdk_trace = importlib.import_module("opentelemetry.sdk.trace")
+        sdk_trace_export = importlib.import_module("opentelemetry.sdk.trace.export")
+        otlp_exporter = importlib.import_module(
+            "opentelemetry.exporter.otlp.proto.http.trace_exporter"
         )
-        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+        fastapi_instrumentation = importlib.import_module(
+            "opentelemetry.instrumentation.fastapi"
+        )
+        httpx_instrumentation = importlib.import_module(
+            "opentelemetry.instrumentation.httpx"
+        )
+
+        Resource = getattr(sdk_resources, "Resource")
+        TracerProvider = getattr(sdk_trace, "TracerProvider")
+        BatchSpanProcessor = getattr(sdk_trace_export, "BatchSpanProcessor")
+        OTLPSpanExporter = getattr(otlp_exporter, "OTLPSpanExporter")
+        FastAPIInstrumentor = getattr(fastapi_instrumentation, "FastAPIInstrumentor")
+        HTTPXClientInstrumentor = getattr(
+            httpx_instrumentation, "HTTPXClientInstrumentor"
+        )
 
         # If someone already configured a provider elsewhere, don't replace it.
         current_provider = trace.get_tracer_provider()
@@ -70,8 +84,7 @@ def get_tracer(name: Optional[str] = None):
     """Return an OpenTelemetry tracer (safe even if tracing is disabled)."""
 
     try:
-        from opentelemetry import trace
-
+        trace = importlib.import_module("opentelemetry.trace")
         return trace.get_tracer(name or __name__)
     except Exception:
         # If opentelemetry isn't installed, return a minimal no-op context manager.

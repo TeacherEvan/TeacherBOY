@@ -104,6 +104,7 @@ Render gives you a stable HTTPS URL, managed restarts, and easy secret managemen
 5. Set LINE webhook to: `https://<service>.onrender.com/webhook`
 
 Admin control (one-time):
+
 - Set `ADMIN_SETUP_KEY` temporarily, then message: `/admin claim <ADMIN_SETUP_KEY>`.
 - Copy the returned user id into `ADMIN_USER_IDS`, redeploy/restart, then remove `ADMIN_SETUP_KEY`.
 
@@ -114,6 +115,7 @@ Admin control (one-time):
 Azure Container Apps provides stable HTTPS, autoscaling, and secret management.
 
 High-level steps:
+
 1. Build and push the container to ACR (Azure Container Registry).
 2. Create a Container App pointing at that image.
 3. Set ingress to **External** and target port to `8000`.
