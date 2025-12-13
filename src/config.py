@@ -51,6 +51,14 @@ class Settings(BaseSettings):
         description="Comma-separated list of LINE user IDs authorized as admins"
     )
 
+    admin_setup_key: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional one-time admin bootstrap key. If set, a user can run '/admin claim <key>' "
+            "to reveal their LINE user ID and become an in-memory admin for the current process."
+        ),
+    )
+
     # ============================================================================
     # Translation Service Configuration
     # ============================================================================

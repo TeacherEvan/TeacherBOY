@@ -124,8 +124,8 @@ https://your-server-ip-or-domain.com/webhook
 cd /home/eboth/projects/TeacherBOY/TeacherBOY
 
 # Your .env is already configured with:
-# LINE_CHANNEL_SECRET=ddbb096582dbf20d25090ec1292f8179
-# LINE_CHANNEL_ACCESS_TOKEN=076qI6h5UQZOBRahmdB2lqU74HCwAfssP0AI4fsQI0NMun4Aubas07LviJhw1ILDZekx2zaHtracTNtL7d8dMolfOXFqxKCJPF4Z9BfPk1yz+Hk/j4n6AsELF3u/1vQ4UDtIrNtrssiB8aWAUmUQNQdB04t89/1O/w1cDnyilFU=
+# LINE_CHANNEL_SECRET=your_channel_secret
+# LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
 
 # Run with Docker
 docker build -t teacherboy .

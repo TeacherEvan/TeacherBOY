@@ -41,9 +41,9 @@
 # Add your Google API key
 GOOGLE_TRANSLATE_API_KEY=your_google_api_key_here
 
-# Your LINE credentials (already configured)
-LINE_CHANNEL_SECRET=ddbb096582dbf20d25090ec1292f8179
-LINE_CHANNEL_ACCESS_TOKEN=076qI6h5UQZOBRahmdB2lqU74HCwAfssP0AI4fsQI0NMun4Aubas07LviJhw1ILDZekx2zaHtracTNtL7d8dMolfOXFqxKCJPF4Z9BfPk1yz+Hk/j4n6AsELF3u/1vQ4UDtIrNtrssiB8aWAUmUQNQdB04t89/1O/w1cDnyilFU=
+# Your LINE credentials (DO NOT commit)
+LINE_CHANNEL_SECRET=your_channel_secret
+LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
 ```
 
 ### 3. Deploy
@@ -58,15 +58,40 @@ docker run -d --name teacherboy --env-file .env -p 8000:8000 teacherboy
 ngrok http 8000
 ```
 
+### Alternative: Deploy on Hugging Face Spaces (Docker)
+
+This repo already includes Spaces metadata in `README.md` (`sdk: docker`, `app_port: 8000`).
+
+1. Create a Space: <https://huggingface.co/new-space> (SDK: Docker)
+2. Push this repo to the Space
+3. In Space Settings, add **Secrets**:
+   - `LINE_CHANNEL_SECRET`
+   - `LINE_CHANNEL_ACCESS_TOKEN`
+   - `GOOGLE_TRANSLATE_API_KEY` (recommended)
+   - Optional one-time setup: `ADMIN_SETUP_KEY` (lets you claim admin in-chat; see below)
+4. Set LINE webhook URL to:
+   - `https://<your-username>-<your-space>.hf.space/webhook`
+5. Click **Verify** in LINE console
+
+### Admin control (set once, then forget)
+
+To use `/admin ...` commands you must know your LINE user ID.
+
+Recommended bootstrap flow:
+- Set `ADMIN_SETUP_KEY` (random string) in your host environment.
+- After deploy, send: `/admin claim <ADMIN_SETUP_KEY>`
+- The bot replies with your LINE user ID; set `ADMIN_USER_IDS=<that id>` in host settings and restart.
+- Remove `ADMIN_SETUP_KEY` afterwards.
+
 ### 4. Configure LINE
 
 1. Copy ngrok URL (e.g., `https://abc123.ngrok.io`)
-2. Go to: https://manager.line.biz/account/@788hwhea/setting/messaging-api
+2. Go to: <https://manager.line.biz/account/@788hwhea/setting/messaging-api>
 3. Set **Webhook URL**: `https://abc123.ngrok.io/webhook`
 4. Click **Verify** (must show success)
 5. **Disable** auto-reply messages
 
-### 5. Test!
+### 5. Test
 
 1. Add bot as friend (scan QR code)
 2. Send: `สวัสดีครับ` (Hello in Thai)
@@ -78,7 +103,7 @@ ngrok http 8000
 
 ## 🎨 How It Works
 
-```
+```text
 User sends Thai text → Bot detects Thai characters
                     ↓
           Translation mode ON 🔥
@@ -163,7 +188,7 @@ User sends Thai text → Bot detects Thai characters
 - **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Full deployment guide
 - **[README.md](README.md)** - Project overview
 
-## 🎉 You're Ready!
+## 🎉 You're Ready
 
 Your bot now:
 

@@ -163,11 +163,25 @@ async def lifespan(app: FastAPI):
     logger.info("📋 Registering intelligent agents...")
 
     # Register Admin Agent if configured (Priority: 5 - Highest)
-    admin_user_ids = settings.get_admin_user_ids()
-    if admin_user_ids:
+    admin_user_ids: list[str] = []
+    try:
+        candidate_admins = settings.get_admin_user_ids()  # type: ignore[call-arg]
+        if isinstance(candidate_admins, list):
+            admin_user_ids = candidate_admins
+    except Exception:
+        admin_user_ids = []
+
+    admin_setup_key = getattr(settings, "admin_setup_key", None)
+    if not isinstance(admin_setup_key, str) or not admin_setup_key.strip():
+        admin_setup_key = None
+
+    if admin_user_ids or admin_setup_key:
         admin_agent = AdminAgent()
         agent_router.register_agent(admin_agent)
-        logger.info(f"🔧 Admin Agent registered with {len(admin_user_ids)} authorized admin(s)")
+        if admin_user_ids:
+            logger.info(f"🔧 Admin Agent registered with {len(admin_user_ids)} authorized admin(s)")
+        else:
+            logger.info("🔧 Admin Agent registered (bootstrap enabled via ADMIN_SETUP_KEY)")
     else:
         logger.info("🔧 Admin Agent not registered (no ADMIN_USER_IDS configured)")
 

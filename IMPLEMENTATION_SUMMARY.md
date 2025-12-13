@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Successfully implemented a complete Thai/English LINE translation bot with automatic language detection, translation capabilities, and group chat support. Deployed and configured for user @788hwhea (ewiebotha@gmail.com) in Thailand.
+Successfully implemented a complete Thai/English LINE translation bot with automatic language detection, translation capabilities, and group chat support.
 
 ## ✅ Completed Features
 
@@ -31,8 +31,8 @@ Successfully implemented a complete Thai/English LINE translation bot with autom
   - Region: Qatar (can be edited if needed)
 - ✅ **Credentials Configured**
   - Channel ID: 2008662864
-  - Channel Secret: ddbb096582dbf20d25090ec1292f8179
-  - Channel Access Token: Issued and saved in `.env`
+  - Channel Secret: (set in environment)
+  - Channel Access Token: (set in environment)
 - ✅ **Local Environment Ready**
   - `.env` file configured with all tokens
   - Docker image builds successfully
@@ -40,7 +40,7 @@ Successfully implemented a complete Thai/English LINE translation bot with autom
 
 ### Architecture
 
-```
+```text
 src/
 ├── main.py                 # FastAPI app with webhook endpoint
 ├── config.py               # Pydantic settings management
@@ -107,7 +107,7 @@ src/
 
 ## 📊 Test Results
 
-```
+```text
 15 tests passed, 87% code coverage
 
 Module Coverage:
@@ -248,9 +248,9 @@ The implementation is production-ready with:
 ### ✅ COMPLETED - LINE Account Setup
 
 - ✅ LINE Official Account created: @788hwhea (Brown)
-- ✅ Channel Secret obtained: ddbb096582dbf20d25090ec1292f8179
-- ✅ Channel Access Token issued and configured
-- ✅ `.env` file configured with all credentials
+- ✅ Channel Secret obtained and stored as a secret
+- ✅ Channel Access Token issued and stored as a secret
+- ✅ Environment configured (no secrets committed)
 
 ### 🚀 TO DO - Deploy and Test
 
@@ -261,15 +261,15 @@ The implementation is production-ready with:
    - **VPS** (full control): See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md#option-3-vps-digitalocean-linode-aws-ec2)
    - **Render.com** (Heroku alternative): See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md#option-4-rendercom-easy-free-tier)
 
-2. **Configure LINE Webhook**
+1. **Configure LINE Webhook**
 
-   - URL: https://manager.line.biz/account/@788hwhea/setting/messaging-api
-   - Set Webhook URL: `https://your-deployment-url.com/webhook`
-   - Click **Verify** (must show success)
-   - Disable **Auto-reply messages**
-   - Enable **Use webhooks**
+- URL: <https://manager.line.biz/account/@788hwhea/setting/messaging-api>
+- Set Webhook URL: `https://your-deployment-url.com/webhook`
+- Click **Verify** (must show success)
+- Disable **Auto-reply messages**
+- Enable **Use webhooks**
 
-3. **Test Your Bot**
+1. **Test Your Bot**
    - Scan QR code in Messaging API page
    - Add bot as friend
    - Send: `สวัสดี` → Should get English translation
@@ -335,26 +335,26 @@ All comprehensive guides are ready:
 - Follow docs/LINE_SETUP.md
 - Obtain channel secret and access token
 
-2. **Configure Environment**
+1. **Configure Environment**
 
    - Copy .env.example to .env
    - Add your LINE credentials
    - Configure LibreTranslate API (optional)
 
-3. **Deploy**
+2. **Deploy**
 
    - Choose deployment method (Docker recommended)
    - Deploy to a server with public HTTPS endpoint
    - Update webhook URL in LINE Developer Console
 
-4. **Test**
+3. **Test**
    - Send Thai text → Get English translation
    - Send English text → Get Thai translation
 
 ## 📞 Support
 
 - Documentation: docs/LINE_SETUP.md
-- GitHub: https://github.com/TeacherEvan/TeacherBOY
+- GitHub: <https://github.com/TeacherEvan/TeacherBOY>
 - User: ewaldt91
 
 ---

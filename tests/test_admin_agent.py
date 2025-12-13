@@ -217,3 +217,31 @@ class TestAdminAgent:
         """Test that admin agent has higher priority than translation agent."""
         # Priority 5 is higher than translation agent's priority 10
         assert admin_agent.get_priority() < 10
+
+
+@pytest.fixture
+def bootstrap_admin_agent():
+    """Create admin agent with bootstrap key enabled but no preconfigured admins."""
+    with patch("src.agents.admin_agent.settings") as mock_settings:
+        mock_settings.get_admin_user_ids.return_value = []
+        mock_settings.admin_setup_key = "setup-secret"
+        agent = AdminAgent()
+        return agent
+
+
+class TestAdminBootstrap:
+    @pytest.mark.asyncio
+    async def test_should_handle_claim_when_bootstrap_enabled(self, bootstrap_admin_agent, mock_event):
+        mock_event.source.user_id = "U0000000000000000"  # not pre-authorized
+        assert await bootstrap_admin_agent.should_handle(mock_event, "/admin claim setup-secret") is True
+
+    @pytest.mark.asyncio
+    async def test_claim_grants_in_memory_admin(self, bootstrap_admin_agent, mock_event, mock_line_bot_api):
+        mock_event.source.user_id = "UCLAIMME123"
+
+        # Claim
+        ok = await bootstrap_admin_agent.handle(mock_event, "/admin claim setup-secret", mock_line_bot_api)
+        assert ok is True
+
+        # After claim, user should be treated as admin
+        assert bootstrap_admin_agent._is_admin("UCLAIMME123") is True

@@ -4,9 +4,8 @@ Complete guide to deploying your TeacherBOY translation bot to production.
 
 ## 📋 Prerequisites
 
-- ✅ LINE Official Account created (@788hwhea)
-- ✅ Channel Secret: `ddbb096582dbf20d25090ec1292f8179`
-- ✅ Channel Access Token: (configured in `.env`)
+- ✅ LINE Official Account created (your bot)
+- ✅ Channel Secret + Channel Access Token available (store as **secrets**, never commit)
 - ✅ `.env` file configured
 - ✅ Docker installed (or Python 3.11+)
 
@@ -32,7 +31,7 @@ ngrok config add-authtoken YOUR_AUTH_TOKEN
 #### Step 2: Start Your Bot
 
 ```bash
-cd /home/eboth/projects/TeacherBOY/TeacherBOY
+cd /path/to/TeacherBOY
 
 # Option A: Docker
 docker build -t teacherboy .
@@ -56,7 +55,7 @@ ngrok http 8000
 #### Step 4: Configure LINE Webhook
 
 1. Copy your ngrok HTTPS URL: `https://abc123def.ngrok.io`
-2. Go to: https://manager.line.biz/account/@788hwhea/setting/messaging-api
+2. Go to: <https://manager.line.biz/account/@788hwhea/setting/messaging-api>
 3. Find **Webhook URL** field
 4. Enter: `https://abc123def.ngrok.io/webhook`
 5. Click **Update**
@@ -73,7 +72,7 @@ ngrok http 8000
    - Use webhooks
 5. Save
 
-#### Step 6: Test!
+#### Step 6: Test
 
 1. Scan QR code in Messaging API page
 2. Add bot as friend
@@ -85,6 +84,43 @@ ngrok http 8000
 - Free tier: URL changes when you restart ngrok
 - Must update webhook URL in LINE each time
 - Good for testing only
+
+---
+
+### Option 2: Render (recommended “set it and forget it”)
+
+Render gives you a stable HTTPS URL, managed restarts, and easy secret management.
+
+1. Create a new **Web Service** from this Git repo.
+2. Environment:
+   - Runtime: Docker
+   - Internal port: `8000` (or whatever `PORT` is set to; default is 8000)
+3. Add Environment Variables (Render dashboard → Environment):
+   - `LINE_CHANNEL_SECRET`
+   - `LINE_CHANNEL_ACCESS_TOKEN`
+   - `GOOGLE_TRANSLATE_API_KEY` (recommended)
+   - Optional admin bootstrap: `ADMIN_SETUP_KEY` (see “Admin control” below)
+4. Deploy. Your public URL will look like: `https://<service>.onrender.com`
+5. Set LINE webhook to: `https://<service>.onrender.com/webhook`
+
+Admin control (one-time):
+- Set `ADMIN_SETUP_KEY` temporarily, then message: `/admin claim <ADMIN_SETUP_KEY>`.
+- Copy the returned user id into `ADMIN_USER_IDS`, redeploy/restart, then remove `ADMIN_SETUP_KEY`.
+
+---
+
+### Option 3: Azure Container Apps (recommended for Azure)
+
+Azure Container Apps provides stable HTTPS, autoscaling, and secret management.
+
+High-level steps:
+1. Build and push the container to ACR (Azure Container Registry).
+2. Create a Container App pointing at that image.
+3. Set ingress to **External** and target port to `8000`.
+4. Add secrets/env vars:
+   - `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `GOOGLE_TRANSLATE_API_KEY`
+   - Optional: `ADMIN_SETUP_KEY` for bootstrap, then set `ADMIN_USER_IDS`
+5. Set LINE webhook to: `https://<your-app>.<region>.azurecontainerapps.io/webhook`
 
 ---
 
@@ -122,9 +158,10 @@ heroku create teacherboy-translator
 #### Step 4: Set Environment Variables
 
 ```bash
-heroku config:set LINE_CHANNEL_SECRET=ddbb096582dbf20d25090ec1292f8179
-heroku config:set LINE_CHANNEL_ACCESS_TOKEN=076qI6h5UQZOBRahmdB2lqU74HCwAfssP0AI4fsQI0NMun4Aubas07LviJhw1ILDZekx2zaHtracTNtL7d8dMolfOXFqxKCJPF4Z9BfPk1yz+Hk/j4n6AsELF3u/1vQ4UDtIrNtrssiB8aWAUmUQNQdB04t89/1O/w1cDnyilFU=
+heroku config:set LINE_CHANNEL_SECRET=your_channel_secret
+heroku config:set LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
 heroku config:set LIBRETRANSLATE_API_URL=https://libretranslate.de/translate
+heroku config:set GOOGLE_TRANSLATE_API_KEY=your_google_translate_api_key
 heroku config:set DEBUG=False
 ```
 
@@ -167,10 +204,11 @@ sudo usermod -aG docker $USER
 git clone https://github.com/TeacherEvan/TeacherBOY.git
 cd TeacherBOY
 
-# Create .env file
+# Create .env file (DO NOT commit)
 cat > .env << 'EOF'
-LINE_CHANNEL_SECRET=ddbb096582dbf20d25090ec1292f8179
-LINE_CHANNEL_ACCESS_TOKEN=076qI6h5UQZOBRahmdB2lqU74HCwAfssP0AI4fsQI0NMun4Aubas07LviJhw1ILDZekx2zaHtracTNtL7d8dMolfOXFqxKCJPF4Z9BfPk1yz+Hk/j4n6AsELF3u/1vQ4UDtIrNtrssiB8aWAUmUQNQdB04t89/1O/w1cDnyilFU=
+LINE_CHANNEL_SECRET=your_channel_secret
+LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
+GOOGLE_TRANSLATE_API_KEY=your_google_translate_api_key
 LIBRETRANSLATE_API_URL=https://libretranslate.de/translate
 DEBUG=False
 EOF
@@ -230,7 +268,7 @@ Simple alternative to Heroku.
 
 #### Step 1: Sign Up
 
-- Go to https://render.com
+- Go to <https://render.com>
 - Sign up (free tier available)
 
 #### Step 2: Create Web Service
@@ -242,14 +280,71 @@ Simple alternative to Heroku.
    - **Environment:** Docker
    - **Instance Type:** Free
 4. Add environment variables:
-   ```
-   LINE_CHANNEL_SECRET=ddbb096582dbf20d25090ec1292f8179
-   LINE_CHANNEL_ACCESS_TOKEN=076qI6h5UQZOBRahmdB2lqU74HCwAfssP0AI4fsQI0NMun4Aubas07LviJhw1ILDZekx2zaHtracTNtL7d8dMolfOXFqxKCJPF4Z9BfPk1yz+Hk/j4n6AsELF3u/1vQ4UDtIrNtrssiB8aWAUmUQNQdB04t89/1O/w1cDnyilFU=
+
+   ```text
+   LINE_CHANNEL_SECRET=your_channel_secret
+   LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
+   GOOGLE_TRANSLATE_API_KEY=your_google_translate_api_key
    LIBRETRANSLATE_API_URL=https://libretranslate.de/translate
    ```
+
 5. Deploy!
 
 Your URL: `https://teacherboy.onrender.com/webhook`
+
+---
+
+### Option 5: Hugging Face Spaces (Docker) (Recommended: permanent HTTPS URL)
+
+Hugging Face Spaces can host this repo as a **Docker Space**. This is a good fit for LINE because Spaces gives you a stable HTTPS endpoint for the webhook.
+
+#### Step 1: Create a Docker Space
+
+1. Go to <https://huggingface.co/new-space>
+2. Choose **SDK: Docker**
+3. Set the Space name (this affects the URL)
+
+This repo already includes the required README metadata:
+
+- `sdk: docker`
+- `app_port: 8000`
+
+#### Step 2: Push this repo to the Space
+
+Option A: Use the Hugging Face web UI “Files” upload.
+
+Option B: Git push (recommended):
+
+```bash
+git remote add space https://huggingface.co/spaces/<your-username>/<your-space>
+git push space main
+```
+
+#### Step 3: Configure Secrets (Space Settings)
+
+In the Space **Settings → Variables and secrets**, set these as **Secrets** (not committed in git):
+
+- `LINE_CHANNEL_SECRET`
+- `LINE_CHANNEL_ACCESS_TOKEN`
+- `GOOGLE_TRANSLATE_API_KEY` (recommended)
+
+Optional:
+
+- `LIBRETRANSLATE_API_URL` (defaults to public instance)
+- `ADMIN_USER_IDS` (comma-separated LINE user IDs)
+- `DEBUG=False`
+
+#### Step 4: Set your LINE Webhook URL to the Space
+
+Your public Space URL is typically:
+
+`https://<your-username>-<your-space>.hf.space`
+
+Set the LINE webhook URL to:
+
+`https://<your-username>-<your-space>.hf.space/webhook`
+
+Then click **Verify** in the LINE console.
 
 ---
 
@@ -259,7 +354,7 @@ Your URL: `https://teacherboy.onrender.com/webhook`
 
 1. **Go to LINE Developers Console**
 
-   - https://developers.line.biz/console/
+   - <https://developers.line.biz/console/>
 
 2. **Navigate to Your Channel**
 
@@ -272,12 +367,14 @@ Your URL: `https://teacherboy.onrender.com/webhook`
    - Find **Webhook settings** section
    - Click **Edit**
    - Enter your URL:
-     ```
+
+     ```text
      ngrok:    https://abc123.ngrok.io/webhook
      Heroku:   https://your-app.herokuapp.com/webhook
      VPS:      https://your-domain.com/webhook
      Render:   https://your-app.onrender.com/webhook
      ```
+
    - Click **Update**
 
 4. **Verify Webhook**
@@ -367,23 +464,23 @@ sudo tail -f /var/log/nginx/error.log
 
 ### Bot Doesn't Respond
 
-**Check 1: Server Running?**
+#### Check 1: Server Running?
 
 ```bash
 curl https://your-url.com/health
 # Should return: {"status":"healthy"}
 ```
 
-**Check 2: Webhook Verified?**
+#### Check 2: Webhook Verified?
 
 - LINE Console → Messaging API → Verify button
 - Should be green/success
 
-**Check 3: Auto-Reply Disabled?**
+#### Check 3: Auto-Reply Disabled?
 
 - Response settings → Auto-reply OFF
 
-**Check 4: Logs**
+#### Check 4: Logs
 
 ```bash
 docker logs teacherboy
@@ -409,11 +506,13 @@ docker logs teacherboy
 **Solutions:**
 
 1. Check LibreTranslate API:
+
    ```bash
    curl -X POST https://libretranslate.de/translate \
      -H "Content-Type: application/json" \
      -d '{"q":"Hello","source":"en","target":"th","format":"text"}'
    ```
+
 2. Check logs for API errors
 3. Try different LibreTranslate instance in `.env`
 
@@ -458,6 +557,7 @@ sudo ufw allow 443
    - Update `.env` and redeploy
 
 4. **Monitor logs for suspicious activity**
+
    ```bash
    docker logs teacherboy | grep "Invalid signature"
    ```
@@ -496,10 +596,10 @@ sudo ufw allow 443
 
 ## 📚 Additional Resources
 
-- **LINE Messaging API Docs:** https://developers.line.biz/en/docs/messaging-api/
-- **LibreTranslate:** https://github.com/LibreTranslate/LibreTranslate
-- **FastAPI Docs:** https://fastapi.tiangolo.com/
-- **ngrok Docs:** https://ngrok.com/docs
+- **LINE Messaging API Docs:** <https://developers.line.biz/en/docs/messaging-api/>
+- **LibreTranslate:** <https://github.com/LibreTranslate/LibreTranslate>
+- **FastAPI Docs:** <https://fastapi.tiangolo.com/>
+- **ngrok Docs:** <https://ngrok.com/docs>
 
 ---
 

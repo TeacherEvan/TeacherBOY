@@ -25,6 +25,10 @@ class AdminAgent(BaseAgent):
             description="Admin commands for bot management and control",
         )
         self._admin_user_ids = settings.get_admin_user_ids()
+        self._admin_setup_key = (
+            settings.admin_setup_key.strip() if isinstance(settings.admin_setup_key, str) else None
+        )
+        self._claimed_admin_user_id: str | None = None
         
         if self._admin_user_ids:
             logger.info(f"✅ AdminAgent initialized with {len(self._admin_user_ids)} authorized admin(s)")
@@ -46,8 +50,17 @@ class AdminAgent(BaseAgent):
         text_lower = text.lower().strip()
         return text_lower.startswith("/admin") or text_lower.startswith("!admin")
 
+    def _parse_admin_command(self, text: str) -> tuple[str | None, str | None]:
+        """Parse '/admin <cmd> [args...]' into (cmd, args)."""
+        parts = text.strip().split(maxsplit=2)
+        if len(parts) < 2:
+            return None, None
+        cmd = parts[1].lower()
+        arg = parts[2] if len(parts) > 2 else None
+        return cmd, arg
+
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
-        """Handle if message is an admin command from an authorized user."""
+        """Handle if message is an admin command from an authorized user (or bootstrap claim)."""
         if not self._is_admin_command(text):
             return False
         
@@ -55,7 +68,12 @@ class AdminAgent(BaseAgent):
         user_id = getattr(event.source, 'user_id', None) if event.source else None
         if not user_id:
             return False
-        
+
+        # Allow bootstrap claim when configured (even if user isn't an admin yet)
+        cmd, _ = self._parse_admin_command(text)
+        if cmd == "claim" and self._admin_setup_key:
+            return True
+
         return self._is_admin(user_id)
 
     async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
@@ -65,16 +83,20 @@ class AdminAgent(BaseAgent):
         
         try:
             # Parse command
-            parts = text.strip().split(maxsplit=2)
-            if len(parts) < 2:
+            cmd, arg = self._parse_admin_command(text)
+            if not cmd:
                 # Just "/admin" or "!admin" - show help
                 response = self._get_help_message()
             else:
-                command = parts[1].lower()
-                arg = parts[2] if len(parts) > 2 else None
+                command = cmd
+
+                # Bootstrap: /admin claim <key>
+                if command == "claim":
+                    response = self._claim_admin(user_id, chat_id, arg)
+                # Normal admin commands
                 
                 # Execute command
-                if command == "help":
+                elif command == "help":
                     response = self._get_help_message()
                 elif command == "status":
                     response = self._get_status_message(chat_id, arg)
@@ -119,6 +141,46 @@ class AdminAgent(BaseAgent):
                     )
                 )
             return False
+
+    def _claim_admin(self, user_id: str | None, chat_id: str, arg: str | None) -> str:
+        """Allow one-time admin bootstrap using ADMIN_SETUP_KEY."""
+        if not self._admin_setup_key:
+            return (
+                "❌ Admin bootstrap is not enabled.\n\n"
+                "Ask the deployer to set ADMIN_SETUP_KEY, then run: /admin claim <key>"
+            )
+
+        if not user_id:
+            return "❌ Could not determine your LINE user ID from this event."
+
+        provided_key = (arg or "").strip()
+        if not provided_key:
+            return "Usage: /admin claim <ADMIN_SETUP_KEY>"
+
+        if provided_key != self._admin_setup_key:
+            logger.warning(f"⚠️  Invalid admin claim attempt from user {user_id} in {chat_id}")
+            return "❌ Invalid claim key."
+
+        if self._claimed_admin_user_id and self._claimed_admin_user_id != user_id:
+            return (
+                "❌ Admin was already claimed for this running instance.\n\n"
+                "Persist admin via ADMIN_USER_IDS in your host settings, then restart."
+            )
+
+        # Grant in-memory admin for this process so user can immediately use /admin commands
+        if user_id not in self._admin_user_ids:
+            self._admin_user_ids.append(user_id)
+        self._claimed_admin_user_id = user_id
+
+        return (
+            "✅ Admin claim successful (for this running instance).\n\n"
+            f"Your LINE user ID: {user_id}\n"
+            f"This chat ID: {chat_id}\n\n"
+            "To make it permanent:\n"
+            f"- Set ADMIN_USER_IDS={user_id} in your host environment\n"
+            "- Restart the service\n"
+            "- Remove ADMIN_SETUP_KEY afterwards"
+        )
 
     def _get_help_message(self) -> str:
         """Get help message with all available admin commands."""
