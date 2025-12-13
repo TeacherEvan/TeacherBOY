@@ -1,6 +1,7 @@
 """Admin agent - Handles admin control commands for bot management."""
 
 import logging
+import re
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
     MessagingApi,
@@ -48,15 +49,48 @@ class AdminAgent(BaseAgent):
     def _is_admin_command(self, text: str) -> bool:
         """Check if text is an admin command."""
         text_lower = text.lower().strip()
-        return text_lower.startswith("/admin") or text_lower.startswith("!admin")
+
+        if text_lower.startswith("/admin") or text_lower.startswith("!admin"):
+            return True
+
+        teacher_pattern = r"teacher(?:boy|boi|biy|boj|boii)"
+        return bool(re.match(rf"^{teacher_pattern}\s+admin\b", text_lower))
 
     def _parse_admin_command(self, text: str) -> tuple[str | None, str | None]:
-        """Parse '/admin <cmd> [args...]' into (cmd, args)."""
-        parts = text.strip().split(maxsplit=2)
-        if len(parts) < 2:
+        """Parse an admin command into (cmd, args).
+
+        Supported formats:
+        - /admin <cmd> [args...]
+        - !admin <cmd> [args...]
+        - TeacherBoy admin <cmd> [args...]
+        """
+        raw = text.strip()
+        raw_lower = raw.lower()
+
+        if raw_lower.startswith("/admin") or raw_lower.startswith("!admin"):
+            parts = raw.split(maxsplit=2)
+            if len(parts) < 2:
+                return None, None
+            cmd = parts[1].lower()
+            arg = parts[2] if len(parts) > 2 else None
+            return cmd, arg
+
+        teacher_pattern = r"teacher(?:boy|boi|biy|boj|boii)"
+        match = re.match(
+            rf"^\s*(?P<teacher>{teacher_pattern})\s+admin(?:\s+(?P<rest>.*))?$",
+            raw,
+            flags=re.IGNORECASE,
+        )
+        if not match:
             return None, None
-        cmd = parts[1].lower()
-        arg = parts[2] if len(parts) > 2 else None
+
+        rest = (match.group("rest") or "").strip()
+        if not rest:
+            return None, None
+
+        parts = rest.split(maxsplit=1)
+        cmd = parts[0].lower()
+        arg = parts[1] if len(parts) > 1 else None
         return cmd, arg
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
@@ -109,7 +143,10 @@ class AdminAgent(BaseAgent):
                 elif command == "sessions":
                     response = self._list_sessions()
                 else:
-                    response = f"❌ Unknown command: {command}\n\nUse /admin help for available commands."
+                    response = (
+                        f"❌ Unknown command: {command}\n\n"
+                        "Use TeacherBoy admin help (or /admin help) for available commands."
+                    )
             
             # Send response
             if event.reply_token:
@@ -187,6 +224,9 @@ class AdminAgent(BaseAgent):
         return (
             "🔧 Admin Commands\n"
             "━━━━━━━━━━━━━━━━\n\n"
+            "You can run commands as:\n"
+            "  TeacherBoy admin <command>\n"
+            "  /admin <command>\n\n"
             "📊 Status & Info:\n"
             "  /admin status [chat_id]\n"
             "    → Show current chat status\n\n"

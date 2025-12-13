@@ -48,6 +48,62 @@ Use this to validate your bot before deploying.
 5. Deploy.
 6. Set LINE webhook to `https://<service>.onrender.com/webhook`.
 
+## Hugging Face Spaces (Docker)
+
+This repo is compatible with **Docker Spaces**.
+
+Key notes:
+
+- Your Space must be **Public** for LINE to reach your webhook.
+- Configure LINE to call: `https://<your-space-host>.hf.space/webhook`
+- Store secrets in **Space Settings → Secrets** (do not commit `.env`).
+
+### Push updates (recommended workflow)
+
+Spaces are git repos. Pushing triggers an automatic rebuild/restart.
+
+1. Add the Space as a remote (once):
+
+   ```bash
+   git remote add hf https://huggingface.co/spaces/<owner>/<space>
+   # Example:
+   git remote add hf https://huggingface.co/spaces/EvilEvan/TeacherBOY
+   ```
+
+2. Commit your changes locally:
+
+   ```bash
+   git add .
+   git commit -m "Update"
+   ```
+
+3. Push to Hugging Face:
+
+   ```bash
+   git push hf main
+   ```
+
+   Authentication:
+
+   - Username: your Hugging Face username
+   - Password: a Hugging Face **Access Token** (not your account password)
+
+If you initially uploaded files via the web UI, the Space may have a different git history.
+If you control the Space and want your local repo to be the source of truth, you can sync with:
+
+```bash
+git push --force-with-lease hf main
+```
+
+### VS Code one-click push
+
+This repo includes tasks:
+
+- `hf:set-remote`
+- `hf:push`
+
+Run them via **Tasks: Run Task**.
+
 ## Azure Container Apps
 
 High-level flow:

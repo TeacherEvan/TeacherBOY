@@ -70,6 +70,16 @@ class TranslationAgent(BaseAgent):
         teacher_pattern = r"^teacher(?:boy|boi|biy|boj|boii)[\s.!]*$"
         return bool(re.match(teacher_pattern, text.lower().strip()))
 
+    def is_help_command(self, text: str) -> bool:
+        """Check if text is a help command for the bot."""
+        text_lower = text.lower().strip()
+        teacher_pattern = r"teacher(?:boy|boi|biy|boj|boii)"
+        help_patterns = [
+            rf"^{teacher_pattern}\s+--help[\s.!?]*$",
+            rf"^{teacher_pattern}\s+help[\s.!?]*$",
+        ]
+        return any(re.match(pattern, text_lower) for pattern in help_patterns)
+
     def is_exit_command(self, text: str) -> bool:
         """Check if text is an exit command (ends session but doesn't sleep)."""
         # Sleep command is now the primary way to exit
@@ -84,6 +94,10 @@ class TranslationAgent(BaseAgent):
         4. Sleep command (to properly put bot to sleep)
         """
         chat_id = self._get_chat_id(event)
+
+        # Always handle help command (even if sleeping)
+        if self.is_help_command(text):
+            return True
 
         # Always handle wake command (even if not sleeping)
         if self.is_wake_command(text):
@@ -110,6 +124,37 @@ class TranslationAgent(BaseAgent):
         with tracer.start_as_current_span("translation_agent.handle") as span:
             span.set_attribute("chat.id", chat_id)
             try:
+                # Help command
+                if self.is_help_command(text):
+                    span.set_attribute("translation.command", "help")
+                    help_message = TextMessage(
+                        text=(
+                            "TeacherBOY Help\n"
+                            "━━━━━━━━━━━━\n\n"
+                            "Wake the bot:\n"
+                            "- TeacherBoy\n\n"
+                            "Put the bot to sleep (24h):\n"
+                            "- Thank you TeacherBoy\n\n"
+                            "Admin (if enabled):\n"
+                            "- TeacherBoy admin help\n"
+                            "- /admin help\n\n"
+                            "Tips:\n"
+                            "- Send Thai to start auto-translation\n"
+                            "- Translation continues until sleep"
+                        ),
+                        quickReply=None,
+                        quoteToken=None,
+                    )
+                    if event.reply_token:
+                        line_bot_api.reply_message(
+                            ReplyMessageRequest(
+                                replyToken=event.reply_token,
+                                messages=[help_message],
+                                notificationDisabled=False,
+                            )
+                        )
+                    return True
+
                 # Handle wake command
                 if self.is_wake_command(text):
                     span.set_attribute("translation.command", "wake")

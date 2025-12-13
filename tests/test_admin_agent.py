@@ -60,12 +60,15 @@ class TestAdminAgent:
         assert admin_agent._is_admin_command("/admin status") is True
         assert admin_agent._is_admin_command("!admin help") is True
         assert admin_agent._is_admin_command("/ADMIN HELP") is True
+        assert admin_agent._is_admin_command("TeacherBoy admin help") is True
+        assert admin_agent._is_admin_command("teacherboi admin status") is True
 
     def test_is_admin_command_invalid(self, admin_agent):
         """Test admin command detection with invalid commands."""
         assert admin_agent._is_admin_command("admin help") is False
         assert admin_agent._is_admin_command("hello") is False
         assert admin_agent._is_admin_command("/not_admin") is False
+        assert admin_agent._is_admin_command("TeacherBoy help") is False
 
     @pytest.mark.asyncio
     async def test_should_handle_authorized_admin_command(self, admin_agent, mock_event):
