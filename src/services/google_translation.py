@@ -28,7 +28,11 @@ def with_retry(max_retries: Optional[int] = None, backoff_factor: float = 0.5):
         async def wrapper(*args, **kwargs):
             from src.config import settings
 
-            retries = max_retries if max_retries is not None else settings.translation_max_retries
+            retries = (
+                max_retries
+                if max_retries is not None
+                else settings.translation_max_retries
+            )
 
             last_exception = None
             for attempt in range(retries):
@@ -44,7 +48,9 @@ def with_retry(max_retries: Optional[int] = None, backoff_factor: float = 0.5):
                         )
                         await asyncio.sleep(delay)
                     else:
-                        logger.error(f"Translation failed after {retries} attempts: {e}")
+                        logger.error(
+                            f"Translation failed after {retries} attempts: {e}"
+                        )
             raise last_exception
 
         return wrapper
@@ -103,9 +109,16 @@ class GoogleTranslationService:
 
         # Validate input length (Google API limit is 30k characters)
         if len(text) > 30000:
-            raise ValueError(f"Text too long ({len(text)} chars). Maximum is 30,000 characters.")
+            raise ValueError(
+                f"Text too long ({len(text)} chars). Maximum is 30,000 characters."
+            )
 
-        params = {"q": text, "target": target_lang, "key": self.api_key, "format": "text"}
+        params = {
+            "q": text,
+            "target": target_lang,
+            "key": self.api_key,
+            "format": "text",
+        }
 
         if source_lang:
             params["source"] = source_lang
@@ -122,7 +135,9 @@ class GoogleTranslationService:
 
         if "data" in data and "translations" in data["data"]:
             translated = data["data"]["translations"][0]["translatedText"]
-            detected_lang = data["data"]["translations"][0].get("detectedSourceLanguage", "")
+            detected_lang = data["data"]["translations"][0].get(
+                "detectedSourceLanguage", ""
+            )
 
             logger.info(
                 f"✅ Google Translate success: {source_lang or detected_lang} → {target_lang} "

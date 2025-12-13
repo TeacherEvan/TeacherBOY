@@ -65,24 +65,32 @@ class Settings(BaseSettings):
 
     # Google Cloud Translation API (Primary - Professional Grade)
     google_translate_api_key: Optional[str] = Field(
-        default=None, description="Google Cloud Translation API key for high-quality translation"
+        default=None,
+        description="Google Cloud Translation API key for high-quality translation",
     )
 
     # LibreTranslate API (Fallback/Development)
     libretranslate_api_url: str = Field(
-        default="https://libretranslate.de/translate", description="LibreTranslate API endpoint URL"
+        default="https://libretranslate.de/translate",
+        description="LibreTranslate API endpoint URL",
     )
     libretranslate_api_key: Optional[str] = Field(
-        default=None, description="LibreTranslate API key (optional, for rate limit increases)"
+        default=None,
+        description="LibreTranslate API key (optional, for rate limit increases)",
     )
 
     # Translation Performance Optimization
     # NOTE: Caching implementation is planned for future release
     translation_cache_ttl_seconds: int = Field(
-        default=3600, ge=0, description="TTL for translation cache in seconds (0 to disable) - TODO"
+        default=3600,
+        ge=0,
+        description="TTL for translation cache in seconds (0 to disable) - TODO",
     )
     translation_max_retries: int = Field(
-        default=3, ge=0, le=10, description="Maximum retry attempts for failed translation requests"
+        default=3,
+        ge=0,
+        le=10,
+        description="Maximum retry attempts for failed translation requests",
     )
 
     # ============================================================================
@@ -92,13 +100,17 @@ class Settings(BaseSettings):
         default=None, description="LINE Group Chat ID for calendar reminders"
     )
     calendar_timezone: str = Field(
-        default="Asia/Bangkok", description="Timezone for scheduled reminders (IANA format)"
+        default="Asia/Bangkok",
+        description="Timezone for scheduled reminders (IANA format)",
     )
     calendar_morning_hour: int = Field(
         default=7, ge=0, le=23, description="Hour for morning reminder (24-hour format)"
     )
     calendar_afternoon_hour: int = Field(
-        default=14, ge=0, le=23, description="Hour for afternoon reminder (24-hour format)"
+        default=14,
+        ge=0,
+        le=23,
+        description="Hour for afternoon reminder (24-hour format)",
     )
 
     # ============================================================================
@@ -119,7 +131,9 @@ class Settings(BaseSettings):
     # ============================================================================
     host: str = Field(default="0.0.0.0", description="Server bind host address")
     port: int = Field(default=8000, ge=1024, le=65535, description="Server bind port")
-    debug: bool = Field(default=False, description="Enable debug mode (DO NOT use in production)")
+    debug: bool = Field(
+        default=False, description="Enable debug mode (DO NOT use in production)"
+    )
 
     # Performance and monitoring
     enable_request_logging: bool = Field(
@@ -190,7 +204,9 @@ class Settings(BaseSettings):
 
     def is_google_translate_configured(self) -> bool:
         """Check if Google Translate API is properly configured."""
-        return bool(self.google_translate_api_key and len(self.google_translate_api_key) > 20)
+        return bool(
+            self.google_translate_api_key and len(self.google_translate_api_key) > 20
+        )
 
     def is_calendar_configured(self) -> bool:
         """Check if Google Calendar integration is properly configured."""
