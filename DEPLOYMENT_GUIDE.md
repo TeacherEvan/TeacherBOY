@@ -2,6 +2,10 @@
 
 Complete guide to deploying your TeacherBOY translation bot to production.
 
+> Note: Docs were reorganized. The maintained deployment guide is now:
+>
+> - [docs/guides/deployment.md](docs/guides/deployment.md)
+
 ## 📋 Prerequisites
 
 - ✅ LINE Official Account created (your bot)

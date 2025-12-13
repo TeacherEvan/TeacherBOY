@@ -1,5 +1,9 @@
 # Multi-Agent Architecture Guide
 
+> Note: Docs were reorganized. The maintained agent docs are now:
+>
+> - [docs/architecture/agents.md](docs/architecture/agents.md)
+
 ## 🏗️ Architecture Overview
 
 TeacherBOY uses a **modular multi-agent architecture** that allows multiple specialized agents to coexist in a single bot, each triggered by different message patterns.

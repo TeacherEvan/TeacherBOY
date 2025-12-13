@@ -1,5 +1,10 @@
 # TeacherBOY Architecture & How It Works
 
+> Note: Docs were reorganized. The maintained architecture docs are now:
+>
+> - [docs/architecture/overview.md](docs/architecture/overview.md)
+> - [docs/architecture/agents.md](docs/architecture/agents.md)
+
 ## 🎯 What TeacherBOY Does
 
 TeacherBOY is an **automatic translation bot** for LINE that translates messages between Thai and English. When users send a message in Thai, the bot replies with English. When they send English, the bot replies with Thai.

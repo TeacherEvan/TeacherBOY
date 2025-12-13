@@ -15,13 +15,16 @@ TeacherBOY is a high-performance, asynchronous LINE Bot featuring a modular mult
 
 ## 📚 Documentation
 
-- **[🏗️ Architecture & How It Works](ARCHITECTURE.md)** - Complete explanation of how the bot works, data flow, and webhook concepts
-- **[🚀 Deployment Guide](DEPLOYMENT_GUIDE.md)** - Step-by-step deployment with ngrok, Heroku, VPS, or Render
-- **[🤖 Multi-Agent Guide](MULTI_AGENT_GUIDE.md)** - **NEW!** Build custom agents for math, code review, quizzes, and more
-- **[🔧 Admin Commands](docs/ADMIN_COMMANDS.md)** - **NEW!** In-chat control commands for authorized administrators
-- **[⚡ Quick Start](QUICK_START.md)** - Fast setup with Google Translate API integration
-- **[⚙️ LINE Setup Guide](docs/LINE_SETUP.md)** - Getting your LINE tokens and configuring webhooks
-- **[📋 Implementation Summary](IMPLEMENTATION_SUMMARY.md)** - Technical details and test results
+- **[📚 Docs Home](docs/README.md)** - Start here (quickstart, deployment, LINE setup, admin)
+- **[⚡ Quick Start](docs/guides/quickstart.md)**
+- **[⚙️ LINE Setup](docs/guides/line-setup.md)**
+- **[🚀 Deployment](docs/guides/deployment.md)**
+- **[🏗️ Architecture](docs/architecture/overview.md)**
+- **[🤖 Agents](docs/architecture/agents.md)**
+- **[🔧 Admin Commands](docs/ADMIN_COMMANDS.md)**
+- **[🔎 Tracing](docs/TRACING.md)**
+
+Legacy docs at repo root are kept for backward compatibility.
 
 ## 🚀 Features
 

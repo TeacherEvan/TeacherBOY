@@ -1,5 +1,9 @@
 # LINE Bot Token Setup Guide
 
+> Note: Docs were reorganized. The maintained guide is now:
+>
+> - [docs/guides/line-setup.md](guides/line-setup.md)
+
 This guide will help you set up your LINE Bot and obtain the necessary tokens for TeacherBOY translation bot.
 
 ## Prerequisites
@@ -38,11 +42,13 @@ This guide will help you set up your LINE Bot and obtain the necessary tokens fo
 
 1. In the channel settings, go to the "Messaging API" tab
 2. **Channel Secret**:
+
    - Find "Channel secret" at the top
    - Click "Show" to reveal it
    - Copy this value - you'll need it as `LINE_CHANNEL_SECRET`
 
 3. **Channel Access Token**:
+
    - Scroll down to "Channel access token (long-lived)"
    - Click "Issue"
    - Copy the generated token - you'll need it as `LINE_CHANNEL_ACCESS_TOKEN`
@@ -62,11 +68,13 @@ This guide will help you set up your LINE Bot and obtain the necessary tokens fo
 ### 6. Configure Your Application
 
 1. Copy `.env.example` to `.env`:
+
    ```bash
    cp .env.example .env
    ```
 
 2. Edit `.env` and add your tokens:
+
    ```
    LINE_CHANNEL_SECRET=your_channel_secret_here
    LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token_here
@@ -106,6 +114,7 @@ python -m src.main
 3. Test the webhook using the "Verify" button
 
 **Important**: LINE requires HTTPS for webhook URLs. You can use:
+
 - ngrok for local testing: `ngrok http 8000`
 - A cloud provider with SSL (AWS, Google Cloud, Heroku, etc.)
 
@@ -144,6 +153,7 @@ The bot is configured to work with `line-bot-mcp-server` for Docker MCP integrat
 ### Setting Up MCP Server
 
 1. Install line-bot-mcp-server Docker image:
+
    ```bash
    docker pull line-bot-mcp-server
    ```
@@ -161,5 +171,6 @@ The bot is configured to work with `line-bot-mcp-server` for Docker MCP integrat
 ## Support
 
 For issues or questions:
+
 - GitHub Issues: https://github.com/TeacherEvan/TeacherBOY/issues
 - User: ewaldt91
