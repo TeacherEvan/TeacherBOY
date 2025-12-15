@@ -4,7 +4,7 @@
 
 ### Example 1: Thai Language Flow
 
-```
+```text
 User: news
 
 Bot: 📰 News / ข่าว

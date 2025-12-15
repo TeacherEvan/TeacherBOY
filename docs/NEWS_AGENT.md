@@ -16,7 +16,7 @@ Type `news` or `ข่าว` in any LINE chat to start.
 
 2. **Main Menu** (auto-fetched data)
 
-   ```
+   ```text
    🌡️ Temperature (Bangkok): 32°C
    💨 PM2.5 (Bangkok): 45
    🌧️ Will it rain in next 5 hours: No

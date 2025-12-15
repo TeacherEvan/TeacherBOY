@@ -15,6 +15,13 @@ from src.services.news_data_service import NewsDataService
 
 logger = logging.getLogger(__name__)
 
+# Legal information constants (as of Dec 2024 - update if laws change)
+LEGAL_INFO = {
+    "cannabis": {"th": "ถูกกฎหมาย (Legal)", "en": "Legal"},
+    "ecig": {"th": "*ผิดกฎหมาย* (NOT LEGAL)", "en": "*NOT LEGAL*"},
+    "alcohol": {"th": "ควรระวัง (Prescriptive)", "en": "Prescriptive"},
+}
+
 
 class NewsAgent(BaseAgent):
     """Agent for handling multi-step news conversations with weather and headlines."""
@@ -180,9 +187,9 @@ class NewsAgent(BaseAgent):
         msg += f"🌡️ อุณหภูมิ (Bangkok): {temp}°C\n"
         msg += f"💨 PM2.5 (Bangkok): {pm25}\n"
         msg += f"🌧️ จะฝนตกใน 5 ชั่วโมงข้างหน้า: {rain_text}\n\n"
-        msg += f"🍃 กัญชา: ถูกกฎหมาย (Legal)\n"
-        msg += f"🚭 บุหรี่ไฟฟ้า: *ผิดกฎหมาย* (NOT LEGAL)\n"
-        msg += f"🍺 แอลกอฮอล์: ควรระวัง (Prescriptive)\n\n"
+        msg += f"🍃 กัญชา: {LEGAL_INFO['cannabis']['th']}\n"
+        msg += f"🚭 บุหรี่ไฟฟ้า: {LEGAL_INFO['ecig']['th']}\n"
+        msg += f"🍺 แอลกอฮอล์: {LEGAL_INFO['alcohol']['th']}\n\n"
         msg += f"📰 ข่าวสำคัญวันนี้:\n"
         
         for i, headline in enumerate(headlines[:5], 1):
@@ -204,9 +211,9 @@ class NewsAgent(BaseAgent):
         msg += f"🌡️ Temperature (Bangkok): {temp}°C\n"
         msg += f"💨 PM2.5 (Bangkok): {pm25}\n"
         msg += f"🌧️ Will it rain in next 5 hours: {rain_text}\n\n"
-        msg += f"🍃 Cannabis: Legal\n"
-        msg += f"🚭 E-Cigarettes: *NOT LEGAL*\n"
-        msg += f"🍺 Alcohol: Prescriptive\n\n"
+        msg += f"🍃 Cannabis: {LEGAL_INFO['cannabis']['en']}\n"
+        msg += f"🚭 E-Cigarettes: {LEGAL_INFO['ecig']['en']}\n"
+        msg += f"🍺 Alcohol: {LEGAL_INFO['alcohol']['en']}\n\n"
         msg += f"📰 Top 5 Headlines Today:\n"
         
         for i, headline in enumerate(headlines[:5], 1):
@@ -228,7 +235,11 @@ class NewsAgent(BaseAgent):
         if text_clean in ["1", "2", "3", "4", "5", "๑", "๒", "๓", "๔", "๕"]:
             # Normalize Thai numerals
             thai_to_arabic = {"๑": "1", "๒": "2", "๓": "3", "๔": "4", "๕": "5"}
-            index = int(thai_to_arabic.get(text_clean, text_clean)) - 1
+            try:
+                index = int(thai_to_arabic.get(text_clean, text_clean)) - 1
+            except ValueError:
+                await self._send_invalid_choice(event, line_bot_api, session["language"])
+                return True
             
             cached_data = session.get("cached_data", {})
             headlines = cached_data.get("headlines", [])

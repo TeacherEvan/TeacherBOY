@@ -30,7 +30,7 @@ The News Agent feature has been successfully implemented and integrated into Tea
 
 ### Configuration
 
-4. **src/config.py** (modified)
+1. **src/config.py** (modified)
    - Added `news_api_key` (optional)
    - Added `weather_cache_ttl_seconds` (default: 1800)
    - Added `news_cache_ttl_seconds` (default: 3600)
@@ -38,7 +38,7 @@ The News Agent feature has been successfully implemented and integrated into Tea
 
 ### Integration
 
-5. **src/main.py** (modified)
+1. **src/main.py** (modified)
    - Imported `NewsDataService` and `NewsAgent`
    - Instantiated news service with shared HTTP client
    - Registered NewsAgent with priority 15
@@ -46,7 +46,7 @@ The News Agent feature has been successfully implemented and integrated into Tea
 
 ### Testing & Documentation
 
-6. **tests/test_news_agent.py** (110 lines)
+1. **tests/test_news_agent.py** (110 lines)
    - 5 passing tests covering:
      - Agent initialization
      - Trigger word detection
@@ -54,14 +54,14 @@ The News Agent feature has been successfully implemented and integrated into Tea
      - Session state management
      - Language selection flow
 
-7. **docs/NEWS_AGENT.md** (134 lines)
+1. **docs/NEWS_AGENT.md** (134 lines)
    - Quick reference guide
    - User flow documentation
    - Configuration instructions
    - Technical details
    - Testing procedures
 
-8. **README.md** (modified)
+1. **README.md** (modified)
    - Added News Agent feature section
    - Updated .env example with NEWS_API_KEY
 
@@ -69,7 +69,7 @@ The News Agent feature has been successfully implemented and integrated into Tea
 
 ### User Flow
 
-```
+```text
 User: "news" or "ข่าว"
 Bot: Language selection (1=Thai, 2=English)
 User: "1" or "2"
@@ -116,7 +116,7 @@ NEWS_CACHE_TTL_SECONDS=3600     # Default: 1 hour
 
 ## ✅ Test Results
 
-```
+```text
 tests/test_news_agent.py::test_news_agent_initialization PASSED
 tests/test_news_agent.py::test_news_trigger_detection PASSED
 tests/test_news_agent.py::test_line_system_message_ignored PASSED

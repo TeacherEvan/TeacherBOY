@@ -100,6 +100,7 @@ def test_session_language_selection():
     news_session_manager.set_language(chat_id, "th")
     
     session = news_session_manager.get_session_state(chat_id)
+    assert session is not None, "Session should exist after set_language"
     assert session["language"] == "th"
     assert session["step"] == "main_menu"
     
