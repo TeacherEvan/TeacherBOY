@@ -37,6 +37,7 @@ uvicorn src.main:app --reload
 ```
 
 Look for this in the logs:
+
 ```
 ✅ AdminAgent initialized with 1 authorized admin(s)
 🔧 Admin Agent registered with 1 authorized admin(s)
@@ -53,6 +54,7 @@ Send these messages to your bot on LINE:
 You should see the admin commands menu! 🎉
 
 Try other commands:
+
 ```
 /admin status
 /admin sessions

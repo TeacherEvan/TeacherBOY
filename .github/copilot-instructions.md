@@ -1,5 +1,9 @@
 # TeacherBOY — Copilot coding-agent notes
 
+## Extensions:
+
+- Disable all extensions not related to the current project
+
 ## What this repo is
 
 - Production LINE bot: Thai ↔ English translation is the core feature.

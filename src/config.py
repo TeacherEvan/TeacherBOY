@@ -114,6 +114,26 @@ class Settings(BaseSettings):
     )
 
     # ============================================================================
+    # News Agent Configuration
+    # ============================================================================
+    news_api_key: Optional[str] = Field(
+        default=None,
+        description="NewsAPI.org API key for fetching Thai news headlines (optional)",
+    )
+    weather_cache_ttl_seconds: int = Field(
+        default=1800,
+        ge=300,
+        le=7200,
+        description="Weather data cache TTL in seconds (default: 30 minutes)",
+    )
+    news_cache_ttl_seconds: int = Field(
+        default=3600,
+        ge=600,
+        le=14400,
+        description="News headlines cache TTL in seconds (default: 1 hour)",
+    )
+
+    # ============================================================================
     # HTTP Client Configuration
     # ============================================================================
     http_client_timeout_seconds: int = Field(
@@ -231,6 +251,10 @@ class Settings(BaseSettings):
     def is_calendar_configured(self) -> bool:
         """Check if Google Calendar integration is properly configured."""
         return bool(self.google_calendar_group_id)
+
+    def is_news_api_configured(self) -> bool:
+        """Check if NewsAPI.org is properly configured."""
+        return bool(self.news_api_key and len(self.news_api_key) > 10)
 
     def get_admin_user_ids(self) -> list[str]:
         """

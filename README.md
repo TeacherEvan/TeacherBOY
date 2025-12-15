@@ -36,11 +36,24 @@ Legacy docs at repo root are kept for backward compatibility.
 - **🌐 Professional Quality:** Google Translate (primary) + LibreTranslate (fallback)
 - **💬 Bi-directional:** Thai 🇹🇭 → English 🇬🇧 and English 🇬🇧 → Thai 🇹🇭
 - **👥 Group Chat Support:** Works in 1-on-1, groups, and multi-person chats
-- **� Text-Only Responses:** Clean, simple text translations (no distracting cards)
+- **📝 Text-Only Responses:** Clean, simple text translations (no distracting cards)
 - **🤫 Silent Join:** Bot joins groups silently - only speaks when Thai is detected
 - **🎯 Session Management:** Independent sessions per chat
 
-### Multi-Agent Architecture **NEW!**
+### News Agent **NEW!**
+
+- **📰 Real-time News:** Bangkok weather, air quality, PM2.5, and Thai news headlines
+- **🌡️ Weather Data:** Temperature and 5-hour rain forecast via Open-Meteo (free)
+- **💨 Air Quality:** PM2.5 levels for Bangkok
+- **📱 Multi-step Flow:** Conversational interface (news → language → menu → headlines)
+- **🌍 Bilingual:** Full Thai and English support
+- **⚖️ Legal Info:** Cannabis, E-Cigarette, and Alcohol status (preset)
+- **🔗 Clickable Headlines:** Top 5 news with direct links
+- **📚 Resources:** View data sources (Open-Meteo, NewsAPI, ThaiPBS, Bangkok Post)
+- **⏰ Smart Caching:** 30-min weather, 1-hour news cache (reduces API calls)
+- **Trigger:** Type `news` or `ข่าว` to start
+
+### Multi-Agent Architecture
 
 - **🏗️ Modular Design:** Easy to add agents with different capabilities
 - **⚡ Smart Routing:** Messages routed to appropriate agent by priority
@@ -81,6 +94,9 @@ LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
 # Translation APIs
 GOOGLE_TRANSLATE_API_KEY=your_google_api_key  # Recommended!
 LIBRETRANSLATE_API_URL=https://libretranslate.de/translate
+
+# News Agent (optional)
+NEWS_API_KEY=your_newsapi_org_key  # Optional - 100 req/day free tier
 
 # Optional: Additional agents
 ADDITIONAL_AGENTS=

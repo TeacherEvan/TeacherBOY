@@ -39,10 +39,12 @@ from src.config import settings
 from src.services.translation_service import translation_service
 from src.services.google_translation import google_translation_service
 from src.services.scheduler_service import scheduler_service
+from src.services.news_data_service import NewsDataService
 from src.agents.agent_router import AgentRouter
 from src.agents.translation_agent import TranslationAgent
 from src.agents.admin_agent import AdminAgent
 from src.agents.calendar_agent import CalendarAgent
+from src.agents.news_agent import NewsAgent
 from src.handlers.message_handler import (
     handle_join_event,
     handle_leave_event,
@@ -196,6 +198,18 @@ async def lifespan(app: FastAPI):
     # Register Translation Agent (Priority: 10)
     translation_agent = TranslationAgent()
     agent_router.register_agent(translation_agent)
+
+    # Register News Agent (Priority: 15)
+    news_data_service = NewsDataService(
+        http_client=http_client_pool,
+        news_api_key=settings.news_api_key
+    )
+    news_agent = NewsAgent(news_data_service=news_data_service)
+    agent_router.register_agent(news_agent)
+    if settings.is_news_api_configured():
+        logger.info("📰 News Agent registered with NewsAPI.org key")
+    else:
+        logger.info("📰 News Agent registered (using Open-Meteo only, no NewsAPI key)")
 
     # Register Calendar Agent if configured (Priority: 20)
     if settings.is_calendar_configured():
