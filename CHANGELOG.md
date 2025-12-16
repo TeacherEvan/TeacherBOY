@@ -5,6 +5,43 @@ All notable changes to TeacherBOY will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2025-12-16
+
+### 🚀 Added
+
+#### Rate Limiting with Admin Exemption
+- **TranslationAgent:** Admins bypass rate limits (unlimited), standard users: 10 requests/60s
+- **NewsAgent:** Friends get 1 news request per hour, admins unlimited, non-friends translation only
+- Admin detection via `settings.get_admin_user_ids()`
+- Bilingual rate limit messages (Thai/English)
+- Per-chat rate tracking with automatic reset
+- Admin bypass logging for monitoring
+
+### 🐛 Fixed
+
+#### Type Safety
+- Added `Optional[str]` type hint to `_is_admin()` method in NewsAgent
+- Fixed type checking error where `user_id` could be `None`
+
+### 📝 Documentation
+
+#### Comprehensive Updates
+- Added index/table of contents to `.github/copilot-instructions.md`
+- Documented rate limiting rules for both TranslationAgent and NewsAgent
+- Added admin exemption details and logging patterns
+- Updated CHANGELOG with rate limiting features
+
+### 🔧 Technical Details
+
+#### Files Modified
+- `src/agents/translation_agent.py`: Added admin check in rate limit logic
+- `src/agents/news_agent.py`: 
+  * Rate limiter: `RateLimiter(max_requests=1, time_window_seconds=3600)`
+  * Friend verification via LINE API `get_profile()`
+  * Bilingual rate limit messages
+  * Added `Optional` type hint for type safety
+- `.github/copilot-instructions.md`: Added index and rate limiting section
+
 ## [3.1.0] - 2025-12-16
 
 ### 🛡️ Critical Security Fix

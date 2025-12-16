@@ -15,6 +15,9 @@ TeacherBOY is a high-performance, asynchronous LINE Bot featuring a modular mult
 
 ## 📚 Documentation
 
+**[📖 Complete Documentation Index](DOCUMENTATION_INDEX.md)** - Browse all documentation files organized by category
+
+### Quick Links
 - **[📚 Docs Home](docs/README.md)** - Start here (quickstart, deployment, LINE setup, admin)
 - **[⚡ Quick Start](docs/guides/quickstart.md)**
 - **[⚙️ LINE Setup](docs/guides/line-setup.md)**
@@ -40,14 +43,16 @@ Legacy docs at repo root are kept for backward compatibility.
 - **📝 Text-Only Responses:** Clean, simple text translations (no distracting cards)
 - **🤫 Silent Join:** Bot joins groups silently - only speaks when Thai is detected
 - **🎯 Session Management:** Independent sessions per chat
-- **📋 Parentheses Preservation:** Names and notes in (parentheses) are never translated
-
+- **📋 Parentheses Preservation:** Names and notes in (parentheses) are never translated- **⏱️ Rate Limiting:** 10 requests per minute (admins unlimited)
 ### News Agent **NEW!**
 
 - **📰 Real-time News:** Bangkok weather, air quality, PM2.5, and Thai news headlines
 - **🌡️ Weather Data:** Temperature and 5-hour rain forecast via Open-Meteo (free)
 - **💨 Air Quality:** PM2.5 levels for Bangkok
-- **📱 Multi-step Flow:** Conversational interface (news → language → menu → headlines)
+- **📱 Auto-Language Detection:** Type "news" for English or "ข่าว" for Thai
+- **🔒 Friend-Gated Access:** Full menu for friends in groups (1 request/hour), translation only for others
+- **👑 Admin Access:** Unlimited news requests for admin users
+- **🌍 Extended Data:** Lucky color, Bitcoin price, exchange rates, Thai holidays, festivals
 - **🌍 Bilingual:** Full Thai and English support
 - **⚖️ Legal Info:** Cannabis, E-Cigarette, and Alcohol status (preset)
 - **🔗 Clickable Headlines:** Top 5 news with direct links

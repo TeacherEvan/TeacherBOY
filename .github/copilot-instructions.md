@@ -1,5 +1,20 @@
 # TeacherBOY — AI Coding Agent Instructions
 
+## 📋 Index
+
+- [🎯 Quick Context](#-quick-context)
+- [🔄 Webhook Flow](#-webhook-flow-read-first)
+- [🤖 Agent Hierarchy](#-agent-hierarchy-priority-order)
+- [📰 News Access Model](#-news-access-model)
+- [📰 Extended News Menu](#-extended-news-menu-8-items-for-friends)
+- [⏱️ Rate Limiting](#️-rate-limiting-rules)
+- [📋 Session & Rate-Limiting Rules](#-session--rate-limiting-rules-translationagent-only)
+- [🌐 Translation Provider Stack](#-translation-provider-stack)
+- [🛠️ Developer Workflows](#️-developer-workflows)
+- [➕ Adding a New Agent](#-adding-a-new-agent-pattern)
+- [📝 Code Patterns to Follow](#-code-patterns-to-follow)
+- [⚠️ Known Gotchas & Legacy](#️-known-gotchas--legacy)
+
 ## 🎯 Quick Context
 
 **What:** Production LINE bot with async multi-agent architecture. Thai ↔ English translation is the primary feature, with optional admin commands and news/weather data.
@@ -49,6 +64,41 @@ First agent with should_handle()=true → calls handle()
 - `_is_group_chat(event)` → checks for `group_id` or `room_id`
 - `await _is_friend(event, line_bot_api)` → calls LINE API `get_profile(user_id)`; returns `False` on `ApiException`
 - `_send_trigger_translation(...)` → responds with translated keyword only (robotic, no chatter)
+
+## ⏱️ Rate Limiting
+
+**Rate limiting enforces fair usage and prevents API quota exhaustion:**
+
+### TranslationAgent Rate Limits
+- **Default Users:** 10 requests per 60 seconds per chat
+- **Admin Users:** Unlimited (bypass all rate limits)
+- **Implementation:** `rate_limiter.is_allowed(chat_id)` check in `handle()` method
+- **Admin Check:** `_is_admin(user_id)` returns True if user in `settings.get_admin_user_ids()`
+
+### NewsAgent Rate Limits
+- **Friend Users (groups):** 1 news request per hour (3600 seconds)
+- **Non-Friends (groups):** Translation only (no menu access)
+- **Private Chats:** Translation only (no menu access)
+- **Admin Users:** Unlimited (bypass all rate limits)
+- **Implementation:** `news_rate_limiter_friend.is_allowed(chat_id)` check before menu display
+- **Rate Limiter:** `RateLimiter(max_requests=1, time_window_seconds=3600)`
+
+### Rate Limit Response
+When rate limited, users receive:
+```text
+⏳ Only 1 news request per hour
+Total requests left: 0
+
+Try again in ~45 minutes
+
+คุณขอข่าวเร็วเกินไปค่ะ! 📰
+เหลืออีก: 0 ครั้ง
+กรุณารอ ~45 นาที 😊
+```
+
+**Admin Bypass Logging:**
+- `"🔓 Admin {user_id} bypassed rate limit"` for TranslationAgent
+- `"🔓 Admin {user_id} bypassed news rate limit"` for NewsAgent
 
 ## 📰 Extended News Menu (8 Items for Friends)
 
