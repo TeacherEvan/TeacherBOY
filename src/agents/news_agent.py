@@ -112,16 +112,18 @@ class NewsAgent(BaseAgent):
         """Check if user is a friend of the bot; LINE returns error for non-friends."""
         user_id = getattr(event.source, "user_id", None) if event.source else None
         if not user_id:
+            logger.warning(f"📰 No user_id found for friendship check")
             return False
 
         try:
             line_bot_api.get_profile(user_id)
+            logger.info(f"📰 User {user_id} is a friend (verified via LINE API)")
             return True
-        except ApiException:
-            logger.info("📰 Non-friend user attempted news flow", exc_info=False)
+        except ApiException as e:
+            logger.info(f"📰 User {user_id} is NOT a friend (ApiException: {e.status_code})", exc_info=False)
             return False
-        except Exception:
-            logger.info("📰 Unable to verify friendship; treating as non-friend", exc_info=False)
+        except Exception as e:
+            logger.warning(f"📰 Friendship check failed for {user_id}: {e}", exc_info=False)
             return False
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
@@ -192,14 +194,18 @@ class NewsAgent(BaseAgent):
             if not session and self._is_news_trigger(text):
                 user_id = getattr(event.source, "user_id", None) if event.source else None
                 
-                # Non-friends: just translate trigger word
-                is_friend = await self._is_friend(event, line_bot_api)
-                if not is_friend:
-                    await self._send_trigger_translation(event, line_bot_api, text)
-                    return True
+                # Admins bypass friendship check
+                is_admin = self._is_admin(user_id)
+                
+                # Non-friends and non-admins: just translate trigger word
+                if not is_admin:
+                    is_friend = await self._is_friend(event, line_bot_api)
+                    if not is_friend:
+                        await self._send_trigger_translation(event, line_bot_api, text)
+                        return True
 
                 # Rate limit check (skip for admins)
-                if not self._is_admin(user_id):
+                if not is_admin:
                     # Friends get 1/hour
                     limiter = news_rate_limiter_friend
                     max_requests = 1
