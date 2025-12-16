@@ -96,3 +96,67 @@ def restore_parenthesized_text(text: str, extracted_items: List[str]) -> str:
         restored_text = restored_text.replace(placeholder, item)
     
     return restored_text
+
+
+def detect_incomplete_sentence(text: str) -> Tuple[str, bool]:
+    """
+    Detect if a sentence appears incomplete and may cause translation hallucination.
+    
+    Translation APIs often "complete" incomplete sentences based on statistical patterns,
+    which can lead to unwanted additions or misinterpretations. This function detects
+    common incomplete patterns and appends "..." to signal intentional incompleteness.
+    
+    Incomplete patterns detected:
+    - Ends with conjunctions: "so", "but", "and", "because", "therefore", "however"
+    - Ends with "so/but/and + pronoun + verb": "so i tried", "but she wanted"
+    - Ends with transitive verbs without objects: "tried", "wanted", "needed"
+    
+    Args:
+        text: Input text to check for incompleteness
+        
+    Returns:
+        Tuple of (processed_text, was_incomplete)
+        - processed_text: Original text with "..." appended if incomplete
+        - was_incomplete: True if incompleteness was detected
+        
+    Examples:
+        >>> detect_incomplete_sentence("so i tried")
+        ("so i tried...", True)
+        >>> detect_incomplete_sentence("Hello world")
+        ("Hello world", False)
+        >>> detect_incomplete_sentence("I went home because")
+        ("I went home because...", True)
+    """
+    # Trim and check if already has ellipsis
+    text_stripped = text.strip()
+    if text_stripped.endswith('...'):
+        return text, False  # Already marked as incomplete
+    
+    # Lowercase for pattern matching (preserve original case in output)
+    text_lower = text_stripped.lower()
+    
+    # Pattern 1: Ends with standalone conjunctions/connectors
+    standalone_incomplete = [
+        r'\b(so|but|and|because|therefore|however|thus|hence|yet|nor|or|we|i|he|she|they|you)$',
+    ]
+    
+    # Pattern 2: Ends with "conjunction + pronoun + verb" (incomplete action)
+    pronoun_verb_incomplete = [
+        r'\b(so|but|and|because|therefore)\s+(i|we|he|she|they|you)\s+(tried|wanted|needed|thought|hoped|planned|attempted|started|decided|forgot|remembered)$',
+    ]
+    
+    # Pattern 3: Ends with transitive verbs that typically need objects
+    transitive_verb_incomplete = [
+        r'\b(tried|wanted|needed|thought|hoped|planned|attempted|forgot|remembered|considered|expected|intended|wished|meant)$',
+    ]
+    
+    # Combine all patterns
+    all_patterns = standalone_incomplete + pronoun_verb_incomplete + transitive_verb_incomplete
+    
+    # Check if any pattern matches
+    for pattern in all_patterns:
+        if re.search(pattern, text_lower):
+            # Append ellipsis to signal intentional incompleteness
+            return text_stripped + '...', True
+    
+    return text, False

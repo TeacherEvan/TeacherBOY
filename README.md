@@ -34,11 +34,13 @@ Legacy docs at repo root are kept for backward compatibility.
 - **🔄 Continuous Mode:** Translates EVERY message until you say "Thank you TeacherBoy"
 - **😴 Sleep Mode:** Bot sleeps for 24 hours - say "TeacherBoy" alone to wake up
 - **🌐 Professional Quality:** Google Translate (primary) + LibreTranslate (fallback)
+- **�️ Hallucination Prevention:** Detects incomplete sentences and prevents unwanted context injection
 - **💬 Bi-directional:** Thai 🇹🇭 → English 🇬🇧 and English 🇬🇧 → Thai 🇹🇭
 - **👥 Group Chat Support:** Works in 1-on-1, groups, and multi-person chats
 - **📝 Text-Only Responses:** Clean, simple text translations (no distracting cards)
 - **🤫 Silent Join:** Bot joins groups silently - only speaks when Thai is detected
 - **🎯 Session Management:** Independent sessions per chat
+- **📋 Parentheses Preservation:** Names and notes in (parentheses) are never translated
 
 ### News Agent **NEW!**
 

@@ -92,6 +92,10 @@ class Settings(BaseSettings):
         le=10,
         description="Maximum retry attempts for failed translation requests",
     )
+    translation_detect_incomplete: bool = Field(
+        default=True,
+        description="Auto-detect incomplete sentences and append '...' to prevent hallucination",
+    )
 
     # ============================================================================
     # News Agent Configuration

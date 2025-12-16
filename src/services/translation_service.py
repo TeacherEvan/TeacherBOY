@@ -10,6 +10,7 @@ from src.utils.text_preprocessing import (
     extract_parenthesized_text,
     restore_parenthesized_text,
     is_only_parenthesized_content,
+    detect_incomplete_sentence,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,8 +73,20 @@ class TranslationService:
             Translated text or None if translation fails
         """
         try:
+            # Detect and handle incomplete sentences to prevent hallucination
+            processed_text = text
+            was_incomplete = False
+            
+            if settings.translation_detect_incomplete:
+                processed_text, was_incomplete = detect_incomplete_sentence(text)
+                if was_incomplete:
+                    logger.warning(
+                        f"⚠️  Detected incomplete sentence: '{text[:50]}...' "
+                        f"→ Appended '...' to prevent translation hallucination"
+                    )
+            
             # Extract parenthesized text before translation
-            processed_text, extracted_items = extract_parenthesized_text(text)
+            processed_text, extracted_items = extract_parenthesized_text(processed_text)
             
             # If nothing to translate (only parentheses), return original
             if is_only_parenthesized_content(processed_text, extracted_items):
