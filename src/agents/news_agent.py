@@ -17,8 +17,14 @@ from linebot.v3.messaging.exceptions import ApiException
 from .base_agent import BaseAgent
 from src.services.news_session_manager import news_session_manager
 from src.services.news_data_service import NewsDataService
+from src.services.rate_limiter import RateLimiter
+from src.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Rate limiters for news requests
+news_rate_limiter_friend = RateLimiter(max_requests=3, time_window_seconds=3600)  # 3/hour for friends
+news_rate_limiter_other = RateLimiter(max_requests=1, time_window_seconds=3600)  # 1/hour for others
 
 # Legal information constants (as of Dec 2024 - update if laws change)
 LEGAL_INFO = {
@@ -37,11 +43,16 @@ class NewsAgent(BaseAgent):
             description="Weather, air quality, and news headlines for Bangkok",
         )
         self.news_service = news_data_service
+        self._admin_user_ids = settings.get_admin_user_ids()
         # Import translation services for headline translation
         from src.services.google_translation import google_translation_service
         from src.services.translation_service import translation_service as libre_translation
         self.google_translate = google_translation_service
         self.libre_translate = libre_translation
+
+    def _is_admin(self, user_id: str) -> bool:
+        """Check if user is an admin (admins bypass rate limits)."""
+        return user_id in self._admin_user_ids if user_id else False
 
     def get_priority(self) -> int:
         """News agent priority - runs after Translation (10)."""
@@ -139,10 +150,28 @@ class NewsAgent(BaseAgent):
 
             # Step 1: News trigger - start flow with auto-detected language
             if not session and self._is_news_trigger(text):
+                user_id = getattr(event.source, "user_id", None) if event.source else None
+                
+                # Non-friends: just translate trigger word
                 is_friend = await self._is_friend(event, line_bot_api)
                 if not is_friend:
                     await self._send_trigger_translation(event, line_bot_api, text)
                     return True
+
+                # Rate limit check (skip for admins)
+                if not self._is_admin(user_id):
+                    # Friends get 3/hour, check friend rate limiter
+                    limiter = news_rate_limiter_friend
+                    max_requests = 3
+                    
+                    if not limiter.is_allowed(chat_id):
+                        remaining = limiter.get_remaining_requests(chat_id)
+                        reset_seconds = limiter.get_reset_time(chat_id)
+                        await self._send_rate_limit_message(event, line_bot_api, max_requests, remaining, reset_seconds)
+                        logger.warning(f"⚠️  Rate limited news request for chat {chat_id}")
+                        return True
+                elif user_id:
+                    logger.debug(f"🔓 Admin {user_id} bypassed news rate limit")
 
                 # Auto-detect language from trigger word
                 text_lower = text.lower().strip()
@@ -608,6 +637,33 @@ class NewsAgent(BaseAgent):
             msg = "❌ กรุณาเลือก 1-5"
         else:
             msg = "❌ Pick 1-5"
+        
+        text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
+        
+        if event.reply_token:
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[text_msg],
+                    notificationDisabled=False,
+                )
+            )
+
+    async def _send_rate_limit_message(
+        self, event: MessageEvent, line_bot_api: MessagingApi, 
+        max_requests: int, remaining: int, reset_seconds: int
+    ):
+        """Send rate limit message to user."""
+        reset_minutes = (reset_seconds + 59) // 60  # Round up to nearest minute
+        
+        msg = (
+            f"⏳ Only {max_requests} news request{'s' if max_requests > 1 else ''} per hour\n"
+            f"Total requests left: {remaining}\n\n"
+            f"Try again in ~{reset_minutes} minute{'s' if reset_minutes != 1 else ''}\n\n"
+            f"คุณขอข่าวเร็วเกินไปค่ะ! 📰\n"
+            f"เหลืออีก: {remaining} ครั้ง\n"
+            f"กรุณารอ ~{reset_minutes} นาที 😊"
+        )
         
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
         

@@ -17,6 +17,7 @@ from src.services.google_translation import google_translation_service
 from src.services.session_manager import session_manager
 from src.services.rate_limiter import rate_limiter
 from src.utils.tracing import get_tracer
+from src.config import settings
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -30,10 +31,15 @@ class TranslationAgent(BaseAgent):
             name="TranslationAgent",
             description="Thai/English translation with continuous session mode",
         )
+        self._admin_user_ids = settings.get_admin_user_ids()
 
     def get_priority(self) -> int:
         """Translation has high priority."""
         return 10
+
+    def _is_admin(self, user_id: str) -> bool:
+        """Check if user is an admin (admins bypass rate limits)."""
+        return user_id in self._admin_user_ids if user_id else False
 
     def contains_thai(self, text: str) -> bool:
         """Check if text contains Thai characters."""
@@ -204,8 +210,8 @@ class TranslationAgent(BaseAgent):
                     logger.info(f"😴 Chat {chat_id} put to sleep for 24 hours")
                     return True
 
-                # Check for rate limiting
-                if not rate_limiter.is_allowed(chat_id):
+                # Check for rate limiting (skip for admins)
+                if not self._is_admin(user_id) and not rate_limiter.is_allowed(chat_id):
                     span.set_attribute("translation.rate_limited", True)
                     reset_seconds = rate_limiter.get_reset_time(chat_id)
                     rate_limit_message = self._create_rate_limit_message(reset_seconds)
@@ -219,6 +225,8 @@ class TranslationAgent(BaseAgent):
                         )
                     logger.warning(f"⚠️  Rate limited chat {chat_id}")
                     return True
+                elif self._is_admin(user_id):
+                    logger.debug(f"🔓 Admin {user_id} bypassed rate limit")
 
                 # Check for duplicate message
                 if session_manager.is_duplicate_message(chat_id, text):
