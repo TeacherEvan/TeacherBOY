@@ -105,41 +105,38 @@ Try again in ~45 minutes
 - `"🔓 Admin {user_id} bypassed rate limit"` for TranslationAgent
 - `"🔓 Admin {user_id} bypassed news rate limit"` for NewsAgent
 
-## 📰 Extended News Menu (8 Items for Friends)
+## 📰 News Menu (Inline Display + Interactive Headlines)
 
-**Menu Structure:**
+**Menu Structure (All Data Shown Immediately):**
 
-1. **Weather & Air Quality** 🌡️💨 → Bangkok temperature + PM2.5 (Open-Meteo)
-2. **Rain Forecast** 🌧️ → 5-hour rain prediction (Open-Meteo)
-3. **Legal Info** 🍃🚭🍺 → Cannabis, e-cigs, alcohol status (static Thai law)
-4. **Lucky Color + Sunsets** 🎨🌅 → Daily lucky color (365-color cycle) + sunrise/sunset times
-5. **Headlines** 📰 → Top 5 news stories (NewsAPI or placeholders)
-6. **Thai Holidays + Markets** 📅🏛️ → Major holidays + SET market status (holidays library + static fallback)
-7. **Bitcoin Price** ₿ → BTC/USD + 24h change (CoinGecko, free, no key)
-8. **Exchange Rates** 💱 → THB→USD, THB→ZAR, THB→CNY (ExchangeRate-API or hardcoded fallback)
+1. **Weather & Air Quality** 🌡️💨 → Bangkok temperature + PM2.5 (inline, Open-Meteo)
+2. **Rain Forecast** 🌧️ → 5-hour rain prediction (inline, Open-Meteo)
+3. **Legal Info** 🍃🚭🍺 → Cannabis, e-cigs, alcohol status (inline, static Thai law)
+   📅 **Next Holiday** → Next upcoming Thai holiday (inline, `holidays` library)
+   ₿ **Bitcoin Price** → BTC/USD + 24h change (inline, CoinGecko free API)
+   💱 **Exchange Rate** → THB→USD (inline, ExchangeRate-API or fallback)
+   📰 **Headlines 1-5** → Interactive - select to view full article link (Bangkok Post RSS)
 
 **Output:** Terse, robotic, single emoji per bullet. No instructions or chatter.
 
 **Data Methods** ([src/services/news_data_service.py](../src/services/news_data_service.py)):
 
-- `get_color_of_day()` → Thai lucky color (365-color cycle, 24h cache, no API key needed)
-- `get_sunset_sunrise_times()` → Bangkok times from Open-Meteo (24h cache, no API key)
+- `get_weather_data()` → Temperature, PM2.5, rain forecast (30-min cache, Open-Meteo)
 - `get_thai_holidays()` → Uses 'holidays' Python library (7d cache, no API key)
 - `get_bitcoin_price()` → CoinGecko free API (5-min cache, volatile data)
 - `get_exchange_rates()` → ExchangeRate-API or hardcoded THB rates (1h cache)
+- `get_news_headlines(language)` → RSS feeds from Bangkok Post (1h cache)
 
 **Menu Handlers** ([src/agents/news_agent.py](../src/agents/news_agent.py)):
 
-- `_send_color_sunset_sunrise()` → Item 6 output
-- `_send_holidays_markets()` → Item 7 output
-- `_send_crypto_exchange()` → Item 8 output
-- Thai numerals (๖=6, ๗=7, ๘=8) normalized to Arabic in `_handle_main_menu()`
+- `_send_headline_detail()` → Show full article link for selected headline (1-5)
+- Headlines are the only interactive elements; all other data displays inline
+- Deprecated methods (no longer called): `_send_color_sunset_sunrise()`, `_send_holidays_markets()`, `_send_crypto_exchange()`, `_send_festivals()`
 
 **Optional API Keys** ([src/config.py](../src/config.py)):
 
 | Service          | Env Variable          | Default | Plan             | Fallback              |
 | ---------------- | --------------------- | ------- | ---------------- | --------------------- |
-| NewsAPI          | NEWS_API_KEY          | None    | 100 req/day free | Placeholder headlines |
 | ExchangeRate-API | EXCHANGE_RATE_API_KEY | None    | 1500 req/mo free | Hardcoded rates (THB) |
 | Open-Meteo       | (none needed)         | Free    | Unlimited        | N/A (always works)    |
 | CoinGecko        | (none needed)         | Free    | Unlimited        | N/A (always works)    |
@@ -148,8 +145,8 @@ Try again in ~45 minutes
 
 | Setting                    | Env Variable               | Default | Range        | Purpose                  |
 | -------------------------- | -------------------------- | ------- | ------------ | ------------------------ |
-| color_cache_ttl_seconds    | COLOR_CACHE_TTL_SECONDS    | 86400   | 3600–86400   | Lucky color (daily)      |
-| sunset_cache_ttl_seconds   | SUNSET_CACHE_TTL_SECONDS   | 86400   | 3600–86400   | Sunset/sunrise times     |
+| weather_cache_ttl_seconds  | WEATHER_CACHE_TTL_SECONDS  | 1800    | 300–7200     | Weather/air quality      |
+| news_cache_ttl_seconds     | NEWS_CACHE_TTL_SECONDS     | 3600    | 600–14400    | News headlines (RSS)     |
 | holiday_cache_ttl_seconds  | HOLIDAY_CACHE_TTL_SECONDS  | 604800  | 86400–604800 | Thai holidays (weekly)   |
 | bitcoin_cache_ttl_seconds  | BITCOIN_CACHE_TTL_SECONDS  | 300     | 60–3600      | Bitcoin price (volatile) |
 | exchange_cache_ttl_seconds | EXCHANGE_CACHE_TTL_SECONDS | 3600    | 300–14400    | Exchange rates (hourly)  |
