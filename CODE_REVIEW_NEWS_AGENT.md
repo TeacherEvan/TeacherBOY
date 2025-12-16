@@ -151,7 +151,7 @@ LEGAL_INFO = {
 
 **Example**:
 
-```
+```text
 Request 1: cache.get("weather") → None
 Request 2: cache.get("weather") → None (race condition)
 Request 1: API call starts
@@ -460,4 +460,6 @@ The News Agent implementation demonstrates:
 
 ---
 
-_Code review completed by GitHub Copilot on December 15, 2025_
+### Code Review Completion Note
+
+Code review completed by GitHub Copilot on December 15, 2025

@@ -74,7 +74,7 @@ https://open-meteo.com
 
 ### Example 2: English Language Flow
 
-```
+```text
 User: news
 
 Bot: 📰 News / ข่าว
@@ -146,7 +146,7 @@ Thank you for using TeacherBOY! 🙏
 
 ### Session Timeout
 
-```
+```text
 User: news
 Bot: (Language selection)
 ... (5 minutes pass with no response)
@@ -163,7 +163,7 @@ Select language:
 
 ### Invalid Input
 
-```
+```text
 User: news
 Bot: (Language selection)
 
@@ -175,7 +175,7 @@ Bot: ❌ Please select a valid option (1-5 or 9)
 
 ### Thai Numerals
 
-```
+```text
 User: news
 Bot: (Language selection)
 
@@ -185,7 +185,7 @@ Bot: (Accepts Thai numeral ๑ as 1, proceeds in Thai)
 
 ### No NewsAPI Key Configured
 
-```
+```text
 User: news
 Bot: (Language selection)
 
@@ -217,7 +217,7 @@ Bot: 📰 News & Weather
 
 ### Translation + News (Different Chats)
 
-```
+```text
 Chat A (User 1): สวัสดี
 Bot: Hello
 
@@ -235,7 +235,7 @@ Bot: (Thai news menu)
 
 ### Translation Priority Over News
 
-```
+```text
 User: news
 Bot: (Language selection)
 
@@ -248,7 +248,7 @@ Bot: I need news information
 
 ## Group Chat Usage
 
-```
+```text
 [LINE Group: Bangkok Expats]
 
 User A: news
@@ -291,7 +291,7 @@ https://YOUR-NGROK-URL/webhook
 
 Watch the logs to see caching in action:
 
-```
+```text
 2025-12-15 10:30:00 - INFO - 📰 Fetched fresh weather data
 2025-12-15 10:30:05 - INFO - 📰 Fetched fresh en news headlines
 2025-12-15 10:35:00 - INFO - 📰 Using cached weather data

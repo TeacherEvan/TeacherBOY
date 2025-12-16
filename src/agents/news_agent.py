@@ -8,6 +8,7 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     TextMessage,
 )
+from linebot.v3.messaging.exceptions import ApiException
 
 from .base_agent import BaseAgent
 from src.services.news_session_manager import news_session_manager
@@ -62,11 +63,35 @@ class NewsAgent(BaseAgent):
         text_clean = text.lower().strip()
         return text_clean in ["news", "ข่าว"]
 
+    def _is_group_chat(self, event: MessageEvent) -> bool:
+        """Return True when message comes from a group or room."""
+        if event.source and getattr(event.source, "group_id", None):
+            return True
+        if event.source and getattr(event.source, "room_id", None):
+            return True
+        return False
+
+    async def _is_friend(self, event: MessageEvent, line_bot_api: MessagingApi) -> bool:
+        """Check if user is a friend of the bot; LINE returns error for non-friends."""
+        user_id = getattr(event.source, "user_id", None) if event.source else None
+        if not user_id:
+            return False
+
+        try:
+            line_bot_api.get_profile(user_id)
+            return True
+        except ApiException:
+            logger.info("📰 Non-friend user attempted news flow", exc_info=False)
+            return False
+        except Exception:
+            logger.info("📰 Unable to verify friendship; treating as non-friend", exc_info=False)
+            return False
+
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
         Handle if:
-        1. Text is news trigger ("news" or "ข่าว")
-        2. Chat is in active news flow
+        1. Chat is in active news flow
+        2. News trigger ("news" or "ข่าว") in allowed contexts
         """
         # Ignore LINE system messages
         if self._is_line_system_message(text):
@@ -78,7 +103,11 @@ class NewsAgent(BaseAgent):
         if news_session_manager.is_in_news_flow(chat_id):
             return True
 
-        # Handle if news trigger
+        # Private chats: let translation agent handle; this agent only translates trigger word
+        if not self._is_group_chat(event):
+            return self._is_news_trigger(text)
+
+        # Group/room: handle translation-only for non-friends and full flow for friends
         if self._is_news_trigger(text):
             return True
 
@@ -92,8 +121,20 @@ class NewsAgent(BaseAgent):
         session = news_session_manager.get_session_state(chat_id)
 
         try:
+            # Private chats: respond with translation of trigger only
+            if not self._is_group_chat(event):
+                if self._is_news_trigger(text):
+                    await self._send_trigger_translation(event, line_bot_api, text)
+                    return True
+                return False
+
             # Step 1: News trigger - start flow
             if not session and self._is_news_trigger(text):
+                is_friend = await self._is_friend(event, line_bot_api)
+                if not is_friend:
+                    await self._send_trigger_translation(event, line_bot_api, text)
+                    return True
+
                 news_session_manager.start_news_flow(chat_id)
                 await self._send_language_selection(event, line_bot_api)
                 return True
@@ -183,20 +224,18 @@ class NewsAgent(BaseAgent):
         will_rain = weather.get("will_rain")
         rain_text = "ใช่ (Yes)" if will_rain else "ไม่ (No)" if will_rain is not None else "N/A"
         
-        msg = f"📰 ข่าวและสภาพอากาศ\n\n"
-        msg += f"🌡️ อุณหภูมิ (Bangkok): {temp}°C\n"
-        msg += f"💨 PM2.5 (Bangkok): {pm25}\n"
-        msg += f"🌧️ จะฝนตกใน 5 ชั่วโมงข้างหน้า: {rain_text}\n\n"
+        msg = "📰 ข่าว Bangkok\n"
+        msg += f"🌡️ อุณหภูมิ: {temp}°C\n"
+        msg += f"💨 PM2.5: {pm25}\n"
+        msg += f"🌧️ 5 ชม.ข้างหน้า: {rain_text}\n"
         msg += f"🍃 กัญชา: {LEGAL_INFO['cannabis']['th']}\n"
         msg += f"🚭 บุหรี่ไฟฟ้า: {LEGAL_INFO['ecig']['th']}\n"
-        msg += f"🍺 แอลกอฮอล์: {LEGAL_INFO['alcohol']['th']}\n\n"
-        msg += f"📰 ข่าวสำคัญวันนี้:\n"
-        
+        msg += f"🍺 แอลกอฮอล์: {LEGAL_INFO['alcohol']['th']}\n"
+        msg += "📰 หัวข้อ:\n"
+
         for i, headline in enumerate(headlines[:5], 1):
             title = headline.get("title", "ไม่มีหัวข้อ")[:80]
-            msg += f"{i} - {title}\n"
-        
-        msg += f"\n💡 กด 1-5 เพื่ออ่านข่าวเพิ่มเติม\n💡 กด 9 เพื่อดูแหล่งข้อมูล"
+            msg += f"{i}. {title}\n"
         
         return msg
 
@@ -207,20 +246,18 @@ class NewsAgent(BaseAgent):
         will_rain = weather.get("will_rain")
         rain_text = "Yes" if will_rain else "No" if will_rain is not None else "N/A"
         
-        msg = f"📰 News & Weather\n\n"
-        msg += f"🌡️ Temperature (Bangkok): {temp}°C\n"
-        msg += f"💨 PM2.5 (Bangkok): {pm25}\n"
-        msg += f"🌧️ Will it rain in next 5 hours: {rain_text}\n\n"
+        msg = "📰 Bangkok News\n"
+        msg += f"🌡️ Temp: {temp}°C\n"
+        msg += f"💨 PM2.5: {pm25}\n"
+        msg += f"🌧️ Next 5h: {rain_text}\n"
         msg += f"🍃 Cannabis: {LEGAL_INFO['cannabis']['en']}\n"
-        msg += f"🚭 E-Cigarettes: {LEGAL_INFO['ecig']['en']}\n"
-        msg += f"🍺 Alcohol: {LEGAL_INFO['alcohol']['en']}\n\n"
-        msg += f"📰 Top 5 Headlines Today:\n"
-        
+        msg += f"🚭 E-Cigs: {LEGAL_INFO['ecig']['en']}\n"
+        msg += f"🍺 Alcohol: {LEGAL_INFO['alcohol']['en']}\n"
+        msg += "📰 Headlines:\n"
+
         for i, headline in enumerate(headlines[:5], 1):
             title = headline.get("title", "No title")[:80]
-            msg += f"{i} - {title}\n"
-        
-        msg += f"\n💡 Press 1-5 to read more\n💡 Press 9 for resources"
+            msg += f"{i}. {title}\n"
         
         return msg
 
@@ -228,7 +265,7 @@ class NewsAgent(BaseAgent):
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi, 
         chat_id: str, session: dict
     ) -> bool:
-        """Handle main menu selections (1-5 for headlines, 9 for resources)."""
+        """Handle main menu selections (1-5 for headlines)."""
         text_clean = text.strip()
         
         # Handle headline selection (1-5)
@@ -253,12 +290,6 @@ class NewsAgent(BaseAgent):
                 await self._send_invalid_choice(event, line_bot_api, session["language"])
                 return True
         
-        # Handle resources (9)
-        elif text_clean in ["9", "๙"]:
-            await self._send_resources(event, line_bot_api, session["language"])
-            news_session_manager.end_news_flow(chat_id)
-            return True
-        
         else:
             await self._send_invalid_choice(event, line_bot_api, session["language"])
             return True
@@ -272,15 +303,13 @@ class NewsAgent(BaseAgent):
         url = headline.get("url", "")
         
         if language == "th":
-            msg = f"📰 {title}\n\n"
+            msg = f"📰 {title}\n"
             if url:
-                msg += f"🔗 อ่านเพิ่มเติม: {url}\n\n"
-            msg += "กดข้อความใดก็ได้เพื่อกลับไปเมนู"
+                msg += f"🔗 {url}\n"
         else:
-            msg = f"📰 {title}\n\n"
+            msg = f"📰 {title}\n"
             if url:
-                msg += f"🔗 Read more: {url}\n\n"
-            msg += "Send any message to return to menu"
+                msg += f"🔗 {url}\n"
         
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
         
@@ -325,12 +354,36 @@ class NewsAgent(BaseAgent):
                 )
             )
 
+
+    async def _send_trigger_translation(
+        self, event: MessageEvent, line_bot_api: MessagingApi, text: str
+    ):
+        """Translate the trigger word to the other language (group/non-friend or private)."""
+        text_lower = text.lower().strip()
+        if text_lower == "news":
+            translated = "ข่าว"
+        else:
+            translated = "news"
+
+        msg = f"news → {translated}" if text_lower == "news" else f"ข่าว → {translated}"
+
+        text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
+
+        if event.reply_token:
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[text_msg],
+                    notificationDisabled=False,
+                )
+            )
+
     async def _send_invalid_choice(self, event: MessageEvent, line_bot_api: MessagingApi, language: str):
         """Send invalid choice message."""
         if language == "th":
-            msg = "❌ กรุณาเลือกตัวเลือกที่ถูกต้อง (1-5 หรือ 9)"
+            msg = "❌ กรุณาเลือก 1-5"
         else:
-            msg = "❌ Please select a valid option (1-5 or 9)"
+            msg = "❌ Pick 1-5"
         
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
         
