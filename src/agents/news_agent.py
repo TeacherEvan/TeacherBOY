@@ -5,7 +5,7 @@ Auto-detects language from trigger: 'news' = English, 'ข่าว' = Thai (no 
 
 import logging
 import re
-from typing import List, Dict
+from typing import List, Dict, Optional
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
     MessagingApi,
@@ -49,7 +49,7 @@ class NewsAgent(BaseAgent):
         self.google_translate = google_translation_service
         self.libre_translate = libre_translation
 
-    def _is_admin(self, user_id: str) -> bool:
+    def _is_admin(self, user_id: Optional[str]) -> bool:
         """Check if user is an admin (admins bypass rate limits)."""
         return user_id in self._admin_user_ids if user_id else False
 
