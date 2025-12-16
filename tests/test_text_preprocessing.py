@@ -4,6 +4,7 @@ import pytest
 from src.utils.text_preprocessing import (
     extract_parenthesized_text,
     restore_parenthesized_text,
+    is_only_parenthesized_content,
 )
 
 
@@ -140,3 +141,39 @@ class TestTextPreprocessing:
         # Restore should work correctly
         restored = restore_parenthesized_text(processed, extracted)
         assert restored == text
+
+
+class TestIsOnlyParenthesizedContent:
+    """Test cases for is_only_parenthesized_content helper."""
+
+    def test_only_parentheses(self):
+        """Test text with only parenthesized content."""
+        processed = "__PAREN_0__"
+        extracted = ["(Name)"]
+        assert is_only_parenthesized_content(processed, extracted) is True
+
+    def test_multiple_parentheses_only(self):
+        """Test text with multiple parentheses and whitespace."""
+        processed = "__PAREN_0__ __PAREN_1__"
+        extracted = ["(First)", "(Second)"]
+        assert is_only_parenthesized_content(processed, extracted) is True
+
+    def test_parentheses_with_text(self):
+        """Test text with parentheses and actual content."""
+        processed = "__PAREN_0__ had the day off"
+        extracted = ["(Pim)"]
+        assert is_only_parenthesized_content(processed, extracted) is False
+
+    def test_empty_text(self):
+        """Test empty text."""
+        assert is_only_parenthesized_content("", []) is True
+
+    def test_whitespace_only(self):
+        """Test text with only whitespace."""
+        assert is_only_parenthesized_content("   ", []) is True
+
+    def test_text_no_parentheses(self):
+        """Test text without any parentheses."""
+        processed = "Hello world"
+        extracted = []
+        assert is_only_parenthesized_content(processed, extracted) is False

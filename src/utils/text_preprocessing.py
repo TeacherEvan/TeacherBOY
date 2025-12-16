@@ -11,6 +11,10 @@ def extract_parenthesized_text(text: str) -> Tuple[str, List[str]]:
     This allows translation services to skip translating content in parentheses,
     which is useful for preserving proper nouns, technical terms, or notes.
     
+    The regex pattern `\\([^()]*\\)` matches simple (non-nested) parentheses.
+    It will only match parentheses that don't contain other parentheses inside them.
+    For example, in "(outer (inner))", only "(inner)" will be matched.
+    
     Args:
         text: Original text that may contain parenthesized content
         
@@ -24,6 +28,7 @@ def extract_parenthesized_text(text: str) -> Tuple[str, List[str]]:
         ("__PAREN_0__ had the day off.", ["(Pim)"])
     """
     # Find all text within parentheses (including the parentheses themselves)
+    # Pattern explanation: \\( matches opening paren, [^()]* matches any non-paren chars, \\) matches closing paren
     pattern = r'\([^()]*\)'
     
     extracted_items = []
@@ -38,6 +43,36 @@ def extract_parenthesized_text(text: str) -> Tuple[str, List[str]]:
     processed_text = re.sub(pattern, replace_with_placeholder, text)
     
     return processed_text, extracted_items
+
+
+def is_only_parenthesized_content(text: str, extracted_items: List[str]) -> bool:
+    """
+    Check if the text contains only parenthesized content (no translatable text).
+    
+    Args:
+        text: Processed text with placeholders
+        extracted_items: List of extracted parenthesized strings
+        
+    Returns:
+        True if text is empty or contains only placeholders
+        
+    Example:
+        >>> is_only_parenthesized_content("__PAREN_0__", ["(Name)"])
+        True
+        >>> is_only_parenthesized_content("__PAREN_0__ text", ["(Name)"])
+        False
+    """
+    if not text.strip():
+        return True
+    
+    # Check if text is only placeholders by removing all placeholders and checking what's left
+    remaining = text
+    for i in range(len(extracted_items)):
+        placeholder = f"__PAREN_{i}__"
+        remaining = remaining.replace(placeholder, "")
+    
+    # If only whitespace remains, it's only parenthesized content
+    return not remaining.strip()
 
 
 def restore_parenthesized_text(text: str, extracted_items: List[str]) -> str:

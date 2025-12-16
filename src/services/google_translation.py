@@ -14,6 +14,7 @@ from functools import wraps
 from src.utils.text_preprocessing import (
     extract_parenthesized_text,
     restore_parenthesized_text,
+    is_only_parenthesized_content,
 )
 
 logger = logging.getLogger(__name__)
@@ -123,9 +124,7 @@ class GoogleTranslationService:
         processed_text, extracted_items = extract_parenthesized_text(text)
         
         # If nothing to translate (only parentheses), return original
-        if not processed_text.strip() or processed_text.strip() == "".join(
-            [f"__PAREN_{i}__" for i in range(len(extracted_items))]
-        ).strip():
+        if is_only_parenthesized_content(processed_text, extracted_items):
             logger.info("Text contains only parenthesized content, skipping translation")
             return text
 
