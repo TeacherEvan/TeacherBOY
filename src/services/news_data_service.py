@@ -315,7 +315,8 @@ class NewsDataService:
         try:
             # Get holidays for current year
             year = datetime.now().year
-            th_holidays = holidays.TH(years=year)
+            # Use country_holidays factory for better compatibility
+            th_holidays = holidays.country_holidays('TH', years=year)
             
             # Sort by date
             sorted_holidays = sorted(th_holidays.items())
@@ -335,7 +336,7 @@ class NewsDataService:
             
             # If fewer than 3 upcoming, add next year's
             if len(upcoming) < 3:
-                th_holidays_next = holidays.TH(years=year + 1)
+                th_holidays_next = holidays.country_holidays('TH', years=year + 1)
                 sorted_next = sorted(th_holidays_next.items())
                 for date_obj, name in sorted_next:
                     upcoming.append({

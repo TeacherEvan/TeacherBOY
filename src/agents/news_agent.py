@@ -456,6 +456,7 @@ class NewsAgent(BaseAgent):
 
     async def _send_resources(self, event: MessageEvent, line_bot_api: MessagingApi, language: str):
         """Send API resources list."""
+        msg = ""
         if language == "th":
             msg = "📚 แหล่งข้อมูล / Resources:\n\n"
             msg += "🌡️ สภาพอากาศ: Open-Meteo\n"
