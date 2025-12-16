@@ -87,7 +87,7 @@ git push origin v3.0.0
 If your repository requires PR reviews:
 
 1. **Create Pull Request**
-   - Navigate to: https://github.com/TeacherEvan/TeacherBOY/compare/main...copilot/overhaul-code-for-production
+   - Navigate to: <https://github.com/TeacherEvan/TeacherBOY/compare/main...copilot/overhaul-code-for-production>
    - Click "Create Pull Request"
    - Title: "feat(ux): Production-grade overhaul v3.0.0"
    - Use the PR description from the latest commit
@@ -232,8 +232,8 @@ echo $GOOGLE_TRANSLATE_API_KEY
 
 ## 📞 Support Contacts
 
-- **Repository**: https://github.com/TeacherEvan/TeacherBOY
-- **Issues**: https://github.com/TeacherEvan/TeacherBOY/issues
+- **Repository**: <https://github.com/TeacherEvan/TeacherBOY>
+- **Issues**: <https://github.com/TeacherEvan/TeacherBOY/issues>
 - **Documentation**: See OPTIMIZATION_GUIDE.md and PRODUCTION_OVERHAUL_SUMMARY.md
 
 ## 🎉 Deployment Completion
@@ -250,7 +250,7 @@ Once deployed successfully:
 
 ## 📝 Deployment Log Template
 
-```
+```text
 Deployment Date: _____________
 Deployed By: _____________
 Version: v3.0.0

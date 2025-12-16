@@ -183,6 +183,7 @@ async def test_shutdown_during_menu_interaction(news_agent, mock_line_api):
     
     # User is at main_menu
     session = news_session_manager.get_session_state("group_G_TEST")
+    assert session is not None
     assert session["step"] == "main_menu"
     
     # User can shut down from menu
