@@ -4,6 +4,8 @@ import logging
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta
 import httpx
+import feedparser
+import holidays
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,7 @@ class DataCache:
             "weather": 1800,  # 30 minutes
             "news_th": 3600,  # 1 hour
             "news_en": 3600,  # 1 hour
+            "thai_holidays": 86400,  # 24 hours
         }
 
     def get(self, key: str) -> Optional[Any]:
@@ -60,7 +63,7 @@ class NewsDataService:
 
         Args:
             http_client: Shared async HTTP client
-            news_api_key: Optional NewsAPI.org API key
+            news_api_key: Optional NewsAPI.org API key (kept for backward compatibility)
         """
         self.client = http_client
         self.news_api_key = news_api_key
@@ -137,7 +140,7 @@ class NewsDataService:
 
     async def get_news_headlines(self, language: str = "en") -> List[Dict[str, str]]:
         """
-        Fetch top 5 news headlines for Thailand.
+        Fetch top 5 news headlines for Thailand using RSS feeds.
 
         Args:
             language: Language code ('th' or 'en')
@@ -166,83 +169,33 @@ class NewsDataService:
             return []
 
     async def _fetch_thai_news(self) -> List[Dict[str, str]]:
-        """Fetch Thai news from NewsAPI.org if key available."""
-        if not self.news_api_key:
-            logger.warning("📰 No NEWS_API_KEY configured, returning placeholder Thai news")
-            return self._get_placeholder_headlines("th")
-
-        try:
-            url = (
-                f"https://newsapi.org/v2/top-headlines"
-                f"?country=th"
-                f"&apiKey={self.news_api_key}"
-            )
-
-            response = await self.client.get(url, timeout=10.0)
-            response.raise_for_status()
-            data = response.json()
-
-            articles = data.get("articles", [])[:5]
-            return [
-                {
-                    "title": article.get("title", "ไม่มีหัวข้อ"),
-                    "url": article.get("url", ""),
-                }
-                for article in articles
-            ]
-
-        except Exception as e:
-            logger.error(f"📰 NewsAPI error: {e}")
-            return self._get_placeholder_headlines("th")
+        """Fetch Thai news from Bangkok Post RSS (Thailand section)."""
+        # Note: Bangkok Post RSS is in English, but covers local Thai news.
+        # Ideally we would use a Thai language RSS feed, but for now this ensures reliability.
+        rss_url = "https://www.bangkokpost.com/rss/data/thailand.xml"
+        return self._parse_rss_feed(rss_url)
 
     async def _fetch_english_news(self) -> List[Dict[str, str]]:
-        """Fetch English news from NewsAPI.org or fallback to placeholder."""
-        if not self.news_api_key:
-            logger.warning("📰 No NEWS_API_KEY configured, returning placeholder English news")
-            return self._get_placeholder_headlines("en")
+        """Fetch English news from Bangkok Post RSS (Top Stories)."""
+        rss_url = "https://www.bangkokpost.com/rss/data/topstories.xml"
+        return self._parse_rss_feed(rss_url)
 
+    def _parse_rss_feed(self, url: str) -> List[Dict[str, str]]:
+        """Parse RSS feed and return top 5 items."""
         try:
-            url = (
-                f"https://newsapi.org/v2/top-headlines"
-                f"?country=th"
-                f"&language=en"
-                f"&apiKey={self.news_api_key}"
-            )
-
-            response = await self.client.get(url, timeout=10.0)
-            response.raise_for_status()
-            data = response.json()
-
-            articles = data.get("articles", [])[:5]
-            return [
-                {
-                    "title": article.get("title", "No title"),
-                    "url": article.get("url", ""),
-                }
-                for article in articles
-            ]
-
+            feed = feedparser.parse(url)
+            articles = []
+            for entry in feed.entries[:5]:
+                articles.append({
+                    "title": entry.title,
+                    "url": entry.link
+                })
+            return articles
         except Exception as e:
-            logger.error(f"📰 NewsAPI error: {e}")
-            return self._get_placeholder_headlines("en")
-
-    def _get_placeholder_headlines(self, language: str) -> List[Dict[str, str]]:
-        """Return placeholder headlines when API is unavailable."""
-        if language == "th":
+            logger.error(f"📰 RSS parse error for {url}: {e}")
             return [
-                {"title": "ข่าวไม่พร้อมใช้งาน - กรุณาตั้งค่า NEWS_API_KEY", "url": ""},
-                {"title": "สามารถดูข่าวได้ที่ ThaiPBS", "url": "https://news.thaipbs.or.th"},
-                {"title": "หรือ Bangkok Post", "url": "https://www.bangkokpost.com"},
-                {"title": "หรือ The Nation", "url": "https://www.nationthailand.com"},
-                {"title": "กด 9 เพื่อดูแหล่งข้อมูล", "url": ""},
-            ]
-        else:
-            return [
-                {"title": "News unavailable - Please set NEWS_API_KEY", "url": ""},
-                {"title": "Visit ThaiPBS for news", "url": "https://news.thaipbs.or.th/en"},
-                {"title": "Or Bangkok Post", "url": "https://www.bangkokpost.com"},
-                {"title": "Or The Nation", "url": "https://www.nationthailand.com"},
-                {"title": "Press 9 for resources", "url": ""},
+                {"title": "News unavailable", "url": ""},
+                {"title": "Visit Bangkok Post", "url": "https://www.bangkokpost.com"},
             ]
 
     async def get_color_of_day(self) -> Dict[str, str]:
@@ -262,7 +215,6 @@ class NewsDataService:
             return cached
 
         # Thai lucky colors mapping (5-color cycle)
-        # Note: Thai zodiac uses 12 colors; simplified to 5 primary colors
         THAI_COLORS = [
             {"th": "เหลือง", "en": "Yellow", "hex": "#FFD700"},  # Monday
             {"th": "ชมพู", "en": "Pink", "hex": "#FFC0CB"},  # Tuesday
@@ -349,9 +301,7 @@ class NewsDataService:
 
     async def get_thai_holidays(self) -> List[Dict[str, str]]:
         """
-        Get major Thai holidays and observances for current month.
-
-        Falls back to static list if Calendarific API is unavailable.
+        Get major Thai holidays and observances for current year using 'holidays' library.
 
         Returns:
             List of dicts with 'date', 'name_th', 'name_en' keys
@@ -362,53 +312,51 @@ class NewsDataService:
             logger.info("📅 Using cached Thai holidays")
             return cached
 
-        # Fallback: Major Thai holidays (2024-2025)
-        THAI_HOLIDAYS_STATIC = [
-            {"date": "Dec 5", "name_th": "วันคล้ายวันพระราชสมภพพระบาทสมเด็จพระเจ้าอยู่หัว", "name_en": "King Bhumibol Commemoration"},
-            {"date": "Dec 10", "name_th": "วันรัฐธรรมนูญ", "name_en": "Constitution Day"},
-            {"date": "Dec 31", "name_th": "วันสิ้นปี", "name_en": "New Year's Eve"},
-            {"date": "Jan 1", "name_th": "วันปีใหม่", "name_en": "New Year's Day"},
-            {"date": "Feb 26", "name_th": "วันมาฆบูชา", "name_en": "Magha Bucha"},
-            {"date": "Apr 6", "name_th": "วันจักรี", "name_en": "Chakri Memorial Day"},
-            {"date": "Apr 13-15", "name_th": "สงกรานต์ (วันปีใหม่ไทย)", "name_en": "Songkran (Thai New Year)"},
-            {"date": "May 1", "name_th": "วันแรงงาน", "name_en": "Labor Day"},
-            {"date": "May 22", "name_th": "วันวิสาขบูชา", "name_en": "Visakha Bucha"},
-        ]
-
         try:
-            from src.config import settings
-            if not settings.calendarific_api_key:
-                logger.warning("📅 No CALENDARIFIC_API_KEY, using static holiday list")
-                self.cache.set(cache_key, THAI_HOLIDAYS_STATIC)
-                return THAI_HOLIDAYS_STATIC
+            # Get holidays for current year
+            year = datetime.now().year
+            th_holidays = holidays.TH(years=year)
+            
+            # Sort by date
+            sorted_holidays = sorted(th_holidays.items())
+            
+            # Filter for upcoming holidays (or recent ones if near end of year)
+            # For simplicity, we return the next 5 holidays from today
+            today = datetime.now().date()
+            upcoming = []
+            
+            for date_obj, name in sorted_holidays:
+                if date_obj >= today:
+                    upcoming.append({
+                        "date": date_obj.strftime("%b %d"),
+                        "name_th": name,  # The library returns English names by default usually
+                        "name_en": name,
+                    })
+            
+            # If fewer than 3 upcoming, add next year's
+            if len(upcoming) < 3:
+                th_holidays_next = holidays.TH(years=year + 1)
+                sorted_next = sorted(th_holidays_next.items())
+                for date_obj, name in sorted_next:
+                    upcoming.append({
+                        "date": date_obj.strftime("%b %d"),
+                        "name_th": name,
+                        "name_en": name,
+                    })
+                    if len(upcoming) >= 5:
+                        break
 
-            url = (
-                f"https://calendarific.com/api/v2/holidays"
-                f"?country=TH"
-                f"&year={datetime.now().year}"
-                f"&api_key={settings.calendarific_api_key}"
-            )
-
-            response = await self.client.get(url, timeout=10.0)
-            response.raise_for_status()
-            data = response.json()
-
-            holidays = []
-            for holiday in data.get("response", {}).get("holidays", [])[:5]:  # Top 5
-                holidays.append({
-                    "date": holiday.get("date", {}).get("iso", ""),
-                    "name_th": holiday.get("name", ""),
-                    "name_en": holiday.get("description", ""),
-                })
-
-            self.cache.set(cache_key, holidays)
-            logger.info(f"📅 Fetched {len(holidays)} Thai holidays from Calendarific")
-            return holidays
+            result = upcoming[:5]
+            self.cache.set(cache_key, result)
+            logger.info(f"📅 Fetched {len(result)} Thai holidays from library")
+            return result
 
         except Exception as e:
-            logger.error(f"📅 Error fetching Thai holidays: {e}, using fallback")
-            self.cache.set(cache_key, THAI_HOLIDAYS_STATIC)
-            return THAI_HOLIDAYS_STATIC
+            logger.error(f"📅 Error fetching Thai holidays: {e}")
+            # Fallback
+            return [
+                {"date": "N/A", "name_th": "ไม่สามารถดึงข้อมูลวันหยุดได้", "name_en": "Unable to fetch holidays"}
+            ]
 
     async def get_bitcoin_price(self) -> Dict[str, str]:
         """

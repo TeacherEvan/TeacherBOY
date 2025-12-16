@@ -118,7 +118,7 @@ class Settings(BaseSettings):
     # ============================================================================
     news_api_key: Optional[str] = Field(
         default=None,
-        description="NewsAPI.org API key for fetching Thai news headlines (optional)",
+        description="DEPRECATED: NewsAPI.org key (now using RSS feeds)",
     )
     weather_cache_ttl_seconds: int = Field(
         default=1800,
@@ -142,7 +142,7 @@ class Settings(BaseSettings):
     )
     calendarific_api_key: Optional[str] = Field(
         default=None,
-        description="Calendarific API key for Thai holidays (optional; 100 req/mo free)",
+        description="DEPRECATED: Calendarific API key (now using 'holidays' library)",
     )
 
     # Cache TTLs for new menu items
