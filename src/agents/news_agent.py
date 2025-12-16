@@ -23,8 +23,7 @@ from src.config import settings
 logger = logging.getLogger(__name__)
 
 # Rate limiters for news requests
-news_rate_limiter_friend = RateLimiter(max_requests=3, time_window_seconds=3600)  # 3/hour for friends
-news_rate_limiter_other = RateLimiter(max_requests=1, time_window_seconds=3600)  # 1/hour for others
+news_rate_limiter_friend = RateLimiter(max_requests=1, time_window_seconds=3600)  # 1/hour for friends
 
 # Legal information constants (as of Dec 2024 - update if laws change)
 LEGAL_INFO = {
@@ -160,9 +159,9 @@ class NewsAgent(BaseAgent):
 
                 # Rate limit check (skip for admins)
                 if not self._is_admin(user_id):
-                    # Friends get 3/hour, check friend rate limiter
+                    # Friends get 1/hour
                     limiter = news_rate_limiter_friend
-                    max_requests = 3
+                    max_requests = 1
                     
                     if not limiter.is_allowed(chat_id):
                         remaining = limiter.get_remaining_requests(chat_id)
@@ -657,7 +656,7 @@ class NewsAgent(BaseAgent):
         reset_minutes = (reset_seconds + 59) // 60  # Round up to nearest minute
         
         msg = (
-            f"⏳ Only {max_requests} news request{'s' if max_requests > 1 else ''} per hour\n"
+            f"⏳ Only {max_requests} news request per hour\n"
             f"Total requests left: {remaining}\n\n"
             f"Try again in ~{reset_minutes} minute{'s' if reset_minutes != 1 else ''}\n\n"
             f"คุณขอข่าวเร็วเกินไปค่ะ! 📰\n"
