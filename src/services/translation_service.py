@@ -6,6 +6,10 @@ from typing import Optional, Tuple
 from langdetect import detect, LangDetectException
 
 from src.config import settings
+from src.utils.text_preprocessing import (
+    extract_parenthesized_text,
+    restore_parenthesized_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +60,8 @@ class TranslationService:
         """
         Translate text from source language to target language.
 
+        Text within parentheses is preserved and not translated.
+
         Args:
             text: Text to translate
             source_lang: Source language code ('th' or 'en')
@@ -65,8 +71,18 @@ class TranslationService:
             Translated text or None if translation fails
         """
         try:
+            # Extract parenthesized text before translation
+            processed_text, extracted_items = extract_parenthesized_text(text)
+            
+            # If nothing to translate (only parentheses), return original
+            if not processed_text.strip() or processed_text.strip() == "".join(
+                [f"__PAREN_{i}__" for i in range(len(extracted_items))]
+            ).strip():
+                logger.info("Text contains only parenthesized content, skipping translation")
+                return text
+
             payload = {
-                "q": text,
+                "q": processed_text,
                 "source": source_lang,
                 "target": target_lang,
                 "format": "text",
@@ -86,6 +102,9 @@ class TranslationService:
 
             result = response.json()
             translated_text = result.get("translatedText", "")
+
+            # Restore parenthesized text
+            translated_text = restore_parenthesized_text(translated_text, extracted_items)
 
             logger.info(f"Translation successful: {source_lang} -> {target_lang}")
             return translated_text

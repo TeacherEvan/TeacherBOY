@@ -11,6 +11,11 @@ import httpx
 import asyncio
 from functools import wraps
 
+from src.utils.text_preprocessing import (
+    extract_parenthesized_text,
+    restore_parenthesized_text,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,7 +95,8 @@ class GoogleTranslationService:
         Translate text using Google Cloud Translation API with automatic retry.
 
         This method implements exponential backoff retry logic for resilient
-        translation in production environments.
+        translation in production environments. Text within parentheses is
+        preserved and not translated.
 
         Args:
             text: Text to translate (max 30,000 characters)
@@ -113,8 +119,18 @@ class GoogleTranslationService:
                 f"Text too long ({len(text)} chars). Maximum is 30,000 characters."
             )
 
+        # Extract parenthesized text before translation
+        processed_text, extracted_items = extract_parenthesized_text(text)
+        
+        # If nothing to translate (only parentheses), return original
+        if not processed_text.strip() or processed_text.strip() == "".join(
+            [f"__PAREN_{i}__" for i in range(len(extracted_items))]
+        ).strip():
+            logger.info("Text contains only parenthesized content, skipping translation")
+            return text
+
         params = {
-            "q": text,
+            "q": processed_text,
             "target": target_lang,
             "key": self.api_key,
             "format": "text",
@@ -138,6 +154,9 @@ class GoogleTranslationService:
             detected_lang = data["data"]["translations"][0].get(
                 "detectedSourceLanguage", ""
             )
+
+            # Restore parenthesized text
+            translated = restore_parenthesized_text(translated, extracted_items)
 
             logger.info(
                 f"✅ Google Translate success: {source_lang or detected_lang} → {target_lang} "
