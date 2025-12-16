@@ -1,4 +1,7 @@
-"""News agent - Handles weather, air quality, and news headlines in multi-step flow."""
+"""News agent - Handles weather, air quality, and news headlines in multi-step flow.
+
+Auto-detects language from trigger: 'news' = English, 'ข่าว' = Thai (no selection prompt).
+"""
 
 import logging
 import re
