@@ -134,6 +134,50 @@ class Settings(BaseSettings):
     )
 
     # ============================================================================
+    # Extended News Agent Configuration (Optional APIs)
+    # ============================================================================
+    exchange_rate_api_key: Optional[str] = Field(
+        default=None,
+        description="ExchangeRate-API key for currency conversion (optional; 1500 req/mo free)",
+    )
+    calendarific_api_key: Optional[str] = Field(
+        default=None,
+        description="Calendarific API key for Thai holidays (optional; 100 req/mo free)",
+    )
+
+    # Cache TTLs for new menu items
+    color_cache_ttl_seconds: int = Field(
+        default=86400,
+        ge=3600,
+        le=86400,
+        description="Thai lucky color cache TTL (default: 24 hours)",
+    )
+    sunset_cache_ttl_seconds: int = Field(
+        default=86400,
+        ge=3600,
+        le=86400,
+        description="Sunset/sunrise times cache TTL (default: 24 hours)",
+    )
+    holiday_cache_ttl_seconds: int = Field(
+        default=604800,
+        ge=86400,
+        le=604800,
+        description="Thai holidays cache TTL (default: 7 days)",
+    )
+    bitcoin_cache_ttl_seconds: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        description="Bitcoin price cache TTL (default: 5 minutes; volatile data)",
+    )
+    exchange_cache_ttl_seconds: int = Field(
+        default=3600,
+        ge=300,
+        le=14400,
+        description="Exchange rate cache TTL (default: 1 hour)",
+    )
+
+    # ============================================================================
     # HTTP Client Configuration
     # ============================================================================
     http_client_timeout_seconds: int = Field(

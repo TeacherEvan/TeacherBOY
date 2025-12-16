@@ -224,14 +224,16 @@ class NewsAgent(BaseAgent):
         will_rain = weather.get("will_rain")
         rain_text = "ใช่ (Yes)" if will_rain else "ไม่ (No)" if will_rain is not None else "N/A"
         
-        msg = "📰 ข่าว Bangkok\n"
-        msg += f"🌡️ อุณหภูมิ: {temp}°C\n"
-        msg += f"💨 PM2.5: {pm25}\n"
-        msg += f"🌧️ 5 ชม.ข้างหน้า: {rain_text}\n"
-        msg += f"🍃 กัญชา: {LEGAL_INFO['cannabis']['th']}\n"
-        msg += f"🚭 บุหรี่ไฟฟ้า: {LEGAL_INFO['ecig']['th']}\n"
-        msg += f"🍺 แอลกอฮอล์: {LEGAL_INFO['alcohol']['th']}\n"
-        msg += "📰 หัวข้อ:\n"
+        msg = "📰 ข่าว Bangkok (ทั้งหมด 8 หัวข้อ)\n\n"
+        msg += f"1️⃣ 🌡️ อุณหภูมิ: {temp}°C | 💨 PM2.5: {pm25}\n"
+        msg += f"2️⃣ 🌧️ 5 ชม.ข้างหน้า: {rain_text}\n"
+        msg += f"3️⃣ 🍃 กัญชา: {LEGAL_INFO['cannabis']['th']}\n"
+        msg += f"4️⃣ 🚭 บุหรี่ไฟฟ้า: {LEGAL_INFO['ecig']['th']}\n"
+        msg += f"5️⃣ 🍺 แอลกอฮอล์: {LEGAL_INFO['alcohol']['th']}\n"
+        msg += "6️⃣ 🎨 สีแม่น้ำ + 🌅 อาทิตย์\n"
+        msg += "7️⃣ 📅 วันหยุด + 🏛️ ตลาด\n"
+        msg += "8️⃣ ₿ Bitcoin + 💱 อัตราแลก\n\n"
+        msg += "📰 หัวข้อข่าว:\n"
 
         for i, headline in enumerate(headlines[:5], 1):
             title = headline.get("title", "ไม่มีหัวข้อ")[:80]
@@ -246,13 +248,15 @@ class NewsAgent(BaseAgent):
         will_rain = weather.get("will_rain")
         rain_text = "Yes" if will_rain else "No" if will_rain is not None else "N/A"
         
-        msg = "📰 Bangkok News\n"
-        msg += f"🌡️ Temp: {temp}°C\n"
-        msg += f"💨 PM2.5: {pm25}\n"
-        msg += f"🌧️ Next 5h: {rain_text}\n"
-        msg += f"🍃 Cannabis: {LEGAL_INFO['cannabis']['en']}\n"
-        msg += f"🚭 E-Cigs: {LEGAL_INFO['ecig']['en']}\n"
-        msg += f"🍺 Alcohol: {LEGAL_INFO['alcohol']['en']}\n"
+        msg = "📰 Bangkok News (8 items)\n\n"
+        msg += f"1️⃣ 🌡️ Temp: {temp}°C | 💨 PM2.5: {pm25}\n"
+        msg += f"2️⃣ 🌧️ Next 5h: {rain_text}\n"
+        msg += f"3️⃣ 🍃 Cannabis: {LEGAL_INFO['cannabis']['en']}\n"
+        msg += f"4️⃣ 🚭 E-Cigs: {LEGAL_INFO['ecig']['en']}\n"
+        msg += f"5️⃣ 🍺 Alcohol: {LEGAL_INFO['alcohol']['en']}\n"
+        msg += "6️⃣ 🎨 Color + 🌅 Sunset\n"
+        msg += "7️⃣ 📅 Holidays + 🏛️ Markets\n"
+        msg += "8️⃣ ₿ Bitcoin + 💱 Exchange\n\n"
         msg += "📰 Headlines:\n"
 
         for i, headline in enumerate(headlines[:5], 1):
@@ -265,15 +269,20 @@ class NewsAgent(BaseAgent):
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi, 
         chat_id: str, session: dict
     ) -> bool:
-        """Handle main menu selections (1-5 for headlines)."""
+        """Handle main menu selections (1-8)."""
         text_clean = text.strip()
         
+        # Normalize Thai numerals to Arabic numerals
+        thai_to_arabic = {
+            "๑": "1", "๒": "2", "๓": "3", "๔": "4", "๕": "5",
+            "๖": "6", "๗": "7", "๘": "8"
+        }
+        normalized = thai_to_arabic.get(text_clean, text_clean)
+        
         # Handle headline selection (1-5)
-        if text_clean in ["1", "2", "3", "4", "5", "๑", "๒", "๓", "๔", "๕"]:
-            # Normalize Thai numerals
-            thai_to_arabic = {"๑": "1", "๒": "2", "๓": "3", "๔": "4", "๕": "5"}
+        if normalized in ["1", "2", "3", "4", "5"]:
             try:
-                index = int(thai_to_arabic.get(text_clean, text_clean)) - 1
+                index = int(normalized) - 1
             except ValueError:
                 await self._send_invalid_choice(event, line_bot_api, session["language"])
                 return True
@@ -289,6 +298,21 @@ class NewsAgent(BaseAgent):
             else:
                 await self._send_invalid_choice(event, line_bot_api, session["language"])
                 return True
+        
+        # Handle item 6: Color + Sunset/Sunrise
+        elif normalized == "6":
+            await self._send_color_sunset_sunrise(event, line_bot_api, session["language"])
+            return True
+        
+        # Handle item 7: Holidays + Markets
+        elif normalized == "7":
+            await self._send_holidays_markets(event, line_bot_api, session["language"])
+            return True
+        
+        # Handle item 8: Bitcoin + Exchange Rates
+        elif normalized == "8":
+            await self._send_crypto_exchange(event, line_bot_api, session["language"])
+            return True
         
         else:
             await self._send_invalid_choice(event, line_bot_api, session["language"])
@@ -321,6 +345,114 @@ class NewsAgent(BaseAgent):
                     notificationDisabled=False,
                 )
             )
+
+    async def _send_color_sunset_sunrise(
+        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
+    ):
+        """Send lucky color of day + sunset/sunrise times."""
+        try:
+            color_data = await self.news_service.get_color_of_day()
+            time_data = await self.news_service.get_sunset_sunrise_times()
+
+            if language == "th":
+                color_name = color_data.get("color_name_th", "ไม่ทราบ")
+                msg = f"🎨 สีแม่น้ำวันนี้: {color_name}\n"
+                msg += f"   (ฐานะดี / Lucky)\n\n"
+                msg += f"🌅 พระอาทิตย์ขึ้น: {time_data.get('sunrise', 'N/A')}\n"
+                msg += f"🌇 พระอาทิตย์ตก: {time_data.get('sunset', 'N/A')}"
+            else:
+                color_name = color_data.get("color_name_en", "Unknown")
+                msg = f"🎨 Lucky color: {color_name}\n\n"
+                msg += f"🌅 Sunrise: {time_data.get('sunrise', 'N/A')}\n"
+                msg += f"🌇 Sunset: {time_data.get('sunset', 'N/A')}"
+
+            text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
+            if event.reply_token:
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[text_msg],
+                        notificationDisabled=False,
+                    )
+                )
+        except Exception as e:
+            logger.error(f"📰 Error sending color/sunset: {e}", exc_info=True)
+            await self._send_error_message(event, line_bot_api)
+
+    async def _send_holidays_markets(
+        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
+    ):
+        """Send Thai holidays + SET market info."""
+        try:
+            holidays = await self.news_service.get_thai_holidays()
+
+            if language == "th":
+                msg = "📅 วันหยุดราชการ (ต.ค.-ธ.ค.):\n"
+                for holiday in holidays[:3]:  # Top 3 holidays
+                    date = holiday.get("date", "")
+                    name = holiday.get("name_th", "")
+                    msg += f"• {date}: {name}\n"
+                msg += "\n🏛️ ตลาดหุ้น SET (ปิด):\n"
+                msg += "• วันเสาร์-อาทิตย์\n"
+                msg += "• วันหยุดราชการ"
+            else:
+                msg = "📅 Thai Holidays (Oct-Dec):\n"
+                for holiday in holidays[:3]:  # Top 3 holidays
+                    date = holiday.get("date", "")
+                    name = holiday.get("name_en", "")
+                    msg += f"• {date}: {name}\n"
+                msg += "\n🏛️ SET Market (Closed):\n"
+                msg += "• Saturday-Sunday\n"
+                msg += "• Thai holidays"
+
+            text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
+            if event.reply_token:
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[text_msg],
+                        notificationDisabled=False,
+                    )
+                )
+        except Exception as e:
+            logger.error(f"📰 Error sending holidays/markets: {e}", exc_info=True)
+            await self._send_error_message(event, line_bot_api)
+
+    async def _send_crypto_exchange(
+        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
+    ):
+        """Send Bitcoin price + exchange rates."""
+        try:
+            btc_data = await self.news_service.get_bitcoin_price()
+            rates_data = await self.news_service.get_exchange_rates()
+
+            if language == "th":
+                msg = f"₿ Bitcoin (USD): {btc_data.get('price_usd', 'N/A')}\n"
+                msg += f"   24h: {btc_data.get('change_24h_percent', 'N/A')}\n\n"
+                msg += "💱 อัตราแลก (1 THB):\n"
+                msg += f"• USD: {rates_data.get('thb_usd', 'N/A')}\n"
+                msg += f"• ZAR: {rates_data.get('thb_zar', 'N/A')}\n"
+                msg += f"• CNY: {rates_data.get('thb_cny', 'N/A')}"
+            else:
+                msg = f"₿ Bitcoin (USD): {btc_data.get('price_usd', 'N/A')}\n"
+                msg += f"   24h: {btc_data.get('change_24h_percent', 'N/A')}\n\n"
+                msg += "💱 Exchange (1 THB):\n"
+                msg += f"• USD: {rates_data.get('thb_usd', 'N/A')}\n"
+                msg += f"• ZAR: {rates_data.get('thb_zar', 'N/A')}\n"
+                msg += f"• CNY: {rates_data.get('thb_cny', 'N/A')}"
+
+            text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
+            if event.reply_token:
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[text_msg],
+                        notificationDisabled=False,
+                    )
+                )
+        except Exception as e:
+            logger.error(f"📰 Error sending crypto/exchange: {e}", exc_info=True)
+            await self._send_error_message(event, line_bot_api)
 
     async def _send_resources(self, event: MessageEvent, line_bot_api: MessagingApi, language: str):
         """Send API resources list."""

@@ -1,54 +1,195 @@
-# TeacherBOY — Copilot coding-agent notes
+# TeacherBOY — AI Coding Agent Instructions
 
-## Extensions:
+## 🎯 Quick Context
 
-- Disable all extensions not related to the current project
+**What:** Production LINE bot with async multi-agent architecture. Thai ↔ English translation is the primary feature, with optional admin commands, calendar integration, and news/weather data.
 
-## What this repo is
+**Key files:**
 
-- Production LINE bot: Thai ↔ English translation is the core feature.
-- FastAPI webhook app with a priority-based multi-agent router.
+- Entry point: [src/main.py](../src/main.py) — FastAPI app with `lifespan` context, `/webhook` endpoint, HTTP client pool
+- Agent dispatch: [src/agents/agent_router.py](../src/agents/agent_router.py) — priority-based routing
+- Base contract: [src/agents/base_agent.py](../src/agents/base_agent.py) — abstract `should_handle()` + async `handle()`
 
-## Runtime flow (read these first)
+## 🔄 Webhook Flow (Read First)
 
-- Entry point + lifecycle: `src/main.py` (FastAPI `lifespan`, `/webhook`, health endpoints).
-- Webhook flow: LINE signature validation → parse events → **skip self-messages** via `bot_user_id` → `AgentRouter.route_message()`.
-- Router contract: `src/agents/agent_router.py` iterates agents in ascending `get_priority()` and stops at the first successful `handle()`.
+```
+LINE sends POST → FastAPI /webhook
+  ↓
+Validate signature (InvalidSignatureError if fails)
+  ↓
+Skip self-messages via bot_user_id check (prevents loops)
+  ↓
+AgentRouter.route_message() → try agents in priority order
+  ↓
+First agent with should_handle()=true → calls handle()
+```
 
-## Agents & priorities (lower = higher priority)
+**Critical:** Agents run **in ascending priority order** (`get_priority()`); first match wins. The event loop is **async-only** — all agent methods are `async def`.
 
-- `AdminAgent` (priority **5**) only registers when `ADMIN_USER_IDS` is set; commands start with `/admin` or `!admin` (`src/agents/admin_agent.py`).
-- `TranslationAgent` (priority **10**) is the primary behavior (`src/agents/translation_agent.py`).
-- `CalendarAgent` (priority **20**) is optional/scheduled-only and only registers when `GOOGLE_CALENDAR_GROUP_ID` is set (`src/agents/calendar_agent.py`, scheduler in `src/main.py`).
+## 🤖 Agent Hierarchy (Priority Order)
 
-## Translation-specific conventions (don’t fight these)
+| Agent                | Priority | Status      | Trigger                                   | Notes                                                                                                                                                                                                                                                 |
+| -------------------- | -------- | ----------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AdminAgent**       | 5        | Conditional | `/admin` or `!admin` prefix               | Only registered if `ADMIN_USER_IDS` env is set                                                                                                                                                                                                        |
+| **TranslationAgent** | 10       | Always on   | Non-admin messages (fallback)             | Detects language, calls Google or LibreTranslate, applies session/rate-limit rules                                                                                                                                                                    |
+| **NewsAgent**        | 15       | Conditional | `news` or `ข่าว` (group-only for friends) | **Friend-gated**: Groups—friends see full 8-item menu (weather, PM2.5, legal, color, holidays, Bitcoin, rates); non-friends get trigger translation only. Private chats always translate trigger. See [News Access Model](#-news-access-model) below. |
+| **CalendarAgent**    | 20       | Conditional | `/cal` or `!cal` prefix                   | Scheduler-based; only registers if `GOOGLE_CALENDAR_GROUP_ID` env is set                                                                                                                                                                              |
 
-- Chat IDs are normalized in `TranslationAgent._get_chat_id()` as `user_<id>`, `group_<id>`, `room_<id>`.
-- Session state is in `src/services/session_manager.py`:
-  - `is_session_active()` returns false while sleeping.
-  - Sleep mode: `sleep_chat(chat_id, hours=24)`; wake: `wake_chat(chat_id)`.
-  - Dedup: `is_duplicate_message(chat_id, text)` (per-chat history, default 60s window).
-- Rate limiting uses `src/services/rate_limiter.py` singleton: **10 requests / 60s per chat**.
+## � News Access Model
 
-## Translation providers (shared HTTP client)
+**NewsAgent enforces friend-based access control:**
 
-- `src/main.py` creates a single optimized `httpx.AsyncClient` and injects it into:
-  - Google: `src/services/google_translation.py` (primary; async retry via `with_retry()` and `settings.translation_max_retries`).
-  - LibreTranslate: `src/services/translation_service.py` (fallback).
+| Context          | Trigger          | User Type                      | Response                                                   |
+| ---------------- | ---------------- | ------------------------------ | ---------------------------------------------------------- |
+| **Group/Room**   | `news` or `ข่าว` | Friend (verified via LINE API) | Full menu: weather, PM2.5, stocks, headlines (1–5 options) |
+| **Group/Room**   | `news` or `ข่าว` | Non-friend                     | Trigger translation only: `news → ข่าว` or vice versa      |
+| **Private Chat** | `news` or `ข่าว` | Any user                       | Trigger translation only (no menu/data shown)              |
 
-## Dev workflows
+**Implementation**:
 
-- Run (Docker): `docker-compose up --build` (expects `.env`, binds `8000`).
-- Run (local): `python -m uvicorn src.main:app --reload --port 8000`.
-- Tests: `pytest` (async tests supported; `asyncio_mode=auto` in `pytest.ini`).
-- Coverage: `pytest --cov=src --cov-report=html`.
+- `_is_group_chat(event)` → checks for `group_id` or `room_id`
+- `await _is_friend(event, line_bot_api)` → calls LINE API `get_profile(user_id)`; returns `False` on `ApiException`
+- `_send_trigger_translation(...)` → responds with translated keyword only (robotic, no chatter)
 
-## Adding a new agent (project pattern)
+## 📰 Extended News Menu (8 Items for Friends)
 
-- Implement `BaseAgent` (`src/agents/base_agent.py`) with **async** `should_handle()` + `handle()`.
-- Pick priority carefully: use **<10** only if the agent must preempt translation; otherwise use **>10**.
-- Register the agent in the `lifespan` agent-registration section in `src/main.py`.
+**Menu Structure:**
 
-## Notes about legacy code
+1. **Weather & Air Quality** 🌡️💨 → Bangkok temperature + PM2.5 (Open-Meteo)
+2. **Rain Forecast** 🌧️ → 5-hour rain prediction (Open-Meteo)
+3. **Legal Info** 🍃🚭🍺 → Cannabis, e-cigs, alcohol status (static Thai law)
+4. **Lucky Color + Sunsets** 🎨🌅 → Daily lucky color (365-color cycle) + sunrise/sunset times
+5. **Headlines** 📰 → Top 5 news stories (NewsAPI or placeholders)
+6. **Thai Holidays + Markets** 📅🏛️ → Major holidays + SET market status (Calendarific/static fallback)
+7. **Bitcoin Price** ₿ → BTC/USD + 24h change (CoinGecko, free, no key)
+8. **Exchange Rates** 💱 → THB→USD, THB→ZAR, THB→CNY (ExchangeRate-API or hardcoded fallback)
 
-- `src/handlers/message_handler.py` contains an older “Flex-message translation” handler, but the production webhook path routes via agents; update it only if a test/feature explicitly depends on it.
+**Output:** Terse, robotic, single emoji per bullet. No instructions or chatter.
+
+**Data Methods** ([src/services/news_data_service.py](../src/services/news_data_service.py)):
+
+- `get_color_of_day()` → Thai lucky color (365-color cycle, 24h cache, no API key needed)
+- `get_sunset_sunrise_times()` → Bangkok times from Open-Meteo (24h cache, no API key)
+- `get_thai_holidays()` → Calendarific API or static 9-item fallback (7d cache)
+- `get_bitcoin_price()` → CoinGecko free API (5-min cache, volatile data)
+- `get_exchange_rates()` → ExchangeRate-API or hardcoded THB rates (1h cache)
+
+**Menu Handlers** ([src/agents/news_agent.py](../src/agents/news_agent.py)):
+
+- `_send_color_sunset_sunrise()` → Item 6 output
+- `_send_holidays_markets()` → Item 7 output
+- `_send_crypto_exchange()` → Item 8 output
+- Thai numerals (๖=6, ๗=7, ๘=8) normalized to Arabic in `_handle_main_menu()`
+
+**Optional API Keys** ([src/config.py](../src/config.py)):
+
+| Service          | Env Variable          | Default | Plan             | Fallback              |
+| ---------------- | --------------------- | ------- | ---------------- | --------------------- |
+| NewsAPI          | NEWS_API_KEY          | None    | 100 req/day free | Placeholder headlines |
+| Calendarific     | CALENDARIFIC_API_KEY  | None    | 100 req/mo free  | Static 9-item list    |
+| ExchangeRate-API | EXCHANGE_RATE_API_KEY | None    | 1500 req/mo free | Hardcoded rates (THB) |
+| Open-Meteo       | (none needed)         | Free    | Unlimited        | N/A (always works)    |
+| CoinGecko        | (none needed)         | Free    | Unlimited        | N/A (always works)    |
+
+**Cache TTLs** ([src/config.py](../src/config.py)):
+
+| Setting                    | Env Variable               | Default | Range        | Purpose                  |
+| -------------------------- | -------------------------- | ------- | ------------ | ------------------------ |
+| color_cache_ttl_seconds    | COLOR_CACHE_TTL_SECONDS    | 86400   | 3600–86400   | Lucky color (daily)      |
+| sunset_cache_ttl_seconds   | SUNSET_CACHE_TTL_SECONDS   | 86400   | 3600–86400   | Sunset/sunrise times     |
+| holiday_cache_ttl_seconds  | HOLIDAY_CACHE_TTL_SECONDS  | 604800  | 86400–604800 | Thai holidays (weekly)   |
+| bitcoin_cache_ttl_seconds  | BITCOIN_CACHE_TTL_SECONDS  | 300     | 60–3600      | Bitcoin price (volatile) |
+| exchange_cache_ttl_seconds | EXCHANGE_CACHE_TTL_SECONDS | 3600    | 300–14400    | Exchange rates (hourly)  |
+
+## �📋 Session & Rate-Limiting Rules (TranslationAgent Only)
+
+All enforced via singletons in [src/services](../src/services):
+
+- **Chat ID format:** `user_<id>`, `group_<id>`, `room_<id>` (normalized in `_get_chat_id()`)
+- **Session state** ([src/services/session_manager.py](../src/services/session_manager.py)):
+  - `is_session_active(chat_id)` → checks sleep mode + active sessions
+  - Sleep mode: `sleep_chat(chat_id, hours=24)` blocks translation; wake: `wake_chat(chat_id)`
+  - Dedup: `is_duplicate_message(chat_id, text)` within 60s window (per-chat history)
+- **Rate limiting** ([src/services/rate_limiter.py](../src/services/rate_limiter.py)):
+  - **Hard limit:** 10 requests / 60 seconds per chat
+  - Returns `429` if breached; respects `Retry-After` headers from translation APIs
+
+## 🌐 Translation Provider Stack
+
+**Shared HTTP client** (singleton `httpx.AsyncClient`) created in [src/main.py](../src/main.py):
+
+1. **Primary:** Google Translate ([src/services/google_translation.py](../src/services/google_translation.py))
+   - Async with automatic retry (`with_retry()`) controlled by `settings.translation_max_retries`
+   - Used by `TranslationAgent.translate()`
+2. **Fallback:** LibreTranslate ([src/services/translation_service.py](../src/services/translation_service.py))
+   - Public instance (https://libretranslate.de) or self-hosted
+   - Also detects language via `detect_language(text)`
+
+**Do not create multiple `httpx.AsyncClient` instances** — reuse the singleton from context.
+
+## 🛠️ Developer Workflows
+
+```bash
+# Local development (requires .env)
+python -m uvicorn src.main:app --reload --port 8000
+
+# Docker (see docker-compose.yml)
+docker-compose up --build
+
+# Testing (pytest with asyncio support; see pytest.ini)
+pytest                                    # Run all
+pytest --cov=src --cov-report=html       # With coverage
+pytest tests/test_translation_agent.py    # Single file
+```
+
+## ➕ Adding a New Agent (Pattern)
+
+1. **Create** `src/agents/<your_agent>.py` and subclass `BaseAgent`
+2. **Implement:**
+   - `async def should_handle(event, text) -> bool` — return True if this agent matches
+   - `async def handle(event, text, line_bot_api) -> bool` — return True if successful
+   - `get_priority() -> int` — return 0-100 (lower = runs first)
+3. **Pick priority wisely:**
+   - `<10`: Preempts translation (rarely needed; AdminAgent is exception at 5)
+   - `10-20`: Runs after translation checks
+   - `>20`: Fallback behavior
+4. **Register in `src/main.py` lifespan:**
+   ```python
+   @asynccontextmanager
+   async def lifespan(app: FastAPI):
+       # ... existing setup ...
+       agent_router.register_agent(YourAgent(settings, client))
+       yield
+   ```
+
+## 📝 Code Patterns to Follow
+
+- **Logging:** Always use `logger = logging.getLogger(__name__)` at module level; prefix messages with emoji (✅ success, ❌ error, 🔍 debug, ⚠️ warning)
+- **Tracing:** Import `get_tracer(__name__)` from `src/utils/tracing`; wrap agent logic in `tracer.start_as_current_span()`
+- **Error handling:** Catch `linebot.v3.exceptions.ApiException` and `httpx.TimeoutException` separately; log before rethrowing or responding with fallback
+- **Chat ID extraction:** Use `_get_chat_id(event)` pattern (see `TranslationAgent` & `NewsAgent` for examples)
+- **Environment variables:** Load from `src/config.py` settings singleton; never hardcode secrets
+- **Friend gating** (NewsAgent pattern):
+
+  ```python
+  def _is_group_chat(self, event: MessageEvent) -> bool:
+      """Check if message is from group or room."""
+      return bool(getattr(event.source, "group_id", None) or getattr(event.source, "room_id", None))
+
+  async def _is_friend(self, event: MessageEvent, line_bot_api: MessagingApi) -> bool:
+      """Verify friendship via LINE API; returns False if non-friend or error."""
+      try:
+          line_bot_api.get_profile(getattr(event.source, "user_id", None))
+          return True
+      except ApiException:
+          return False
+  ```
+
+## ⚠️ Known Gotchas & Legacy
+
+- **Do not edit** [src/handlers/message_handler.py](../src/handlers/message_handler.py) (older Flex-message handler) unless a test explicitly requires it — production uses agent routing
+- **Self-message loop prevention:** Check `event.source.user_id == bot_user_id` before processing (done in webhook handler)
+- **Async-only code:** No `time.sleep()`, no blocking I/O — use `await asyncio.sleep()` and async libraries
+- **LINE SDK v3:** Uses `linebot.v3.webhooks` and `linebot.v3.messaging`; avoid v2 imports
+- **NewsAgent access control:** Friend gating enforced via LINE API `get_profile()` call; non-friends and private chats fallback to trigger translation only. No menu/data shown outside eligible contexts.
+- **NewsAgent multi-step flow:** Uses `news_session_manager` to track conversation state; test thoroughly if modifying state transitions. Output is terse (robotic): single emoji per bullet, no instructions or explanations.
