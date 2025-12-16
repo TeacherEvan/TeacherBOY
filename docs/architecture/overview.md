@@ -20,18 +20,15 @@ TeacherBOY is a FastAPI webhook app for LINE.
 
 - Admin Agent (priority 5): in-chat operations, only registered when configured.
 - Translation Agent (priority 10): Thai ↔ English translation with session + dedup + rate limiting.
-- Calendar Agent (priority 20): optional scheduled reminders (only when configured).
 
 ## Services
 
 - Shared `httpx.AsyncClient` is created once and injected into translation services.
 - Translation providers:
-
   - Google Cloud Translate (primary)
   - LibreTranslate (fallback)
 
 - Session/rate-limit state:
-
   - `src/services/session_manager.py`
   - `src/services/rate_limiter.py`
 

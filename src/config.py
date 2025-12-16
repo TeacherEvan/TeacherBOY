@@ -94,26 +94,6 @@ class Settings(BaseSettings):
     )
 
     # ============================================================================
-    # Google Calendar Integration
-    # ============================================================================
-    google_calendar_group_id: Optional[str] = Field(
-        default=None, description="LINE Group Chat ID for calendar reminders"
-    )
-    calendar_timezone: str = Field(
-        default="Asia/Bangkok",
-        description="Timezone for scheduled reminders (IANA format)",
-    )
-    calendar_morning_hour: int = Field(
-        default=7, ge=0, le=23, description="Hour for morning reminder (24-hour format)"
-    )
-    calendar_afternoon_hour: int = Field(
-        default=14,
-        ge=0,
-        le=23,
-        description="Hour for afternoon reminder (24-hour format)",
-    )
-
-    # ============================================================================
     # News Agent Configuration
     # ============================================================================
     news_api_key: Optional[str] = Field(
@@ -143,10 +123,6 @@ class Settings(BaseSettings):
     tat_api_key: Optional[str] = Field(
         default=None,
         description="Tourism Authority of Thailand (TAT) API key for events/festivals",
-    )
-    calendarific_api_key: Optional[str] = Field(
-        default=None,
-        description="DEPRECATED: Calendarific API key (now using 'holidays' library)",
     )
 
     # Cache TTLs for new menu items
@@ -244,19 +220,6 @@ class Settings(BaseSettings):
         # Allow extra fields for forward compatibility
         extra = "ignore"
 
-    @field_validator("calendar_timezone")
-    @classmethod
-    def validate_timezone(cls, v: str) -> str:
-        """Validate that timezone is a valid IANA timezone string."""
-        try:
-            import pytz
-
-            pytz.timezone(v)
-            return v
-        except Exception as e:
-            logger.warning(f"Invalid timezone '{v}', falling back to Asia/Bangkok: {e}")
-            return "Asia/Bangkok"
-
     @field_validator("additional_agents")
     @classmethod
     def validate_additional_agents_json(cls, v: Optional[str]) -> Optional[str]:
@@ -295,10 +258,6 @@ class Settings(BaseSettings):
         return bool(
             self.google_translate_api_key and len(self.google_translate_api_key) > 20
         )
-
-    def is_calendar_configured(self) -> bool:
-        """Check if Google Calendar integration is properly configured."""
-        return bool(self.google_calendar_group_id)
 
     def is_news_api_configured(self) -> bool:
         """Check if NewsAPI.org is properly configured."""

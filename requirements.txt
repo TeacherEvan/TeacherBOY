@@ -16,11 +16,6 @@ opentelemetry-exporter-otlp==1.29.0
 opentelemetry-instrumentation-fastapi==0.50b0
 opentelemetry-instrumentation-httpx==0.50b0
 
-# Google Calendar API
-google-api-python-client==2.108.0
-google-auth-httplib2==0.1.1
-google-auth-oauthlib==1.2.0
-
 # Scheduler for timed events
 apscheduler==3.10.4
 pytz==2024.1

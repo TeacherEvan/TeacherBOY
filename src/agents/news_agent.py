@@ -35,7 +35,7 @@ class NewsAgent(BaseAgent):
         self.news_service = news_data_service
 
     def get_priority(self) -> int:
-        """News agent priority - between Translation (10) and Calendar (20)."""
+        """News agent priority - runs after Translation (10)."""
         return 15
 
     def _get_chat_id(self, event: MessageEvent) -> str:

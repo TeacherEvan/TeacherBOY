@@ -2,7 +2,7 @@
 
 ## 🎯 Quick Context
 
-**What:** Production LINE bot with async multi-agent architecture. Thai ↔ English translation is the primary feature, with optional admin commands, calendar integration, and news/weather data.
+**What:** Production LINE bot with async multi-agent architecture. Thai ↔ English translation is the primary feature, with optional admin commands and news/weather data.
 
 **Key files:**
 
@@ -33,7 +33,6 @@ First agent with should_handle()=true → calls handle()
 | **AdminAgent**       | 5        | Conditional | `/admin` or `!admin` prefix               | Only registered if `ADMIN_USER_IDS` env is set                                                                                                                                                                                                        |
 | **TranslationAgent** | 10       | Always on   | Non-admin messages (fallback)             | Detects language, calls Google or LibreTranslate, applies session/rate-limit rules                                                                                                                                                                    |
 | **NewsAgent**        | 15       | Conditional | `news` or `ข่าว` (group-only for friends) | **Friend-gated**: Groups—friends see full 8-item menu (weather, PM2.5, legal, color, holidays, Bitcoin, rates); non-friends get trigger translation only. Private chats always translate trigger. See [News Access Model](#-news-access-model) below. |
-| **CalendarAgent**    | 20       | Conditional | `/cal` or `!cal` prefix                   | Scheduler-based; only registers if `GOOGLE_CALENDAR_GROUP_ID` env is set                                                                                                                                                                              |
 
 ## � News Access Model
 
@@ -60,7 +59,7 @@ First agent with should_handle()=true → calls handle()
 3. **Legal Info** 🍃🚭🍺 → Cannabis, e-cigs, alcohol status (static Thai law)
 4. **Lucky Color + Sunsets** 🎨🌅 → Daily lucky color (365-color cycle) + sunrise/sunset times
 5. **Headlines** 📰 → Top 5 news stories (NewsAPI or placeholders)
-6. **Thai Holidays + Markets** 📅🏛️ → Major holidays + SET market status (Calendarific/static fallback)
+6. **Thai Holidays + Markets** 📅🏛️ → Major holidays + SET market status (holidays library + static fallback)
 7. **Bitcoin Price** ₿ → BTC/USD + 24h change (CoinGecko, free, no key)
 8. **Exchange Rates** 💱 → THB→USD, THB→ZAR, THB→CNY (ExchangeRate-API or hardcoded fallback)
 
@@ -70,7 +69,7 @@ First agent with should_handle()=true → calls handle()
 
 - `get_color_of_day()` → Thai lucky color (365-color cycle, 24h cache, no API key needed)
 - `get_sunset_sunrise_times()` → Bangkok times from Open-Meteo (24h cache, no API key)
-- `get_thai_holidays()` → Calendarific API or static 9-item fallback (7d cache)
+- `get_thai_holidays()` → Uses 'holidays' Python library (7d cache, no API key)
 - `get_bitcoin_price()` → CoinGecko free API (5-min cache, volatile data)
 - `get_exchange_rates()` → ExchangeRate-API or hardcoded THB rates (1h cache)
 
@@ -86,7 +85,6 @@ First agent with should_handle()=true → calls handle()
 | Service          | Env Variable          | Default | Plan             | Fallback              |
 | ---------------- | --------------------- | ------- | ---------------- | --------------------- |
 | NewsAPI          | NEWS_API_KEY          | None    | 100 req/day free | Placeholder headlines |
-| Calendarific     | CALENDARIFIC_API_KEY  | None    | 100 req/mo free  | Static 9-item list    |
 | ExchangeRate-API | EXCHANGE_RATE_API_KEY | None    | 1500 req/mo free | Hardcoded rates (THB) |
 | Open-Meteo       | (none needed)         | Free    | Unlimited        | N/A (always works)    |
 | CoinGecko        | (none needed)         | Free    | Unlimited        | N/A (always works)    |

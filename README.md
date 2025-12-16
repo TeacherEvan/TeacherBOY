@@ -61,7 +61,6 @@ Legacy docs at repo root are kept for backward compatibility.
 - **🎨 Clean API:** Simple `BaseAgent` class to inherit from
 - **📊 Priority System:** Control which agent handles messages first
 - **🔧 Admin Commands:** In-chat control commands for authorized admins **NEW!**
-- **❄️ Calendar Agent:** Currently frozen/deprecated (focus on translation)
 
 ### Performance & Scalability
 

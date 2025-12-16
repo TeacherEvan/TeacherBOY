@@ -145,12 +145,10 @@ class TestThaiHolidays:
     @pytest.mark.asyncio
     async def test_get_thai_holidays_fallback_list_has_major_holidays(self, news_service):
         """Test that fallback list includes major Thai holidays."""
-        # Mock no API key
-        with patch("src.config.settings") as mock_settings:
-            mock_settings.calendarific_api_key = None
-            result = await news_service.get_thai_holidays()
+        # Test holidays library (no API key needed)
+        result = await news_service.get_thai_holidays()
         
-        # Should have fallback holidays
+        # Should have holidays
         assert len(result) > 0
         
         # Check for major holidays

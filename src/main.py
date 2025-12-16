@@ -43,7 +43,6 @@ from src.services.news_data_service import NewsDataService
 from src.agents.agent_router import AgentRouter
 from src.agents.translation_agent import TranslationAgent
 from src.agents.admin_agent import AdminAgent
-from src.agents.calendar_agent import CalendarAgent
 from src.agents.news_agent import NewsAgent
 from src.handlers.message_handler import (
     handle_join_event,
@@ -72,10 +71,6 @@ webhook_parser = linebot.v3.WebhookParser(settings.line_channel_secret)
 # Global Agent Router (Singleton Pattern)
 # ============================================================================
 agent_router = AgentRouter()
-
-# Global references for scheduler callbacks (properly typed)
-calendar_agent_instance: Optional[CalendarAgent] = None
-line_bot_api_global: Optional[MessagingApi] = None
 
 # Bot's own user ID for self-message detection (prevents infinite loops)
 bot_user_id: Optional[str] = None
@@ -120,7 +115,7 @@ async def lifespan(app: FastAPI):
     - Scheduler configuration
     - Graceful shutdown
     """
-    global calendar_agent_instance, line_bot_api_global, bot_user_id
+    global bot_user_id
 
     logger.info("=" * 80)
     logger.info("🚀 TeacherBOY Multi-Agent System - Starting Up")
@@ -211,69 +206,7 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("📰 News Agent registered (using Open-Meteo only, no NewsAPI key)")
 
-    # Register Calendar Agent if configured (Priority: 20)
-    if settings.is_calendar_configured():
-        calendar_agent_instance = CalendarAgent(
-            group_chat_id=settings.google_calendar_group_id
-        )
-        agent_router.register_agent(calendar_agent_instance)
 
-        # Initialize global LINE API client for scheduler
-        with ApiClient(configuration) as api_client:
-            line_bot_api_global = MessagingApi(api_client)
-
-        # ====================================================================
-        # PHASE 4: Scheduler Configuration
-        # ====================================================================
-        scheduler_service.start()
-
-        # Morning reminder job (07:00 by default)
-        async def execute_morning_reminder():
-            """Execute daily morning calendar reminder."""
-            if calendar_agent_instance and line_bot_api_global:
-                try:
-                    await calendar_agent_instance.send_daily_reminder(
-                        line_bot_api_global
-                    )
-                    logger.info("✅ Morning reminder sent successfully")
-                except Exception as e:
-                    logger.error(f"❌ Morning reminder failed: {e}", exc_info=True)
-
-        scheduler_service.add_daily_job(
-            execute_morning_reminder,
-            hour=settings.calendar_morning_hour,
-            minute=0,
-            name="daily_morning_calendar_reminder",
-        )
-
-        # Afternoon overview job (14:00 by default)
-        async def execute_afternoon_overview():
-            """Execute weekly afternoon calendar overview."""
-            if calendar_agent_instance and line_bot_api_global:
-                try:
-                    await calendar_agent_instance.send_weekly_overview(
-                        line_bot_api_global
-                    )
-                    logger.info("✅ Afternoon overview sent successfully")
-                except Exception as e:
-                    logger.error(f"❌ Afternoon overview failed: {e}", exc_info=True)
-
-        scheduler_service.add_daily_job(
-            execute_afternoon_overview,
-            hour=settings.calendar_afternoon_hour,
-            minute=0,
-            name="weekly_afternoon_calendar_overview",
-        )
-
-        logger.info(
-            f"📅 Calendar reminders scheduled: "
-            f"{settings.calendar_morning_hour:02d}:00 and "
-            f"{settings.calendar_afternoon_hour:02d}:00 ({settings.calendar_timezone})"
-        )
-    else:
-        logger.info(
-            "📅 Calendar Agent not configured (GOOGLE_CALENDAR_GROUP_ID not set)"
-        )
 
     # ========================================================================
     # PHASE 5: Startup Summary
@@ -352,7 +285,6 @@ async def root() -> Dict[str, Any]:
         "api_docs": "/docs" if settings.debug else "disabled",
         "features": {
             "translation": "Thai ↔ English",
-            "calendar_reminders": settings.is_calendar_configured(),
             "google_translate": settings.is_google_translate_configured(),
         },
     }
@@ -382,63 +314,7 @@ async def readiness_check() -> Dict[str, Any]:
         "ready": True,
         "agents_registered": len(agents_status),
         "google_translate_enabled": settings.is_google_translate_configured(),
-        "calendar_enabled": settings.is_calendar_configured(),
     }
-
-
-# ============================================================================
-# Debug/Testing Endpoints (Calendar)
-# ============================================================================
-
-
-@app.get("/calendar/test-daily", tags=["Debug"])
-async def test_daily_reminder() -> Dict[str, str]:
-    """
-    Test endpoint to manually trigger daily calendar reminder.
-
-    For debugging and testing the calendar integration.
-    """
-    global calendar_agent_instance, line_bot_api_global
-
-    if not calendar_agent_instance:
-        raise HTTPException(status_code=503, detail="Calendar agent not configured")
-
-    if not line_bot_api_global:
-        raise HTTPException(status_code=503, detail="LINE API not initialized")
-
-    try:
-        await calendar_agent_instance.send_daily_reminder(line_bot_api_global)
-        return {"status": "success", "message": "Daily reminder sent"}
-    except Exception as e:
-        logger.error(f"Test daily reminder failed: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to send reminder: {str(e)}"
-        )
-
-
-@app.get("/calendar/test-weekly", tags=["Debug"])
-async def test_weekly_overview() -> Dict[str, str]:
-    """
-    Test endpoint to manually trigger weekly calendar overview.
-
-    For debugging and testing the calendar integration.
-    """
-    global calendar_agent_instance, line_bot_api_global
-
-    if not calendar_agent_instance:
-        raise HTTPException(status_code=503, detail="Calendar agent not configured")
-
-    if not line_bot_api_global:
-        raise HTTPException(status_code=503, detail="LINE API not initialized")
-
-    try:
-        await calendar_agent_instance.send_weekly_overview(line_bot_api_global)
-        return {"status": "success", "message": "Weekly overview sent"}
-    except Exception as e:
-        logger.error(f"Test weekly overview failed: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to send overview: {str(e)}"
-        )
 
 
 # ============================================================================

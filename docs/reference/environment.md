@@ -30,13 +30,6 @@ Start from `.env.example`.
 - `PORT` (default: `8000`)
 - `DEBUG` (default: `False`)
 
-## Calendar (optional)
-
-- `GOOGLE_CALENDAR_GROUP_ID`
-- `CALENDAR_TIMEZONE`
-- `CALENDAR_MORNING_HOUR`
-- `CALENDAR_AFTERNOON_HOUR`
-
 ## Translation (fallback)
 
 - `LIBRETRANSLATE_API_URL`
