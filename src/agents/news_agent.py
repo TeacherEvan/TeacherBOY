@@ -134,36 +134,28 @@ class NewsAgent(BaseAgent):
                     return True
                 return False
 
-            # Step 1: News trigger - start flow
+            # Step 1: News trigger - start flow with auto-detected language
             if not session and self._is_news_trigger(text):
                 is_friend = await self._is_friend(event, line_bot_api)
                 if not is_friend:
                     await self._send_trigger_translation(event, line_bot_api, text)
                     return True
 
+                # Auto-detect language from trigger word
+                text_lower = text.lower().strip()
+                language = "th" if text_lower == "ข่าว" else "en"
+                
+                # Start flow with detected language and go straight to menu
                 news_session_manager.start_news_flow(chat_id)
-                await self._send_language_selection(event, line_bot_api)
+                news_session_manager.set_language(chat_id, language)
+                await self._send_main_menu(event, line_bot_api, language)
                 return True
 
-            # Step 2: Language selection
-            if session and session["step"] == "language_selection":
-                if text.strip() in ["1", "๑"]:  # Thai
-                    news_session_manager.set_language(chat_id, "th")
-                    await self._send_main_menu(event, line_bot_api, "th")
-                    return True
-                elif text.strip() in ["2", "๒"]:  # English
-                    news_session_manager.set_language(chat_id, "en")
-                    await self._send_main_menu(event, line_bot_api, "en")
-                    return True
-                else:
-                    await self._send_invalid_choice(event, line_bot_api, session["language"])
-                    return True
-
-            # Step 3: Main menu - handle selections
+            # Step 2: Main menu - handle selections
             if session and session["step"] == "main_menu":
                 return await self._handle_main_menu(event, text, line_bot_api, chat_id, session)
 
-            # Step 4: Headline detail - return to menu
+            # Step 3: Headline detail - return to menu
             if session and session["step"] == "headline_detail":
                 news_session_manager.return_to_menu(chat_id)
                 await self._send_main_menu(event, line_bot_api, session["language"])

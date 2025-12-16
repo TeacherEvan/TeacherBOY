@@ -73,15 +73,15 @@ def test_session_manager_initialization():
     # Should not be in flow initially
     assert not news_session_manager.is_in_news_flow(chat_id)
     
-    # Start news flow
+    # Start news flow (now goes directly to main_menu with language detection)
     news_session_manager.start_news_flow(chat_id)
     assert news_session_manager.is_in_news_flow(chat_id)
     
-    # Get session state
+    # Get session state - now starts at main_menu, not language_selection
     session = news_session_manager.get_session_state(chat_id)
     assert session is not None
-    assert session["step"] == "language_selection"
-    assert session["language"] is None
+    assert session["step"] == "main_menu"  # Changed: skip language selection
+    assert session["language"] is None  # Will be set by caller after auto-detection
     
     # Clean up
     news_session_manager.end_news_flow(chat_id)

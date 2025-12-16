@@ -56,8 +56,8 @@ class NewsSessionManager:
             chat_id: Chat identifier
         """
         self._news_sessions[chat_id] = {
-            "step": "language_selection",
-            "language": None,
+            "step": "main_menu",  # Skip language selection, go straight to menu
+            "language": None,  # Will be set by caller
             "selected_headline": None,
             "cached_data": None,
             "started_at": datetime.now(),

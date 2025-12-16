@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🛡️ Critical Security Fix
 
 #### Added
+
 - **Incomplete Sentence Detection:** Automatically detects incomplete sentences that could cause translation hallucination
 - New function `detect_incomplete_sentence()` in `src/utils/text_preprocessing.py`
 - Configuration option `TRANSLATION_DETECT_INCOMPLETE` (default: enabled)
@@ -19,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ News Agent Enhancement
 
 #### Added
+
 - **Language-Appropriate News Display:** News headlines now display in the language selected by the user
 - New method `_translate_headlines_to_thai()` in `src/agents/news_agent.py`
 - Automatic translation of English headlines to Thai when Thai language is selected
@@ -26,12 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation: `docs/NEWS_LANGUAGE_DISPLAY.md`
 
 #### Fixed
+
 - **News Agent:** Headlines are now properly translated to Thai when user selects Thai language
   - Previously: English headlines shown regardless of language selection ❌
   - Now: Thai headlines when Thai selected, English when English selected ✅
 - Improved user experience with native language support
 
 #### Technical Details
+
 - Modified: `src/agents/news_agent.py`
 - Added: `tests/test_news_language_display.py`
 - Translation uses Google Translate (primary) or LibreTranslate (fallback)
@@ -41,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🛡️ Translation Hallucination Fix
 
 #### Fixed
+
 - **CRITICAL:** Translation APIs no longer add unwanted context to incomplete sentences
   - Example: "so i tried" → "so i tried..." (prevents hallucination)
   - Previously: "so i tried" could translate to "doing something silly/bad" ❌
@@ -49,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Protects users from unintended meaning in critical communications
 
 #### Technical Details
+
 - Modified: `src/services/google_translation.py`
 - Modified: `src/services/translation_service.py`
 - Modified: `src/config.py`
@@ -58,12 +64,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added: Visual comparison in `TRANSLATION_FIX_COMPARISON.md`
 
 #### Impact
+
 - **Risk Level:** LOW (backward compatible, safe to deploy)
 - **Performance:** Minimal (<1ms per message)
 - **User Experience:** Improved translation accuracy
 - **Test Coverage:** 59/59 translation and news tests passing
 
 ### Documentation
+
 - Updated README.md with hallucination prevention feature
 - Added comprehensive documentation for both fixes
 - Created visual comparison guide for users
