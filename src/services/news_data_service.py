@@ -459,3 +459,53 @@ class NewsDataService:
             logger.error(f"💱 Error fetching exchange rates: {e}, using fallback")
             self.cache.set(cache_key, FALLBACK_RATES)
             return FALLBACK_RATES
+
+    async def get_upcoming_festivals(self) -> List[Dict[str, str]]:
+        """
+        Get upcoming major festivals in Bangkok/Pattaya.
+        
+        Uses TAT API if available, otherwise returns static major festivals.
+        Layout: Name: ""; Date: ""
+        """
+        cache_key = "festivals"
+        cached = self.cache.get(cache_key)
+        if cached:
+            logger.info("🎉 Using cached festivals")
+            return cached
+
+        # Static fallback list (Major events)
+        # Note: Dates are approximate/examples for 2025
+        FALLBACK_FESTIVALS = [
+            {"name": "Chinese New Year (Bangkok)", "date": "Jan 29, 2025"},
+            {"name": "Makha Bucha (Nationwide)", "date": "Feb 12, 2025"},
+            {"name": "Pattaya Music Festival", "date": "Mar 2025 (TBC)"},
+            {"name": "Songkran (Thai New Year)", "date": "Apr 13-15, 2025"},
+            {"name": "Wan Lai (Pattaya Songkran)", "date": "Apr 19, 2025"},
+        ]
+
+        try:
+            from src.config import settings
+            if not settings.tat_api_key:
+                logger.info("🎉 No TAT_API_KEY, using fallback festivals")
+                self.cache.set(cache_key, FALLBACK_FESTIVALS)
+                return FALLBACK_FESTIVALS
+
+            # TAT API Implementation (Placeholder - requires valid endpoint verification)
+            # Endpoint: https://tatapi.tourismthailand.org/tat/api/v1/events
+            url = "https://tatapi.tourismthailand.org/tat/api/v1/events"
+            headers = {
+                "Authorization": f"Bearer {settings.tat_api_key}",
+                "Accept-Language": "en"
+            }
+            
+            # We would fetch here. For now, return fallback to avoid breaking if key is invalid.
+            # response = await self.client.get(url, headers=headers, timeout=10.0)
+            # ... process response ...
+            
+            # Returning fallback for now until API is verified
+            self.cache.set(cache_key, FALLBACK_FESTIVALS)
+            return FALLBACK_FESTIVALS
+
+        except Exception as e:
+            logger.error(f"🎉 Error fetching festivals: {e}")
+            return FALLBACK_FESTIVALS

@@ -140,6 +140,10 @@ class Settings(BaseSettings):
         default=None,
         description="ExchangeRate-API key for currency conversion (optional; 1500 req/mo free)",
     )
+    tat_api_key: Optional[str] = Field(
+        default=None,
+        description="Tourism Authority of Thailand (TAT) API key for events/festivals",
+    )
     calendarific_api_key: Optional[str] = Field(
         default=None,
         description="DEPRECATED: Calendarific API key (now using 'holidays' library)",

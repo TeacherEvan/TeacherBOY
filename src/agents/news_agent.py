@@ -232,7 +232,8 @@ class NewsAgent(BaseAgent):
         msg += f"5️⃣ 🍺 แอลกอฮอล์: {LEGAL_INFO['alcohol']['th']}\n"
         msg += "6️⃣ 🎨 สีแม่น้ำ + 🌅 อาทิตย์\n"
         msg += "7️⃣ 📅 วันหยุด + 🏛️ ตลาด\n"
-        msg += "8️⃣ ₿ Bitcoin + 💱 อัตราแลก\n\n"
+        msg += "8️⃣ ₿ Bitcoin + 💱 อัตราแลก\n"
+        msg += "9️⃣ 🎉 เทศกาล (กทม./พัทยา)\n\n"
         msg += "📰 หัวข้อข่าว:\n"
 
         for i, headline in enumerate(headlines[:5], 1):
@@ -256,7 +257,8 @@ class NewsAgent(BaseAgent):
         msg += f"5️⃣ 🍺 Alcohol: {LEGAL_INFO['alcohol']['en']}\n"
         msg += "6️⃣ 🎨 Color + 🌅 Sunset\n"
         msg += "7️⃣ 📅 Holidays + 🏛️ Markets\n"
-        msg += "8️⃣ ₿ Bitcoin + 💱 Exchange\n\n"
+        msg += "8️⃣ ₿ Bitcoin + 💱 Exchange\n"
+        msg += "9️⃣ 🎉 Festivals (BKK/Pattaya)\n\n"
         msg += "📰 Headlines:\n"
 
         for i, headline in enumerate(headlines[:5], 1):
@@ -269,13 +271,13 @@ class NewsAgent(BaseAgent):
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi, 
         chat_id: str, session: dict
     ) -> bool:
-        """Handle main menu selections (1-8)."""
+        """Handle main menu selections (1-9)."""
         text_clean = text.strip()
         
         # Normalize Thai numerals to Arabic numerals
         thai_to_arabic = {
             "๑": "1", "๒": "2", "๓": "3", "๔": "4", "๕": "5",
-            "๖": "6", "๗": "7", "๘": "8"
+            "๖": "6", "๗": "7", "๘": "8", "๙": "9"
         }
         normalized = thai_to_arabic.get(text_clean, text_clean)
         
@@ -312,6 +314,11 @@ class NewsAgent(BaseAgent):
         # Handle item 8: Bitcoin + Exchange Rates
         elif normalized == "8":
             await self._send_crypto_exchange(event, line_bot_api, session["language"])
+            return True
+
+        # Handle item 9: Festivals
+        elif normalized == "9":
+            await self._send_festivals(event, line_bot_api, session["language"])
             return True
         
         else:
@@ -452,6 +459,39 @@ class NewsAgent(BaseAgent):
                 )
         except Exception as e:
             logger.error(f"📰 Error sending crypto/exchange: {e}", exc_info=True)
+            await self._send_error_message(event, line_bot_api)
+
+    async def _send_festivals(
+        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
+    ):
+        """Send upcoming festivals."""
+        try:
+            festivals = await self.news_service.get_upcoming_festivals()
+
+            if language == "th":
+                msg = "🎉 เทศกาลที่กำลังจะมาถึง (กทม./พัทยา):\n\n"
+                for fest in festivals:
+                    name = fest.get("name", "")
+                    date = fest.get("date", "")
+                    msg += f"• {name}\n  📅 {date}\n"
+            else:
+                msg = "🎉 Upcoming Festivals (BKK/Pattaya):\n\n"
+                for fest in festivals:
+                    name = fest.get("name", "")
+                    date = fest.get("date", "")
+                    msg += f"• {name}\n  📅 {date}\n"
+
+            text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
+            if event.reply_token:
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[text_msg],
+                        notificationDisabled=False,
+                    )
+                )
+        except Exception as e:
+            logger.error(f"📰 Error sending festivals: {e}", exc_info=True)
             await self._send_error_message(event, line_bot_api)
 
     async def _send_resources(self, event: MessageEvent, line_bot_api: MessagingApi, language: str):
