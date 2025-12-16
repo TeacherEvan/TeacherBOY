@@ -269,17 +269,27 @@ class NewsAgent(BaseAgent):
         if language == "th" and headlines:
             headlines = await self._translate_headlines_to_thai(headlines)
         
+        # Fetch additional data for menu items 6-8
+        holidays_data = await self.news_service.get_thai_holidays()
+        bitcoin_data = await self.news_service.get_bitcoin_price()
+        exchange_data = await self.news_service.get_exchange_rates()
+        festivals_data = await self.news_service.get_upcoming_festivals()
+        
         # Cache data in session
         news_session_manager.set_cached_data(chat_id, {
             "weather": weather_data,
-            "headlines": headlines
+            "headlines": headlines,
+            "holidays": holidays_data,
+            "bitcoin": bitcoin_data,
+            "exchange": exchange_data,
+            "festivals": festivals_data
         })
         
         # Format message
         if language == "th":
-            message = self._format_menu_thai(weather_data, headlines)
+            message = self._format_menu_thai(weather_data, headlines, holidays_data, bitcoin_data, exchange_data, festivals_data)
         else:
-            message = self._format_menu_english(weather_data, headlines)
+            message = self._format_menu_english(weather_data, headlines, holidays_data, bitcoin_data, exchange_data, festivals_data)
         
         text_msg = TextMessage(text=message, quickReply=None, quoteToken=None)
         
@@ -337,23 +347,34 @@ class NewsAgent(BaseAgent):
         
         return translated_headlines
 
-    def _format_menu_thai(self, weather: dict, headlines: list) -> str:
-        """Format main menu in Thai."""
+    def _format_menu_thai(self, weather: dict, headlines: list, holidays: list, bitcoin: dict, exchange: dict, festivals: list) -> str:
+        """Format main menu in Thai with all inline data."""
         temp = weather.get("temperature", "N/A")
         pm25 = weather.get("pm25", "N/A")
         will_rain = weather.get("will_rain")
         rain_text = "ใช่ (Yes)" if will_rain else "ไม่ (No)" if will_rain is not None else "N/A"
         
-        msg = "📰 ข่าว Bangkok (ทั้งหมด 8 หัวข้อ)\n\n"
+        msg = "📰 ข่าว Bangkok\n\n"
         msg += f"1️⃣ 🌡️ อุณหภูมิ: {temp}°C | 💨 PM2.5: {pm25}\n"
         msg += f"2️⃣ 🌧️ 5 ชม.ข้างหน้า: {rain_text}\n"
         msg += f"3️⃣ 🍃 กัญชา: {LEGAL_INFO['cannabis']['th']}\n"
         msg += f"4️⃣ 🚭 บุหรี่ไฟฟ้า: {LEGAL_INFO['ecig']['th']}\n"
-        msg += f"5️⃣ 🍺 แอลกอฮอล์: {LEGAL_INFO['alcohol']['th']}\n"
-        msg += "6️⃣ 🎨 สีแม่น้ำ + 🌅 อาทิตย์\n"
-        msg += "7️⃣ 📅 วันหยุด + 🏛️ ตลาด\n"
-        msg += "8️⃣ ₿ Bitcoin + 💱 อัตราแลก\n"
-        msg += "9️⃣ 🎉 เทศกาล (กทม./พัทยา)\n\n"
+        msg += f"5️⃣ 🍺 แอลกอฮอล์: {LEGAL_INFO['alcohol']['th']}\n\n"
+        
+        # Item 6: Holidays (first upcoming only)
+        if holidays and len(holidays) > 0:
+            holiday = holidays[0]
+            msg += f"📅 วันหยุดถัดไป: {holiday.get('date', 'N/A')} - {holiday.get('name_th', 'N/A')}\n"
+        
+        # Item 7: Bitcoin price
+        btc_price = bitcoin.get("price_usd", "N/A")
+        btc_change = bitcoin.get("change_24h_percent", "N/A")
+        msg += f"₿ Bitcoin: {btc_price} ({btc_change})\n"
+        
+        # Item 8: Exchange rates (THB to USD)
+        thb_usd = exchange.get("thb_usd", "N/A")
+        msg += f"💱 อัตราแลก: 1 THB = {thb_usd} USD\n\n"
+        
         msg += "📰 หัวข้อข่าว:\n"
 
         for i, headline in enumerate(headlines[:5], 1):
@@ -362,23 +383,34 @@ class NewsAgent(BaseAgent):
         
         return msg
 
-    def _format_menu_english(self, weather: dict, headlines: list) -> str:
-        """Format main menu in English."""
+    def _format_menu_english(self, weather: dict, headlines: list, holidays: list, bitcoin: dict, exchange: dict, festivals: list) -> str:
+        """Format main menu in English with all inline data."""
         temp = weather.get("temperature", "N/A")
         pm25 = weather.get("pm25", "N/A")
         will_rain = weather.get("will_rain")
         rain_text = "Yes" if will_rain else "No" if will_rain is not None else "N/A"
         
-        msg = "📰 Bangkok News (8 items)\n\n"
+        msg = "📰 Bangkok News\n\n"
         msg += f"1️⃣ 🌡️ Temp: {temp}°C | 💨 PM2.5: {pm25}\n"
         msg += f"2️⃣ 🌧️ Next 5h: {rain_text}\n"
         msg += f"3️⃣ 🍃 Cannabis: {LEGAL_INFO['cannabis']['en']}\n"
         msg += f"4️⃣ 🚭 E-Cigs: {LEGAL_INFO['ecig']['en']}\n"
-        msg += f"5️⃣ 🍺 Alcohol: {LEGAL_INFO['alcohol']['en']}\n"
-        msg += "6️⃣ 🎨 Color + 🌅 Sunset\n"
-        msg += "7️⃣ 📅 Holidays + 🏛️ Markets\n"
-        msg += "8️⃣ ₿ Bitcoin + 💱 Exchange\n"
-        msg += "9️⃣ 🎉 Festivals (BKK/Pattaya)\n\n"
+        msg += f"5️⃣ 🍺 Alcohol: {LEGAL_INFO['alcohol']['en']}\n\n"
+        
+        # Item 6: Holidays (first upcoming only)
+        if holidays and len(holidays) > 0:
+            holiday = holidays[0]
+            msg += f"📅 Next Holiday: {holiday.get('date', 'N/A')} - {holiday.get('name_en', 'N/A')}\n"
+        
+        # Item 7: Bitcoin price
+        btc_price = bitcoin.get("price_usd", "N/A")
+        btc_change = bitcoin.get("change_24h_percent", "N/A")
+        msg += f"₿ Bitcoin: {btc_price} ({btc_change})\n"
+        
+        # Item 8: Exchange rates (THB to USD)
+        thb_usd = exchange.get("thb_usd", "N/A")
+        msg += f"💱 Exchange: 1 THB = {thb_usd} USD\n\n"
+        
         msg += "📰 Headlines:\n"
 
         for i, headline in enumerate(headlines[:5], 1):
@@ -391,13 +423,12 @@ class NewsAgent(BaseAgent):
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi, 
         chat_id: str, session: dict
     ) -> bool:
-        """Handle main menu selections (1-9)."""
+        """Handle main menu selections (1-5 for headlines only)."""
         text_clean = text.strip()
         
         # Normalize Thai numerals to Arabic numerals
         thai_to_arabic = {
             "๑": "1", "๒": "2", "๓": "3", "๔": "4", "๕": "5",
-            "๖": "6", "๗": "7", "๘": "8", "๙": "9"
         }
         normalized = thai_to_arabic.get(text_clean, text_clean)
         
@@ -420,26 +451,6 @@ class NewsAgent(BaseAgent):
             else:
                 await self._send_invalid_choice(event, line_bot_api, session["language"])
                 return True
-        
-        # Handle item 6: Color + Sunset/Sunrise
-        elif normalized == "6":
-            await self._send_color_sunset_sunrise(event, line_bot_api, session["language"])
-            return True
-        
-        # Handle item 7: Holidays + Markets
-        elif normalized == "7":
-            await self._send_holidays_markets(event, line_bot_api, session["language"])
-            return True
-        
-        # Handle item 8: Bitcoin + Exchange Rates
-        elif normalized == "8":
-            await self._send_crypto_exchange(event, line_bot_api, session["language"])
-            return True
-
-        # Handle item 9: Festivals
-        elif normalized == "9":
-            await self._send_festivals(event, line_bot_api, session["language"])
-            return True
         
         else:
             await self._send_invalid_choice(event, line_bot_api, session["language"])
@@ -674,9 +685,9 @@ class NewsAgent(BaseAgent):
     async def _send_invalid_choice(self, event: MessageEvent, line_bot_api: MessagingApi, language: str):
         """Send invalid choice message."""
         if language == "th":
-            msg = "❌ กรุณาเลือก 1-5"
+            msg = "❌ กรุณาเลือก 1-5 (หัวข้อข่าว)"
         else:
-            msg = "❌ Pick 1-5"
+            msg = "❌ Please pick 1-5 (headlines)"
         
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
         
