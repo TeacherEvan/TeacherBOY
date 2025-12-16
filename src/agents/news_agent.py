@@ -2,6 +2,7 @@
 
 import logging
 import re
+from typing import List, Dict
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
     MessagingApi,
@@ -33,6 +34,11 @@ class NewsAgent(BaseAgent):
             description="Weather, air quality, and news headlines for Bangkok",
         )
         self.news_service = news_data_service
+        # Import translation services for headline translation
+        from src.services.google_translation import google_translation_service
+        from src.services.translation_service import translation_service as libre_translation
+        self.google_translate = google_translation_service
+        self.libre_translate = libre_translation
 
     def get_priority(self) -> int:
         """News agent priority - runs after Translation (10)."""
@@ -192,7 +198,12 @@ class NewsAgent(BaseAgent):
         
         # Fetch weather and news data
         weather_data = await self.news_service.get_weather_data()
-        headlines = await self.news_service.get_news_headlines(language)
+        # Get English headlines first (RSS feeds are in English)
+        headlines = await self.news_service.get_news_headlines("en")
+        
+        # Translate headlines to Thai if Thai language selected
+        if language == "th" and headlines:
+            headlines = await self._translate_headlines_to_thai(headlines)
         
         # Cache data in session
         news_session_manager.set_cached_data(chat_id, {
@@ -216,6 +227,51 @@ class NewsAgent(BaseAgent):
                     notificationDisabled=False,
                 )
             )
+
+    async def _translate_headlines_to_thai(self, headlines: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Translate English headlines to Thai."""
+        translated_headlines = []
+        
+        for headline in headlines:
+            title = headline.get("title", "")
+            url = headline.get("url", "")
+            
+            if not title or title in ["News unavailable", "Visit Bangkok Post"]:
+                # Don't translate fallback messages
+                translated_headlines.append(headline)
+                continue
+            
+            # Try Google Translate first, fallback to LibreTranslate
+            translated_title = None
+            if self.google_translate.is_configured():
+                try:
+                    translated_title = await self.google_translate.translate(
+                        text=title,
+                        target_lang="th",
+                        source_lang="en"
+                    )
+                except Exception as e:
+                    logger.warning(f"Google Translate failed for headline: {e}")
+            
+            # Fallback to LibreTranslate
+            if not translated_title:
+                try:
+                    translated_title = await self.libre_translate.translate(
+                        text=title,
+                        source_lang="en",
+                        target_lang="th"
+                    )
+                except Exception as e:
+                    logger.warning(f"LibreTranslate failed for headline: {e}")
+                    # Use original English if translation fails
+                    translated_title = title
+            
+            translated_headlines.append({
+                "title": translated_title or title,
+                "url": url
+            })
+        
+        return translated_headlines
 
     def _format_menu_thai(self, weather: dict, headlines: list) -> str:
         """Format main menu in Thai."""
