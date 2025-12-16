@@ -70,12 +70,14 @@ First agent with should_handle()=true → calls handle()
 **Rate limiting enforces fair usage and prevents API quota exhaustion:**
 
 ### TranslationAgent Rate Limits
+
 - **Default Users:** 10 requests per 60 seconds per chat
 - **Admin Users:** Unlimited (bypass all rate limits)
 - **Implementation:** `rate_limiter.is_allowed(chat_id)` check in `handle()` method
 - **Admin Check:** `_is_admin(user_id)` returns True if user in `settings.get_admin_user_ids()`
 
 ### NewsAgent Rate Limits
+
 - **Friend Users (groups):** 1 news request per hour (3600 seconds)
 - **Non-Friends (groups):** Translation only (no menu access)
 - **Private Chats:** Translation only (no menu access)
@@ -84,7 +86,9 @@ First agent with should_handle()=true → calls handle()
 - **Rate Limiter:** `RateLimiter(max_requests=1, time_window_seconds=3600)`
 
 ### Rate Limit Response
+
 When rate limited, users receive:
+
 ```text
 ⏳ Only 1 news request per hour
 Total requests left: 0
@@ -97,6 +101,7 @@ Try again in ~45 minutes
 ```
 
 **Admin Bypass Logging:**
+
 - `"🔓 Admin {user_id} bypassed rate limit"` for TranslationAgent
 - `"🔓 Admin {user_id} bypassed news rate limit"` for NewsAgent
 

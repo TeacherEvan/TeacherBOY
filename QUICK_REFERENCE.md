@@ -36,22 +36,22 @@ ADMIN_USER_IDS=U1234567890,U0987654321  # Comma-separated LINE user IDs
 
 ## ⏱️ Rate Limits
 
-| Agent | User Type | Limit | Time Window |
-|-------|-----------|-------|-------------|
-| **Translation** | Admin | Unlimited | - |
-| **Translation** | Standard | 10 requests | 60 seconds |
-| **News** | Admin | Unlimited | - |
-| **News** | Friend (group) | 1 request | 3600 seconds (1 hour) |
-| **News** | Non-friend (group) | Translation only | - |
-| **News** | Private chat | Translation only | - |
+| Agent           | User Type          | Limit            | Time Window           |
+| --------------- | ------------------ | ---------------- | --------------------- |
+| **Translation** | Admin              | Unlimited        | -                     |
+| **Translation** | Standard           | 10 requests      | 60 seconds            |
+| **News**        | Admin              | Unlimited        | -                     |
+| **News**        | Friend (group)     | 1 request        | 3600 seconds (1 hour) |
+| **News**        | Non-friend (group) | Translation only | -                     |
+| **News**        | Private chat       | Translation only | -                     |
 
 ## 📰 News Agent Access Matrix
 
-| Context | User Type | Trigger | Response |
-|---------|-----------|---------|----------|
-| Group/Room | Friend | `news` or `ข่าว` | Full 8-item menu |
+| Context    | User Type  | Trigger          | Response         |
+| ---------- | ---------- | ---------------- | ---------------- |
+| Group/Room | Friend     | `news` or `ข่าว` | Full 8-item menu |
 | Group/Room | Non-friend | `news` or `ข่าว` | Translation only |
-| Private | Any | `news` or `ข่าว` | Translation only |
+| Private    | Any        | `news` or `ข่าว` | Translation only |
 
 ## 🛠️ Admin Commands
 
@@ -109,13 +109,13 @@ src/
 
 ## 🐛 Common Issues & Solutions
 
-| Issue | Solution |
-|-------|----------|
+| Issue                   | Solution                                   |
+| ----------------------- | ------------------------------------------ |
 | Translation not working | Check `GOOGLE_TRANSLATE_API_KEY` in `.env` |
-| News menu not showing | Verify user is friend and in group chat |
-| Rate limited | Wait for time window or use admin account |
-| Bot not responding | Check LINE webhook URL configuration |
-| Incomplete translation | Fixed in v3.1.0+ with ellipsis append |
+| News menu not showing   | Verify user is friend and in group chat    |
+| Rate limited            | Wait for time window or use admin account  |
+| Bot not responding      | Check LINE webhook URL configuration       |
+| Incomplete translation  | Fixed in v3.1.0+ with ellipsis append      |
 
 ## 📊 Testing Commands
 
@@ -151,6 +151,7 @@ pytest --cov=src --cov-report=term-missing
 ## 🎯 Best Practices
 
 ### Code Patterns
+
 - Use `async def` for all agent methods
 - Import `get_tracer(__name__)` for OpenTelemetry
 - Log with emoji prefixes: ✅ success, ❌ error, 🔍 debug
@@ -158,12 +159,14 @@ pytest --cov=src --cov-report=term-missing
 - Check admin with `_is_admin(user_id)` before bypassing limits
 
 ### Rate Limiting
+
 - Always check admin status first
 - Log admin bypasses for monitoring
 - Show remaining requests in rate limit messages
 - Use per-chat rate tracking (not per-user)
 
 ### Translation
+
 - Detect incomplete sentences before translation
 - Preserve text in parentheses
 - Use Google Translate as primary, LibreTranslate as fallback

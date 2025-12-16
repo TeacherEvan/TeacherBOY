@@ -1,7 +1,9 @@
 # TeacherBOY Documentation
 
 This folder is the single source of truth for docs.
+
 > **📚 For a complete documentation index, see [DOCUMENTATION_INDEX.md](../DOCUMENTATION_INDEX.md)**
+
 ## Start here
 
 - If you want the bot running fast: [docs/guides/quickstart.md](guides/quickstart.md)

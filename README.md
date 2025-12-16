@@ -18,6 +18,7 @@ TeacherBOY is a high-performance, asynchronous LINE Bot featuring a modular mult
 **[📖 Complete Documentation Index](DOCUMENTATION_INDEX.md)** - Browse all documentation files organized by category
 
 ### Quick Links
+
 - **[📚 Docs Home](docs/README.md)** - Start here (quickstart, deployment, LINE setup, admin)
 - **[⚡ Quick Start](docs/guides/quickstart.md)**
 - **[⚙️ LINE Setup](docs/guides/line-setup.md)**
@@ -44,6 +45,7 @@ Legacy docs at repo root are kept for backward compatibility.
 - **🤫 Silent Join:** Bot joins groups silently - only speaks when Thai is detected
 - **🎯 Session Management:** Independent sessions per chat
 - **📋 Parentheses Preservation:** Names and notes in (parentheses) are never translated- **⏱️ Rate Limiting:** 10 requests per minute (admins unlimited)
+
 ### News Agent **NEW!**
 
 - **📰 Real-time News:** Bangkok weather, air quality, PM2.5, and Thai news headlines

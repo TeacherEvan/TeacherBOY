@@ -82,6 +82,24 @@ class NewsAgent(BaseAgent):
         text_clean = text.lower().strip()
         return text_clean in ["news", "ข่าว"]
 
+    def _is_shutdown_phrase(self, text: str) -> bool:
+        """
+        Check if text is a shutdown phrase ("thank you teacherboy").
+        
+        This allows users to exit news flow immediately by thanking the bot.
+        """
+        text_lower = text.lower().strip()
+        teacher_pattern = r"teacher(?:boy|boi|biy|boj|boii)"
+        shutdown_patterns = [
+            rf"^thanks?\s+{teacher_pattern}[\s.!]*$",
+            rf"^thank\s+you\s+{teacher_pattern}[\s.!]*$",
+            rf"^thx\s+{teacher_pattern}[\s.!]*$",
+            rf"^ty\s+{teacher_pattern}[\s.!]*$",
+            rf"^ขอบคุณ\s*{teacher_pattern}[\s.!]*$",
+            rf"^ขอบใจ\s*{teacher_pattern}[\s.!]*$",
+        ]
+        return any(re.search(pattern, text_lower) for pattern in shutdown_patterns)
+
     def _is_group_chat(self, event: MessageEvent) -> bool:
         """Return True when message comes from a group or room."""
         if event.source and getattr(event.source, "group_id", None):
@@ -138,14 +156,37 @@ class NewsAgent(BaseAgent):
         """Process news-related messages through multi-step flow."""
         chat_id = self._get_chat_id(event)
         session = news_session_manager.get_session_state(chat_id)
+        user_id = getattr(event.source, "user_id", None) if event.source else None
 
         try:
+            # ALWAYS check for shutdown phrase first - allows exit at any time
+            if self._is_shutdown_phrase(text) and session:
+                news_session_manager.end_news_flow(chat_id)
+                # Send goodbye message
+                goodbye_msg = TextMessage(text="👋 News session ended. Type 'news' or 'ข่าว' to start again!", quickReply=None, quoteToken=None)
+                if event.reply_token:
+                    line_bot_api.reply_message(
+                        ReplyMessageRequest(
+                            replyToken=event.reply_token,
+                            messages=[goodbye_msg],
+                            notificationDisabled=False,
+                        )
+                    )
+                logger.info(f"📰 User ended news session with shutdown phrase in chat {chat_id}")
+                return True
+
             # Private chats: respond with translation of trigger only
             if not self._is_group_chat(event):
                 if self._is_news_trigger(text):
                     await self._send_trigger_translation(event, line_bot_api, text)
                     return True
                 return False
+
+            # Check if user is session owner (only they can interact)
+            if session and not news_session_manager.is_session_owner(chat_id, user_id):
+                # Silently ignore - another user trying to interact with someone else's session
+                logger.debug(f"📰 User {user_id} tried to interact with news session owned by {session.get('user_id')}")
+                return True  # Handled but ignored
 
             # Step 1: News trigger - start flow with auto-detected language
             if not session and self._is_news_trigger(text):
@@ -177,7 +218,7 @@ class NewsAgent(BaseAgent):
                 language = "th" if text_lower == "ข่าว" else "en"
                 
                 # Start flow with detected language and go straight to menu
-                news_session_manager.start_news_flow(chat_id)
+                news_session_manager.start_news_flow(chat_id, user_id)
                 news_session_manager.set_language(chat_id, language)
                 await self._send_main_menu(event, line_bot_api, language)
                 return True

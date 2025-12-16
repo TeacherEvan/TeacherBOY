@@ -48,12 +48,13 @@ class NewsSessionManager:
         self._cleanup_expired_sessions()
         return self._news_sessions.get(chat_id)
 
-    def start_news_flow(self, chat_id: str):
+    def start_news_flow(self, chat_id: str, user_id: Optional[str] = None):
         """
         Initialize news conversation flow.
 
         Args:
             chat_id: Chat identifier
+            user_id: LINE user ID who started the flow (for user-specific interaction)
         """
         self._news_sessions[chat_id] = {
             "step": "main_menu",  # Skip language selection, go straight to menu
@@ -62,8 +63,9 @@ class NewsSessionManager:
             "cached_data": None,
             "started_at": datetime.now(),
             "last_activity": datetime.now(),
+            "user_id": user_id,  # Track who started this flow
         }
-        logger.info(f"📰 Started news flow for chat {chat_id}")
+        logger.info(f"📰 Started news flow for chat {chat_id} by user {user_id}")
 
     def set_language(self, chat_id: str, language: str):
         """
@@ -116,7 +118,23 @@ class NewsSessionManager:
             self._news_sessions[chat_id]["step"] = "main_menu"
             self._news_sessions[chat_id]["selected_headline"] = None
             self._news_sessions[chat_id]["last_activity"] = datetime.now()
+    def is_session_owner(self, chat_id: str, user_id: Optional[str]) -> bool:
+        """
+        Check if user is the owner of the news session (started it).
 
+        Args:
+            chat_id: Chat identifier
+            user_id: LINE user ID to check
+
+        Returns:
+            True if user owns the session or no session exists, False otherwise
+        """
+        if chat_id not in self._news_sessions:
+            return True  # No session, anyone can start
+        
+        session_user = self._news_sessions[chat_id].get("user_id")
+        # Allow if no user was tracked or if it matches
+        return session_user is None or session_user == user_id
     def end_news_flow(self, chat_id: str):
         """
         Exit news conversation and cleanup session.
