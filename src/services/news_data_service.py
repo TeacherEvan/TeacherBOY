@@ -313,36 +313,41 @@ class NewsDataService:
             return cached
 
         try:
-            # Get holidays for current year
+            # Get holidays for current year in both languages
             year = datetime.now().year
-            # Use country_holidays factory for better compatibility
-            th_holidays = holidays.country_holidays('TH', years=year)
+            # Get Thai names
+            th_holidays_th = holidays.country_holidays('TH', years=year, language='th')
+            # Get English names
+            th_holidays_en = holidays.country_holidays('TH', years=year, language='en_US')
             
-            # Sort by date
-            sorted_holidays = sorted(th_holidays.items())
+            # Sort by date (use Thai version for dates)
+            sorted_holidays = sorted(th_holidays_th.items())
             
             # Filter for upcoming holidays (or recent ones if near end of year)
             # For simplicity, we return the next 5 holidays from today
             today = datetime.now().date()
             upcoming = []
             
-            for date_obj, name in sorted_holidays:
+            for date_obj, name_th in sorted_holidays:
                 if date_obj >= today:
+                    name_en = th_holidays_en.get(date_obj, name_th)  # Fallback to Thai if English missing
                     upcoming.append({
                         "date": date_obj.strftime("%b %d"),
-                        "name_th": name,  # The library returns English names by default usually
-                        "name_en": name,
+                        "name_th": name_th,
+                        "name_en": name_en,
                     })
             
             # If fewer than 3 upcoming, add next year's
             if len(upcoming) < 3:
-                th_holidays_next = holidays.country_holidays('TH', years=year + 1)
-                sorted_next = sorted(th_holidays_next.items())
-                for date_obj, name in sorted_next:
+                th_holidays_next_th = holidays.country_holidays('TH', years=year + 1, language='th')
+                th_holidays_next_en = holidays.country_holidays('TH', years=year + 1, language='en_US')
+                sorted_next = sorted(th_holidays_next_th.items())
+                for date_obj, name_th in sorted_next:
+                    name_en = th_holidays_next_en.get(date_obj, name_th)
                     upcoming.append({
                         "date": date_obj.strftime("%b %d"),
-                        "name_th": name,
-                        "name_en": name,
+                        "name_th": name_th,
+                        "name_en": name_en,
                     })
                     if len(upcoming) >= 5:
                         break
