@@ -314,6 +314,9 @@ class NewsDataService:
 
         try:
             # Get holidays for current year in both languages
+            # Note: We create two holiday objects to support bilingual output.
+            # The holidays library doesn't provide a native method to get names in multiple languages,
+            # so this is the recommended approach. The objects are lightweight and only created once per cache TTL.
             year = datetime.now().year
             # Get Thai names
             th_holidays_th = holidays.country_holidays('TH', years=year, language='th')
