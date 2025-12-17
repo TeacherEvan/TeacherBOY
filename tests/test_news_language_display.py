@@ -138,16 +138,20 @@ async def test_menu_format_uses_translated_headlines(news_agent):
         {"title": "ข่าวที่สอง", "url": "https://example.com/2"},
     ]
     holidays = [{"date": "Apr 13", "name_th": "วันสงกรานต์", "name_en": "Songkran Festival"}]
-    bitcoin = {"price_usd": "$50,000.00", "change_24h_percent": "+5.20%"}
-    exchange = {"thb_usd": "0.028"}
-    festivals = []
+    indices = {"S&P 500": "5,000.00 (+0.10%)", "DJIA": "40,000.00 (-0.10%)", "FTSE 100": "7,500.00 (+0.20%)"}
+    crypto = {
+        "btc": {"price_usd": "$50,000.00", "change_24h_percent": "+5.20%"},
+        "eth": {"price_usd": "$2,500.00", "change_24h_percent": "+2.10%"},
+        "usdt": {"price_usd": "$1.00", "change_24h_percent": "+0.00%"},
+    }
+    exchange = {"usd": "0.028", "jpy": "4.000", "zar": "0.490", "aud": "0.041", "gbp": "0.021", "rub": "2.400"}
     
-    menu = news_agent._format_menu_thai(weather, headlines_thai, holidays, bitcoin, exchange, festivals)
+    menu = news_agent._format_menu_thai(weather, headlines_thai, holidays, indices, crypto, exchange)
     
     # Verify Thai headlines appear in menu
     assert "ข่าวแรก" in menu
     assert "ข่าวที่สอง" in menu
-    assert "📰 หัวข้อข่าว:" in menu  # Thai header
+    assert "📰 หัวข้อข่าว (Thailand):" in menu  # Thai header
 
 
 @pytest.mark.asyncio
@@ -159,13 +163,17 @@ async def test_menu_format_english_headlines(news_agent):
         {"title": "Second news", "url": "https://example.com/2"},
     ]
     holidays = [{"date": "Apr 13", "name_th": "วันสงกรานต์", "name_en": "Songkran Festival"}]
-    bitcoin = {"price_usd": "$50,000.00", "change_24h_percent": "+5.20%"}
-    exchange = {"thb_usd": "0.028"}
-    festivals = []
+    indices = {"S&P 500": "5,000.00 (+0.10%)", "DJIA": "40,000.00 (-0.10%)", "FTSE 100": "7,500.00 (+0.20%)"}
+    crypto = {
+        "btc": {"price_usd": "$50,000.00", "change_24h_percent": "+5.20%"},
+        "eth": {"price_usd": "$2,500.00", "change_24h_percent": "+2.10%"},
+        "usdt": {"price_usd": "$1.00", "change_24h_percent": "+0.00%"},
+    }
+    exchange = {"usd": "0.028", "jpy": "4.000", "zar": "0.490", "aud": "0.041", "gbp": "0.021", "rub": "2.400"}
     
-    menu = news_agent._format_menu_english(weather, headlines_en, holidays, bitcoin, exchange, festivals)
+    menu = news_agent._format_menu_english(weather, headlines_en, holidays, indices, crypto, exchange)
     
     # Verify English headlines appear in menu
     assert "First news" in menu
     assert "Second news" in menu
-    assert "📰 Headlines:" in menu  # English header
+    assert "📰 Headlines (Thailand):" in menu  # English header

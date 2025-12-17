@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 import httpx
 import feedparser
 import holidays
+import csv
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,9 @@ class DataCache:
                 "news_en": settings.news_cache_ttl_seconds,
                 "thai_holidays": settings.holiday_cache_ttl_seconds,
                 "bitcoin_price": settings.bitcoin_cache_ttl_seconds,
+                "crypto_prices": settings.bitcoin_cache_ttl_seconds,
                 "exchange_rates": settings.exchange_cache_ttl_seconds,
+                "market_indices": settings.exchange_cache_ttl_seconds,
                 "color_of_day": settings.color_cache_ttl_seconds,
                 "sunset_sunrise": settings.sunset_cache_ttl_seconds,
                 # Festivals aren't separately configurable; use news cache TTL.
@@ -40,7 +44,9 @@ class DataCache:
                 "news_en": 3600,  # 1 hour
                 "thai_holidays": 604800,  # 7 days
                 "bitcoin_price": 300,  # 5 minutes
+                "crypto_prices": 300,  # 5 minutes
                 "exchange_rates": 3600,  # 1 hour
+                "market_indices": 3600,  # 1 hour
                 "color_of_day": 86400,  # 24 hours
                 "sunset_sunrise": 86400,  # 24 hours
                 "festivals": 3600,  # 1 hour
@@ -440,12 +446,12 @@ class NewsDataService:
 
     async def get_exchange_rates(self) -> Dict[str, str]:
         """
-        Get exchange rates: THB → USD, THB → ZAR, THB → CNY.
+        Get exchange rates: 1 THB → USD, JPY, ZAR, AUD, GBP, RUB.
 
         Uses ExchangeRate-API if key available, otherwise falls back to hardcoded rates.
 
         Returns:
-            Dict with 'thb_usd', 'thb_zar', 'thb_cny' keys (rates per 1 THB)
+            Dict with currency keys (rates per 1 THB)
         """
         cache_key = "exchange_rates"
         cached = self.cache.get(cache_key)
@@ -455,17 +461,30 @@ class NewsDataService:
 
         # Hardcoded fallback rates (approximate as of Dec 2024)
         FALLBACK_RATES = {
-            "thb_usd": "0.027",      # 1 THB ≈ 0.027 USD
-            "thb_zar": "0.49",       # 1 THB ≈ 0.49 ZAR
-            "thb_cny": "0.19",       # 1 THB ≈ 0.19 CNY
+            "usd": "0.027",      # 1 THB ≈ 0.027 USD
+            "jpy": "4.00",       # 1 THB ≈ 4.00 JPY
+            "zar": "0.49",       # 1 THB ≈ 0.49 ZAR
+            "aud": "0.041",      # 1 THB ≈ 0.041 AUD
+            "gbp": "0.021",      # 1 THB ≈ 0.021 GBP
+            "rub": "2.40",       # 1 THB ≈ 2.40 RUB
+            # Backward-compat for older tests/menu paths
+            "cny": "0.19",       # 1 THB ≈ 0.19 CNY
         }
+
+        def _with_legacy_keys(rates: Dict[str, str]) -> Dict[str, str]:
+            """Return rates with both short and legacy thb_* keys."""
+            combined = dict(rates)
+            for k, v in rates.items():
+                combined[f"thb_{k}"] = v
+            return combined
 
         try:
             from src.config import settings
             if not settings.exchange_rate_api_key:
                 logger.warning("💱 No EXCHANGE_RATE_API_KEY, using fallback rates")
-                self.cache.set(cache_key, FALLBACK_RATES)
-                return FALLBACK_RATES
+                result = _with_legacy_keys(FALLBACK_RATES)
+                self.cache.set(cache_key, result)
+                return result
 
             url = (
                 f"https://v6.exchangerate-api.com/v6/{settings.exchange_rate_api_key}/latest/THB"
@@ -476,20 +495,159 @@ class NewsDataService:
             data = response.json()
 
             rates = data.get("conversion_rates", {})
-            result = {
-                "thb_usd": f"{rates.get('USD', 0):.3f}",
-                "thb_zar": f"{rates.get('ZAR', 0):.3f}",
-                "thb_cny": f"{rates.get('CNY', 0):.3f}",
+            short_result = {
+                "usd": f"{rates.get('USD', 0):.3f}",
+                "jpy": f"{rates.get('JPY', 0):.3f}",
+                "zar": f"{rates.get('ZAR', 0):.3f}",
+                "aud": f"{rates.get('AUD', 0):.3f}",
+                "gbp": f"{rates.get('GBP', 0):.3f}",
+                "rub": f"{rates.get('RUB', 0):.3f}",
+                # Backward-compat for older tests/menu paths
+                "cny": f"{rates.get('CNY', 0):.3f}",
             }
 
+            result = _with_legacy_keys(short_result)
+
             self.cache.set(cache_key, result)
-            logger.info(f"💱 Exchange rates: THB→USD {result['thb_usd']}")
+            logger.info(f"💱 Exchange rates: THB→USD {result['usd']}")
             return result
 
         except Exception as e:
             logger.error(f"💱 Error fetching exchange rates: {e}, using fallback")
-            self.cache.set(cache_key, FALLBACK_RATES)
-            return FALLBACK_RATES
+            result = _with_legacy_keys(FALLBACK_RATES)
+            self.cache.set(cache_key, result)
+            return result
+
+    async def get_crypto_prices(self) -> Dict[str, Dict[str, str]]:
+        """
+        Get crypto prices (USD): BTC, ETH, USDT.
+
+        Uses CoinGecko (free, no key required). Returns formatted strings.
+
+        Returns:
+            Dict like {"btc": {"price_usd": "...", "change_24h_percent": "..."}, ...}
+        """
+        cache_key = "crypto_prices"
+        cached = self.cache.get(cache_key)
+        if cached:
+            logger.info("₿ Using cached crypto prices")
+            return cached
+
+        # Conservative fallback
+        fallback = {
+            "btc": {"price_usd": "N/A", "change_24h_percent": "N/A"},
+            "eth": {"price_usd": "N/A", "change_24h_percent": "N/A"},
+            "usdt": {"price_usd": "N/A", "change_24h_percent": "N/A"},
+        }
+
+        try:
+            url = (
+                "https://api.coingecko.com/api/v3/simple/price"
+                "?ids=bitcoin,ethereum,tether"
+                "&vs_currencies=usd"
+                "&include_24hr_change=true"
+            )
+
+            response = await self.client.get(url, timeout=10.0)
+            response.raise_for_status()
+            data = response.json()
+
+            def _fmt(asset: dict) -> Dict[str, str]:
+                price = asset.get("usd", None)
+                change = asset.get("usd_24h_change", None)
+                if isinstance(price, (int, float)):
+                    price_str = f"${price:,.2f}"
+                else:
+                    price_str = "N/A"
+                if isinstance(change, (int, float)):
+                    change_str = f"{change:+.2f}%"
+                else:
+                    change_str = "N/A"
+                return {"price_usd": price_str, "change_24h_percent": change_str}
+
+            result = {
+                "btc": _fmt(data.get("bitcoin", {})),
+                "eth": _fmt(data.get("ethereum", {})),
+                "usdt": _fmt(data.get("tether", {})),
+            }
+
+            self.cache.set(cache_key, result)
+            logger.info("₿ Fetched fresh crypto prices")
+            return result
+        except Exception as e:
+            logger.error(f"₿ Error fetching crypto prices: {e}")
+            self.cache.set(cache_key, fallback)
+            return fallback
+
+    async def get_market_indices(self) -> Dict[str, str]:
+        """
+        Get headline market indices (best-effort, no API key).
+
+        Source: stooq.com CSV endpoint.
+
+        Returns:
+            Dict of index labels to formatted strings.
+        """
+        cache_key = "market_indices"
+        cached = self.cache.get(cache_key)
+        if cached:
+            logger.info("📈 Using cached market indices")
+            return cached
+
+        # Symbols are best-effort; stooq uses caret-prefixed names for indices.
+        symbol_map = {
+            "S&P 500": "^spx",
+            "DJIA": "^dji",
+            "FTSE 100": "^ftse",
+        }
+
+        result: Dict[str, str] = {label: "N/A" for label in symbol_map}
+
+        try:
+            for label, symbol in symbol_map.items():
+                url = f"https://stooq.com/q/l/?s={symbol}&f=sd2t2ohlcv&h&e=csv"
+                resp = await self.client.get(url, timeout=10.0)
+                resp.raise_for_status()
+
+                # CSV is usually: Symbol,Date,Time,Open,High,Low,Close,Volume
+                content = resp.text.strip()
+                if not content:
+                    continue
+
+                reader = csv.DictReader(io.StringIO(content))
+                row = next(reader, None)
+                if not row:
+                    continue
+
+                close_raw = row.get("Close")
+                open_raw = row.get("Open")
+
+                try:
+                    close_val = float(close_raw) if close_raw not in (None, "", "N/A") else None
+                except ValueError:
+                    close_val = None
+
+                try:
+                    open_val = float(open_raw) if open_raw not in (None, "", "N/A") else None
+                except ValueError:
+                    open_val = None
+
+                if close_val is None:
+                    continue
+
+                if open_val and open_val != 0:
+                    change_pct = ((close_val - open_val) / open_val) * 100.0
+                    result[label] = f"{close_val:,.2f} ({change_pct:+.2f}%)"
+                else:
+                    result[label] = f"{close_val:,.2f}"
+
+            self.cache.set(cache_key, result)
+            logger.info("📈 Fetched fresh market indices")
+            return result
+        except Exception as e:
+            logger.error(f"📈 Error fetching market indices: {e}")
+            self.cache.set(cache_key, result)
+            return result
 
     async def get_upcoming_festivals(self) -> List[Dict[str, str]]:
         """

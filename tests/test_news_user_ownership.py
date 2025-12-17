@@ -23,6 +23,29 @@ def mock_news_data_service():
         {"title": "Test Headline 1", "url": "http://example.com/1"},
         {"title": "Test Headline 2", "url": "http://example.com/2"}
     ])
+
+    # Additional inline data fetched by the menu
+    service.get_thai_holidays = AsyncMock(return_value=[
+        {"date": "Jan 01", "name_th": "วันขึ้นปีใหม่", "name_en": "New Year's Day"}
+    ])
+    service.get_market_indices = AsyncMock(return_value={
+        "S&P 500": "5,000.00 (+0.10%)",
+        "DJIA": "39,000.00 (-0.05%)",
+        "FTSE 100": "7,500.00 (+0.00%)",
+    })
+    service.get_crypto_prices = AsyncMock(return_value={
+        "btc": {"price_usd": "$60,000.00", "change_24h_percent": "+1.23%"},
+        "eth": {"price_usd": "$3,000.00", "change_24h_percent": "-0.45%"},
+        "usdt": {"price_usd": "$1.00", "change_24h_percent": "+0.00%"},
+    })
+    service.get_exchange_rates = AsyncMock(return_value={
+        "usd": "0.027",
+        "jpy": "4.00",
+        "zar": "0.49",
+        "aud": "0.041",
+        "gbp": "0.021",
+        "rub": "2.40",
+    })
     return service
 
 

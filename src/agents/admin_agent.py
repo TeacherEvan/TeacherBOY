@@ -140,6 +140,13 @@ class AdminAgent(BaseAgent):
                     response = self._sleep_chat(chat_id, arg)
                 elif command == "reset":
                     response = self._reset_chat(chat_id, arg)
+                elif command == "purge":
+                    response = self._purge_chat(chat_id, arg)
+                elif command == "leave":
+                    # Special-case because this command needs access to the MessagingApi
+                    await self._leave_chat(event, line_bot_api, chat_id, arg)
+                    logger.info(f"🔧 Admin leave executed by {user_id} from chat {chat_id}: {text}")
+                    return True
                 elif command == "sessions":
                     response = self._list_sessions()
                 else:
@@ -232,6 +239,13 @@ class AdminAgent(BaseAgent):
             "    → Show current chat status\n\n"
             "  /admin sessions\n"
             "    → List all active sessions\n\n"
+            "🚪 Leave Chats:\n"
+            "  /admin leave\n"
+            "    → Leave current group/room (only works in group/room)\n\n"
+            "  /admin leave <chat_id>\n"
+            "    → Leave a specific group/room by chat_id (group_<id> or room_<id>)\n\n"
+            "  /admin leave group <group_id>\n"
+            "  /admin leave room <room_id>\n\n"
             "😴 Sleep Management:\n"
             "  /admin sleep [chat_id] [hours]\n"
             "    → Put chat to sleep (default: 24h)\n\n"
@@ -240,11 +254,121 @@ class AdminAgent(BaseAgent):
             "🔄 Session Control:\n"
             "  /admin reset [chat_id]\n"
             "    → Reset chat session & history\n\n"
+            "  /admin purge [chat_id]\n"
+            "    → Clear bot internal history/state for a chat\n"
+            "      (Note: LINE does not support deleting/unsending chat messages via API)\n\n"
             "💡 Tips:\n"
             "• [chat_id] is optional - defaults to current chat\n"
             "• Chat IDs format: user_U123..., group_C123...\n"
             "• Use 'sessions' to see active chat IDs"
         )
+
+    def _purge_chat(self, current_chat_id: str, target_chat_id: str = None) -> str:
+        """Clear bot internal history/state for a chat (best-effort)."""
+        chat_id = target_chat_id or current_chat_id
+
+        # Translation/session state
+        had_session = session_manager.end_session(chat_id)
+        session_manager.clear_message_history(chat_id)
+        was_sleeping = session_manager.wake_chat(chat_id)
+        rate_limiter.reset_chat(chat_id)
+
+        # News flow state (import locally to avoid import cycles)
+        ended_news = False
+        try:
+            from src.services.news_session_manager import news_session_manager
+
+            ended_news = news_session_manager.end_news_flow(chat_id)
+        except Exception:
+            ended_news = False
+
+        # News rate limit (if present)
+        try:
+            from src.agents.news_agent import news_rate_limiter_friend
+
+            news_rate_limiter_friend.reset_chat(chat_id)
+        except Exception:
+            pass
+
+        logger.info(f"🔧 Admin purged chat {chat_id}")
+
+        status = "🧹 Purge Complete\n━━━━━━━━━━━━━━━━\n\n"
+        status += f"Chat ID: {chat_id}\n\n"
+        status += f"{'✅' if had_session else '⏸️'} Session: {'Ended' if had_session else 'Was inactive'}\n"
+        status += f"{'☀️' if was_sleeping else '⏸️'} Sleep: {'Woken up' if was_sleeping else 'Was awake'}\n"
+        status += "🧹 History: Cleared\n"
+        status += f"{'📰' if ended_news else '⏸️'} News flow: {'Ended' if ended_news else 'Was inactive'}\n\n"
+        status += "Note: Bots cannot delete/unsend existing LINE chat messages via API."
+        return status
+
+    def _parse_leave_target(self, current_chat_id: str, arg: str | None) -> tuple[str | None, str | None, str | None]:
+        """Parse leave target; returns (kind, raw_id, error). kind is 'group' or 'room'."""
+        if not arg or not arg.strip():
+            if current_chat_id.startswith("group_"):
+                return "group", current_chat_id[len("group_"):], None
+            if current_chat_id.startswith("room_"):
+                return "room", current_chat_id[len("room_"):], None
+            return None, None, "❌ /admin leave can only be used in a group/room, or with an explicit target."
+
+        raw = arg.strip()
+
+        # Accept chat_id formats
+        if raw.startswith("group_"):
+            return "group", raw[len("group_"):], None
+        if raw.startswith("room_"):
+            return "room", raw[len("room_"):], None
+
+        # Accept explicit kind syntax: "group <id>" / "room <id>"
+        parts = raw.split(maxsplit=1)
+        if len(parts) == 2 and parts[0].lower() in ("group", "room"):
+            kind = parts[0].lower()
+            target_id = parts[1].strip()
+            if not target_id:
+                return None, None, f"❌ Usage: /admin leave {kind} <{kind}_id>"
+            return kind, target_id, None
+
+        # Heuristic: LINE group IDs often start with 'C', rooms often start with 'R'
+        if raw.startswith("C"):
+            return "group", raw, None
+        if raw.startswith("R"):
+            return "room", raw, None
+
+        return None, None, "❌ Invalid target. Use /admin leave group <id>, /admin leave room <id>, or group_<id>/room_<id>."
+
+    async def _leave_chat(self, event: MessageEvent, line_bot_api: MessagingApi, current_chat_id: str, arg: str | None) -> None:
+        """Leave the specified group/room (or current group/room) and reply with status."""
+        kind, target_id, error = self._parse_leave_target(current_chat_id, arg)
+        if error or not kind or not target_id:
+            message = error or "❌ Could not determine leave target."
+            if event.reply_token:
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[TextMessage(text=message, quickReply=None, quoteToken=None)],
+                        notificationDisabled=False,
+                    )
+                )
+            return
+
+        # Reply first so the admin sees confirmation even if leaving succeeds immediately.
+        leaving_msg = f"🚪 Leaving {kind} {target_id}..."
+        if event.reply_token:
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[TextMessage(text=leaving_msg, quickReply=None, quoteToken=None)],
+                    notificationDisabled=False,
+                )
+            )
+
+        try:
+            if kind == "group":
+                line_bot_api.leave_group(target_id)
+            else:
+                line_bot_api.leave_room(target_id)
+            logger.info(f"🚪 Left {kind} {target_id} by admin request")
+        except Exception as e:
+            logger.error(f"❌ Failed to leave {kind} {target_id}: {e}", exc_info=True)
 
     def _get_status_message(self, current_chat_id: str, target_chat_id: str = None) -> str:
         """Get status information for a chat."""

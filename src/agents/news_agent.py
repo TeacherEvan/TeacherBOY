@@ -279,36 +279,36 @@ class NewsAgent(BaseAgent):
         """Fetch data and send main menu with weather and news."""
         chat_id = self._get_chat_id(event)
         
-        # Fetch weather and news data
+        # Fetch weather and Thailand-only headlines
         weather_data = await self.news_service.get_weather_data()
-        # Get English headlines first (RSS feeds are in English)
-        headlines = await self.news_service.get_news_headlines("en")
+        # Bangkok Post Thailand RSS is English; Thai UI translates headlines.
+        headlines = await self.news_service.get_news_headlines("th")
         
         # Translate headlines to Thai if Thai language selected
         if language == "th" and headlines:
             headlines = await self._translate_headlines_to_thai(headlines)
         
-        # Fetch additional data for menu items 6-8
+        # Fetch additional inline data
         holidays_data = await self.news_service.get_thai_holidays()
-        bitcoin_data = await self.news_service.get_bitcoin_price()
+        indices_data = await self.news_service.get_market_indices()
+        crypto_data = await self.news_service.get_crypto_prices()
         exchange_data = await self.news_service.get_exchange_rates()
-        festivals_data = await self.news_service.get_upcoming_festivals()
         
         # Cache data in session
         news_session_manager.set_cached_data(chat_id, {
             "weather": weather_data,
             "headlines": headlines,
             "holidays": holidays_data,
-            "bitcoin": bitcoin_data,
+            "indices": indices_data,
+            "crypto": crypto_data,
             "exchange": exchange_data,
-            "festivals": festivals_data
         })
         
         # Format message
         if language == "th":
-            message = self._format_menu_thai(weather_data, headlines, holidays_data, bitcoin_data, exchange_data, festivals_data)
+            message = self._format_menu_thai(weather_data, headlines, holidays_data, indices_data, crypto_data, exchange_data)
         else:
-            message = self._format_menu_english(weather_data, headlines, holidays_data, bitcoin_data, exchange_data, festivals_data)
+            message = self._format_menu_english(weather_data, headlines, holidays_data, indices_data, crypto_data, exchange_data)
         
         text_msg = TextMessage(text=message, quickReply=None, quoteToken=None)
         
@@ -366,35 +366,62 @@ class NewsAgent(BaseAgent):
         
         return translated_headlines
 
-    def _format_menu_thai(self, weather: dict, headlines: list, holidays: list, bitcoin: dict, exchange: dict, festivals: list) -> str:
+    def _format_menu_thai(
+        self,
+        weather: dict,
+        headlines: list,
+        holidays: list,
+        indices: dict,
+        crypto: dict,
+        exchange: dict,
+    ) -> str:
         """Format main menu in Thai with all inline data."""
         temp = weather.get("temperature", "N/A")
         pm25 = weather.get("pm25", "N/A")
         will_rain = weather.get("will_rain")
         rain_text = "ใช่ (Yes)" if will_rain else "ไม่ (No)" if will_rain is not None else "N/A"
         
-        msg = "📰 ข่าว Bangkok\n\n"
-        msg += f"1️⃣ 🌡️ อุณหภูมิ: {temp}°C | 💨 PM2.5: {pm25}\n"
-        msg += f"2️⃣ 🌧️ 5 ชม.ข้างหน้า: {rain_text}\n"
-        msg += f"3️⃣ 🍃 กัญชา: {LEGAL_INFO['cannabis']['th']}\n"
-        msg += f"4️⃣ 🚭 บุหรี่ไฟฟ้า: {LEGAL_INFO['ecig']['th']}\n"
-        msg += f"5️⃣ 🍺 แอลกอฮอล์: {LEGAL_INFO['alcohol']['th']}\n\n"
+        msg = "📰 Bangkok\n\n"
+        msg += f"🌡️ อุณหภูมิ: {temp}°C | 💨 PM2.5: {pm25}\n"
+        msg += f"🌧️ 5 ชม.ข้างหน้า: {rain_text}\n"
+        msg += f"🍃 กัญชา: {LEGAL_INFO['cannabis']['th']}\n"
+        msg += f"🚭 บุหรี่ไฟฟ้า: {LEGAL_INFO['ecig']['th']}\n"
+        msg += f"🍺 แอลกอฮอล์: {LEGAL_INFO['alcohol']['th']}\n"
         
-        # Item 6: Holidays (first upcoming only)
+        # Next holiday (first upcoming only)
         if holidays and len(holidays) > 0:
             holiday = holidays[0]
             msg += f"📅 วันหยุดถัดไป: {holiday.get('date', 'N/A')} - {holiday.get('name_th', 'N/A')}\n"
+
+        # Indices
+        spx = indices.get("S&P 500", "N/A")
+        dji = indices.get("DJIA", "N/A")
+        ftse = indices.get("FTSE 100", "N/A")
+        msg += f"📈 ดัชนี: S&P 500 {spx} | DJIA {dji} | FTSE {ftse}\n"
+
+        # Crypto
+        btc = crypto.get("btc", {})
+        eth = crypto.get("eth", {})
+        usdt = crypto.get("usdt", {})
+        msg += (
+            "₿ Crypto: "
+            f"BTC {btc.get('price_usd', 'N/A')} ({btc.get('change_24h_percent', 'N/A')}), "
+            f"ETH {eth.get('price_usd', 'N/A')} ({eth.get('change_24h_percent', 'N/A')}), "
+            f"USDT {usdt.get('price_usd', 'N/A')} ({usdt.get('change_24h_percent', 'N/A')})\n"
+        )
+
+        # Exchange rates (1 THB)
+        msg += (
+            "💱 อัตราแลก (1 THB): "
+            f"USD {exchange.get('usd', 'N/A')}, "
+            f"JPY {exchange.get('jpy', 'N/A')}, "
+            f"ZAR {exchange.get('zar', 'N/A')}, "
+            f"AUD {exchange.get('aud', 'N/A')}, "
+            f"GBP {exchange.get('gbp', 'N/A')}, "
+            f"RUB {exchange.get('rub', 'N/A')}\n\n"
+        )
         
-        # Item 7: Bitcoin price
-        btc_price = bitcoin.get("price_usd", "N/A")
-        btc_change = bitcoin.get("change_24h_percent", "N/A")
-        msg += f"₿ Bitcoin: {btc_price} ({btc_change})\n"
-        
-        # Item 8: Exchange rates (THB to USD)
-        thb_usd = exchange.get("thb_usd", "N/A")
-        msg += f"💱 อัตราแลก: 1 THB = {thb_usd} USD\n\n"
-        
-        msg += "📰 หัวข้อข่าว:\n"
+        msg += "📰 หัวข้อข่าว (Thailand):\n"
 
         for i, headline in enumerate(headlines[:5], 1):
             title = headline.get("title", "ไม่มีหัวข้อ")[:80]
@@ -402,35 +429,62 @@ class NewsAgent(BaseAgent):
         
         return msg
 
-    def _format_menu_english(self, weather: dict, headlines: list, holidays: list, bitcoin: dict, exchange: dict, festivals: list) -> str:
+    def _format_menu_english(
+        self,
+        weather: dict,
+        headlines: list,
+        holidays: list,
+        indices: dict,
+        crypto: dict,
+        exchange: dict,
+    ) -> str:
         """Format main menu in English with all inline data."""
         temp = weather.get("temperature", "N/A")
         pm25 = weather.get("pm25", "N/A")
         will_rain = weather.get("will_rain")
         rain_text = "Yes" if will_rain else "No" if will_rain is not None else "N/A"
         
-        msg = "📰 Bangkok News\n\n"
-        msg += f"1️⃣ 🌡️ Temp: {temp}°C | 💨 PM2.5: {pm25}\n"
-        msg += f"2️⃣ 🌧️ Next 5h: {rain_text}\n"
-        msg += f"3️⃣ 🍃 Cannabis: {LEGAL_INFO['cannabis']['en']}\n"
-        msg += f"4️⃣ 🚭 E-Cigs: {LEGAL_INFO['ecig']['en']}\n"
-        msg += f"5️⃣ 🍺 Alcohol: {LEGAL_INFO['alcohol']['en']}\n\n"
+        msg = "📰 Bangkok\n\n"
+        msg += f"🌡️ Temp: {temp}°C | 💨 PM2.5: {pm25}\n"
+        msg += f"🌧️ Next 5h rain: {rain_text}\n"
+        msg += f"🍃 Cannabis: {LEGAL_INFO['cannabis']['en']}\n"
+        msg += f"🚭 E-Cigs: {LEGAL_INFO['ecig']['en']}\n"
+        msg += f"🍺 Alcohol: {LEGAL_INFO['alcohol']['en']}\n"
         
-        # Item 6: Holidays (first upcoming only)
+        # Next holiday (first upcoming only)
         if holidays and len(holidays) > 0:
             holiday = holidays[0]
             msg += f"📅 Next Holiday: {holiday.get('date', 'N/A')} - {holiday.get('name_en', 'N/A')}\n"
+
+        # Indices
+        spx = indices.get("S&P 500", "N/A")
+        dji = indices.get("DJIA", "N/A")
+        ftse = indices.get("FTSE 100", "N/A")
+        msg += f"📈 Indices: S&P 500 {spx} | DJIA {dji} | FTSE {ftse}\n"
+
+        # Crypto
+        btc = crypto.get("btc", {})
+        eth = crypto.get("eth", {})
+        usdt = crypto.get("usdt", {})
+        msg += (
+            "₿ Crypto: "
+            f"BTC {btc.get('price_usd', 'N/A')} ({btc.get('change_24h_percent', 'N/A')}), "
+            f"ETH {eth.get('price_usd', 'N/A')} ({eth.get('change_24h_percent', 'N/A')}), "
+            f"USDT {usdt.get('price_usd', 'N/A')} ({usdt.get('change_24h_percent', 'N/A')})\n"
+        )
+
+        # Exchange rates (1 THB)
+        msg += (
+            "💱 FX (1 THB): "
+            f"USD {exchange.get('usd', 'N/A')}, "
+            f"JPY {exchange.get('jpy', 'N/A')}, "
+            f"ZAR {exchange.get('zar', 'N/A')}, "
+            f"AUD {exchange.get('aud', 'N/A')}, "
+            f"GBP {exchange.get('gbp', 'N/A')}, "
+            f"RUB {exchange.get('rub', 'N/A')}\n\n"
+        )
         
-        # Item 7: Bitcoin price
-        btc_price = bitcoin.get("price_usd", "N/A")
-        btc_change = bitcoin.get("change_24h_percent", "N/A")
-        msg += f"₿ Bitcoin: {btc_price} ({btc_change})\n"
-        
-        # Item 8: Exchange rates (THB to USD)
-        thb_usd = exchange.get("thb_usd", "N/A")
-        msg += f"💱 Exchange: 1 THB = {thb_usd} USD\n\n"
-        
-        msg += "📰 Headlines:\n"
+        msg += "📰 Headlines (Thailand):\n"
 
         for i, headline in enumerate(headlines[:5], 1):
             title = headline.get("title", "No title")[:80]
