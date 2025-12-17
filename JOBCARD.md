@@ -1,4 +1,28 @@
-# Job Card: TeacherBOY Overhaul
+# Job Card — Remove “Legalities” From News Menu
+
+**Status:** Completed ✅
+
+## Summary
+
+- Removed the “legalities” section from NewsAgent output so the Bangkok news menu no longer shows cannabis/e-cig/alcohol status.
+- Updated documentation to reflect the current NewsAgent menu (weather/PM2.5/rain, next holiday, indices, crypto incl. USDT, FX rates, headlines 1–5 interactive).
+
+## 5 Important Notes
+
+1. Free-tier message limits: Prefer local unit tests/mocks over live LINE messages to avoid consuming free-tier quotas.
+2. Keep manual validation minimal: after tests are green, validate with 1–2 real messages in a test group only.
+3. Access model stays the same: group/room friends get the full menu; non-friends get trigger translation only; private chats remain trigger translation only.
+4. Interactivity stays headlines-only: only selections 1–5 should return headline detail + link.
+5. State/metrics are in-memory: session state and counters reset on process restart (expected).
+
+## Suggested Validation (Low-Quota)
+
+- Local: run `pytest` once.
+- Manual (optional): send `news` in a friend-eligible group; confirm no legal-status block; reply `1` and confirm the detail + link.
+
+---
+
+# Job Card: TeacherBOY Overhaul (Historical)
 
 **Status:** Completed ✅  
 **Date:** December 9, 2025  
