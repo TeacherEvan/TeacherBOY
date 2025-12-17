@@ -6,12 +6,15 @@ from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
     MessagingApi,
     ReplyMessageRequest,
+    PushMessageRequest,
     TextMessage,
 )
 
 from .base_agent import BaseAgent
 from src.services.session_manager import session_manager
 from src.services.rate_limiter import rate_limiter
+from src.services.metrics_service import metrics_service
+from src.services.admin_confirmation_service import admin_confirmation_service
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -132,6 +135,12 @@ class AdminAgent(BaseAgent):
                 # Execute command
                 elif command == "help":
                     response = self._get_help_message()
+                elif command == "stats":
+                    response = await self._get_stats_message(line_bot_api)
+                elif command == "confirm":
+                    response = await self._confirm_action(chat_id, user_id, arg, line_bot_api)
+                elif command == "cancel":
+                    response = self._cancel_action(chat_id, user_id, arg)
                 elif command == "status":
                     response = self._get_status_message(chat_id, arg)
                 elif command == "wake":
@@ -141,12 +150,9 @@ class AdminAgent(BaseAgent):
                 elif command == "reset":
                     response = self._reset_chat(chat_id, arg)
                 elif command == "purge":
-                    response = self._purge_chat(chat_id, arg)
+                    response = await self._request_confirm_purge(event, line_bot_api, chat_id, user_id, arg)
                 elif command == "leave":
-                    # Special-case because this command needs access to the MessagingApi
-                    await self._leave_chat(event, line_bot_api, chat_id, arg)
-                    logger.info(f"🔧 Admin leave executed by {user_id} from chat {chat_id}: {text}")
-                    return True
+                    response = await self._request_confirm_leave(event, line_bot_api, chat_id, user_id, arg)
                 elif command == "sessions":
                     response = self._list_sessions()
                 else:
@@ -237,13 +243,16 @@ class AdminAgent(BaseAgent):
             "📊 Status & Info:\n"
             "  /admin status [chat_id]\n"
             "    → Show current chat status\n\n"
+
+            "  /admin stats\n"
+            "    → Show service stats dashboard\n\n"
             "  /admin sessions\n"
             "    → List all active sessions\n\n"
             "🚪 Leave Chats:\n"
             "  /admin leave\n"
-            "    → Leave current group/room (only works in group/room)\n\n"
+            "    → Request leaving current group/room (confirmation required)\n\n"
             "  /admin leave <chat_id>\n"
-            "    → Leave a specific group/room by chat_id (group_<id> or room_<id>)\n\n"
+            "    → Request leaving a specific group/room (confirmation required)\n\n"
             "  /admin leave group <group_id>\n"
             "  /admin leave room <room_id>\n\n"
             "😴 Sleep Management:\n"
@@ -255,13 +264,240 @@ class AdminAgent(BaseAgent):
             "  /admin reset [chat_id]\n"
             "    → Reset chat session & history\n\n"
             "  /admin purge [chat_id]\n"
-            "    → Clear bot internal history/state for a chat\n"
+            "    → Request clearing bot internal history/state for a chat\n"
             "      (Note: LINE does not support deleting/unsending chat messages via API)\n\n"
+
+            "✅ Confirmations (private chat only):\n"
+            "  /admin confirm <token>\n"
+            "  /admin cancel <token>\n\n"
             "💡 Tips:\n"
             "• [chat_id] is optional - defaults to current chat\n"
             "• Chat IDs format: user_U123..., group_C123...\n"
             "• Use 'sessions' to see active chat IDs"
         )
+
+    def _is_private_chat(self, chat_id: str) -> bool:
+        return chat_id.startswith("user_")
+
+    def _mask_user_id(self, user_id: str | None) -> str:
+        if not user_id:
+            return "N/A"
+        if len(user_id) <= 6:
+            return user_id
+        return f"{user_id[:3]}…{user_id[-3:]}"
+
+    def _push_to_admin(self, line_bot_api: MessagingApi, user_id: str, text: str) -> bool:
+        """Best-effort push message to admin's private chat."""
+        try:
+            if not hasattr(line_bot_api, "push_message"):
+                return False
+            line_bot_api.push_message(
+                PushMessageRequest(
+                    to=user_id,
+                    messages=[TextMessage(text=text, quickReply=None, quoteToken=None)],
+                    notificationDisabled=False,
+                )
+            )
+            return True
+        except Exception:
+            return False
+
+    async def _request_confirm_leave(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        current_chat_id: str,
+        user_id: str | None,
+        arg: str | None,
+    ) -> str:
+        if not user_id:
+            return "❌ Could not determine your LINE user ID."
+
+        kind, target_id, error = self._parse_leave_target(current_chat_id, arg)
+        if error or not kind or not target_id:
+            return error or "❌ Could not determine leave target."
+
+        pending = admin_confirmation_service.create(
+            action="leave",
+            requested_by_user_id=user_id,
+            requested_from_chat_id=current_chat_id,
+            payload={"kind": kind, "target_id": target_id},
+        )
+
+        confirm_text = (
+            "🔐 Confirm admin action\n"
+            "━━━━━━━━━━━━━━━━\n\n"
+            f"Action: leave {kind} {target_id}\n"
+            f"Token: {pending.token}\n"
+            f"Expires: {pending.expires_at.strftime('%H:%M:%S')} UTC\n\n"
+            f"Confirm: /admin confirm {pending.token}\n"
+            f"Cancel: /admin cancel {pending.token}"
+        )
+
+        pushed = self._push_to_admin(line_bot_api, user_id, confirm_text)
+        if pushed:
+            return "✅ Confirmation sent to your private chat."
+
+        # Fallback when push isn't available.
+        return (
+            "⚠️ Could not push a private confirmation message.\n\n"
+            f"Confirm here (preferred in private chat): /admin confirm {pending.token}\n"
+            f"Cancel: /admin cancel {pending.token}"
+        )
+
+    async def _request_confirm_purge(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        current_chat_id: str,
+        user_id: str | None,
+        arg: str | None,
+    ) -> str:
+        if not user_id:
+            return "❌ Could not determine your LINE user ID."
+
+        target_chat_id = (arg or "").strip() or current_chat_id
+        pending = admin_confirmation_service.create(
+            action="purge",
+            requested_by_user_id=user_id,
+            requested_from_chat_id=current_chat_id,
+            payload={"chat_id": target_chat_id},
+        )
+
+        confirm_text = (
+            "🔐 Confirm admin action\n"
+            "━━━━━━━━━━━━━━━━\n\n"
+            f"Action: purge {target_chat_id}\n"
+            f"Token: {pending.token}\n"
+            f"Expires: {pending.expires_at.strftime('%H:%M:%S')} UTC\n\n"
+            f"Confirm: /admin confirm {pending.token}\n"
+            f"Cancel: /admin cancel {pending.token}"
+        )
+
+        pushed = self._push_to_admin(line_bot_api, user_id, confirm_text)
+        if pushed:
+            return "✅ Confirmation sent to your private chat."
+
+        return (
+            "⚠️ Could not push a private confirmation message.\n\n"
+            f"Confirm here (preferred in private chat): /admin confirm {pending.token}\n"
+            f"Cancel: /admin cancel {pending.token}"
+        )
+
+    async def _confirm_action(
+        self,
+        chat_id: str,
+        user_id: str | None,
+        arg: str | None,
+        line_bot_api: MessagingApi,
+    ) -> str:
+        if not user_id:
+            return "❌ Could not determine your LINE user ID."
+
+        token = (arg or "").strip()
+        if not token:
+            return "Usage: /admin confirm <token>"
+
+        # Enforce private-chat confirmation.
+        if not self._is_private_chat(chat_id):
+            return "❌ Please confirm in your private chat with the bot."
+
+        pending, msg = admin_confirmation_service.confirm(token, user_id)
+        if not pending:
+            return msg
+
+        if pending.action == "leave":
+            kind = str(pending.payload.get("kind"))
+            target_id = str(pending.payload.get("target_id"))
+            try:
+                if kind == "group":
+                    line_bot_api.leave_group(target_id)
+                else:
+                    line_bot_api.leave_room(target_id)
+                return f"✅ Left {kind} {target_id}."
+            except Exception as e:
+                logger.error(f"❌ Failed to leave {kind} {target_id}: {e}", exc_info=True)
+                return f"❌ Failed to leave {kind} {target_id}."
+
+        if pending.action == "purge":
+            target_chat_id = str(pending.payload.get("chat_id"))
+            return self._purge_chat(current_chat_id=chat_id, target_chat_id=target_chat_id)
+
+        return "❌ Unknown pending action type."
+
+    def _cancel_action(self, chat_id: str, user_id: str | None, arg: str | None) -> str:
+        if not user_id:
+            return "❌ Could not determine your LINE user ID."
+
+        token = (arg or "").strip()
+        if not token:
+            return "Usage: /admin cancel <token>"
+
+        if not self._is_private_chat(chat_id):
+            return "❌ Please cancel in your private chat with the bot."
+
+        ok, msg = admin_confirmation_service.cancel(token, user_id)
+        return msg
+
+    async def _get_stats_message(self, line_bot_api: MessagingApi) -> str:
+        snap = metrics_service.snapshot()
+
+        # LINE monthly quota (best-effort; depends on SDK / channel plan).
+        monthly_limit = None
+        monthly_used = None
+        monthly_left = None
+        try:
+            quota = None
+            if hasattr(line_bot_api, "get_message_quota"):
+                quota = line_bot_api.get_message_quota()
+
+            consumption = None
+            if hasattr(line_bot_api, "get_message_quota_consumption"):
+                consumption = line_bot_api.get_message_quota_consumption()
+
+            def _get(obj, key: str):
+                if obj is None:
+                    return None
+                if isinstance(obj, dict):
+                    return obj.get(key)
+                return getattr(obj, key, None)
+
+            monthly_limit = _get(quota, "value")
+            monthly_used = _get(consumption, "totalUsage")
+            if isinstance(monthly_limit, int) and isinstance(monthly_used, int):
+                monthly_left = max(0, monthly_limit - monthly_used)
+        except Exception:
+            monthly_limit = None
+
+        uptime = metrics_service.get_uptime()
+        uptime_minutes = int(uptime.total_seconds() // 60)
+
+        active_sessions = len(session_manager.get_active_sessions())
+        sleeping_chats = len(session_manager.get_sleeping_chats())
+        pending_confirms = admin_confirmation_service.count_pending()
+
+        last_friend = "N/A"
+        if snap.last_friend_added_at:
+            last_friend = f"{snap.last_friend_added_at.strftime('%Y-%m-%d %H:%M:%S')} UTC ({self._mask_user_id(snap.last_friend_added_user_id)})"
+
+        msg = "📊 Admin Stats\n━━━━━━━━━━━━━━━━\n\n"
+
+        if monthly_left is not None:
+            msg += f"✉️ LINE monthly messages left: {monthly_left} (used {monthly_used}/{monthly_limit})\n"
+        else:
+            msg += "✉️ LINE monthly messages left: N/A\n"
+
+        msg += (
+            f"🧠 Translation requests: {snap.translation_requests_total} (Google {snap.translation_google_total}, Libre {snap.translation_libre_total})\n"
+            f"📰 News requests: {snap.news_requests_total}\n"
+            f"👤 Last friend added: {last_friend}\n\n"
+            f"⏱️ Uptime: ~{uptime_minutes} min\n"
+            f"✅ Active sessions: {active_sessions}\n"
+            f"😴 Sleeping chats: {sleeping_chats}\n"
+            f"🔐 Pending confirmations: {pending_confirms}"
+        )
+
+        return msg
 
     def _purge_chat(self, current_chat_id: str, target_chat_id: str = None) -> str:
         """Clear bot internal history/state for a chat (best-effort)."""

@@ -71,22 +71,22 @@ The News Agent feature has been successfully implemented and integrated into Tea
 
 ```text
 User: "news" or "ข่าว"
-Bot: Language selection (1=Thai, 2=English)
-User: "1" or "2"
-Bot: Main menu with:
-     - Weather (temperature)
-     - Air quality (PM2.5)
-     - Rain forecast (5 hours)
-     - Legal info (Cannabis, E-Cig, Alcohol)
-     - Top 5 news headlines
-User: "1-5" for headline details OR "9" for resources
+Bot: Main menu (language auto-detected from trigger word) with:
+   - Weather (temperature + PM2.5)
+   - Rain forecast (next 5 hours)
+   - Next holiday (inline)
+   - Indices (inline)
+   - Crypto (BTC/ETH/USDT) (inline)
+   - Exchange rates (inline)
+   - Top 5 Thailand headlines
+User: "1-5" for headline details
 ```
 
 ### Data Sources
 
 - **Weather**: Open-Meteo (free, unlimited)
 - **Air Quality**: Open-Meteo Air Quality API (free, unlimited)
-- **News**: NewsAPI.org (optional, 100 req/day free tier)
+- **News**: Bangkok Post RSS feeds (no API key)
 
 ### Optimizations
 

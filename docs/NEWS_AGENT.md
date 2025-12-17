@@ -6,53 +6,40 @@ The NewsAgent provides real-time weather, air quality, and news headlines for Ba
 
 ## Trigger
 
-Type `news` or `ข่าว` in any LINE chat to start.
+- In groups/rooms: type `news` (English) or `ข่าว` (Thai)
+- In private chat: the bot replies with trigger translation only (no menu)
 
 ## Flow
 
-1. **Language Selection**
-   - Bot asks: "1 = Thai (ไทย)" or "2 = English"
-   - User responds with `1` or `2`
-
-2. **Main Menu** (auto-fetched data)
+1. **Main Menu** (auto-fetched data)
 
    ```text
    🌡️ Temperature (Bangkok): 32°C
    💨 PM2.5 (Bangkok): 45
    🌧️ Will it rain in next 5 hours: No
 
-   🍃 Cannabis: Legal
-   🚭 E-Cigarettes: *NOT LEGAL*
-   🍺 Alcohol: Prescriptive
+   📅 Next Holiday: Jan 1 - New Year's Day
+   📈 Indices: S&P 500 4,700.00 (+0.50%) | DJIA 37,000.00 (-0.20%) | FTSE 7,500.00 (+0.10%)
+   ₿ Crypto: BTC $43,250.00 (+2.50%), ETH $2,300.00 (-0.10%), USDT $1.00 (+0.00%)
+   💱 FX (1 THB): USD 0.027, JPY 4.000, ZAR 0.490, AUD 0.041, GBP 0.021, RUB 2.400
 
-   📰 Top 5 Headlines Today:
+   📰 Headlines (Thailand):
    1 - Headline 1...
    2 - Headline 2...
    3 - Headline 3...
    4 - Headline 4...
    5 - Headline 5...
-
-   💡 Press 1-5 to read more
-   💡 Press 9 for resources
    ```
 
-3. **Headline Detail** (if user presses 1-5)
+2. **Headline Detail** (if user presses 1-5)
    - Shows full headline + URL
    - User sends any message to return to menu
 
-4. **Resources** (if user presses 9)
-   - Shows API sources (Open-Meteo, ThaiPBS, Bangkok Post, etc.)
-   - Exits news flow
-
 ## Configuration
 
-Add to `.env`:
+Add to `.env` (optional cache tuning):
 
 ```bash
-# Optional - for news headlines (100 req/day free tier)
-NEWS_API_KEY=your_newsapi_org_key
-
-# Optional - cache TTL settings (defaults shown)
 WEATHER_CACHE_TTL_SECONDS=1800  # 30 minutes
 NEWS_CACHE_TTL_SECONDS=3600     # 1 hour
 ```
@@ -61,7 +48,7 @@ NEWS_CACHE_TTL_SECONDS=3600     # 1 hour
 
 - **Weather**: [Open-Meteo](https://open-meteo.com) (free, no API key)
 - **Air Quality**: [Open-Meteo Air Quality API](https://air-quality-api.open-meteo.com) (free, no API key)
-- **News**: [NewsAPI.org](https://newsapi.org) (optional, 100 req/day free)
+- **News**: Bangkok Post RSS feeds (no API key)
 
 ## Agent Priority
 

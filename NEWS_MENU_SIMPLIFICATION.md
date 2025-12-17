@@ -19,13 +19,10 @@
 ```
 1️⃣ Temperature + PM2.5 (inline data)
 2️⃣ Rain forecast (inline data)
-3️⃣ Cannabis status (inline data)
-4️⃣ E-cig status (inline data)
-5️⃣ Alcohol status (inline data)
-6️⃣ Color + Sunset (selection required) ❌
-7️⃣ Holidays + Markets (selection required)
-8️⃣ Bitcoin + Exchange (selection required)
-9️⃣ Festivals (selection required)
+3️⃣ Color + Sunset (selection required) ❌
+4️⃣ Holidays + Markets (selection required)
+5️⃣ Bitcoin + Exchange (selection required)
+6️⃣ Festivals (selection required)
 📰 Headlines 1-5 (selection for details)
 ```
 
@@ -34,12 +31,10 @@
 ```
 1️⃣ Temperature + PM2.5 (inline data)
 2️⃣ Rain forecast (inline data)
-3️⃣ Cannabis status (inline data)
-4️⃣ E-cig status (inline data)
-5️⃣ Alcohol status (inline data)
 📅 Next Holiday: Dec 31 - New Year's Eve (inline data)
-₿ Bitcoin: $43,250.00 (+2.5%) (inline data)
-💱 Exchange: 1 THB = 0.027 USD (inline data)
+📈 Indices: S&P 500 / DJIA / FTSE 100 (inline data)
+₿ Crypto: BTC / ETH / USDT (inline data)
+💱 FX: THB → USD (+ others) (inline data)
 📰 Headlines 1-5 (selection for details)
 ```
 

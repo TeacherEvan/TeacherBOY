@@ -72,16 +72,15 @@ ADMIN_USER_IDS=U1234567890,U0987654321  # Comma-separated LINE user IDs
 - ✅ Sleep mode: "Thank you TeacherBoy" → 24h sleep
 - ✅ Wake command: "TeacherBoy" alone
 
-## 📰 News Menu (8 Items for Friends)
+## 📰 News Menu (Friends in Groups/Rooms)
 
 1. 🌡️💨 Weather & Air Quality
 2. 🌧️ Rain Forecast (5 hours)
-3. 🍃🚭🍺 Legal Info (Cannabis, E-cigs, Alcohol)
-4. 🎨🌅 Lucky Color + Sunset Times
-5. 📰 Headlines (Top 5)
-6. 📅🏛️ Thai Holidays + Markets
-7. ₿💱 Bitcoin + Exchange Rates
-8. 🎉 Festivals (Bangkok/Pattaya)
+3. 📅 Next Holiday (inline)
+4. 📈 Indices (inline)
+5. ₿ Crypto (BTC, ETH, USDT) (inline)
+6. 💱 Exchange Rates (inline)
+7. 📰 Headlines (Top 5, pick 1-5)
 
 ## 🔍 Key File Locations
 

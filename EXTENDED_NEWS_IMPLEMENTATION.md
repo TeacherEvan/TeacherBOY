@@ -87,12 +87,11 @@
 
 1. 🌡️💨 **Weather & Air Quality** – Bangkok temp + PM2.5 (Open-Meteo)
 2. 🌧️ **Rain Forecast** – 5-hour precipitation (Open-Meteo)
-3. 🍃🚭🍺 **Legal Info** – Cannabis, e-cigs, alcohol (Thai law)
-4. 🎨🌅 **Lucky Color + Sunset** – Daily color + sunrise/sunset times
-5. 📰 **Headlines** – Top 5 news (NewsAPI or placeholder)
-6. 📅🏛️ **Holidays + Markets** – Major holidays + SET market status
-7. ₿ **Bitcoin** – Price + 24h change (CoinGecko)
-8. 💱 **Exchange Rates** – THB→USD, THB→ZAR, THB→CNY
+3. 📅 **Next Holiday** – Next upcoming Thai holiday (inline)
+4. 📈 **Indices** – S&P 500, DJIA, FTSE 100 (best-effort)
+5. ₿ **Crypto** – BTC, ETH, USDT (CoinGecko)
+6. 💱 **Exchange Rates** – THB→USD (+ others)
+7. 📰 **Headlines** – Top 5 Thailand headlines (RSS)
 
 ### Non-Friends in Groups/Rooms or Private Chats:
 
@@ -102,16 +101,14 @@
 
 ## Data Sources & APIs
 
-| Item       | Source           | API Key  | Fallback              | Cache |
-| ---------- | ---------------- | -------- | --------------------- | ----- |
-| 1-2        | Open-Meteo       | None     | Basic defaults        | 30m   |
-| 3          | Static           | None     | N/A                   | 30m   |
-| 4 (color)  | Day-of-year      | None     | N/A                   | 24h   |
-| 4 (sunset) | Open-Meteo       | None     | 06:30–18:00           | 24h   |
-| 5          | NewsAPI          | OPTIONAL | Placeholder headlines | 1h    |
-| 6          | Calendarific     | OPTIONAL | Static 9-item list    | 7d    |
-| 7          | CoinGecko        | None     | N/A                   | 5m    |
-| 8          | ExchangeRate-API | OPTIONAL | Hardcoded rates       | 1h    |
+| Item | Source           | API Key  | Fallback              | Cache |
+| ---- | ---------------- | -------- | --------------------- | ----- |
+| 1-2  | Open-Meteo       | None     | Basic defaults        | 30m   |
+| 3    | holidays library | None     | N/A                   | 7d    |
+| 4    | stooq.com (CSV)  | None     | N/A                   | 1h    |
+| 5    | CoinGecko        | None     | N/A                   | 5m    |
+| 6    | ExchangeRate-API | OPTIONAL | Hardcoded rates       | 1h    |
+| 7    | Bangkok Post RSS | None     | Placeholder headlines | 1h    |
 
 ---
 

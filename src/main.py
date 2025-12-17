@@ -19,6 +19,8 @@ import linebot.v3
 from linebot.v3.webhooks import (
     MessageEvent,
     TextMessageContent,
+    FollowEvent,
+    UnfollowEvent,
     JoinEvent,
     LeaveEvent,
     MemberJoinedEvent,
@@ -50,6 +52,7 @@ from src.handlers.message_handler import (
     handle_member_joined_event,
     handle_member_left_event,
 )
+from src.services.metrics_service import metrics_service
 from src.utils.tracing import setup_tracing
 
 # ============================================================================
@@ -379,6 +382,16 @@ async def webhook(request: Request) -> JSONResponse:
                     elif isinstance(event, JoinEvent):
                         # Bot joined a group/room
                         await handle_join_event(event, line_bot_api)
+
+                    elif isinstance(event, FollowEvent):
+                        # User added bot as friend
+                        user_id = getattr(event.source, "user_id", None) if getattr(event, "source", None) else None
+                        metrics_service.record_friend_added(user_id)
+                        logger.info("➕ Follow event received (friend added)")
+
+                    elif isinstance(event, UnfollowEvent):
+                        # User blocked/removed bot
+                        logger.info("➖ Unfollow event received")
 
                     elif isinstance(event, LeaveEvent):
                         # Bot left a group/room

@@ -206,14 +206,12 @@ news_cache_ttl_seconds: int = 3600  # 1 hour
 
 - All menu items in Thai
 - Headlines translated to Thai
-- Legal info in Thai
 - Clean, native experience
 
 **English Language Selected:**
 
 - All menu items in English
 - Headlines in English
-- Legal info in English
 - Native English experience
 
 ---
@@ -258,7 +256,6 @@ If translation fails:
 | Translation Agent | Main bot   | ✅ Yes               |
 | News Headlines    | News Agent | ✅ Yes (new)         |
 | Weather Data      | News Agent | ❌ No (numbers only) |
-| Legal Info        | News Agent | ✅ Yes (hardcoded)   |
 
 ---
 

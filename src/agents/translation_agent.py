@@ -17,6 +17,7 @@ from src.services.translation_service import translation_service
 from src.services.google_translation import google_translation_service
 from src.services.session_manager import session_manager
 from src.services.rate_limiter import rate_limiter
+from src.services.metrics_service import metrics_service
 from src.utils.tracing import get_tracer
 from src.config import settings
 
@@ -89,6 +90,40 @@ class TranslationAgent(BaseAgent):
         ]
         return any(re.match(pattern, text_lower) for pattern in help_patterns)
 
+    def is_private_help_command(self, text: str) -> bool:
+        """Return True for plain 'help' (intended for 1:1 chat)."""
+        text_clean = re.sub(r"[\s.!?]+$", "", text.lower().strip())
+        return text_clean == "help"
+
+    def _is_private_chat(self, event: MessageEvent) -> bool:
+        if event.source and getattr(event.source, "group_id", None):
+            return False
+        if event.source and getattr(event.source, "room_id", None):
+            return False
+        return True
+
+    def _get_contextual_help(self, is_admin: bool) -> str:
+        msg = (
+            "Help\n"
+            "━━━━━━━━━━━━\n\n"
+            "User commands:\n"
+            "- TeacherBoy  (wake)\n"
+            "- Thank you TeacherBoy  (sleep 24h)\n"
+            "- help  (this message)\n"
+            "- news / ข่าว  (private: keyword translation only)\n"
+        )
+        if is_admin:
+            msg += (
+                "\nAdmin commands:\n"
+                "- /admin help\n"
+                "- /admin stats\n"
+                "- /admin leave ... (confirmation)\n"
+                "- /admin purge ... (confirmation)\n"
+                "- /admin confirm <token>\n"
+                "- /admin cancel <token>\n"
+            )
+        return msg
+
     def is_exit_command(self, text: str) -> bool:
         """Check if text is an exit command (ends session but doesn't sleep)."""
         # Sleep command is now the primary way to exit
@@ -113,6 +148,10 @@ class TranslationAgent(BaseAgent):
 
         # Always handle help command (even if sleeping)
         if self.is_help_command(text):
+            return True
+
+        # Plain help in private chat
+        if self._is_private_chat(event) and self.is_private_help_command(text):
             return True
 
         # Always handle wake command (even if not sleeping)
@@ -165,6 +204,21 @@ class TranslationAgent(BaseAgent):
                         quickReply=None,
                         quoteToken=None,
                     )
+                    if event.reply_token:
+                        line_bot_api.reply_message(
+                            ReplyMessageRequest(
+                                replyToken=event.reply_token,
+                                messages=[help_message],
+                                notificationDisabled=False,
+                            )
+                        )
+                    return True
+
+                # Private chat: contextual help (plain 'help')
+                if self._is_private_chat(event) and self.is_private_help_command(text):
+                    span.set_attribute("translation.command", "help_private")
+                    help_text = self._get_contextual_help(self._is_admin(user_id))
+                    help_message = TextMessage(text=help_text, quickReply=None, quoteToken=None)
                     if event.reply_token:
                         line_bot_api.reply_message(
                             ReplyMessageRequest(
@@ -296,6 +350,7 @@ class TranslationAgent(BaseAgent):
                 span.set_attribute("translation.provider", "google")
                 result = await google_translation_service.auto_translate(text)
             if result:
+                metrics_service.record_translation("google")
                 return result
             logger.warning("⚠️  Google Translate failed, trying LibreTranslate...")
 
@@ -307,7 +362,10 @@ class TranslationAgent(BaseAgent):
             else:
                 result = await translation_service.translate(text, "en", "th")
 
-        return result or "Translation failed"
+        if result:
+            metrics_service.record_translation("libre")
+            return result
+        return "Translation failed"
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         """Extract chat ID from event."""

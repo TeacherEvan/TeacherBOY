@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from src.agents.admin_agent import AdminAgent
 from src.services.session_manager import SessionManager
+from src.services.admin_confirmation_service import AdminConfirmationService
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.messaging import MessagingApi
 
@@ -33,8 +34,11 @@ def mock_line_bot_api():
     """Create a mock LINE Bot API."""
     api = Mock(spec=MessagingApi)
     api.reply_message = Mock()
+    api.push_message = Mock()
     api.leave_group = Mock()
     api.leave_room = Mock()
+    api.get_message_quota = Mock(return_value={"type": "limited", "value": 1000})
+    api.get_message_quota_consumption = Mock(return_value={"totalUsage": 123})
     return api
 
 
@@ -220,26 +224,34 @@ class TestAdminAgent:
 
     @pytest.mark.asyncio
     async def test_handle_leave_current_group(self, admin_agent, mock_event, mock_line_bot_api):
-        """Test /admin leave leaves the current group when invoked in a group."""
+        """Test /admin leave requests confirmation (does not leave immediately)."""
         mock_event.source.group_id = "C123456"
         mock_event.source.room_id = None
 
-        ok = await admin_agent.handle(mock_event, "/admin leave", mock_line_bot_api)
+        confirm_service = AdminConfirmationService()
+        confirm_service._generate_token = lambda: "tok123"  # type: ignore[method-assign]
+        with patch("src.agents.admin_agent.admin_confirmation_service", confirm_service):
+            ok = await admin_agent.handle(mock_event, "/admin leave", mock_line_bot_api)
         assert ok is True
         mock_line_bot_api.reply_message.assert_called_once()
-        mock_line_bot_api.leave_group.assert_called_once_with("C123456")
+        mock_line_bot_api.push_message.assert_called_once()
+        mock_line_bot_api.leave_group.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_handle_leave_specific_group_chat_id(self, admin_agent, mock_event, mock_line_bot_api):
-        """Test /admin leave group_<id> leaves a specific group."""
+        """Test /admin leave group_<id> requests confirmation."""
         # Simulate running the command from anywhere
         mock_event.source.group_id = None
         mock_event.source.room_id = None
 
-        ok = await admin_agent.handle(mock_event, "/admin leave group_C999", mock_line_bot_api)
+        confirm_service = AdminConfirmationService()
+        confirm_service._generate_token = lambda: "tok123"  # type: ignore[method-assign]
+        with patch("src.agents.admin_agent.admin_confirmation_service", confirm_service):
+            ok = await admin_agent.handle(mock_event, "/admin leave group_C999", mock_line_bot_api)
         assert ok is True
         mock_line_bot_api.reply_message.assert_called_once()
-        mock_line_bot_api.leave_group.assert_called_once_with("C999")
+        mock_line_bot_api.push_message.assert_called_once()
+        mock_line_bot_api.leave_group.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_handle_leave_invalid_in_user_chat(self, admin_agent, mock_event, mock_line_bot_api):
@@ -254,28 +266,60 @@ class TestAdminAgent:
         mock_line_bot_api.leave_room.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_handle_purge_command(self, admin_agent, mock_event, mock_line_bot_api):
-        """Test /admin purge clears internal state for the current chat."""
-        with patch("src.agents.admin_agent.session_manager") as mock_session_mgr, patch(
-            "src.agents.admin_agent.rate_limiter"
-        ) as mock_rate_limiter, patch(
-            "src.services.news_session_manager.news_session_manager"
-        ) as mock_news_sessions, patch(
-            "src.agents.news_agent.news_rate_limiter_friend"
-        ) as mock_news_rl:
-            mock_session_mgr.end_session.return_value = True
-            mock_session_mgr.wake_chat.return_value = False
-            mock_news_sessions.end_news_flow.return_value = True
+    async def test_confirm_executes_leave_in_private_chat(self, admin_agent, mock_event, mock_line_bot_api):
+        """Test /admin confirm executes the pending leave action when run in private chat."""
+        confirm_service = AdminConfirmationService()
+        confirm_service._generate_token = lambda: "tok123"  # type: ignore[method-assign]
 
-            ok = await admin_agent.handle(mock_event, "/admin purge", mock_line_bot_api)
+        # Request leave for a specific group
+        mock_event.source.group_id = None
+        mock_event.source.room_id = None
+        with patch("src.agents.admin_agent.admin_confirmation_service", confirm_service):
+            ok = await admin_agent.handle(mock_event, "/admin leave group_C999", mock_line_bot_api)
             assert ok is True
 
-            mock_session_mgr.end_session.assert_called_once()
-            mock_session_mgr.clear_message_history.assert_called_once()
-            mock_session_mgr.wake_chat.assert_called_once()
-            mock_rate_limiter.reset_chat.assert_called_once()
-            mock_news_sessions.end_news_flow.assert_called_once()
-            mock_news_rl.reset_chat.assert_called_once()
+            # Confirm in private chat (user_*)
+            confirm_event = Mock(spec=MessageEvent)
+            confirm_event.source = Mock()
+            confirm_event.source.user_id = mock_event.source.user_id
+            confirm_event.source.group_id = None
+            confirm_event.source.room_id = None
+            confirm_event.reply_token = "confirm_reply_token"
+
+            ok2 = await admin_agent.handle(confirm_event, "/admin confirm tok123", mock_line_bot_api)
+            assert ok2 is True
+            mock_line_bot_api.leave_group.assert_called_once_with("C999")
+
+    @pytest.mark.asyncio
+    async def test_stats_command(self, admin_agent, mock_event, mock_line_bot_api):
+        """Test /admin stats returns a dashboard response."""
+        with patch("src.agents.admin_agent.session_manager") as mock_session_mgr:
+            mock_session_mgr.get_active_sessions.return_value = {}
+            mock_session_mgr.get_sleeping_chats.return_value = {}
+
+            ok = await admin_agent.handle(mock_event, "/admin stats", mock_line_bot_api)
+            assert ok is True
+            mock_line_bot_api.reply_message.assert_called_once()
+            msg_text = mock_line_bot_api.reply_message.call_args[0][0].messages[0].text
+            assert "Admin Stats" in msg_text
+            assert "News requests" in msg_text
+            assert "Translation requests" in msg_text
+
+    @pytest.mark.asyncio
+    async def test_handle_purge_command(self, admin_agent, mock_event, mock_line_bot_api):
+        """Test /admin purge requests confirmation (does not purge immediately)."""
+        confirm_service = AdminConfirmationService()
+        confirm_service._generate_token = lambda: "tok123"  # type: ignore[method-assign]
+        with patch("src.agents.admin_agent.admin_confirmation_service", confirm_service), patch(
+            "src.agents.admin_agent.session_manager"
+        ) as mock_session_mgr, patch(
+            "src.agents.admin_agent.rate_limiter"
+        ) as mock_rate_limiter:
+            ok = await admin_agent.handle(mock_event, "/admin purge", mock_line_bot_api)
+            assert ok is True
+            mock_line_bot_api.push_message.assert_called_once()
+            mock_session_mgr.end_session.assert_not_called()
+            mock_rate_limiter.reset_chat.assert_not_called()
 
     def test_priority_higher_than_translation(self, admin_agent):
         """Test that admin agent has higher priority than translation agent."""

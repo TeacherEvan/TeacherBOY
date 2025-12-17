@@ -1,0 +1,58 @@
+import pytest
+from unittest.mock import Mock, patch
+
+from linebot.v3.webhooks import MessageEvent
+from linebot.v3.messaging import MessagingApi
+
+from src.agents.translation_agent import TranslationAgent
+
+
+@pytest.fixture
+def line_bot_api():
+    api = Mock(spec=MessagingApi)
+    api.reply_message = Mock()
+    return api
+
+
+def _make_private_event(user_id: str = "UUSER"):
+    event = Mock(spec=MessageEvent)
+    event.source = Mock()
+    event.source.user_id = user_id
+    event.source.group_id = None
+    event.source.room_id = None
+    event.reply_token = "reply_token"
+    return event
+
+
+@pytest.mark.asyncio
+async def test_private_help_non_admin_shows_user_commands(line_bot_api):
+    with patch("src.agents.translation_agent.settings") as mock_settings:
+        mock_settings.get_admin_user_ids.return_value = ["UADMIN"]
+        agent = TranslationAgent()
+
+    event = _make_private_event("UUSER")
+    assert await agent.should_handle(event, "help") is True
+
+    ok = await agent.handle(event, "help", line_bot_api)
+    assert ok is True
+
+    msg_text = line_bot_api.reply_message.call_args[0][0].messages[0].text
+    assert "User commands" in msg_text
+    assert "Admin commands" not in msg_text
+
+
+@pytest.mark.asyncio
+async def test_private_help_admin_includes_admin_commands(line_bot_api):
+    with patch("src.agents.translation_agent.settings") as mock_settings:
+        mock_settings.get_admin_user_ids.return_value = ["UADMIN"]
+        agent = TranslationAgent()
+
+    event = _make_private_event("UADMIN")
+    assert await agent.should_handle(event, "help") is True
+
+    ok = await agent.handle(event, "help", line_bot_api)
+    assert ok is True
+
+    msg_text = line_bot_api.reply_message.call_args[0][0].messages[0].text
+    assert "User commands" in msg_text
+    assert "Admin commands" in msg_text

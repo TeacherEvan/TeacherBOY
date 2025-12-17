@@ -56,7 +56,6 @@ Legacy docs at repo root are kept for backward compatibility.
 - **👑 Admin Access:** Unlimited news requests for admin users
 - **🌍 Extended Data:** Lucky color, Bitcoin price, exchange rates, Thai holidays, festivals
 - **🌍 Bilingual:** Full Thai and English support
-- **⚖️ Legal Info:** Cannabis, E-Cigarette, and Alcohol status (preset)
 - **🔗 Clickable Headlines:** Top 5 news with direct links
 - **📚 Resources:** View data sources (Open-Meteo, NewsAPI, ThaiPBS, Bangkok Post)
 - **⏰ Smart Caching:** 30-min weather, 1-hour news cache (reduces API calls)

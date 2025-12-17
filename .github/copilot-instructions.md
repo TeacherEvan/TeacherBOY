@@ -111,11 +111,11 @@ Try again in ~45 minutes
 
 1. **Weather & Air Quality** 🌡️💨 → Bangkok temperature + PM2.5 (inline, Open-Meteo)
 2. **Rain Forecast** 🌧️ → 5-hour rain prediction (inline, Open-Meteo)
-3. **Legal Info** 🍃🚭🍺 → Cannabis, e-cigs, alcohol status (inline, static Thai law)
-   📅 **Next Holiday** → Next upcoming Thai holiday (inline, `holidays` library)
-   ₿ **Bitcoin Price** → BTC/USD + 24h change (inline, CoinGecko free API)
-   💱 **Exchange Rate** → THB→USD (inline, ExchangeRate-API or fallback)
-   📰 **Headlines 1-5** → Interactive - select to view full article link (Bangkok Post RSS)
+3. 📅 **Next Holiday** → Next upcoming Thai holiday (inline, `holidays` library)
+4. 📈 **Indices** → S&P 500, DJIA, FTSE 100 (best-effort)
+5. ₿ **Crypto** → BTC, ETH, USDT (inline, CoinGecko)
+6. 💱 **Exchange Rate** → THB→USD (+ others) (inline, ExchangeRate-API or fallback)
+7. 📰 **Headlines 1-5** → Interactive - select to view full article link (Bangkok Post RSS)
 
 **Output:** Terse, robotic, single emoji per bullet. No instructions or chatter.
 

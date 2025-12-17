@@ -18,19 +18,13 @@ from .base_agent import BaseAgent
 from src.services.news_session_manager import news_session_manager
 from src.services.news_data_service import NewsDataService
 from src.services.rate_limiter import RateLimiter
+from src.services.metrics_service import metrics_service
 from src.config import settings
 
 logger = logging.getLogger(__name__)
 
 # Rate limiters for news requests
 news_rate_limiter_friend = RateLimiter(max_requests=1, time_window_seconds=3600)  # 1/hour for friends
-
-# Legal information constants (as of Dec 2024 - update if laws change)
-LEGAL_INFO = {
-    "cannabis": {"th": "ถูกกฎหมาย (Legal)", "en": "Legal"},
-    "ecig": {"th": "*ผิดกฎหมาย* (NOT LEGAL)", "en": "*NOT LEGAL*"},
-    "alcohol": {"th": "ควรระวัง (Prescriptive)", "en": "Prescriptive"},
-}
 
 
 class NewsAgent(BaseAgent):
@@ -232,6 +226,9 @@ class NewsAgent(BaseAgent):
                 elif user_id:
                     logger.debug(f"🔓 Admin {user_id} bypassed news rate limit")
 
+                    # Track successful news request (menu will be shown)
+                    metrics_service.record_news_request()
+
                 # Auto-detect language from trigger word
                 trigger_text = self._normalize_trigger_text(text)
                 language = "th" if self._is_thai_text(trigger_text) else "en"
@@ -384,9 +381,6 @@ class NewsAgent(BaseAgent):
         msg = "📰 Bangkok\n\n"
         msg += f"🌡️ อุณหภูมิ: {temp}°C | 💨 PM2.5: {pm25}\n"
         msg += f"🌧️ 5 ชม.ข้างหน้า: {rain_text}\n"
-        msg += f"🍃 กัญชา: {LEGAL_INFO['cannabis']['th']}\n"
-        msg += f"🚭 บุหรี่ไฟฟ้า: {LEGAL_INFO['ecig']['th']}\n"
-        msg += f"🍺 แอลกอฮอล์: {LEGAL_INFO['alcohol']['th']}\n"
         
         # Next holiday (first upcoming only)
         if holidays and len(holidays) > 0:
@@ -447,9 +441,6 @@ class NewsAgent(BaseAgent):
         msg = "📰 Bangkok\n\n"
         msg += f"🌡️ Temp: {temp}°C | 💨 PM2.5: {pm25}\n"
         msg += f"🌧️ Next 5h rain: {rain_text}\n"
-        msg += f"🍃 Cannabis: {LEGAL_INFO['cannabis']['en']}\n"
-        msg += f"🚭 E-Cigs: {LEGAL_INFO['ecig']['en']}\n"
-        msg += f"🍺 Alcohol: {LEGAL_INFO['alcohol']['en']}\n"
         
         # Next holiday (first upcoming only)
         if holidays and len(holidays) > 0:

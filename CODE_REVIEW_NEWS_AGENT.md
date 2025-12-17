@@ -115,31 +115,9 @@ ttl = self._ttl_seconds.get(category, 3600)
 
 ---
 
-### 3. **Hardcoded Legal Information** (Design Decision)
+### 3. **Legal Information** (Removed)
 
-**Location**: `src/agents/news_agent.py:193-195`, `210-212`
-
-```python
-msg += f"🍃 Cannabis: Legal\n"
-msg += f"🚭 E-Cigarettes: *NOT LEGAL*\n"
-msg += f"🍺 Alcohol: Prescriptive\n\n"
-```
-
-**Observation**: Legal status is hardcoded as requested, but laws can change.
-
-**Recommendation**: Consider adding a comment or configuration option:
-
-```python
-# Legal status as of Dec 2024 - update if laws change
-LEGAL_INFO = {
-    "cannabis": {"th": "ถูกกฎหมาย (Legal)", "en": "Legal"},
-    "ecig": {"th": "*ผิดกฎหมาย* (NOT LEGAL)", "en": "*NOT LEGAL*"},
-    "alcohol": {"th": "ควรระวัง (Prescriptive)", "en": "Prescriptive"},
-}
-```
-
-**Severity**: Informational  
-**Impact**: Easier to update when laws change
+**Status**: The hardcoded legal-info section has been removed from the NewsAgent menu output.
 
 ---
 
@@ -399,7 +377,7 @@ None! Code is production-ready. ✅
 
 ### Low Priority (Future Improvements)
 
-1. **Extract legal info** to configuration constant
+1. Remove/avoid hardcoded legal-info section
 2. **Add async cache locks** (if concurrent load increases)
 3. **Fix markdown linting** in docs (language specifiers)
 4. **Add periodic cleanup task** for memory management
@@ -430,7 +408,7 @@ None! Code is production-ready. ✅
 ### For Next Iteration
 
 1. Add 5-10 more tests covering edge cases (~2 hours)
-2. Extract legal info to config constant (~15 minutes)
+2. Keep docs/examples aligned with current menu (~15 minutes)
 3. Fix markdown linting in docs (~10 minutes)
 
 ### For Future Enhancements
