@@ -93,6 +93,7 @@ async def test_only_session_owner_can_interact(news_agent, mock_line_api):
     
     # Session should still be in main_menu (not advanced)
     session = news_session_manager.get_session_state("group_G_TEST")
+    assert session is not None
     assert session["step"] == "main_menu"
     
     # User1 can still interact

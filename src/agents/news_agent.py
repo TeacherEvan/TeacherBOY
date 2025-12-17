@@ -120,7 +120,8 @@ class NewsAgent(BaseAgent):
             logger.info(f"📰 User {user_id} is a friend (verified via LINE API)")
             return True
         except ApiException as e:
-            logger.info(f"📰 User {user_id} is NOT a friend (ApiException: {e.status_code})", exc_info=False)
+            status = getattr(e, 'status_code', 'unknown')
+            logger.info(f"📰 User {user_id} is NOT a friend (ApiException: {status})", exc_info=False)
             return False
         except Exception as e:
             logger.warning(f"📰 Friendship check failed for {user_id}: {e}", exc_info=False)
