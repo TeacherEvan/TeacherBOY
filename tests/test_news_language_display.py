@@ -137,8 +137,12 @@ async def test_menu_format_uses_translated_headlines(news_agent):
         {"title": "ข่าวแรก", "url": "https://example.com/1"},
         {"title": "ข่าวที่สอง", "url": "https://example.com/2"},
     ]
+    holidays = [{"date": "Apr 13", "name_th": "วันสงกรานต์", "name_en": "Songkran Festival"}]
+    bitcoin = {"price": "50000", "change": "+5.2"}
+    exchange = {"thb_to_usd": "0.028"}
+    festivals = []
     
-    menu = news_agent._format_menu_thai(weather, headlines_thai)
+    menu = news_agent._format_menu_thai(weather, headlines_thai, holidays, bitcoin, exchange, festivals)
     
     # Verify Thai headlines appear in menu
     assert "ข่าวแรก" in menu
@@ -154,8 +158,12 @@ async def test_menu_format_english_headlines(news_agent):
         {"title": "First news", "url": "https://example.com/1"},
         {"title": "Second news", "url": "https://example.com/2"},
     ]
+    holidays = [{"date": "Apr 13", "name_th": "วันสงกรานต์", "name_en": "Songkran Festival"}]
+    bitcoin = {"price": "50000", "change": "+5.2"}
+    exchange = {"thb_to_usd": "0.028"}
+    festivals = []
     
-    menu = news_agent._format_menu_english(weather, headlines_en)
+    menu = news_agent._format_menu_english(weather, headlines_en, holidays, bitcoin, exchange, festivals)
     
     # Verify English headlines appear in menu
     assert "First news" in menu

@@ -91,6 +91,11 @@ class TranslationAgent(BaseAgent):
         # Sleep command is now the primary way to exit
         return self.is_sleep_command(text)
 
+    def is_news_trigger(self, text: str) -> bool:
+        """Check if text is a news trigger word (should be handled by NewsAgent)."""
+        text_clean = text.lower().strip()
+        return text_clean in ["news", "ข่าว"]
+
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
         Handle if:
@@ -98,6 +103,8 @@ class TranslationAgent(BaseAgent):
         2. Thai text detected (auto-start session)
         3. Session is active for this chat
         4. Sleep command (to properly put bot to sleep)
+        
+        NOTE: Skip news triggers ("news", "ข่าว") - let NewsAgent handle them.
         """
         chat_id = self._get_chat_id(event)
 
@@ -116,6 +123,10 @@ class TranslationAgent(BaseAgent):
         # Always handle sleep commands if session is active
         if self.is_sleep_command(text):
             return session_manager.is_session_active(chat_id)
+
+        # Skip news triggers - let NewsAgent handle them
+        if self.is_news_trigger(text):
+            return False
 
         # Handle if Thai detected or session is active
         return self.contains_thai(text) or session_manager.is_session_active(chat_id)
