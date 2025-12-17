@@ -138,8 +138,8 @@ async def test_menu_format_uses_translated_headlines(news_agent):
         {"title": "ข่าวที่สอง", "url": "https://example.com/2"},
     ]
     holidays = [{"date": "Apr 13", "name_th": "วันสงกรานต์", "name_en": "Songkran Festival"}]
-    bitcoin = {"price": "50000", "change": "+5.2"}
-    exchange = {"thb_to_usd": "0.028"}
+    bitcoin = {"price_usd": "$50,000.00", "change_24h_percent": "+5.20%"}
+    exchange = {"thb_usd": "0.028"}
     festivals = []
     
     menu = news_agent._format_menu_thai(weather, headlines_thai, holidays, bitcoin, exchange, festivals)
@@ -159,8 +159,8 @@ async def test_menu_format_english_headlines(news_agent):
         {"title": "Second news", "url": "https://example.com/2"},
     ]
     holidays = [{"date": "Apr 13", "name_th": "วันสงกรานต์", "name_en": "Songkran Festival"}]
-    bitcoin = {"price": "50000", "change": "+5.2"}
-    exchange = {"thb_to_usd": "0.028"}
+    bitcoin = {"price_usd": "$50,000.00", "change_24h_percent": "+5.20%"}
+    exchange = {"thb_usd": "0.028"}
     festivals = []
     
     menu = news_agent._format_menu_english(weather, headlines_en, holidays, bitcoin, exchange, festivals)

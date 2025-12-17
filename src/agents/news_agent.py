@@ -36,6 +36,8 @@ LEGAL_INFO = {
 class NewsAgent(BaseAgent):
     """Agent for handling multi-step news conversations with weather and headlines."""
 
+    _NEWS_TRIGGERS = {"news", "ข่าว", "นิวส์"}
+
     def __init__(self, news_data_service: NewsDataService):
         super().__init__(
             name="NewsAgent",
@@ -77,10 +79,20 @@ class NewsAgent(BaseAgent):
         # Pattern: [Name], [系統], etc.
         return bool(re.match(r"^\[.*\]$", text.strip()))
 
+    def _normalize_trigger_text(self, text: str) -> str:
+        """Normalize trigger text (lowercase, trimmed, strip trailing punctuation)."""
+        text_clean = text.lower().strip()
+        # Allow common punctuation after the trigger: "news!" / "ข่าว." / etc.
+        return re.sub(r"[\s.!?]+$", "", text_clean)
+
+    def _is_thai_text(self, text: str) -> bool:
+        """Return True when text contains Thai characters."""
+        return any("\u0E00" <= char <= "\u0E7F" for char in text)
+
     def _is_news_trigger(self, text: str) -> bool:
         """Check if text is a news trigger word."""
-        text_clean = text.lower().strip()
-        return text_clean in ["news", "ข่าว"]
+        text_clean = self._normalize_trigger_text(text)
+        return text_clean in self._NEWS_TRIGGERS
 
     def _is_shutdown_phrase(self, text: str) -> bool:
         """
@@ -221,8 +233,8 @@ class NewsAgent(BaseAgent):
                     logger.debug(f"🔓 Admin {user_id} bypassed news rate limit")
 
                 # Auto-detect language from trigger word
-                text_lower = text.lower().strip()
-                language = "th" if text_lower == "ข่าว" else "en"
+                trigger_text = self._normalize_trigger_text(text)
+                language = "th" if self._is_thai_text(trigger_text) else "en"
                 
                 # Start flow with detected language and go straight to menu
                 news_session_manager.start_news_flow(chat_id, user_id)
@@ -670,13 +682,13 @@ class NewsAgent(BaseAgent):
         self, event: MessageEvent, line_bot_api: MessagingApi, text: str
     ):
         """Translate the trigger word to the other language (group/non-friend or private)."""
-        text_lower = text.lower().strip()
-        if text_lower == "news":
+        trigger_text = self._normalize_trigger_text(text)
+        if trigger_text == "news":
             translated = "ข่าว"
+            msg = f"news → {translated}"
         else:
             translated = "news"
-
-        msg = f"news → {translated}" if text_lower == "news" else f"ข่าว → {translated}"
+            msg = f"{text.strip()} → {translated}"
 
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
 

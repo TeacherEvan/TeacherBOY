@@ -16,12 +16,35 @@ class DataCache:
     def __init__(self):
         """Initialize cache with TTL settings."""
         self._cache: Dict[str, Tuple[Any, datetime]] = {}
-        self._ttl_seconds = {
-            "weather": 1800,  # 30 minutes
-            "news_th": 3600,  # 1 hour
-            "news_en": 3600,  # 1 hour
-            "thai_holidays": 86400,  # 24 hours
-        }
+        # Keep cache TTLs aligned with config defaults/env overrides.
+        try:
+            from src.config import settings
+
+            self._ttl_seconds = {
+                "weather": settings.weather_cache_ttl_seconds,
+                "news_th": settings.news_cache_ttl_seconds,
+                "news_en": settings.news_cache_ttl_seconds,
+                "thai_holidays": settings.holiday_cache_ttl_seconds,
+                "bitcoin_price": settings.bitcoin_cache_ttl_seconds,
+                "exchange_rates": settings.exchange_cache_ttl_seconds,
+                "color_of_day": settings.color_cache_ttl_seconds,
+                "sunset_sunrise": settings.sunset_cache_ttl_seconds,
+                # Festivals aren't separately configurable; use news cache TTL.
+                "festivals": settings.news_cache_ttl_seconds,
+            }
+        except Exception:
+            # Conservative fallback if settings can't be imported (e.g., in unusual test contexts)
+            self._ttl_seconds = {
+                "weather": 1800,  # 30 minutes
+                "news_th": 3600,  # 1 hour
+                "news_en": 3600,  # 1 hour
+                "thai_holidays": 604800,  # 7 days
+                "bitcoin_price": 300,  # 5 minutes
+                "exchange_rates": 3600,  # 1 hour
+                "color_of_day": 86400,  # 24 hours
+                "sunset_sunrise": 86400,  # 24 hours
+                "festivals": 3600,  # 1 hour
+            }
 
     def get(self, key: str) -> Optional[Any]:
         """

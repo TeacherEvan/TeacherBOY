@@ -72,6 +72,10 @@ async def test_translation_agent_skips_news_trigger(translation_agent, mock_even
     # Test that TranslationAgent skips "ข่าว"
     should_handle = await translation_agent.should_handle(mock_event_group, "ข่าว")
     assert not should_handle, "TranslationAgent should NOT handle 'ข่าว' trigger"
+
+    # Thai transliteration: "นิวส์"
+    should_handle = await translation_agent.should_handle(mock_event_group, "นิวส์")
+    assert not should_handle, "TranslationAgent should NOT handle 'นิวส์' trigger"
     
     # Test with different casing
     should_handle = await translation_agent.should_handle(mock_event_group, "News")
@@ -97,6 +101,9 @@ async def test_translation_agent_skips_news_even_with_active_session(translation
         
         should_handle = await translation_agent.should_handle(mock_event_group, "ข่าว")
         assert not should_handle, "TranslationAgent should NOT handle 'ข่าว' even with active session"
+
+        should_handle = await translation_agent.should_handle(mock_event_group, "นิวส์")
+        assert not should_handle, "TranslationAgent should NOT handle 'นิวส์' even with active session"
     finally:
         # Clean up
         session_manager.end_session(chat_id)
@@ -129,6 +136,10 @@ async def test_news_agent_handles_news_trigger(news_agent, mock_event_group):
     # NewsAgent should handle "ข่าว"
     should_handle = await news_agent.should_handle(mock_event_group, "ข่าว")
     assert should_handle, "NewsAgent should handle 'ข่าว' trigger"
+
+    # NewsAgent should handle Thai transliteration: "นิวส์"
+    should_handle = await news_agent.should_handle(mock_event_group, "นิวส์")
+    assert should_handle, "NewsAgent should handle 'นิวส์' trigger"
     
     # Clean up
     news_session_manager.end_news_flow(chat_id)
@@ -159,8 +170,14 @@ async def test_is_news_trigger_method(translation_agent):
     assert translation_agent.is_news_trigger("News")
     assert translation_agent.is_news_trigger("NEWS")
     assert translation_agent.is_news_trigger("ข่าว")
+    assert translation_agent.is_news_trigger("นิวส์")
     assert translation_agent.is_news_trigger(" news ")
     assert translation_agent.is_news_trigger(" ข่าว ")
+
+    # Allow trailing punctuation
+    assert translation_agent.is_news_trigger("news!")
+    assert translation_agent.is_news_trigger("ข่าว.")
+    assert translation_agent.is_news_trigger("นิวส์!")
     
     # Negative cases
     assert not translation_agent.is_news_trigger("new")
@@ -168,3 +185,23 @@ async def test_is_news_trigger_method(translation_agent):
     assert not translation_agent.is_news_trigger("hello")
     assert not translation_agent.is_news_trigger("สวัสดี")
     assert not translation_agent.is_news_trigger("")
+
+
+@pytest.mark.asyncio
+async def test_news_agent_thai_alias_sets_th_language(news_agent, mock_event_group):
+    """Typing Thai 'news' (e.g., นิวส์) should start Thai menu, not English."""
+    chat_id = "group_test_group_456"
+    news_session_manager.end_news_flow(chat_id)
+
+    mock_line_bot_api = MagicMock()
+    mock_event_group.reply_token = "reply_token_123"
+
+    with patch.object(news_agent, "_is_friend", new_callable=AsyncMock, return_value=True), \
+         patch.object(news_agent, "_send_main_menu", new_callable=AsyncMock) as mock_send_menu:
+        handled = await news_agent.handle(mock_event_group, "นิวส์", mock_line_bot_api)
+        assert handled is True
+        assert mock_send_menu.call_count == 1
+        # args: (event, line_bot_api, language)
+        assert mock_send_menu.call_args[0][2] == "th"
+
+    news_session_manager.end_news_flow(chat_id)

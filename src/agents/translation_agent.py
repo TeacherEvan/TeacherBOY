@@ -2,6 +2,7 @@
 
 import logging
 import re
+from typing import Optional
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
     MessagingApi,
@@ -26,6 +27,8 @@ tracer = get_tracer(__name__)
 class TranslationAgent(BaseAgent):
     """Agent for handling Thai/English translation with smart session management."""
 
+    _NEWS_TRIGGERS = {"news", "ข่าว", "นิวส์"}
+
     def __init__(self):
         super().__init__(
             name="TranslationAgent",
@@ -37,7 +40,7 @@ class TranslationAgent(BaseAgent):
         """Translation has high priority."""
         return 10
 
-    def _is_admin(self, user_id: str) -> bool:
+    def _is_admin(self, user_id: Optional[str]) -> bool:
         """Check if user is an admin (admins bypass rate limits)."""
         return user_id in self._admin_user_ids if user_id else False
 
@@ -93,8 +96,8 @@ class TranslationAgent(BaseAgent):
 
     def is_news_trigger(self, text: str) -> bool:
         """Check if text is a news trigger word (should be handled by NewsAgent)."""
-        text_clean = text.lower().strip()
-        return text_clean in ["news", "ข่าว"]
+        text_clean = re.sub(r"[\s.!?]+$", "", text.lower().strip())
+        return text_clean in self._NEWS_TRIGGERS
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
