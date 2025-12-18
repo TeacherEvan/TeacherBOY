@@ -4,6 +4,24 @@
 
 The Admin Agent provides powerful in-chat control commands for authorized administrators to manage TeacherBOY's behavior, monitor sessions, and troubleshoot issues without needing access to the server.
 
+## 👑 Privileged Access Levels
+
+TeacherBOY supports **two levels of privileged access**:
+
+### 🔐 Admin Users (Full Control)
+- **Access:** All `/admin` commands for bot management
+- **News:** Direct news access (bypass translation, unlimited requests)
+- **Rate Limits:** Bypass all rate limits
+- **Use Cases:** Bot owners, system administrators
+
+### 👥 Moderator Users (News Access Only)
+- **Access:** No admin commands (cannot use `/admin`)
+- **News:** Direct news access in all contexts (private chats + groups)
+- **Rate Limits:** Bypass news rate limits
+- **Use Cases:** Team members, VIPs, community moderators
+
+> **Key Difference:** Admins can manage the bot via commands; Moderators only get privileged news access.
+
 ## Features
 
 ✅ **Authorization System**: Only authorized LINE users can execute admin commands  
@@ -24,17 +42,29 @@ Your LINE user ID is automatically logged when you send a message to the bot. To
    User ID: U1234567890abcdef
    ```
 
-### Step 2: Add Admin User IDs
+### Step 2: Configure Access Levels
 
-Edit your `.env` file and add the `ADMIN_USER_IDS` variable:
+Edit your `.env` file and add user IDs:
 
+#### Admin Users (Full Control)
 ```bash
 # Single admin
 ADMIN_USER_IDS=U1234567890abcdef
 
 # Multiple admins (comma-separated)
-ADMIN_USER_IDS=U1234567890abcdef,U9876543210fedcba,Uaabbccddeeff0011
+ADMIN_USER_IDS=U1234567890abcdef,U9876543210fedcba
 ```
+
+#### Moderator Users (News Access Only)
+```bash
+# Single moderator
+MODERATOR_USER_IDS=U9876543210fedcba
+
+# Multiple moderators (comma-separated)
+MODERATOR_USER_IDS=U9876543210fedcba,Uaabbccddeeff0011,U1122334455667788
+```
+
+> **Note:** Users can be both admin and moderator, but admin privileges supersede moderator privileges.
 
 ### Step 3: Restart the Bot
 
