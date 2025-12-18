@@ -58,6 +58,35 @@ def mock_line_bot_api():
     return api
 
 
+@pytest.fixture
+def mock_news_data():
+    """Standard mock news data for testing."""
+    return {
+        "weather": {"temperature": "30", "pm25": "50", "will_rain": False},
+        "headlines": [{"title": "Test Headline", "url": "https://example.com/news1"}],
+        "holidays": [{"date": "2024-12-31", "name_en": "New Year", "name_th": "ปีใหม่"}],
+        "indices": {"S&P 500": "4500", "DJIA": "35000", "FTSE 100": "7500"},
+        "crypto": {
+            "btc": {"price_usd": "$50000", "change_24h_percent": "+2%"},
+            "eth": {"price_usd": "$3000", "change_24h_percent": "+1%"},
+            "usdt": {"price_usd": "$1.00", "change_24h_percent": "0%"}
+        },
+        "exchange": {
+            "usd": "0.029", "jpy": "4.2", "zar": "0.5",
+            "aud": "0.043", "gbp": "0.023", "rub": "2.7"
+        }
+    }
+
+
+@pytest.fixture(autouse=True)
+def cleanup_sessions():
+    """Automatically cleanup news sessions after each test."""
+    yield
+    # Cleanup common test chat IDs
+    for chat_id in ["group_G_test_group", "user_U_mod_456", "user_U_regular_user"]:
+        news_session_manager.end_news_flow(chat_id)
+
+
 class TestModeratorAuthentication:
     """Test moderator authentication and privilege checks."""
 
@@ -90,7 +119,7 @@ class TestModeratorPrivateChat:
 
     @pytest.mark.asyncio
     async def test_moderator_gets_menu_in_private_chat(
-        self, news_agent_with_moderators, mock_event, mock_line_bot_api
+        self, news_agent_with_moderators, mock_event, mock_line_bot_api, mock_news_data
     ):
         """Test that moderators get full news menu in private chat."""
         # Set as moderator and private chat
@@ -100,31 +129,18 @@ class TestModeratorPrivateChat:
         
         # Mock news data
         with patch.object(
-            news_agent_with_moderators.news_service, "get_weather_data", new_callable=AsyncMock
-        ) as mock_weather, patch.object(
-            news_agent_with_moderators.news_service, "get_news_headlines", new_callable=AsyncMock
-        ) as mock_headlines, patch.object(
-            news_agent_with_moderators.news_service, "get_thai_holidays", new_callable=AsyncMock
-        ) as mock_holidays, patch.object(
-            news_agent_with_moderators.news_service, "get_market_indices", new_callable=AsyncMock
-        ) as mock_indices, patch.object(
-            news_agent_with_moderators.news_service, "get_crypto_prices", new_callable=AsyncMock
-        ) as mock_crypto, patch.object(
-            news_agent_with_moderators.news_service, "get_exchange_rates", new_callable=AsyncMock
+            news_agent_with_moderators.news_service, "get_weather_data", new_callable=AsyncMock, return_value=mock_news_data["weather"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_news_headlines", new_callable=AsyncMock, return_value=mock_news_data["headlines"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_thai_holidays", new_callable=AsyncMock, return_value=mock_news_data["holidays"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_market_indices", new_callable=AsyncMock, return_value=mock_news_data["indices"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_crypto_prices", new_callable=AsyncMock, return_value=mock_news_data["crypto"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_exchange_rates", new_callable=AsyncMock, return_value=mock_news_data["exchange"]
         ) as mock_exchange:
-            
-            mock_weather.return_value = {"temperature": "30", "pm25": "50", "will_rain": False}
-            mock_headlines.return_value = [
-                {"title": "Test Headline", "url": "https://example.com/news1"}
-            ]
-            mock_holidays.return_value = [{"date": "2024-12-31", "name_en": "New Year", "name_th": "ปีใหม่"}]
-            mock_indices.return_value = {"S&P 500": "4500", "DJIA": "35000", "FTSE 100": "7500"}
-            mock_crypto.return_value = {
-                "btc": {"price_usd": "$50000", "change_24h_percent": "+2%"},
-                "eth": {"price_usd": "$3000", "change_24h_percent": "+1%"},
-                "usdt": {"price_usd": "$1.00", "change_24h_percent": "0%"}
-            }
-            mock_exchange.return_value = {"usd": "0.029", "jpy": "4.2", "zar": "0.5", "aud": "0.043", "gbp": "0.023", "rub": "2.7"}
             
             # Handle news trigger
             result = await news_agent_with_moderators.handle(
@@ -134,8 +150,8 @@ class TestModeratorPrivateChat:
             assert result is True
             # Verify API was called to send menu (not translation)
             assert mock_line_bot_api.reply_message.called
-            # Verify weather data was fetched (indicates menu was shown)
-            assert mock_weather.called
+            # Verify exchange data was fetched (indicates menu was shown)
+            assert mock_exchange.called
 
     @pytest.mark.asyncio
     async def test_regular_user_gets_translation_in_private_chat(
@@ -167,7 +183,7 @@ class TestModeratorRateLimiting:
 
     @pytest.mark.asyncio
     async def test_moderator_bypasses_rate_limit(
-        self, news_agent_with_moderators, mock_event, mock_line_bot_api
+        self, news_agent_with_moderators, mock_event, mock_line_bot_api, mock_news_data
     ):
         """Test that moderators bypass rate limits in groups."""
         # Set as moderator in group chat
@@ -180,35 +196,21 @@ class TestModeratorRateLimiting:
         
         # Mock news data
         with patch.object(
-            news_agent_with_moderators.news_service, "get_weather_data", new_callable=AsyncMock
-        ) as mock_weather, patch.object(
-            news_agent_with_moderators.news_service, "get_news_headlines", new_callable=AsyncMock
-        ) as mock_headlines, patch.object(
-            news_agent_with_moderators.news_service, "get_thai_holidays", new_callable=AsyncMock
-        ) as mock_holidays, patch.object(
-            news_agent_with_moderators.news_service, "get_market_indices", new_callable=AsyncMock
-        ) as mock_indices, patch.object(
-            news_agent_with_moderators.news_service, "get_crypto_prices", new_callable=AsyncMock
-        ) as mock_crypto, patch.object(
-            news_agent_with_moderators.news_service, "get_exchange_rates", new_callable=AsyncMock
-        ) as mock_exchange:
-            
-            mock_weather.return_value = {"temperature": "30", "pm25": "50", "will_rain": False}
-            mock_headlines.return_value = [{"title": "Test", "url": "https://example.com"}]
-            mock_holidays.return_value = [{"date": "2024-12-31", "name_en": "New Year", "name_th": "ปีใหม่"}]
-            mock_indices.return_value = {"S&P 500": "4500", "DJIA": "35000", "FTSE 100": "7500"}
-            mock_crypto.return_value = {
-                "btc": {"price_usd": "$50000", "change_24h_percent": "+2%"},
-                "eth": {"price_usd": "$3000", "change_24h_percent": "+1%"},
-                "usdt": {"price_usd": "$1.00", "change_24h_percent": "0%"}
-            }
-            mock_exchange.return_value = {"usd": "0.029", "jpy": "4.2", "zar": "0.5", "aud": "0.043", "gbp": "0.023", "rub": "2.7"}
+            news_agent_with_moderators.news_service, "get_weather_data", new_callable=AsyncMock, return_value=mock_news_data["weather"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_news_headlines", new_callable=AsyncMock, return_value=mock_news_data["headlines"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_thai_holidays", new_callable=AsyncMock, return_value=mock_news_data["holidays"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_market_indices", new_callable=AsyncMock, return_value=mock_news_data["indices"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_crypto_prices", new_callable=AsyncMock, return_value=mock_news_data["crypto"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_exchange_rates", new_callable=AsyncMock, return_value=mock_news_data["exchange"]
+        ):
             
             # Request news multiple times (should not be rate limited)
             chat_id = "group_G_test_group"
-            
-            # Clean up any existing session
-            news_session_manager.end_news_flow(chat_id)
             
             # First request
             result1 = await news_agent_with_moderators.handle(
@@ -234,7 +236,7 @@ class TestModeratorInGroups:
 
     @pytest.mark.asyncio
     async def test_moderator_gets_menu_in_group(
-        self, news_agent_with_moderators, mock_event, mock_line_bot_api
+        self, news_agent_with_moderators, mock_event, mock_line_bot_api, mock_news_data
     ):
         """Test that moderators get full news menu in groups."""
         # Set as moderator in group chat
@@ -242,38 +244,22 @@ class TestModeratorInGroups:
         mock_event.source.group_id = "G_test_group"
         mock_event.source.room_id = None
         
-        # Clean up any existing session
-        chat_id = "group_G_test_group"
-        news_session_manager.end_news_flow(chat_id)
-        
         # Mock news data
         with patch.object(
-            news_agent_with_moderators.news_service, "get_weather_data", new_callable=AsyncMock
+            news_agent_with_moderators.news_service, "get_weather_data", new_callable=AsyncMock, return_value=mock_news_data["weather"]
         ) as mock_weather, patch.object(
-            news_agent_with_moderators.news_service, "get_news_headlines", new_callable=AsyncMock
-        ) as mock_headlines, patch.object(
-            news_agent_with_moderators.news_service, "get_thai_holidays", new_callable=AsyncMock
-        ) as mock_holidays, patch.object(
-            news_agent_with_moderators.news_service, "get_market_indices", new_callable=AsyncMock
-        ) as mock_indices, patch.object(
-            news_agent_with_moderators.news_service, "get_crypto_prices", new_callable=AsyncMock
-        ) as mock_crypto, patch.object(
-            news_agent_with_moderators.news_service, "get_exchange_rates", new_callable=AsyncMock
-        ) as mock_exchange, patch.object(
-            news_agent_with_moderators, "_translate_headlines_to_thai", new_callable=AsyncMock
-        ) as mock_translate:
-            
-            mock_weather.return_value = {"temperature": "30", "pm25": "50", "will_rain": False}
-            mock_headlines.return_value = [{"title": "Test", "url": "https://example.com"}]
-            mock_holidays.return_value = [{"date": "2024-12-31", "name_en": "New Year", "name_th": "ปีใหม่"}]
-            mock_indices.return_value = {"S&P 500": "4500", "DJIA": "35000", "FTSE 100": "7500"}
-            mock_crypto.return_value = {
-                "btc": {"price_usd": "$50000", "change_24h_percent": "+2%"},
-                "eth": {"price_usd": "$3000", "change_24h_percent": "+1%"},
-                "usdt": {"price_usd": "$1.00", "change_24h_percent": "0%"}
-            }
-            mock_exchange.return_value = {"usd": "0.029", "jpy": "4.2", "zar": "0.5", "aud": "0.043", "gbp": "0.023", "rub": "2.7"}
-            mock_translate.return_value = [{"title": "Test", "url": "https://example.com"}]
+            news_agent_with_moderators.news_service, "get_news_headlines", new_callable=AsyncMock, return_value=mock_news_data["headlines"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_thai_holidays", new_callable=AsyncMock, return_value=mock_news_data["holidays"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_market_indices", new_callable=AsyncMock, return_value=mock_news_data["indices"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_crypto_prices", new_callable=AsyncMock, return_value=mock_news_data["crypto"]
+        ), patch.object(
+            news_agent_with_moderators.news_service, "get_exchange_rates", new_callable=AsyncMock, return_value=mock_news_data["exchange"]
+        ), patch.object(
+            news_agent_with_moderators, "_translate_headlines_to_thai", new_callable=AsyncMock, return_value=mock_news_data["headlines"]
+        ):
             
             # Handle news trigger
             result = await news_agent_with_moderators.handle(
@@ -294,10 +280,6 @@ class TestModeratorInGroups:
         mock_event.source.user_id = "U_regular_user"
         mock_event.source.group_id = "G_test_group"
         mock_event.source.room_id = None
-        
-        # Clean up any existing session
-        chat_id = "group_G_test_group"
-        news_session_manager.end_news_flow(chat_id)
         
         # Mock as non-friend (get_profile raises exception)
         mock_line_bot_api.get_profile = Mock(side_effect=ApiException(status=400, reason="Not a friend"))
