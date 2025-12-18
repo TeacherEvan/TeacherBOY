@@ -39,6 +39,7 @@ class NewsAgent(BaseAgent):
         )
         self.news_service = news_data_service
         self._admin_user_ids = settings.get_admin_user_ids()
+        self._moderator_user_ids = settings.get_moderator_user_ids()
         # Import translation services for headline translation
         from src.services.google_translation import google_translation_service
         from src.services.translation_service import translation_service as libre_translation
@@ -48,6 +49,14 @@ class NewsAgent(BaseAgent):
     def _is_admin(self, user_id: Optional[str]) -> bool:
         """Check if user is an admin (admins bypass rate limits)."""
         return user_id in self._admin_user_ids if user_id else False
+
+    def _is_moderator(self, user_id: Optional[str]) -> bool:
+        """Check if user is a moderator (moderators get direct news access like admins)."""
+        return user_id in self._moderator_user_ids if user_id else False
+
+    def _is_privileged_user(self, user_id: Optional[str]) -> bool:
+        """Check if user is admin or moderator (both get same privileges)."""
+        return self._is_admin(user_id) or self._is_moderator(user_id)
 
     def get_priority(self) -> int:
         """News agent priority - runs after Translation (10)."""
@@ -184,12 +193,20 @@ class NewsAgent(BaseAgent):
                 logger.info(f"📰 User ended news session with shutdown phrase in chat {chat_id}")
                 return True
 
-            # Private chats: respond with translation of trigger only
+            # Private chats: respond with translation of trigger only UNLESS user is admin/moderator
             if not self._is_group_chat(event):
                 if self._is_news_trigger(text):
-                    await self._send_trigger_translation(event, line_bot_api, text)
-                    return True
-                return False
+                    # Check if user is privileged (admin or moderator)
+                    if self._is_privileged_user(user_id):
+                        # Admins/moderators get full news menu even in private chat
+                        logger.info(f"📰 Privileged user {user_id} accessing news in private chat")
+                        # No rate limit for privileged users - proceed to start news flow
+                    else:
+                        # Regular users get translation only
+                        await self._send_trigger_translation(event, line_bot_api, text)
+                        return True
+                else:
+                    return False
 
             # Check if user is session owner (only they can interact)
             if session and not news_session_manager.is_session_owner(chat_id, user_id):
@@ -201,18 +218,21 @@ class NewsAgent(BaseAgent):
             if not session and self._is_news_trigger(text):
                 user_id = getattr(event.source, "user_id", None) if event.source else None
                 
-                # Admins bypass friendship check
-                is_admin = self._is_admin(user_id)
+                # Check if user is privileged (admin or moderator)
+                is_privileged = self._is_privileged_user(user_id)
                 
-                # Non-friends and non-admins: just translate trigger word
-                if not is_admin:
-                    is_friend = await self._is_friend(event, line_bot_api)
-                    if not is_friend:
-                        await self._send_trigger_translation(event, line_bot_api, text)
-                        return True
+                # For non-privileged users in groups: check friendship
+                if not is_privileged:
+                    # Only check friendship in group chats
+                    if self._is_group_chat(event):
+                        is_friend = await self._is_friend(event, line_bot_api)
+                        if not is_friend:
+                            await self._send_trigger_translation(event, line_bot_api, text)
+                            return True
+                    # Private chat non-privileged users are already handled above
 
-                # Rate limit check (skip for admins)
-                if not is_admin:
+                # Rate limit check (skip for privileged users)
+                if not is_privileged:
                     # Friends get 1/hour
                     limiter = news_rate_limiter_friend
                     max_requests = 1
@@ -224,10 +244,10 @@ class NewsAgent(BaseAgent):
                         logger.warning(f"⚠️  Rate limited news request for chat {chat_id}")
                         return True
                 elif user_id:
-                    logger.debug(f"🔓 Admin {user_id} bypassed news rate limit")
+                    logger.debug(f"🔓 Privileged user {user_id} bypassed news rate limit")
 
-                    # Track successful news request (menu will be shown)
-                    metrics_service.record_news_request()
+                # Track successful news request (menu will be shown)
+                metrics_service.record_news_request()
 
                 # Auto-detect language from trigger word
                 trigger_text = self._normalize_trigger_text(text)

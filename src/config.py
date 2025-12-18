@@ -59,6 +59,11 @@ class Settings(BaseSettings):
         ),
     )
 
+    moderator_user_ids: Optional[str] = Field(
+        default=None,
+        description="Comma-separated list of LINE user IDs authorized as moderators (can access news directly)"
+    )
+
     # ============================================================================
     # Translation Service Configuration
     # ============================================================================
@@ -277,6 +282,17 @@ class Settings(BaseSettings):
         if not self.admin_user_ids:
             return []
         return [uid.strip() for uid in self.admin_user_ids.split(",") if uid.strip()]
+
+    def get_moderator_user_ids(self) -> list[str]:
+        """
+        Get list of authorized moderator user IDs.
+        
+        Returns:
+            List of LINE user IDs authorized as moderators, or empty list if none configured.
+        """
+        if not self.moderator_user_ids:
+            return []
+        return [uid.strip() for uid in self.moderator_user_ids.split(",") if uid.strip()]
 
     def get_http_client_config(self) -> Dict[str, Any]:
         """

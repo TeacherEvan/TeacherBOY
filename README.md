@@ -53,7 +53,10 @@ Legacy docs at repo root are kept for backward compatibility.
 - **💨 Air Quality:** PM2.5 levels for Bangkok
 - **📱 Auto-Language Detection:** Type "news" for English or "ข่าว" for Thai
 - **🔒 Friend-Gated Access:** Full menu for friends in groups (1 request/hour), translation only for others
-- **👑 Admin Access:** Unlimited news requests for admin users
+- **👑 Admin & Moderator Access:** 
+  - **Admins:** Unlimited news requests + full admin commands
+  - **Moderators:** Direct news access in all contexts (private + groups), bypass rate limits
+  - Regular users get translation only in private chats
 - **🌍 Extended Data:** Lucky color, Bitcoin price, exchange rates, Thai holidays, festivals
 - **🌍 Bilingual:** Full Thai and English support
 - **🔗 Clickable Headlines:** Top 5 news with direct links
@@ -155,14 +158,26 @@ ngrok http 8000
 
 **Need help?** See **[Quick Start Guide](QUICK_START.md)** or **[Deployment Guide](DEPLOYMENT_GUIDE.md)** for detailed instructions.
 
-### 6. Admin Commands (Optional)
+### 6. Admin & Moderator Setup (Optional)
 
-For bot management and troubleshooting, set up admin commands:
+For bot management and privileged access, TeacherBOY supports two levels:
 
-1. Get your LINE user ID from server logs
-2. Add to `.env`: `ADMIN_USER_IDS=U1234567890abcdef`
+**Admin Users (Full Control):**
+- `/admin` commands for bot management (status, sleep, wake, reset, etc.)
+- Unlimited API access (bypass rate limits)
+- Direct news access without translation
+
+**Moderator Users (News Access):**
+- Direct news access in all contexts (private chats + groups)
+- Bypass rate limits for news requests
+- No admin command access
+
+**Setup Steps:**
+1. Get your LINE user ID from server logs (appears when you send a message)
+2. Add to `.env`:
+   - Admins: `ADMIN_USER_IDS=U1234567890abcdef`
+   - Moderators: `MODERATOR_USER_IDS=U9876543210fedcba,U1111222233334444`
 3. Restart bot
-4. Use commands like `/admin status`, `/admin sleep`, `/admin wake`, `/admin reset`
 
 **See [Admin Commands Guide](docs/ADMIN_COMMANDS.md) for complete documentation.**
 
