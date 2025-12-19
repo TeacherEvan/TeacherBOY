@@ -5,6 +5,7 @@ Auto-detects language from trigger: 'news' = English, 'ข่าว' = Thai (no 
 
 import logging
 import re
+from datetime import datetime
 from typing import List, Dict, Optional
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
@@ -429,8 +430,57 @@ class NewsAgent(BaseAgent):
     
     def _format_timestamp(self) -> str:
         """Get current time in HH:MM format for data freshness indicator."""
-        from datetime import datetime
         return datetime.now().strftime("%H:%M")
+    
+    def _format_indices_with_context(self, indices: dict, language: str = "en") -> tuple:
+        """
+        Format market indices with context for N/A values.
+        
+        Args:
+            indices: Dict with index names and values
+            language: "en" or "th"
+            
+        Returns:
+            Tuple of (spx, dji, ftse) with context applied
+        """
+        spx = indices.get("S&P 500", "N/A")
+        dji = indices.get("DJIA", "N/A")
+        ftse = indices.get("FTSE 100", "N/A")
+        
+        # Add context to N/A values
+        if ftse == "N/A":
+            ftse = "N/A (closed)" if language == "en" else "N/A (ปิด)"
+        
+        return spx, dji, ftse
+    
+    def _format_crypto_display(self, crypto: dict) -> tuple:
+        """
+        Format crypto data with clean percentage formatting.
+        
+        Args:
+            crypto: Dict with 'btc', 'eth', 'usdt' keys containing price and change data
+            
+        Returns:
+            Tuple of (btc_display, eth_display, usdt_display) strings
+        """
+        btc = crypto.get("btc", {})
+        eth = crypto.get("eth", {})
+        usdt = crypto.get("usdt", {})
+        
+        btc_price = btc.get('price_usd', 'N/A')
+        btc_change = self._clean_percentage(btc.get('change_24h_percent', 'N/A'))
+        
+        eth_price = eth.get('price_usd', 'N/A')
+        eth_change = self._clean_percentage(eth.get('change_24h_percent', 'N/A'))
+        
+        usdt_price = usdt.get('price_usd', 'N/A')
+        usdt_change = self._clean_percentage(usdt.get('change_24h_percent', 'N/A'))
+        
+        btc_display = f"BTC {btc_price} {btc_change}"
+        eth_display = f"ETH {eth_price} {eth_change}"
+        usdt_display = f"USDT {usdt_price} {usdt_change}"
+        
+        return btc_display, eth_display, usdt_display
 
     def _format_menu_thai(
         self,
@@ -459,35 +509,13 @@ class NewsAgent(BaseAgent):
             holiday = holidays[0]
             msg += f"📅 วันหยุดถัดไป: {holiday.get('date', 'N/A')} - {holiday.get('name_th', 'N/A')}\n"
 
-        # Indices - clean formatting
-        spx = indices.get("S&P 500", "N/A")
-        dji = indices.get("DJIA", "N/A")
-        ftse = indices.get("FTSE 100", "N/A")
-        
-        # Handle N/A with context
-        if ftse == "N/A":
-            ftse = "N/A (closed)"
-        
+        # Indices with context
+        spx, dji, ftse = self._format_indices_with_context(indices, "th")
         msg += f"📈 ดัชนี: S&P 500 {spx} | DJIA {dji} | FTSE {ftse}\n"
 
-        # Crypto - clean percentage formatting
-        btc = crypto.get("btc", {})
-        eth = crypto.get("eth", {})
-        usdt = crypto.get("usdt", {})
-        
-        btc_price = btc.get('price_usd', 'N/A')
-        btc_change = self._clean_percentage(btc.get('change_24h_percent', 'N/A'))
-        eth_price = eth.get('price_usd', 'N/A')
-        eth_change = self._clean_percentage(eth.get('change_24h_percent', 'N/A'))
-        usdt_price = usdt.get('price_usd', 'N/A')
-        usdt_change = self._clean_percentage(usdt.get('change_24h_percent', 'N/A'))
-        
-        msg += (
-            "₿ Crypto: "
-            f"BTC {btc_price} {btc_change}, "
-            f"ETH {eth_price} {eth_change}, "
-            f"USDT {usdt_price} {usdt_change}\n"
-        )
+        # Crypto with clean formatting
+        btc_display, eth_display, usdt_display = self._format_crypto_display(crypto)
+        msg += f"₿ Crypto: {btc_display}, {eth_display}, {usdt_display}\n"
 
         # Exchange rates (1 THB)
         msg += (
@@ -535,35 +563,13 @@ class NewsAgent(BaseAgent):
             holiday = holidays[0]
             msg += f"📅 Next Holiday: {holiday.get('date', 'N/A')} - {holiday.get('name_en', 'N/A')}\n"
 
-        # Indices - clean formatting
-        spx = indices.get("S&P 500", "N/A")
-        dji = indices.get("DJIA", "N/A")
-        ftse = indices.get("FTSE 100", "N/A")
-        
-        # Handle N/A with context
-        if ftse == "N/A":
-            ftse = "N/A (closed)"
-        
+        # Indices with context
+        spx, dji, ftse = self._format_indices_with_context(indices, "en")
         msg += f"📈 Indices: S&P 500 {spx} | DJIA {dji} | FTSE {ftse}\n"
 
-        # Crypto - clean percentage formatting
-        btc = crypto.get("btc", {})
-        eth = crypto.get("eth", {})
-        usdt = crypto.get("usdt", {})
-        
-        btc_price = btc.get('price_usd', 'N/A')
-        btc_change = self._clean_percentage(btc.get('change_24h_percent', 'N/A'))
-        eth_price = eth.get('price_usd', 'N/A')
-        eth_change = self._clean_percentage(eth.get('change_24h_percent', 'N/A'))
-        usdt_price = usdt.get('price_usd', 'N/A')
-        usdt_change = self._clean_percentage(usdt.get('change_24h_percent', 'N/A'))
-        
-        msg += (
-            "₿ Crypto: "
-            f"BTC {btc_price} {btc_change}, "
-            f"ETH {eth_price} {eth_change}, "
-            f"USDT {usdt_price} {usdt_change}\n"
-        )
+        # Crypto with clean formatting
+        btc_display, eth_display, usdt_display = self._format_crypto_display(crypto)
+        msg += f"₿ Crypto: {btc_display}, {eth_display}, {usdt_display}\n"
 
         # Exchange rates (1 THB)
         msg += (

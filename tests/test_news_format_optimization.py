@@ -128,7 +128,7 @@ class TestMenuFormatting:
     def test_thai_menu_has_timestamp(self, news_agent):
         """Test Thai menu includes timestamp."""
         weather = {"temperature": 24.1, "pm25": 25.1, "will_rain": False}
-        headlines = [{"title": "Test headline", "url": "http://test.com"}]
+        headlines = [{"title": "Test headline", "url": "https://test.com"}]
         holidays = [{"date": "Dec 31", "name_th": "วันขึ้นปีใหม่", "name_en": "New Year's Eve"}]
         indices = {"S&P 500": "6,774.76 (-0.05%)", "DJIA": "47,951.85 (-0.31%)", "FTSE 100": "N/A"}
         crypto = {
@@ -150,7 +150,7 @@ class TestMenuFormatting:
     def test_english_menu_has_timestamp(self, news_agent):
         """Test English menu includes timestamp."""
         weather = {"temperature": 24.1, "pm25": 25.1, "will_rain": False}
-        headlines = [{"title": "Test headline", "url": "http://test.com"}]
+        headlines = [{"title": "Test headline", "url": "https://test.com"}]
         holidays = [{"date": "Dec 31", "name_th": "วันขึ้นปีใหม่", "name_en": "New Year's Eve"}]
         indices = {"S&P 500": "6,774.76 (-0.05%)", "DJIA": "47,951.85 (-0.31%)", "FTSE 100": "N/A"}
         crypto = {
