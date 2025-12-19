@@ -5,6 +5,7 @@ Auto-detects language from trigger: 'news' = English, 'ข่าว' = Thai (no 
 
 import logging
 import re
+from datetime import datetime
 from typing import List, Dict, Optional
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
@@ -383,6 +384,104 @@ class NewsAgent(BaseAgent):
         
         return translated_headlines
 
+    def _get_pm25_context(self, pm25_value, language: str = "en") -> str:
+        """
+        Get PM2.5 with health context and units.
+        
+        Args:
+            pm25_value: PM2.5 numeric value or "N/A"
+            language: "en" or "th"
+        
+        Returns:
+            Formatted PM2.5 string with units and health indicator
+        """
+        if pm25_value == "N/A":
+            return "N/A"
+        
+        try:
+            pm25_float = float(pm25_value)
+            if pm25_float <= 50:
+                indicator = "Good 🟢" if language == "en" else "ดี 🟢"
+            elif pm25_float <= 100:
+                indicator = "Moderate 🟡" if language == "en" else "ปานกลาง 🟡"
+            else:
+                indicator = "Unhealthy 🔴" if language == "en" else "ไม่ดี 🔴"
+            return f"{pm25_value} µg/m³ ({indicator})"
+        except (ValueError, TypeError):
+            return str(pm25_value)
+    
+    def _clean_percentage(self, percent_str: str) -> str:
+        """
+        Remove redundant parentheses from percentage strings.
+        
+        Args:
+            percent_str: String like "(-0.05%)" or "(+1.23%)"
+        
+        Returns:
+            Cleaned string like "-0.05%" or "+1.23%"
+        """
+        if not percent_str or percent_str == "N/A":
+            return percent_str
+        # Remove outer parentheses if present
+        cleaned = percent_str.strip()
+        if cleaned.startswith("(") and cleaned.endswith(")"):
+            cleaned = cleaned[1:-1]
+        return cleaned
+    
+    def _format_timestamp(self) -> str:
+        """Get current time in HH:MM format for data freshness indicator."""
+        return datetime.now().strftime("%H:%M")
+    
+    def _format_indices_with_context(self, indices: dict, language: str = "en") -> tuple:
+        """
+        Format market indices with context for N/A values.
+        
+        Args:
+            indices: Dict with index names and values
+            language: "en" or "th"
+            
+        Returns:
+            Tuple of (spx, dji, ftse) with context applied
+        """
+        spx = indices.get("S&P 500", "N/A")
+        dji = indices.get("DJIA", "N/A")
+        ftse = indices.get("FTSE 100", "N/A")
+        
+        # Add context to N/A values
+        if ftse == "N/A":
+            ftse = "N/A (closed)" if language == "en" else "N/A (ปิด)"
+        
+        return spx, dji, ftse
+    
+    def _format_crypto_display(self, crypto: dict) -> tuple:
+        """
+        Format crypto data with clean percentage formatting.
+        
+        Args:
+            crypto: Dict with 'btc', 'eth', 'usdt' keys containing price and change data
+            
+        Returns:
+            Tuple of (btc_display, eth_display, usdt_display) strings
+        """
+        btc = crypto.get("btc", {})
+        eth = crypto.get("eth", {})
+        usdt = crypto.get("usdt", {})
+        
+        btc_price = btc.get('price_usd', 'N/A')
+        btc_change = self._clean_percentage(btc.get('change_24h_percent', 'N/A'))
+        
+        eth_price = eth.get('price_usd', 'N/A')
+        eth_change = self._clean_percentage(eth.get('change_24h_percent', 'N/A'))
+        
+        usdt_price = usdt.get('price_usd', 'N/A')
+        usdt_change = self._clean_percentage(usdt.get('change_24h_percent', 'N/A'))
+        
+        btc_display = f"BTC {btc_price} {btc_change}"
+        eth_display = f"ETH {eth_price} {eth_change}"
+        usdt_display = f"USDT {usdt_price} {usdt_change}"
+        
+        return btc_display, eth_display, usdt_display
+
     def _format_menu_thai(
         self,
         weather: dict,
@@ -398,8 +497,11 @@ class NewsAgent(BaseAgent):
         will_rain = weather.get("will_rain")
         rain_text = "ใช่ (Yes)" if will_rain else "ไม่ (No)" if will_rain is not None else "N/A"
         
-        msg = "📰 Bangkok\n\n"
-        msg += f"🌡️ อุณหภูมิ: {temp}°C | 💨 PM2.5: {pm25}\n"
+        timestamp = self._format_timestamp()
+        pm25_display = self._get_pm25_context(pm25, "th")
+        
+        msg = f"📰 Bangkok (อัปเดต: {timestamp})\n\n"
+        msg += f"🌡️ อุณหภูมิ: {temp}°C | 💨 PM2.5: {pm25_display}\n"
         msg += f"🌧️ 5 ชม.ข้างหน้า: {rain_text}\n"
         
         # Next holiday (first upcoming only)
@@ -407,22 +509,13 @@ class NewsAgent(BaseAgent):
             holiday = holidays[0]
             msg += f"📅 วันหยุดถัดไป: {holiday.get('date', 'N/A')} - {holiday.get('name_th', 'N/A')}\n"
 
-        # Indices
-        spx = indices.get("S&P 500", "N/A")
-        dji = indices.get("DJIA", "N/A")
-        ftse = indices.get("FTSE 100", "N/A")
+        # Indices with context
+        spx, dji, ftse = self._format_indices_with_context(indices, "th")
         msg += f"📈 ดัชนี: S&P 500 {spx} | DJIA {dji} | FTSE {ftse}\n"
 
-        # Crypto
-        btc = crypto.get("btc", {})
-        eth = crypto.get("eth", {})
-        usdt = crypto.get("usdt", {})
-        msg += (
-            "₿ Crypto: "
-            f"BTC {btc.get('price_usd', 'N/A')} ({btc.get('change_24h_percent', 'N/A')}), "
-            f"ETH {eth.get('price_usd', 'N/A')} ({eth.get('change_24h_percent', 'N/A')}), "
-            f"USDT {usdt.get('price_usd', 'N/A')} ({usdt.get('change_24h_percent', 'N/A')})\n"
-        )
+        # Crypto with clean formatting
+        btc_display, eth_display, usdt_display = self._format_crypto_display(crypto)
+        msg += f"₿ Crypto: {btc_display}, {eth_display}, {usdt_display}\n"
 
         # Exchange rates (1 THB)
         msg += (
@@ -458,8 +551,11 @@ class NewsAgent(BaseAgent):
         will_rain = weather.get("will_rain")
         rain_text = "Yes" if will_rain else "No" if will_rain is not None else "N/A"
         
-        msg = "📰 Bangkok\n\n"
-        msg += f"🌡️ Temp: {temp}°C | 💨 PM2.5: {pm25}\n"
+        timestamp = self._format_timestamp()
+        pm25_display = self._get_pm25_context(pm25, "en")
+        
+        msg = f"📰 Bangkok (Updated: {timestamp})\n\n"
+        msg += f"🌡️ Temp: {temp}°C | 💨 PM2.5: {pm25_display}\n"
         msg += f"🌧️ Next 5h rain: {rain_text}\n"
         
         # Next holiday (first upcoming only)
@@ -467,22 +563,13 @@ class NewsAgent(BaseAgent):
             holiday = holidays[0]
             msg += f"📅 Next Holiday: {holiday.get('date', 'N/A')} - {holiday.get('name_en', 'N/A')}\n"
 
-        # Indices
-        spx = indices.get("S&P 500", "N/A")
-        dji = indices.get("DJIA", "N/A")
-        ftse = indices.get("FTSE 100", "N/A")
+        # Indices with context
+        spx, dji, ftse = self._format_indices_with_context(indices, "en")
         msg += f"📈 Indices: S&P 500 {spx} | DJIA {dji} | FTSE {ftse}\n"
 
-        # Crypto
-        btc = crypto.get("btc", {})
-        eth = crypto.get("eth", {})
-        usdt = crypto.get("usdt", {})
-        msg += (
-            "₿ Crypto: "
-            f"BTC {btc.get('price_usd', 'N/A')} ({btc.get('change_24h_percent', 'N/A')}), "
-            f"ETH {eth.get('price_usd', 'N/A')} ({eth.get('change_24h_percent', 'N/A')}), "
-            f"USDT {usdt.get('price_usd', 'N/A')} ({usdt.get('change_24h_percent', 'N/A')})\n"
-        )
+        # Crypto with clean formatting
+        btc_display, eth_display, usdt_display = self._format_crypto_display(crypto)
+        msg += f"₿ Crypto: {btc_display}, {eth_display}, {usdt_display}\n"
 
         # Exchange rates (1 THB)
         msg += (
