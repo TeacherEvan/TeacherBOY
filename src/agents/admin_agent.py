@@ -30,14 +30,20 @@ class AdminAgent(BaseAgent):
         )
         self._admin_user_ids = settings.get_admin_user_ids()
         self._admin_setup_key = (
-            settings.admin_setup_key.strip() if isinstance(settings.admin_setup_key, str) else None
+            settings.admin_setup_key.strip()
+            if isinstance(settings.admin_setup_key, str)
+            else None
         )
         self._claimed_admin_user_id: str | None = None
-        
+
         if self._admin_user_ids:
-            logger.info(f"✅ AdminAgent initialized with {len(self._admin_user_ids)} authorized admin(s)")
+            logger.info(
+                f"✅ AdminAgent initialized with {len(self._admin_user_ids)} authorized admin(s)"
+            )
         else:
-            logger.warning("⚠️  AdminAgent initialized but no admin users configured (ADMIN_USER_IDS)")
+            logger.warning(
+                "⚠️  AdminAgent initialized but no admin users configured (ADMIN_USER_IDS)"
+            )
 
     def get_priority(self) -> int:
         """Admin commands have highest priority (lower number = higher priority)."""
@@ -100,9 +106,9 @@ class AdminAgent(BaseAgent):
         """Handle if message is an admin command from an authorized user (or bootstrap claim)."""
         if not self._is_admin_command(text):
             return False
-        
+
         # Get user ID from event
-        user_id = getattr(event.source, 'user_id', None) if event.source else None
+        user_id = getattr(event.source, "user_id", None) if event.source else None
         if not user_id:
             return False
 
@@ -113,11 +119,13 @@ class AdminAgent(BaseAgent):
 
         return self._is_admin(user_id)
 
-    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
+    async def handle(
+        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
+    ) -> bool:
         """Process admin command."""
         chat_id = self._get_chat_id(event)
-        user_id = getattr(event.source, 'user_id', None) if event.source else None
-        
+        user_id = getattr(event.source, "user_id", None) if event.source else None
+
         try:
             # Parse command
             cmd, arg = self._parse_admin_command(text)
@@ -131,14 +139,16 @@ class AdminAgent(BaseAgent):
                 if command == "claim":
                     response = self._claim_admin(user_id, chat_id, arg)
                 # Normal admin commands
-                
+
                 # Execute command
                 elif command == "help":
                     response = self._get_help_message()
                 elif command == "stats":
                     response = await self._get_stats_message(line_bot_api)
                 elif command == "confirm":
-                    response = await self._confirm_action(chat_id, user_id, arg, line_bot_api)
+                    response = await self._confirm_action(
+                        chat_id, user_id, arg, line_bot_api
+                    )
                 elif command == "cancel":
                     response = self._cancel_action(chat_id, user_id, arg)
                 elif command == "status":
@@ -150,48 +160,60 @@ class AdminAgent(BaseAgent):
                 elif command == "reset":
                     response = self._reset_chat(chat_id, arg)
                 elif command == "purge":
-                    response = await self._request_confirm_purge(event, line_bot_api, chat_id, user_id, arg)
+                    response = await self._request_confirm_purge(
+                        event, line_bot_api, chat_id, user_id, arg
+                    )
                 elif command == "leave":
-                    response = await self._request_confirm_leave(event, line_bot_api, chat_id, user_id, arg)
+                    response = await self._request_confirm_leave(
+                        event, line_bot_api, chat_id, user_id, arg
+                    )
                 elif command == "sessions":
                     response = self._list_sessions()
                 elif command == "news":
                     # Trigger news flow by delegating to NewsAgent
                     # This allows admins to access news in private chat via /admin news
-                    return await self._handle_news_request(event, line_bot_api, chat_id, user_id)
+                    return await self._handle_news_request(
+                        event, line_bot_api, chat_id, user_id
+                    )
                 else:
                     response = (
                         f"❌ Unknown command: {command}\n\n"
                         "Use TeacherBoy admin help (or /admin help) for available commands."
                     )
-            
+
             # Send response
             if event.reply_token:
                 line_bot_api.reply_message(
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
-                        messages=[TextMessage(text=response, quickReply=None, quoteToken=None)],
-                        notificationDisabled=False
+                        messages=[
+                            TextMessage(text=response, quickReply=None, quoteToken=None)
+                        ],
+                        notificationDisabled=False,
                     )
                 )
-            
-            logger.info(f"🔧 Admin command executed by {user_id} in chat {chat_id}: {text}")
+
+            logger.info(
+                f"🔧 Admin command executed by {user_id} in chat {chat_id}: {text}"
+            )
             return True
-            
+
         except Exception as e:
             logger.error(f"❌ Admin agent error: {e}", exc_info=True)
-            
+
             # Send error message
             if event.reply_token:
                 line_bot_api.reply_message(
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
-                        messages=[TextMessage(
-                            text=f"❌ Error executing command: {str(e)}\n\nUse /admin help for usage.",
-                            quickReply=None,
-                            quoteToken=None
-                        )],
-                        notificationDisabled=False
+                        messages=[
+                            TextMessage(
+                                text=f"❌ Error executing command: {str(e)}\n\nUse /admin help for usage.",
+                                quickReply=None,
+                                quoteToken=None,
+                            )
+                        ],
+                        notificationDisabled=False,
                     )
                 )
             return False
@@ -212,7 +234,9 @@ class AdminAgent(BaseAgent):
             return "Usage: /admin claim <ADMIN_SETUP_KEY>"
 
         if provided_key != self._admin_setup_key:
-            logger.warning(f"⚠️  Invalid admin claim attempt from user {user_id} in {chat_id}")
+            logger.warning(
+                f"⚠️  Invalid admin claim attempt from user {user_id} in {chat_id}"
+            )
             return "❌ Invalid claim key."
 
         if self._claimed_admin_user_id and self._claimed_admin_user_id != user_id:
@@ -244,7 +268,6 @@ class AdminAgent(BaseAgent):
             "You can run commands as:\n"
             "  TeacherBoy admin <command>\n"
             "  /admin <command>\n\n"
-            
             "━━━━━━━━━━━━━━━━\n"
             "📊 Status & Info:\n"
             "━━━━━━━━━━━━━━━━\n"
@@ -254,13 +277,11 @@ class AdminAgent(BaseAgent):
             "    → Show service stats dashboard\n\n"
             "  /admin sessions\n"
             "    → List all active sessions\n\n"
-            
             "━━━━━━━━━━━━━━━━\n"
             "📰 News Access:\n"
             "━━━━━━━━━━━━━━━━\n"
             "  /admin news\n"
             "    → Request news in private chat (bypasses friend/group restrictions)\n\n"
-            
             "━━━━━━━━━━━━━━━━\n"
             "🚪 Leave Chats:\n"
             "━━━━━━━━━━━━━━━━\n"
@@ -270,7 +291,6 @@ class AdminAgent(BaseAgent):
             "    → Request leaving a specific group/room (confirmation required)\n\n"
             "  /admin leave group <group_id>\n"
             "  /admin leave room <room_id>\n\n"
-            
             "━━━━━━━━━━━━━━━━\n"
             "😴 Sleep Management:\n"
             "━━━━━━━━━━━━━━━━\n"
@@ -278,7 +298,6 @@ class AdminAgent(BaseAgent):
             "    → Put chat to sleep (default: 24h)\n\n"
             "  /admin wake [chat_id]\n"
             "    → Wake sleeping chat\n\n"
-            
             "━━━━━━━━━━━━━━━━\n"
             "🔄 Session Control:\n"
             "━━━━━━━━━━━━━━━━\n"
@@ -287,13 +306,11 @@ class AdminAgent(BaseAgent):
             "  /admin purge [chat_id]\n"
             "    → Request clearing bot internal history/state for a chat\n"
             "      (Note: LINE does not support deleting/unsending chat messages via API)\n\n"
-            
             "━━━━━━━━━━━━━━━━\n"
             "✅ Confirmations (private chat only):\n"
             "━━━━━━━━━━━━━━━━\n"
             "  /admin confirm <token>\n"
             "  /admin cancel <token>\n\n"
-            
             "━━━━━━━━━━━━━━━━\n"
             "💡 Tips:\n"
             "━━━━━━━━━━━━━━━━\n"
@@ -312,7 +329,9 @@ class AdminAgent(BaseAgent):
             return user_id
         return f"{user_id[:3]}…{user_id[-3:]}"
 
-    def _push_to_admin(self, line_bot_api: MessagingApi, user_id: str, text: str) -> bool:
+    def _push_to_admin(
+        self, line_bot_api: MessagingApi, user_id: str, text: str
+    ) -> bool:
         """Best-effort push message to admin's private chat."""
         try:
             if not hasattr(line_bot_api, "push_message"):
@@ -442,12 +461,16 @@ class AdminAgent(BaseAgent):
                     line_bot_api.leave_room(target_id)
                 return f"✅ Left {kind} {target_id}."
             except Exception as e:
-                logger.error(f"❌ Failed to leave {kind} {target_id}: {e}", exc_info=True)
+                logger.error(
+                    f"❌ Failed to leave {kind} {target_id}: {e}", exc_info=True
+                )
                 return f"❌ Failed to leave {kind} {target_id}."
 
         if pending.action == "purge":
             target_chat_id = str(pending.payload.get("chat_id"))
-            return self._purge_chat(current_chat_id=chat_id, target_chat_id=target_chat_id)
+            return self._purge_chat(
+                current_chat_id=chat_id, target_chat_id=target_chat_id
+            )
 
         return "❌ Unknown pending action type."
 
@@ -563,22 +586,28 @@ class AdminAgent(BaseAgent):
         status += "Note: Bots cannot delete/unsend existing LINE chat messages via API."
         return status
 
-    def _parse_leave_target(self, current_chat_id: str, arg: str | None) -> tuple[str | None, str | None, str | None]:
+    def _parse_leave_target(
+        self, current_chat_id: str, arg: str | None
+    ) -> tuple[str | None, str | None, str | None]:
         """Parse leave target; returns (kind, raw_id, error). kind is 'group' or 'room'."""
         if not arg or not arg.strip():
             if current_chat_id.startswith("group_"):
-                return "group", current_chat_id[len("group_"):], None
+                return "group", current_chat_id[len("group_") :], None
             if current_chat_id.startswith("room_"):
-                return "room", current_chat_id[len("room_"):], None
-            return None, None, "❌ /admin leave can only be used in a group/room, or with an explicit target."
+                return "room", current_chat_id[len("room_") :], None
+            return (
+                None,
+                None,
+                "❌ /admin leave can only be used in a group/room, or with an explicit target.",
+            )
 
         raw = arg.strip()
 
         # Accept chat_id formats
         if raw.startswith("group_"):
-            return "group", raw[len("group_"):], None
+            return "group", raw[len("group_") :], None
         if raw.startswith("room_"):
-            return "room", raw[len("room_"):], None
+            return "room", raw[len("room_") :], None
 
         # Accept explicit kind syntax: "group <id>" / "room <id>"
         parts = raw.split(maxsplit=1)
@@ -595,9 +624,19 @@ class AdminAgent(BaseAgent):
         if raw.startswith("R"):
             return "room", raw, None
 
-        return None, None, "❌ Invalid target. Use /admin leave group <id>, /admin leave room <id>, or group_<id>/room_<id>."
+        return (
+            None,
+            None,
+            "❌ Invalid target. Use /admin leave group <id>, /admin leave room <id>, or group_<id>/room_<id>.",
+        )
 
-    async def _leave_chat(self, event: MessageEvent, line_bot_api: MessagingApi, current_chat_id: str, arg: str | None) -> None:
+    async def _leave_chat(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        current_chat_id: str,
+        arg: str | None,
+    ) -> None:
         """Leave the specified group/room (or current group/room) and reply with status."""
         kind, target_id, error = self._parse_leave_target(current_chat_id, arg)
         if error or not kind or not target_id:
@@ -606,7 +645,9 @@ class AdminAgent(BaseAgent):
                 line_bot_api.reply_message(
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
-                        messages=[TextMessage(text=message, quickReply=None, quoteToken=None)],
+                        messages=[
+                            TextMessage(text=message, quickReply=None, quoteToken=None)
+                        ],
                         notificationDisabled=False,
                     )
                 )
@@ -618,7 +659,9 @@ class AdminAgent(BaseAgent):
             line_bot_api.reply_message(
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
-                    messages=[TextMessage(text=leaving_msg, quickReply=None, quoteToken=None)],
+                    messages=[
+                        TextMessage(text=leaving_msg, quickReply=None, quoteToken=None)
+                    ],
                     notificationDisabled=False,
                 )
             )
@@ -632,20 +675,22 @@ class AdminAgent(BaseAgent):
         except Exception as e:
             logger.error(f"❌ Failed to leave {kind} {target_id}: {e}", exc_info=True)
 
-    def _get_status_message(self, current_chat_id: str, target_chat_id: str = None) -> str:
+    def _get_status_message(
+        self, current_chat_id: str, target_chat_id: str = None
+    ) -> str:
         """Get status information for a chat."""
         chat_id = target_chat_id or current_chat_id
-        
+
         # Check session status
         is_active = session_manager.is_session_active(chat_id)
         is_sleeping = session_manager.is_sleeping(chat_id)
         sleep_remaining = session_manager.get_sleep_remaining(chat_id)
         session_info = session_manager.get_session_info(chat_id)
-        
+
         # Build status message
         status = "📊 Chat Status\n━━━━━━━━━━━━━━━━\n\n"
         status += f"Chat ID: {chat_id}\n\n"
-        
+
         if is_sleeping:
             status += f"😴 Status: SLEEPING\n"
             status += f"⏰ Wake in: {sleep_remaining} hour(s)\n"
@@ -654,21 +699,21 @@ class AdminAgent(BaseAgent):
             if session_info:
                 status += f"👤 User: {session_info.get('user_id', 'unknown')}\n"
                 status += f"📝 Messages: {session_info.get('message_count', 0)}\n"
-                started = session_info.get('started_at')
+                started = session_info.get("started_at")
                 if started:
                     status += f"🕐 Started: {started.strftime('%Y-%m-%d %H:%M:%S')}\n"
         else:
             status += f"⏸️  Status: INACTIVE\n"
-        
+
         return status
 
     def _wake_chat(self, current_chat_id: str, target_chat_id: str = None) -> str:
         """Wake a sleeping chat."""
         chat_id = target_chat_id or current_chat_id
-        
+
         if not session_manager.is_sleeping(chat_id):
             return f"ℹ️  Chat {chat_id} is not sleeping."
-        
+
         session_manager.wake_chat(chat_id)
         logger.info(f"🔧 Admin force-woke chat {chat_id}")
         return f"☀️ Chat {chat_id} has been woken up!\n\nThe bot is now ready to translate."
@@ -681,7 +726,7 @@ class AdminAgent(BaseAgent):
             hours = 24
         else:
             parts = arg.split(maxsplit=1)
-            
+
             # Check if first part looks like a chat_id or hours
             first_part = parts[0]
             if first_part.startswith(("user_", "group_", "room_")):
@@ -695,11 +740,13 @@ class AdminAgent(BaseAgent):
                     hours = int(first_part)
                 except ValueError:
                     return f"❌ Invalid hours: {first_part}\n\nUse: /admin sleep [chat_id] [hours]"
-        
+
         # Validate hours
         if hours < 1 or hours > 168:  # Max 1 week
-            return f"❌ Invalid hours: {hours}\n\nHours must be between 1 and 168 (1 week)."
-        
+            return (
+                f"❌ Invalid hours: {hours}\n\nHours must be between 1 and 168 (1 week)."
+            )
+
         session_manager.sleep_chat(chat_id, hours)
         logger.info(f"🔧 Admin put chat {chat_id} to sleep for {hours} hours")
         return f"😴 Chat {chat_id} is now sleeping for {hours} hour(s).\n\nUse '/admin wake' to wake early."
@@ -707,51 +754,51 @@ class AdminAgent(BaseAgent):
     def _reset_chat(self, current_chat_id: str, target_chat_id: str = None) -> str:
         """Reset chat session and history."""
         chat_id = target_chat_id or current_chat_id
-        
+
         # End session
         had_session = session_manager.end_session(chat_id)
-        
+
         # Clear message history
         session_manager.clear_message_history(chat_id)
-        
+
         # Wake if sleeping
         was_sleeping = session_manager.wake_chat(chat_id)
-        
+
         logger.info(f"🔧 Admin reset chat {chat_id}")
-        
+
         status = "🔄 Chat Reset Complete\n━━━━━━━━━━━━━━━━\n\n"
         status += f"Chat ID: {chat_id}\n\n"
         status += f"{'✅' if had_session else '⏸️'} Session: {'Ended' if had_session else 'Was inactive'}\n"
         status += f"{'☀️' if was_sleeping else '⏸️'} Sleep: {'Woken up' if was_sleeping else 'Was awake'}\n"
         status += f"🧹 History: Cleared\n\n"
         status += "The chat is now in fresh state!"
-        
+
         return status
 
     def _list_sessions(self) -> str:
         """List all active sessions."""
         sessions = session_manager.get_active_sessions()
         sleeping = session_manager.get_sleeping_chats()
-        
+
         if not sessions and not sleeping:
             return "ℹ️  No active sessions or sleeping chats."
-        
+
         msg = "📊 Active Sessions\n━━━━━━━━━━━━━━━━\n\n"
-        
+
         if sessions:
             msg += "✅ ACTIVE SESSIONS:\n"
             for chat_id, info in sessions.items():
                 msg += f"\n• {chat_id}\n"
                 msg += f"  👤 User: {info.get('user_id', 'unknown')}\n"
                 msg += f"  📝 Messages: {info.get('message_count', 0)}\n"
-        
+
         if sleeping:
             msg += "\n😴 SLEEPING CHATS:\n"
             for chat_id in sleeping:
                 remaining = session_manager.get_sleep_remaining(chat_id)
                 msg += f"\n• {chat_id}\n"
                 msg += f"  ⏰ Wake in: {remaining}h\n"
-        
+
         return msg
 
     async def _handle_news_request(
@@ -763,7 +810,7 @@ class AdminAgent(BaseAgent):
     ) -> bool:
         """
         Handle /admin news command by triggering news flow.
-        
+
         This allows admins to access news in private chats or bypass restrictions.
         We simulate a news trigger by importing and calling the NewsAgent's handler.
         """
@@ -771,20 +818,22 @@ class AdminAgent(BaseAgent):
             # Import NewsAgent and news data service
             from src.agents.news_agent import NewsAgent
             from src.services.news_data_service import NewsDataService
-            
+
             # Create instances
             news_data_service = NewsDataService()
             news_agent = NewsAgent(news_data_service)
-            
+
             # Simulate a "news" trigger to start the news flow
             # Use "news" as the trigger text (English)
             trigger_text = "news"
-            
+
             # Delegate to NewsAgent's handle method
             result = await news_agent.handle(event, trigger_text, line_bot_api)
-            
+
             if result:
-                logger.info(f"🔧 Admin {user_id} triggered news via /admin news in {chat_id}")
+                logger.info(
+                    f"🔧 Admin {user_id} triggered news via /admin news in {chat_id}"
+                )
                 return True
             else:
                 # If NewsAgent couldn't handle it, send error
@@ -792,28 +841,32 @@ class AdminAgent(BaseAgent):
                     line_bot_api.reply_message(
                         ReplyMessageRequest(
                             replyToken=event.reply_token,
-                            messages=[TextMessage(
-                                text="❌ Could not start news session. Please try again.",
-                                quickReply=None,
-                                quoteToken=None
-                            )],
-                            notificationDisabled=False
+                            messages=[
+                                TextMessage(
+                                    text="❌ Could not start news session. Please try again.",
+                                    quickReply=None,
+                                    quoteToken=None,
+                                )
+                            ],
+                            notificationDisabled=False,
                         )
                     )
                 return False
-                
+
         except Exception as e:
             logger.error(f"❌ Error in /admin news command: {e}", exc_info=True)
             if event.reply_token:
                 line_bot_api.reply_message(
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
-                        messages=[TextMessage(
-                            text=f"❌ Error starting news: {str(e)}",
-                            quickReply=None,
-                            quoteToken=None
-                        )],
-                        notificationDisabled=False
+                        messages=[
+                            TextMessage(
+                                text=f"❌ Error starting news: {str(e)}",
+                                quickReply=None,
+                                quoteToken=None,
+                            )
+                        ],
+                        notificationDisabled=False,
                     )
                 )
             return False
