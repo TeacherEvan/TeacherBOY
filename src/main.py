@@ -184,12 +184,18 @@ async def lifespan(app: FastAPI):
         admin_setup_key = None
 
     if admin_user_ids or admin_setup_key:
-        admin_agent = AdminAgent()
+        admin_agent = AdminAgent(
+            http_client=http_client_pool, news_api_key=settings.news_api_key
+        )
         agent_router.register_agent(admin_agent)
         if admin_user_ids:
-            logger.info(f"🔧 Admin Agent registered with {len(admin_user_ids)} authorized admin(s)")
+            logger.info(
+                f"🔧 Admin Agent registered with {len(admin_user_ids)} authorized admin(s)"
+            )
         else:
-            logger.info("🔧 Admin Agent registered (bootstrap enabled via ADMIN_SETUP_KEY)")
+            logger.info(
+                "🔧 Admin Agent registered (bootstrap enabled via ADMIN_SETUP_KEY)"
+            )
     else:
         logger.info("🔧 Admin Agent not registered (no ADMIN_USER_IDS configured)")
 
@@ -199,8 +205,7 @@ async def lifespan(app: FastAPI):
 
     # Register News Agent (Priority: 15)
     news_data_service = NewsDataService(
-        http_client=http_client_pool,
-        news_api_key=settings.news_api_key
+        http_client=http_client_pool, news_api_key=settings.news_api_key
     )
     news_agent = NewsAgent(news_data_service=news_data_service)
     agent_router.register_agent(news_agent)
@@ -208,8 +213,6 @@ async def lifespan(app: FastAPI):
         logger.info("📰 News Agent registered with NewsAPI.org key")
     else:
         logger.info("📰 News Agent registered (using Open-Meteo only, no NewsAPI key)")
-
-
 
     # ========================================================================
     # PHASE 5: Startup Summary
@@ -385,7 +388,11 @@ async def webhook(request: Request) -> JSONResponse:
 
                     elif isinstance(event, FollowEvent):
                         # User added bot as friend
-                        user_id = getattr(event.source, "user_id", None) if getattr(event, "source", None) else None
+                        user_id = (
+                            getattr(event.source, "user_id", None)
+                            if getattr(event, "source", None)
+                            else None
+                        )
                         metrics_service.record_friend_added(user_id)
                         logger.info("➕ Follow event received (friend added)")
 
