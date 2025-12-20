@@ -326,6 +326,26 @@ class TestAdminAgent:
         # Priority 5 is higher than translation agent's priority 10
         assert admin_agent.get_priority() < 10
 
+    @pytest.mark.asyncio
+    async def test_handle_news_command(self, admin_agent, mock_event, mock_line_bot_api):
+        """Test /admin news command triggers news flow."""
+        with patch("src.agents.news_agent.NewsAgent") as MockNewsAgent, \
+             patch("src.services.news_data_service.NewsDataService") as MockNewsDataService:
+            # Setup mocks
+            mock_news_agent_instance = AsyncMock()
+            mock_news_agent_instance.handle = AsyncMock(return_value=True)
+            MockNewsAgent.return_value = mock_news_agent_instance
+            MockNewsDataService.return_value = Mock()
+            
+            # Execute command
+            result = await admin_agent.handle(mock_event, "/admin news", mock_line_bot_api)
+            
+            # Verify news agent was called
+            assert result is True
+            MockNewsAgent.assert_called_once()
+            MockNewsDataService.assert_called_once()
+            mock_news_agent_instance.handle.assert_called_once()
+
 
 @pytest.fixture
 def bootstrap_admin_agent():

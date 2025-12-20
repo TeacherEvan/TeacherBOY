@@ -155,6 +155,10 @@ class AdminAgent(BaseAgent):
                     response = await self._request_confirm_leave(event, line_bot_api, chat_id, user_id, arg)
                 elif command == "sessions":
                     response = self._list_sessions()
+                elif command == "news":
+                    # Trigger news flow by delegating to NewsAgent
+                    # This allows admins to access news in private chat via /admin news
+                    return await self._handle_news_request(event, line_bot_api, chat_id, user_id)
                 else:
                     response = (
                         f"❌ Unknown command: {command}\n\n"
@@ -240,37 +244,59 @@ class AdminAgent(BaseAgent):
             "You can run commands as:\n"
             "  TeacherBoy admin <command>\n"
             "  /admin <command>\n\n"
+            
+            "━━━━━━━━━━━━━━━━\n"
             "📊 Status & Info:\n"
+            "━━━━━━━━━━━━━━━━\n"
             "  /admin status [chat_id]\n"
             "    → Show current chat status\n\n"
-
             "  /admin stats\n"
             "    → Show service stats dashboard\n\n"
             "  /admin sessions\n"
             "    → List all active sessions\n\n"
+            
+            "━━━━━━━━━━━━━━━━\n"
+            "📰 News Access:\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "  /admin news\n"
+            "    → Request news in private chat (bypasses friend/group restrictions)\n\n"
+            
+            "━━━━━━━━━━━━━━━━\n"
             "🚪 Leave Chats:\n"
+            "━━━━━━━━━━━━━━━━\n"
             "  /admin leave\n"
             "    → Request leaving current group/room (confirmation required)\n\n"
             "  /admin leave <chat_id>\n"
             "    → Request leaving a specific group/room (confirmation required)\n\n"
             "  /admin leave group <group_id>\n"
             "  /admin leave room <room_id>\n\n"
+            
+            "━━━━━━━━━━━━━━━━\n"
             "😴 Sleep Management:\n"
+            "━━━━━━━━━━━━━━━━\n"
             "  /admin sleep [chat_id] [hours]\n"
             "    → Put chat to sleep (default: 24h)\n\n"
             "  /admin wake [chat_id]\n"
             "    → Wake sleeping chat\n\n"
+            
+            "━━━━━━━━━━━━━━━━\n"
             "🔄 Session Control:\n"
+            "━━━━━━━━━━━━━━━━\n"
             "  /admin reset [chat_id]\n"
             "    → Reset chat session & history\n\n"
             "  /admin purge [chat_id]\n"
             "    → Request clearing bot internal history/state for a chat\n"
             "      (Note: LINE does not support deleting/unsending chat messages via API)\n\n"
-
+            
+            "━━━━━━━━━━━━━━━━\n"
             "✅ Confirmations (private chat only):\n"
+            "━━━━━━━━━━━━━━━━\n"
             "  /admin confirm <token>\n"
             "  /admin cancel <token>\n\n"
+            
+            "━━━━━━━━━━━━━━━━\n"
             "💡 Tips:\n"
+            "━━━━━━━━━━━━━━━━\n"
             "• [chat_id] is optional - defaults to current chat\n"
             "• Chat IDs format: user_U123..., group_C123...\n"
             "• Use 'sessions' to see active chat IDs"
@@ -727,6 +753,70 @@ class AdminAgent(BaseAgent):
                 msg += f"  ⏰ Wake in: {remaining}h\n"
         
         return msg
+
+    async def _handle_news_request(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: str | None,
+    ) -> bool:
+        """
+        Handle /admin news command by triggering news flow.
+        
+        This allows admins to access news in private chats or bypass restrictions.
+        We simulate a news trigger by importing and calling the NewsAgent's handler.
+        """
+        try:
+            # Import NewsAgent and news data service
+            from src.agents.news_agent import NewsAgent
+            from src.services.news_data_service import NewsDataService
+            
+            # Create instances
+            news_data_service = NewsDataService()
+            news_agent = NewsAgent(news_data_service)
+            
+            # Simulate a "news" trigger to start the news flow
+            # Use "news" as the trigger text (English)
+            trigger_text = "news"
+            
+            # Delegate to NewsAgent's handle method
+            result = await news_agent.handle(event, trigger_text, line_bot_api)
+            
+            if result:
+                logger.info(f"🔧 Admin {user_id} triggered news via /admin news in {chat_id}")
+                return True
+            else:
+                # If NewsAgent couldn't handle it, send error
+                if event.reply_token:
+                    line_bot_api.reply_message(
+                        ReplyMessageRequest(
+                            replyToken=event.reply_token,
+                            messages=[TextMessage(
+                                text="❌ Could not start news session. Please try again.",
+                                quickReply=None,
+                                quoteToken=None
+                            )],
+                            notificationDisabled=False
+                        )
+                    )
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error in /admin news command: {e}", exc_info=True)
+            if event.reply_token:
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[TextMessage(
+                            text=f"❌ Error starting news: {str(e)}",
+                            quickReply=None,
+                            quoteToken=None
+                        )],
+                        notificationDisabled=False
+                    )
+                )
+            return False
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         """Extract chat ID from event."""
