@@ -2,6 +2,8 @@
 
 import logging
 import re
+from typing import Optional
+import httpx
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
     MessagingApi,
@@ -19,11 +21,18 @@ from src.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Constants for news command
+NEWS_TRIGGER_TEXT = "news"  # Default trigger to use when invoking NewsAgent
+
 
 class AdminAgent(BaseAgent):
     """Agent for handling admin control commands."""
 
-    def __init__(self, http_client=None, news_api_key: str | None = None):
+    def __init__(
+        self,
+        http_client: Optional[httpx.AsyncClient] = None,
+        news_api_key: str | None = None,
+    ):
         super().__init__(
             name="AdminAgent",
             description="Admin commands for bot management and control",
@@ -852,9 +861,9 @@ class AdminAgent(BaseAgent):
             )
             news_agent = NewsAgent(news_data_service)
 
-            # Simulate a "news" trigger to start the news flow
-            # Use "news" as the trigger text (English)
-            trigger_text = "news"
+            # Simulate a news trigger to start the news flow
+            # Use constant NEWS_TRIGGER_TEXT (English)
+            trigger_text = NEWS_TRIGGER_TEXT
 
             # Delegate to NewsAgent's handle method
             result = await news_agent.handle(event, trigger_text, line_bot_api)
