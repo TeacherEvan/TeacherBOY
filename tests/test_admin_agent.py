@@ -12,12 +12,16 @@ from linebot.v3.messaging import MessagingApi
 @pytest.fixture
 def admin_agent():
     """Create admin agent with test configuration."""
+    from unittest.mock import Mock
+
     with patch("src.agents.admin_agent.settings") as mock_settings:
         mock_settings.get_admin_user_ids.return_value = [
             "U1234567890abcdef",
             "U9876543210fedcba",
         ]
-        agent = AdminAgent()
+        # Create mock http_client for admin agent
+        mock_http_client = Mock()
+        agent = AdminAgent(http_client=mock_http_client, news_api_key="test_key")
         return agent
 
 
@@ -408,10 +412,14 @@ class TestAdminAgent:
 @pytest.fixture
 def bootstrap_admin_agent():
     """Create admin agent with bootstrap key enabled but no preconfigured admins."""
+    from unittest.mock import Mock
+
     with patch("src.agents.admin_agent.settings") as mock_settings:
         mock_settings.get_admin_user_ids.return_value = []
         mock_settings.admin_setup_key = "setup-secret"
-        agent = AdminAgent()
+        # Create mock http_client for admin agent
+        mock_http_client = Mock()
+        agent = AdminAgent(http_client=mock_http_client, news_api_key="test_key")
         return agent
 
 
