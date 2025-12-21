@@ -239,6 +239,7 @@ class NewsAgent(BaseAgent):
                     max_requests = 1
                     
                     if not limiter.is_allowed(chat_id):
+                        metrics_service.record_rate_limited()
                         remaining = limiter.get_remaining_requests(chat_id)
                         reset_seconds = limiter.get_reset_time(chat_id)
                         await self._send_rate_limit_message(event, line_bot_api, max_requests, remaining, reset_seconds)
@@ -248,7 +249,7 @@ class NewsAgent(BaseAgent):
                     logger.debug(f"🔓 Privileged user {user_id} bypassed news rate limit")
 
                 # Track successful news request (menu will be shown)
-                metrics_service.record_news_request()
+                metrics_service.record_news_request(chat_id)
 
                 # Auto-detect language from trigger word
                 trigger_text = self._normalize_trigger_text(text)

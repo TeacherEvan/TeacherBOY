@@ -67,9 +67,22 @@ class DataCache:
             ttl = self._ttl_seconds.get(key, 3600)
 
             if (datetime.now() - cached_at).total_seconds() < ttl:
+                # Record cache hit
+                try:
+                    from src.services.metrics_service import metrics_service
+                    metrics_service.record_cache_hit()
+                except Exception:
+                    pass
                 return data
             else:
                 del self._cache[key]
+        
+        # Record cache miss
+        try:
+            from src.services.metrics_service import metrics_service
+            metrics_service.record_cache_miss()
+        except Exception:
+            pass
         return None
 
     def set(self, key: str, value: Any):

@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Set
+from collections import defaultdict
 
 
 @dataclass
@@ -20,6 +21,16 @@ class MetricsSnapshot:
     news_requests_total: int
     last_friend_added_at: Optional[datetime]
     last_friend_added_user_id: Optional[str]
+    # New metrics
+    rate_limited_requests: int
+    failed_translations: int
+    admin_commands_total: int
+    unique_users_count: int
+    unique_groups_count: int
+    peak_hour: Optional[int]
+    peak_hour_requests: int
+    cache_hits_total: int
+    cache_misses_total: int
 
 
 @dataclass
@@ -35,7 +46,17 @@ class MetricsService:
     _last_friend_added_at: Optional[datetime] = None
     _last_friend_added_user_id: Optional[str] = None
 
-    def record_translation(self, provider: str) -> None:
+    # New metrics tracking
+    _rate_limited_requests: int = 0
+    _failed_translations: int = 0
+    _admin_commands_total: int = 0
+    _unique_users: Set[str] = field(default_factory=set)
+    _unique_groups: Set[str] = field(default_factory=set)
+    _hourly_requests: dict = field(default_factory=lambda: defaultdict(int))
+    _cache_hits_total: int = 0
+    _cache_misses_total: int = 0
+
+    def record_translation(self, provider: str, chat_id: Optional[str] = None) -> None:
         self._translation_requests_total += 1
         provider_lower = (provider or "").lower()
         if provider_lower == "google":
@@ -43,12 +64,54 @@ class MetricsService:
         elif provider_lower == "libre":
             self._translation_libre_total += 1
 
-    def record_news_request(self) -> None:
+        # Track hourly usage
+        current_hour = datetime.utcnow().hour
+        self._hourly_requests[current_hour] += 1
+
+        # Track unique users/groups
+        if chat_id:
+            if chat_id.startswith("user_"):
+                self._unique_users.add(chat_id)
+            elif chat_id.startswith("group_"):
+                self._unique_groups.add(chat_id)
+
+    def record_news_request(self, chat_id: Optional[str] = None) -> None:
         self._news_requests_total += 1
+
+        # Track hourly usage
+        current_hour = datetime.utcnow().hour
+        self._hourly_requests[current_hour] += 1
+
+        # Track unique users/groups
+        if chat_id:
+            if chat_id.startswith("user_"):
+                self._unique_users.add(chat_id)
+            elif chat_id.startswith("group_"):
+                self._unique_groups.add(chat_id)
 
     def record_friend_added(self, user_id: Optional[str]) -> None:
         self._last_friend_added_at = datetime.utcnow()
         self._last_friend_added_user_id = user_id
+
+    def record_rate_limited(self) -> None:
+        """Record a rate-limited request."""
+        self._rate_limited_requests += 1
+
+    def record_failed_translation(self) -> None:
+        """Record a failed translation attempt."""
+        self._failed_translations += 1
+
+    def record_admin_command(self) -> None:
+        """Record an admin command execution."""
+        self._admin_commands_total += 1
+
+    def record_cache_hit(self) -> None:
+        """Record a cache hit."""
+        self._cache_hits_total += 1
+
+    def record_cache_miss(self) -> None:
+        """Record a cache miss."""
+        self._cache_misses_total += 1
 
     def get_started_at(self) -> datetime:
         return self._started_at
@@ -57,6 +120,13 @@ class MetricsService:
         return datetime.utcnow() - self._started_at
 
     def snapshot(self) -> MetricsSnapshot:
+        # Calculate peak hour
+        peak_hour = None
+        peak_hour_requests = 0
+        if self._hourly_requests:
+            peak_hour = max(self._hourly_requests, key=self._hourly_requests.get)
+            peak_hour_requests = self._hourly_requests[peak_hour]
+
         return MetricsSnapshot(
             started_at=self._started_at,
             translation_requests_total=self._translation_requests_total,
@@ -65,6 +135,15 @@ class MetricsService:
             news_requests_total=self._news_requests_total,
             last_friend_added_at=self._last_friend_added_at,
             last_friend_added_user_id=self._last_friend_added_user_id,
+            rate_limited_requests=self._rate_limited_requests,
+            failed_translations=self._failed_translations,
+            admin_commands_total=self._admin_commands_total,
+            unique_users_count=len(self._unique_users),
+            unique_groups_count=len(self._unique_groups),
+            peak_hour=peak_hour,
+            peak_hour_requests=peak_hour_requests,
+            cache_hits_total=self._cache_hits_total,
+            cache_misses_total=self._cache_misses_total,
         )
 
 

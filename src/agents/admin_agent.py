@@ -206,6 +206,8 @@ class AdminAgent(BaseAgent):
                     )
                 )
 
+            # Record admin command execution
+            metrics_service.record_admin_command()
             logger.info(
                 f"🔧 Admin command executed by {user_id} in chat {chat_id}: {text}"
             )
@@ -532,32 +534,81 @@ class AdminAgent(BaseAgent):
             monthly_limit = None
 
         uptime = metrics_service.get_uptime()
-        uptime_minutes = int(uptime.total_seconds() // 60)
+        uptime_hours = int(uptime.total_seconds() // 3600)
+        uptime_minutes = int((uptime.total_seconds() % 3600) // 60)
 
         active_sessions = len(session_manager.get_active_sessions())
         sleeping_chats = len(session_manager.get_sleeping_chats())
         pending_confirms = admin_confirmation_service.count_pending()
 
+        # Get news session stats
+        news_sessions = 0
+        try:
+            from src.services.news_session_manager import news_session_manager
+            # Count active news flows by checking internal state
+            if hasattr(news_session_manager, '_news_sessions'):
+                news_session_manager._cleanup_expired_sessions()
+                news_sessions = len(news_session_manager._news_sessions)
+        except Exception:
+            news_sessions = 0
+
         last_friend = "N/A"
         if snap.last_friend_added_at:
             last_friend = f"{snap.last_friend_added_at.strftime('%Y-%m-%d %H:%M:%S')} UTC ({self._mask_user_id(snap.last_friend_added_user_id)})"
 
-        msg = "📊 Admin Stats\n━━━━━━━━━━━━━━━━\n\n"
+        # Build enhanced stats message with better visual grouping
+        msg = "📊 Admin Stats Dashboard\n" + "=" * 24 + "\n\n"
 
+        # System Status Section
+        msg += "🖥️  SYSTEM STATUS\n" + "─" * 24 + "\n"
+        msg += f"⏱️  Uptime: {uptime_hours}h {uptime_minutes}m\n"
         if monthly_left is not None:
-            msg += f"✉️ LINE monthly messages left: {monthly_left} (used {monthly_used}/{monthly_limit})\n"
+            percentage = (monthly_left / monthly_limit * 100) if monthly_limit > 0 else 0
+            msg += f"✉️  LINE quota: {monthly_left:,}/{monthly_limit:,} ({percentage:.1f}%)\n"
         else:
-            msg += "✉️ LINE monthly messages left: N/A\n"
+            msg += "✉️  LINE quota: N/A\n"
+        msg += "\n"
 
-        msg += (
-            f"🧠 Translation requests: {snap.translation_requests_total} (Google {snap.translation_google_total}, Libre {snap.translation_libre_total})\n"
-            f"📰 News requests: {snap.news_requests_total}\n"
-            f"👤 Last friend added: {last_friend}\n\n"
-            f"⏱️ Uptime: ~{uptime_minutes} min\n"
-            f"✅ Active sessions: {active_sessions}\n"
-            f"😴 Sleeping chats: {sleeping_chats}\n"
-            f"🔐 Pending confirmations: {pending_confirms}"
-        )
+        # Usage Metrics Section
+        msg += "📈 USAGE METRICS\n" + "─" * 24 + "\n"
+        msg += f"🧠 Translations: {snap.translation_requests_total:,}\n"
+        msg += f"   └─ Google: {snap.translation_google_total:,}, Libre: {snap.translation_libre_total:,}\n"
+        msg += f"📰 News requests: {snap.news_requests_total:,}\n"
+        msg += f"🔧 Admin commands: {snap.admin_commands_total:,}\n"
+        
+        # Failure metrics
+        if snap.failed_translations > 0 or snap.rate_limited_requests > 0:
+            msg += f"❌ Failed translations: {snap.failed_translations:,}\n"
+            msg += f"⏳ Rate limited: {snap.rate_limited_requests:,}\n"
+        msg += "\n"
+
+        # User Engagement Section
+        msg += "👥 USER ENGAGEMENT\n" + "─" * 24 + "\n"
+        msg += f"👤 Unique users: {snap.unique_users_count:,}\n"
+        msg += f"👥 Unique groups: {snap.unique_groups_count:,}\n"
+        msg += f"👤 Last friend: {last_friend}\n"
+        
+        # Peak usage
+        if snap.peak_hour is not None:
+            msg += f"📊 Peak hour: {snap.peak_hour}:00 UTC ({snap.peak_hour_requests:,} req)\n"
+        msg += "\n"
+
+        # Active Sessions Section
+        msg += "💬 ACTIVE SESSIONS\n" + "─" * 24 + "\n"
+        msg += f"✅ Translation sessions: {active_sessions:,}\n"
+        msg += f"📰 News flows: {news_sessions:,}\n"
+        msg += f"😴 Sleeping chats: {sleeping_chats:,}\n"
+        msg += f"🔐 Pending confirmations: {pending_confirms:,}\n"
+        
+        # Cache performance (if available)
+        total_cache_ops = snap.cache_hits_total + snap.cache_misses_total
+        if total_cache_ops > 0:
+            hit_rate = (snap.cache_hits_total / total_cache_ops * 100) if total_cache_ops > 0 else 0
+            msg += "\n"
+            msg += "💾 CACHE PERFORMANCE\n" + "─" * 24 + "\n"
+            msg += f"✅ Hits: {snap.cache_hits_total:,}\n"
+            msg += f"❌ Misses: {snap.cache_misses_total:,}\n"
+            msg += f"📊 Hit rate: {hit_rate:.1f}%\n"
 
         return msg
 
