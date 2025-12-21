@@ -347,18 +347,64 @@ class TestAdminAgent:
 
     @pytest.mark.asyncio
     async def test_stats_command(self, admin_agent, mock_event, mock_line_bot_api):
-        """Test /admin stats returns a dashboard response."""
-        with patch("src.agents.admin_agent.session_manager") as mock_session_mgr:
+        """Test /admin stats returns enhanced dashboard response."""
+        with patch("src.agents.admin_agent.session_manager") as mock_session_mgr, patch(
+            "src.agents.admin_agent.metrics_service"
+        ) as mock_metrics:
             mock_session_mgr.get_active_sessions.return_value = {}
             mock_session_mgr.get_sleeping_chats.return_value = {}
+
+            # Mock metrics snapshot with enhanced data
+            from datetime import datetime
+            from src.services.metrics_service import MetricsSnapshot
+
+            mock_snapshot = MetricsSnapshot(
+                started_at=datetime.utcnow(),
+                translation_requests_total=100,
+                translation_google_total=80,
+                translation_libre_total=20,
+                news_requests_total=50,
+                last_friend_added_at=None,
+                last_friend_added_user_id=None,
+                rate_limited_requests=5,
+                failed_translations=3,
+                admin_commands_total=10,
+                unique_users_count=25,
+                unique_groups_count=8,
+                peak_hour=14,
+                peak_hour_requests=15,
+                cache_hits_total=200,
+                cache_misses_total=50,
+            )
+            mock_metrics.snapshot.return_value = mock_snapshot
+            mock_metrics.get_uptime.return_value = __import__("datetime").timedelta(
+                hours=2, minutes=30
+            )
 
             ok = await admin_agent.handle(mock_event, "/admin stats", mock_line_bot_api)
             assert ok is True
             mock_line_bot_api.reply_message.assert_called_once()
             msg_text = mock_line_bot_api.reply_message.call_args[0][0].messages[0].text
-            assert "Admin Stats" in msg_text
-            assert "News requests" in msg_text
-            assert "Translation requests" in msg_text
+
+            # Verify enhanced stats sections are present
+            assert "Admin Stats Dashboard" in msg_text
+            assert "SYSTEM STATUS" in msg_text
+            assert "USAGE METRICS" in msg_text
+            assert "USER ENGAGEMENT" in msg_text
+            assert "ACTIVE SESSIONS" in msg_text
+            assert "CACHE PERFORMANCE" in msg_text
+
+            # Verify key metrics are displayed
+            assert "Translations: 100" in msg_text
+            assert "Google: 80, Libre: 20" in msg_text
+            assert "News requests: 50" in msg_text
+            assert "Admin commands: 10" in msg_text
+            assert "Failed translations: 3" in msg_text
+            assert "Rate limited: 5" in msg_text
+            assert "Unique users: 25" in msg_text
+            assert "Unique groups: 8" in msg_text
+            assert "Peak hour: 14:00 UTC (15 req)" in msg_text
+            assert "Hit rate:" in msg_text
 
     @pytest.mark.asyncio
     async def test_handle_purge_command(

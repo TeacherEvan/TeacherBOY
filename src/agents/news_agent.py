@@ -25,7 +25,9 @@ from src.config import settings
 logger = logging.getLogger(__name__)
 
 # Rate limiters for news requests
-news_rate_limiter_friend = RateLimiter(max_requests=1, time_window_seconds=3600)  # 1/hour for friends
+news_rate_limiter_friend = RateLimiter(
+    max_requests=1, time_window_seconds=3600
+)  # 1/hour for friends
 
 
 class NewsAgent(BaseAgent):
@@ -43,7 +45,10 @@ class NewsAgent(BaseAgent):
         self._moderator_user_ids = settings.get_moderator_user_ids()
         # Import translation services for headline translation
         from src.services.google_translation import google_translation_service
-        from src.services.translation_service import translation_service as libre_translation
+        from src.services.translation_service import (
+            translation_service as libre_translation,
+        )
+
         self.google_translate = google_translation_service
         self.libre_translate = libre_translation
 
@@ -101,7 +106,7 @@ class NewsAgent(BaseAgent):
     def _is_shutdown_phrase(self, text: str) -> bool:
         """
         Check if text is a shutdown phrase ("thank you teacherboy").
-        
+
         This allows users to exit news flow immediately by thanking the bot.
         """
         text_lower = text.lower().strip()
@@ -136,11 +141,16 @@ class NewsAgent(BaseAgent):
             logger.info(f"📰 User {user_id} is a friend (verified via LINE API)")
             return True
         except ApiException as e:
-            status = getattr(e, 'status_code', 'unknown')
-            logger.info(f"📰 User {user_id} is NOT a friend (ApiException: {status})", exc_info=False)
+            status = getattr(e, "status_code", "unknown")
+            logger.info(
+                f"📰 User {user_id} is NOT a friend (ApiException: {status})",
+                exc_info=False,
+            )
             return False
         except Exception as e:
-            logger.warning(f"📰 Friendship check failed for {user_id}: {e}", exc_info=False)
+            logger.warning(
+                f"📰 Friendship check failed for {user_id}: {e}", exc_info=False
+            )
             return False
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
@@ -182,7 +192,11 @@ class NewsAgent(BaseAgent):
             if self._is_shutdown_phrase(text) and session:
                 news_session_manager.end_news_flow(chat_id)
                 # Send goodbye message
-                goodbye_msg = TextMessage(text="👋 News session ended. Type 'news' or 'ข่าว' to start again!", quickReply=None, quoteToken=None)
+                goodbye_msg = TextMessage(
+                    text="👋 News session ended. Type 'news' or 'ข่าว' to start again!",
+                    quickReply=None,
+                    quoteToken=None,
+                )
                 if event.reply_token:
                     line_bot_api.reply_message(
                         ReplyMessageRequest(
@@ -191,7 +205,9 @@ class NewsAgent(BaseAgent):
                             notificationDisabled=False,
                         )
                     )
-                logger.info(f"📰 User ended news session with shutdown phrase in chat {chat_id}")
+                logger.info(
+                    f"📰 User ended news session with shutdown phrase in chat {chat_id}"
+                )
                 return True
 
             # Private chats: respond with translation of trigger only UNLESS user is admin/moderator
@@ -200,7 +216,9 @@ class NewsAgent(BaseAgent):
                     # Check if user is privileged (admin or moderator)
                     if self._is_privileged_user(user_id):
                         # Admins/moderators get full news menu even in private chat
-                        logger.info(f"📰 Privileged user {user_id} accessing news in private chat")
+                        logger.info(
+                            f"📰 Privileged user {user_id} accessing news in private chat"
+                        )
                         # No rate limit for privileged users - proceed to start news flow
                     else:
                         # Regular users get translation only
@@ -212,23 +230,29 @@ class NewsAgent(BaseAgent):
             # Check if user is session owner (only they can interact)
             if session and not news_session_manager.is_session_owner(chat_id, user_id):
                 # Silently ignore - another user trying to interact with someone else's session
-                logger.debug(f"📰 User {user_id} tried to interact with news session owned by {session.get('user_id')}")
+                logger.debug(
+                    f"📰 User {user_id} tried to interact with news session owned by {session.get('user_id')}"
+                )
                 return True  # Handled but ignored
 
             # Step 1: News trigger - start flow with auto-detected language
             if not session and self._is_news_trigger(text):
-                user_id = getattr(event.source, "user_id", None) if event.source else None
-                
+                user_id = (
+                    getattr(event.source, "user_id", None) if event.source else None
+                )
+
                 # Check if user is privileged (admin or moderator)
                 is_privileged = self._is_privileged_user(user_id)
-                
+
                 # For non-privileged users in groups: check friendship
                 if not is_privileged:
                     # Only check friendship in group chats
                     if self._is_group_chat(event):
                         is_friend = await self._is_friend(event, line_bot_api)
                         if not is_friend:
-                            await self._send_trigger_translation(event, line_bot_api, text)
+                            await self._send_trigger_translation(
+                                event, line_bot_api, text
+                            )
                             return True
                     # Private chat non-privileged users are already handled above
 
@@ -237,23 +261,30 @@ class NewsAgent(BaseAgent):
                     # Friends get 1/hour
                     limiter = news_rate_limiter_friend
                     max_requests = 1
-                    
+
                     if not limiter.is_allowed(chat_id):
+                        metrics_service.record_rate_limited()
                         remaining = limiter.get_remaining_requests(chat_id)
                         reset_seconds = limiter.get_reset_time(chat_id)
-                        await self._send_rate_limit_message(event, line_bot_api, max_requests, remaining, reset_seconds)
-                        logger.warning(f"⚠️  Rate limited news request for chat {chat_id}")
+                        await self._send_rate_limit_message(
+                            event, line_bot_api, max_requests, remaining, reset_seconds
+                        )
+                        logger.warning(
+                            f"⚠️  Rate limited news request for chat {chat_id}"
+                        )
                         return True
                 elif user_id:
-                    logger.debug(f"🔓 Privileged user {user_id} bypassed news rate limit")
+                    logger.debug(
+                        f"🔓 Privileged user {user_id} bypassed news rate limit"
+                    )
 
                 # Track successful news request (menu will be shown)
-                metrics_service.record_news_request()
+                metrics_service.record_news_request(chat_id)
 
                 # Auto-detect language from trigger word
                 trigger_text = self._normalize_trigger_text(text)
                 language = "th" if self._is_thai_text(trigger_text) else "en"
-                
+
                 # Start flow with detected language and go straight to menu
                 news_session_manager.start_news_flow(chat_id, user_id)
                 news_session_manager.set_language(chat_id, language)
@@ -262,7 +293,9 @@ class NewsAgent(BaseAgent):
 
             # Step 2: Main menu - handle selections
             if session and session["step"] == "main_menu":
-                return await self._handle_main_menu(event, text, line_bot_api, chat_id, session)
+                return await self._handle_main_menu(
+                    event, text, line_bot_api, chat_id, session
+                )
 
             # Step 3: Headline detail - return to menu
             if session and session["step"] == "headline_detail":
@@ -278,12 +311,14 @@ class NewsAgent(BaseAgent):
             news_session_manager.end_news_flow(chat_id)
             return False
 
-    async def _send_language_selection(self, event: MessageEvent, line_bot_api: MessagingApi):
+    async def _send_language_selection(
+        self, event: MessageEvent, line_bot_api: MessagingApi
+    ):
         """Send language selection prompt."""
         message = "📰 News / ข่าว\n\nSelect language:\n1 = Thai (ไทย)\n2 = English"
-        
+
         text_msg = TextMessage(text=message, quickReply=None, quoteToken=None)
-        
+
         if event.reply_token:
             line_bot_api.reply_message(
                 ReplyMessageRequest(
@@ -293,43 +328,62 @@ class NewsAgent(BaseAgent):
                 )
             )
 
-    async def _send_main_menu(self, event: MessageEvent, line_bot_api: MessagingApi, language: str):
+    async def _send_main_menu(
+        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
+    ):
         """Fetch data and send main menu with weather and news."""
         chat_id = self._get_chat_id(event)
-        
+
         # Fetch weather and Thailand-only headlines
         weather_data = await self.news_service.get_weather_data()
         # Bangkok Post Thailand RSS is English; Thai UI translates headlines.
         headlines = await self.news_service.get_news_headlines("th")
-        
+
         # Translate headlines to Thai if Thai language selected
         if language == "th" and headlines:
             headlines = await self._translate_headlines_to_thai(headlines)
-        
+
         # Fetch additional inline data
         holidays_data = await self.news_service.get_thai_holidays()
         indices_data = await self.news_service.get_market_indices()
         crypto_data = await self.news_service.get_crypto_prices()
         exchange_data = await self.news_service.get_exchange_rates()
-        
+
         # Cache data in session
-        news_session_manager.set_cached_data(chat_id, {
-            "weather": weather_data,
-            "headlines": headlines,
-            "holidays": holidays_data,
-            "indices": indices_data,
-            "crypto": crypto_data,
-            "exchange": exchange_data,
-        })
-        
+        news_session_manager.set_cached_data(
+            chat_id,
+            {
+                "weather": weather_data,
+                "headlines": headlines,
+                "holidays": holidays_data,
+                "indices": indices_data,
+                "crypto": crypto_data,
+                "exchange": exchange_data,
+            },
+        )
+
         # Format message
         if language == "th":
-            message = self._format_menu_thai(weather_data, headlines, holidays_data, indices_data, crypto_data, exchange_data)
+            message = self._format_menu_thai(
+                weather_data,
+                headlines,
+                holidays_data,
+                indices_data,
+                crypto_data,
+                exchange_data,
+            )
         else:
-            message = self._format_menu_english(weather_data, headlines, holidays_data, indices_data, crypto_data, exchange_data)
-        
+            message = self._format_menu_english(
+                weather_data,
+                headlines,
+                holidays_data,
+                indices_data,
+                crypto_data,
+                exchange_data,
+            )
+
         text_msg = TextMessage(text=message, quickReply=None, quoteToken=None)
-        
+
         if event.reply_token:
             line_bot_api.reply_message(
                 ReplyMessageRequest(
@@ -339,65 +393,62 @@ class NewsAgent(BaseAgent):
                 )
             )
 
-    async def _translate_headlines_to_thai(self, headlines: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    async def _translate_headlines_to_thai(
+        self, headlines: List[Dict[str, str]]
+    ) -> List[Dict[str, str]]:
         """Translate English headlines to Thai."""
         translated_headlines = []
-        
+
         for headline in headlines:
             title = headline.get("title", "")
             url = headline.get("url", "")
-            
+
             if not title or title in ["News unavailable", "Visit Bangkok Post"]:
                 # Don't translate fallback messages
                 translated_headlines.append(headline)
                 continue
-            
+
             # Try Google Translate first, fallback to LibreTranslate
             translated_title = None
             if self.google_translate.is_configured():
                 try:
                     translated_title = await self.google_translate.translate(
-                        text=title,
-                        target_lang="th",
-                        source_lang="en"
+                        text=title, target_lang="th", source_lang="en"
                     )
                 except Exception as e:
                     logger.warning(f"Google Translate failed for headline: {e}")
-            
+
             # Fallback to LibreTranslate
             if not translated_title:
                 try:
                     translated_title = await self.libre_translate.translate(
-                        text=title,
-                        source_lang="en",
-                        target_lang="th"
+                        text=title, source_lang="en", target_lang="th"
                     )
                 except Exception as e:
                     logger.warning(f"LibreTranslate failed for headline: {e}")
                     # Use original English if translation fails
                     translated_title = title
-            
-            translated_headlines.append({
-                "title": translated_title or title,
-                "url": url
-            })
-        
+
+            translated_headlines.append(
+                {"title": translated_title or title, "url": url}
+            )
+
         return translated_headlines
 
     def _get_pm25_context(self, pm25_value, language: str = "en") -> str:
         """
         Get PM2.5 with health context and units.
-        
+
         Args:
             pm25_value: PM2.5 numeric value or "N/A"
             language: "en" or "th"
-        
+
         Returns:
             Formatted PM2.5 string with units and health indicator
         """
         if pm25_value == "N/A":
             return "N/A"
-        
+
         try:
             pm25_float = float(pm25_value)
             if pm25_float <= 50:
@@ -409,14 +460,14 @@ class NewsAgent(BaseAgent):
             return f"{pm25_value} µg/m³ ({indicator})"
         except (ValueError, TypeError):
             return str(pm25_value)
-    
+
     def _clean_percentage(self, percent_str: str) -> str:
         """
         Remove redundant parentheses from percentage strings.
-        
+
         Args:
             percent_str: String like "(-0.05%)" or "(+1.23%)"
-        
+
         Returns:
             Cleaned string like "-0.05%" or "+1.23%"
         """
@@ -427,59 +478,61 @@ class NewsAgent(BaseAgent):
         if cleaned.startswith("(") and cleaned.endswith(")"):
             cleaned = cleaned[1:-1]
         return cleaned
-    
+
     def _format_timestamp(self) -> str:
         """Get current time in HH:MM format for data freshness indicator."""
         return datetime.now().strftime("%H:%M")
-    
-    def _format_indices_with_context(self, indices: dict, language: str = "en") -> tuple:
+
+    def _format_indices_with_context(
+        self, indices: dict, language: str = "en"
+    ) -> tuple:
         """
         Format market indices with context for N/A values.
-        
+
         Args:
             indices: Dict with index names and values
             language: "en" or "th"
-            
+
         Returns:
             Tuple of (spx, dji, ftse) with context applied
         """
         spx = indices.get("S&P 500", "N/A")
         dji = indices.get("DJIA", "N/A")
         ftse = indices.get("FTSE 100", "N/A")
-        
+
         # Add context to N/A values
         if ftse == "N/A":
             ftse = "N/A (closed)" if language == "en" else "N/A (ปิด)"
-        
+
         return spx, dji, ftse
-    
+
     def _format_crypto_display(self, crypto: dict) -> tuple:
         """
         Format crypto data with clean percentage formatting.
-        
+
         Args:
             crypto: Dict with 'btc', 'eth', 'usdt' keys containing price and change data
-            
+
         Returns:
             Tuple of (btc_display, eth_display, usdt_display) strings
         """
         btc = crypto.get("btc", {})
         eth = crypto.get("eth", {})
         usdt = crypto.get("usdt", {})
-        
-        btc_price = btc.get('price_usd', 'N/A')
-        btc_change = self._clean_percentage(btc.get('change_24h_percent', 'N/A'))
-        
-        eth_price = eth.get('price_usd', 'N/A')
-        eth_change = self._clean_percentage(eth.get('change_24h_percent', 'N/A'))
-        
-        usdt_price = usdt.get('price_usd', 'N/A')
-        usdt_change = self._clean_percentage(usdt.get('change_24h_percent', 'N/A'))
-        
+
+        btc_price = btc.get("price_usd", "N/A")
+        btc_change = self._clean_percentage(btc.get("change_24h_percent", "N/A"))
+
+        eth_price = eth.get("price_usd", "N/A")
+        eth_change = self._clean_percentage(eth.get("change_24h_percent", "N/A"))
+
+        usdt_price = usdt.get("price_usd", "N/A")
+        usdt_change = self._clean_percentage(usdt.get("change_24h_percent", "N/A"))
+
         btc_display = f"BTC {btc_price} {btc_change}"
         eth_display = f"ETH {eth_price} {eth_change}"
         usdt_display = f"USDT {usdt_price} {usdt_change}"
-        
+
         return btc_display, eth_display, usdt_display
 
     def _format_menu_thai(
@@ -495,15 +548,17 @@ class NewsAgent(BaseAgent):
         temp = weather.get("temperature", "N/A")
         pm25 = weather.get("pm25", "N/A")
         will_rain = weather.get("will_rain")
-        rain_text = "ใช่ (Yes)" if will_rain else "ไม่ (No)" if will_rain is not None else "N/A"
-        
+        rain_text = (
+            "ใช่ (Yes)" if will_rain else "ไม่ (No)" if will_rain is not None else "N/A"
+        )
+
         timestamp = self._format_timestamp()
         pm25_display = self._get_pm25_context(pm25, "th")
-        
+
         msg = f"📰 Bangkok (อัปเดต: {timestamp})\n\n"
         msg += f"🌡️ อุณหภูมิ: {temp}°C | 💨 PM2.5: {pm25_display}\n"
         msg += f"🌧️ 5 ชม.ข้างหน้า: {rain_text}\n"
-        
+
         # Next holiday (first upcoming only)
         if holidays and len(holidays) > 0:
             holiday = holidays[0]
@@ -527,13 +582,13 @@ class NewsAgent(BaseAgent):
             f"GBP {exchange.get('gbp', 'N/A')}, "
             f"RUB {exchange.get('rub', 'N/A')}\n\n"
         )
-        
+
         msg += "📰 หัวข้อข่าว (Thailand):\n"
 
         for i, headline in enumerate(headlines[:5], 1):
             title = headline.get("title", "ไม่มีหัวข้อ")[:80]
             msg += f"{i}. {title}\n"
-        
+
         return msg
 
     def _format_menu_english(
@@ -550,14 +605,14 @@ class NewsAgent(BaseAgent):
         pm25 = weather.get("pm25", "N/A")
         will_rain = weather.get("will_rain")
         rain_text = "Yes" if will_rain else "No" if will_rain is not None else "N/A"
-        
+
         timestamp = self._format_timestamp()
         pm25_display = self._get_pm25_context(pm25, "en")
-        
+
         msg = f"📰 Bangkok (Updated: {timestamp})\n\n"
         msg += f"🌡️ Temp: {temp}°C | 💨 PM2.5: {pm25_display}\n"
         msg += f"🌧️ Next 5h rain: {rain_text}\n"
-        
+
         # Next holiday (first upcoming only)
         if holidays and len(holidays) > 0:
             holiday = holidays[0]
@@ -581,60 +636,77 @@ class NewsAgent(BaseAgent):
             f"GBP {exchange.get('gbp', 'N/A')}, "
             f"RUB {exchange.get('rub', 'N/A')}\n\n"
         )
-        
+
         msg += "📰 Headlines (Thailand):\n"
 
         for i, headline in enumerate(headlines[:5], 1):
             title = headline.get("title", "No title")[:80]
             msg += f"{i}. {title}\n"
-        
+
         return msg
 
     async def _handle_main_menu(
-        self, event: MessageEvent, text: str, line_bot_api: MessagingApi, 
-        chat_id: str, session: dict
+        self,
+        event: MessageEvent,
+        text: str,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        session: dict,
     ) -> bool:
         """Handle main menu selections (1-5 for headlines only)."""
         text_clean = text.strip()
-        
+
         # Normalize Thai numerals to Arabic numerals
         thai_to_arabic = {
-            "๑": "1", "๒": "2", "๓": "3", "๔": "4", "๕": "5",
+            "๑": "1",
+            "๒": "2",
+            "๓": "3",
+            "๔": "4",
+            "๕": "5",
         }
         normalized = thai_to_arabic.get(text_clean, text_clean)
-        
+
         # Handle headline selection (1-5)
         if normalized in ["1", "2", "3", "4", "5"]:
             try:
                 index = int(normalized) - 1
             except ValueError:
-                await self._send_invalid_choice(event, line_bot_api, session["language"])
+                await self._send_invalid_choice(
+                    event, line_bot_api, session["language"]
+                )
                 return True
-            
+
             cached_data = session.get("cached_data", {})
             headlines = cached_data.get("headlines", [])
-            
+
             if index < len(headlines):
                 headline = headlines[index]
                 news_session_manager.select_headline(chat_id, index)
-                await self._send_headline_detail(event, line_bot_api, headline, session["language"])
+                await self._send_headline_detail(
+                    event, line_bot_api, headline, session["language"]
+                )
                 return True
             else:
-                await self._send_invalid_choice(event, line_bot_api, session["language"])
+                await self._send_invalid_choice(
+                    event, line_bot_api, session["language"]
+                )
                 return True
-        
+
         else:
             await self._send_invalid_choice(event, line_bot_api, session["language"])
             return True
 
     async def _send_headline_detail(
-        self, event: MessageEvent, line_bot_api: MessagingApi, 
-        headline: dict, language: str
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        headline: dict,
+        language: str,
     ):
         """Send detailed headline with link."""
         title = headline.get("title", "")
         url = headline.get("url", "")
-        
+
         if language == "th":
             msg = f"📰 {title}\n"
             if url:
@@ -643,9 +715,9 @@ class NewsAgent(BaseAgent):
             msg = f"📰 {title}\n"
             if url:
                 msg += f"🔗 {url}\n"
-        
+
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-        
+
         if event.reply_token:
             line_bot_api.reply_message(
                 ReplyMessageRequest(
@@ -796,7 +868,9 @@ class NewsAgent(BaseAgent):
             logger.error(f"📰 Error sending festivals: {e}", exc_info=True)
             await self._send_error_message(event, line_bot_api)
 
-    async def _send_resources(self, event: MessageEvent, line_bot_api: MessagingApi, language: str):
+    async def _send_resources(
+        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
+    ):
         """Send API resources list."""
         msg = ""
         if language == "th":
@@ -817,9 +891,9 @@ class NewsAgent(BaseAgent):
             msg += "• Bangkok Post: https://bangkokpost.com\n"
             msg += "• The Nation: https://nationthailand.com\n\n"
             msg += "Thank you for using TeacherBOY! 🙏"
-        
+
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-        
+
         if event.reply_token:
             line_bot_api.reply_message(
                 ReplyMessageRequest(
@@ -828,7 +902,6 @@ class NewsAgent(BaseAgent):
                     notificationDisabled=False,
                 )
             )
-
 
     async def _send_trigger_translation(
         self, event: MessageEvent, line_bot_api: MessagingApi, text: str
@@ -853,15 +926,17 @@ class NewsAgent(BaseAgent):
                 )
             )
 
-    async def _send_invalid_choice(self, event: MessageEvent, line_bot_api: MessagingApi, language: str):
+    async def _send_invalid_choice(
+        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
+    ):
         """Send invalid choice message."""
         if language == "th":
             msg = "❌ กรุณาเลือก 1-5 (หัวข้อข่าว)"
         else:
             msg = "❌ Please pick 1-5 (headlines)"
-        
+
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-        
+
         if event.reply_token:
             line_bot_api.reply_message(
                 ReplyMessageRequest(
@@ -872,12 +947,16 @@ class NewsAgent(BaseAgent):
             )
 
     async def _send_rate_limit_message(
-        self, event: MessageEvent, line_bot_api: MessagingApi, 
-        max_requests: int, remaining: int, reset_seconds: int
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        max_requests: int,
+        remaining: int,
+        reset_seconds: int,
     ):
         """Send rate limit message to user."""
         reset_minutes = (reset_seconds + 59) // 60  # Round up to nearest minute
-        
+
         msg = (
             f"⏳ Only {max_requests} news request per hour\n"
             f"Total requests left: {remaining}\n\n"
@@ -886,9 +965,9 @@ class NewsAgent(BaseAgent):
             f"เหลืออีก: {remaining} ครั้ง\n"
             f"กรุณารอ ~{reset_minutes} นาที 😊"
         )
-        
+
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-        
+
         if event.reply_token:
             line_bot_api.reply_message(
                 ReplyMessageRequest(
@@ -898,13 +977,15 @@ class NewsAgent(BaseAgent):
                 )
             )
 
-    async def _send_error_message(self, event: MessageEvent, line_bot_api: MessagingApi):
+    async def _send_error_message(
+        self, event: MessageEvent, line_bot_api: MessagingApi
+    ):
         """Send error message when something goes wrong."""
         msg = "❌ Sorry, something went wrong. Please try again later.\n"
         msg += "ขออภัย เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง"
-        
+
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-        
+
         if event.reply_token:
             line_bot_api.reply_message(
                 ReplyMessageRequest(

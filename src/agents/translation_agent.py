@@ -141,7 +141,7 @@ class TranslationAgent(BaseAgent):
         2. Thai text detected (auto-start session)
         3. Session is active for this chat
         4. Sleep command (to properly put bot to sleep)
-        
+
         NOTE: Skip news triggers ("news", "ข่าว") - let NewsAgent handle them.
         """
         chat_id = self._get_chat_id(event)
@@ -218,7 +218,9 @@ class TranslationAgent(BaseAgent):
                 if self._is_private_chat(event) and self.is_private_help_command(text):
                     span.set_attribute("translation.command", "help_private")
                     help_text = self._get_contextual_help(self._is_admin(user_id))
-                    help_message = TextMessage(text=help_text, quickReply=None, quoteToken=None)
+                    help_message = TextMessage(
+                        text=help_text, quickReply=None, quoteToken=None
+                    )
                     if event.reply_token:
                         line_bot_api.reply_message(
                             ReplyMessageRequest(
@@ -281,6 +283,7 @@ class TranslationAgent(BaseAgent):
                 # Check for rate limiting (skip for admins)
                 if not self._is_admin(user_id) and not rate_limiter.is_allowed(chat_id):
                     span.set_attribute("translation.rate_limited", True)
+                    metrics_service.record_rate_limited()
                     reset_seconds = rate_limiter.get_reset_time(chat_id)
                     rate_limit_message = self._create_rate_limit_message(reset_seconds)
                     if event.reply_token:
@@ -313,7 +316,7 @@ class TranslationAgent(BaseAgent):
                     span.set_attribute("translation.detected", "en")
 
                 # Translate the message
-                translated_text = await self._translate_message(text)
+                translated_text = await self._translate_message(text, chat_id)
 
                 if translated_text:
                     # Send simple text message as requested
@@ -334,6 +337,7 @@ class TranslationAgent(BaseAgent):
                     return True
                 else:
                     logger.error("Translation failed - no result")
+                    metrics_service.record_failed_translation()
                     span.set_attribute("translation.success", False)
                     return False
 
@@ -342,7 +346,7 @@ class TranslationAgent(BaseAgent):
                 span.set_attribute("translation.error", True)
                 return False
 
-    async def _translate_message(self, text: str) -> str:
+    async def _translate_message(self, text: str, chat_id: Optional[str] = None) -> str:
         """Translate using Google (primary) or LibreTranslate (fallback)."""
         # Try Google Translate first
         if google_translation_service.is_configured():
@@ -350,7 +354,7 @@ class TranslationAgent(BaseAgent):
                 span.set_attribute("translation.provider", "google")
                 result = await google_translation_service.auto_translate(text)
             if result:
-                metrics_service.record_translation("google")
+                metrics_service.record_translation("google", chat_id)
                 return result
             logger.warning("⚠️  Google Translate failed, trying LibreTranslate...")
 
@@ -363,8 +367,12 @@ class TranslationAgent(BaseAgent):
                 result = await translation_service.translate(text, "en", "th")
 
         if result:
-            metrics_service.record_translation("libre")
+            metrics_service.record_translation("libre", chat_id)
             return result
+
+        # Record final failure only if both providers failed
+        metrics_service.record_failed_translation()
+        return "Translation failed"
         return "Translation failed"
 
     def _get_chat_id(self, event: MessageEvent) -> str:
