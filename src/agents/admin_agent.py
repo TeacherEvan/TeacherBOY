@@ -545,8 +545,9 @@ class AdminAgent(BaseAgent):
         news_sessions = 0
         try:
             from src.services.news_session_manager import news_session_manager
+
             # Count active news flows by checking internal state
-            if hasattr(news_session_manager, '_news_sessions'):
+            if hasattr(news_session_manager, "_news_sessions"):
                 news_session_manager._cleanup_expired_sessions()
                 news_sessions = len(news_session_manager._news_sessions)
         except Exception:
@@ -563,7 +564,9 @@ class AdminAgent(BaseAgent):
         msg += "🖥️  SYSTEM STATUS\n" + "─" * 24 + "\n"
         msg += f"⏱️  Uptime: {uptime_hours}h {uptime_minutes}m\n"
         if monthly_left is not None:
-            percentage = (monthly_left / monthly_limit * 100) if monthly_limit > 0 else 0
+            percentage = (
+                (monthly_left / monthly_limit * 100) if monthly_limit > 0 else 0
+            )
             msg += f"✉️  LINE quota: {monthly_left:,}/{monthly_limit:,} ({percentage:.1f}%)\n"
         else:
             msg += "✉️  LINE quota: N/A\n"
@@ -575,7 +578,7 @@ class AdminAgent(BaseAgent):
         msg += f"   └─ Google: {snap.translation_google_total:,}, Libre: {snap.translation_libre_total:,}\n"
         msg += f"📰 News requests: {snap.news_requests_total:,}\n"
         msg += f"🔧 Admin commands: {snap.admin_commands_total:,}\n"
-        
+
         # Failure metrics
         if snap.failed_translations > 0 or snap.rate_limited_requests > 0:
             msg += f"❌ Failed translations: {snap.failed_translations:,}\n"
@@ -587,7 +590,7 @@ class AdminAgent(BaseAgent):
         msg += f"👤 Unique users: {snap.unique_users_count:,}\n"
         msg += f"👥 Unique groups: {snap.unique_groups_count:,}\n"
         msg += f"👤 Last friend: {last_friend}\n"
-        
+
         # Peak usage
         if snap.peak_hour is not None:
             msg += f"📊 Peak hour: {snap.peak_hour}:00 UTC ({snap.peak_hour_requests:,} req)\n"
@@ -599,11 +602,15 @@ class AdminAgent(BaseAgent):
         msg += f"📰 News flows: {news_sessions:,}\n"
         msg += f"😴 Sleeping chats: {sleeping_chats:,}\n"
         msg += f"🔐 Pending confirmations: {pending_confirms:,}\n"
-        
+
         # Cache performance (if available)
         total_cache_ops = snap.cache_hits_total + snap.cache_misses_total
         if total_cache_ops > 0:
-            hit_rate = (snap.cache_hits_total / total_cache_ops * 100) if total_cache_ops > 0 else 0
+            hit_rate = (
+                (snap.cache_hits_total / total_cache_ops * 100)
+                if total_cache_ops > 0
+                else 0
+            )
             msg += "\n"
             msg += "💾 CACHE PERFORMANCE\n" + "─" * 24 + "\n"
             msg += f"✅ Hits: {snap.cache_hits_total:,}\n"

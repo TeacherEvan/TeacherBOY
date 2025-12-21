@@ -70,16 +70,18 @@ class DataCache:
                 # Record cache hit
                 try:
                     from src.services.metrics_service import metrics_service
+
                     metrics_service.record_cache_hit()
                 except Exception:
                     pass
                 return data
             else:
                 del self._cache[key]
-        
+
         # Record cache miss
         try:
             from src.services.metrics_service import metrics_service
+
             metrics_service.record_cache_miss()
         except Exception:
             pass
@@ -99,7 +101,9 @@ class DataCache:
 class NewsDataService:
     """Service for fetching weather, air quality, and news data."""
 
-    def __init__(self, http_client: httpx.AsyncClient, news_api_key: Optional[str] = None):
+    def __init__(
+        self, http_client: httpx.AsyncClient, news_api_key: Optional[str] = None
+    ):
         """
         Initialize news data service.
 
@@ -160,7 +164,9 @@ class NewsDataService:
 
             # Check rain in next 5 hours
             hourly_precip = weather_data.get("hourly", {}).get("precipitation", [])
-            will_rain = any(p > 0 for p in hourly_precip[:5]) if hourly_precip else False
+            will_rain = (
+                any(p > 0 for p in hourly_precip[:5]) if hourly_precip else False
+            )
 
             result = {
                 "temperature": temp_c,
@@ -228,10 +234,7 @@ class NewsDataService:
             feed = feedparser.parse(url)
             articles = []
             for entry in feed.entries[:5]:
-                articles.append({
-                    "title": entry.title,
-                    "url": entry.link
-                })
+                articles.append({"title": entry.title, "url": entry.link})
             return articles
         except Exception as e:
             logger.error(f"📰 RSS parse error for {url}: {e}")
@@ -277,7 +280,9 @@ class NewsDataService:
             }
 
             self.cache.set(cache_key, result)
-            logger.info(f"🎨 Color of day: {result['color_name_en']} ({result['color_name_th']})")
+            logger.info(
+                f"🎨 Color of day: {result['color_name_en']} ({result['color_name_th']})"
+            )
             return result
 
         except Exception as e:
@@ -318,7 +323,9 @@ class NewsDataService:
             data = response.json()
 
             daily = data.get("daily", {})
-            sunrise_full = daily.get("sunrise", [""])[0]  # ISO format: "2024-12-16T06:30"
+            sunrise_full = daily.get("sunrise", [""])[
+                0
+            ]  # ISO format: "2024-12-16T06:30"
             sunset_full = daily.get("sunset", [""])[0]
 
             # Extract HH:MM
@@ -361,39 +368,51 @@ class NewsDataService:
             # so this is the recommended approach. The objects are lightweight and only created once per cache TTL.
             year = datetime.now().year
             # Get Thai names
-            th_holidays_th = holidays.country_holidays('TH', years=year, language='th')
+            th_holidays_th = holidays.country_holidays("TH", years=year, language="th")
             # Get English names
-            th_holidays_en = holidays.country_holidays('TH', years=year, language='en_US')
-            
+            th_holidays_en = holidays.country_holidays(
+                "TH", years=year, language="en_US"
+            )
+
             # Sort by date (use Thai version for dates)
             sorted_holidays = sorted(th_holidays_th.items())
-            
+
             # Filter for upcoming holidays (or recent ones if near end of year)
             # For simplicity, we return the next 5 holidays from today
             today = datetime.now().date()
             upcoming = []
-            
+
             for date_obj, name_th in sorted_holidays:
                 if date_obj >= today:
-                    name_en = th_holidays_en.get(date_obj, name_th)  # Fallback to Thai if English missing
-                    upcoming.append({
-                        "date": date_obj.strftime("%b %d"),
-                        "name_th": name_th,
-                        "name_en": name_en,
-                    })
-            
+                    name_en = th_holidays_en.get(
+                        date_obj, name_th
+                    )  # Fallback to Thai if English missing
+                    upcoming.append(
+                        {
+                            "date": date_obj.strftime("%b %d"),
+                            "name_th": name_th,
+                            "name_en": name_en,
+                        }
+                    )
+
             # If fewer than 3 upcoming, add next year's
             if len(upcoming) < 3:
-                th_holidays_next_th = holidays.country_holidays('TH', years=year + 1, language='th')
-                th_holidays_next_en = holidays.country_holidays('TH', years=year + 1, language='en_US')
+                th_holidays_next_th = holidays.country_holidays(
+                    "TH", years=year + 1, language="th"
+                )
+                th_holidays_next_en = holidays.country_holidays(
+                    "TH", years=year + 1, language="en_US"
+                )
                 sorted_next = sorted(th_holidays_next_th.items())
                 for date_obj, name_th in sorted_next:
                     name_en = th_holidays_next_en.get(date_obj, name_th)
-                    upcoming.append({
-                        "date": date_obj.strftime("%b %d"),
-                        "name_th": name_th,
-                        "name_en": name_en,
-                    })
+                    upcoming.append(
+                        {
+                            "date": date_obj.strftime("%b %d"),
+                            "name_th": name_th,
+                            "name_en": name_en,
+                        }
+                    )
                     if len(upcoming) >= 5:
                         break
 
@@ -406,7 +425,11 @@ class NewsDataService:
             logger.error(f"📅 Error fetching Thai holidays: {e}")
             # Fallback
             return [
-                {"date": "N/A", "name_th": "ไม่สามารถดึงข้อมูลวันหยุดได้", "name_en": "Unable to fetch holidays"}
+                {
+                    "date": "N/A",
+                    "name_th": "ไม่สามารถดึงข้อมูลวันหยุดได้",
+                    "name_en": "Unable to fetch holidays",
+                }
             ]
 
     async def get_bitcoin_price(self) -> Dict[str, str]:
@@ -447,7 +470,9 @@ class NewsDataService:
             }
 
             self.cache.set(cache_key, result)
-            logger.info(f"₿ Bitcoin: {result['price_usd']} ({result['change_24h_percent']})")
+            logger.info(
+                f"₿ Bitcoin: {result['price_usd']} ({result['change_24h_percent']})"
+            )
             return result
 
         except Exception as e:
@@ -474,14 +499,14 @@ class NewsDataService:
 
         # Hardcoded fallback rates (approximate as of Dec 2024)
         FALLBACK_RATES = {
-            "usd": "0.027",      # 1 THB ≈ 0.027 USD
-            "jpy": "4.00",       # 1 THB ≈ 4.00 JPY
-            "zar": "0.49",       # 1 THB ≈ 0.49 ZAR
-            "aud": "0.041",      # 1 THB ≈ 0.041 AUD
-            "gbp": "0.021",      # 1 THB ≈ 0.021 GBP
-            "rub": "2.40",       # 1 THB ≈ 2.40 RUB
+            "usd": "0.027",  # 1 THB ≈ 0.027 USD
+            "jpy": "4.00",  # 1 THB ≈ 4.00 JPY
+            "zar": "0.49",  # 1 THB ≈ 0.49 ZAR
+            "aud": "0.041",  # 1 THB ≈ 0.041 AUD
+            "gbp": "0.021",  # 1 THB ≈ 0.021 GBP
+            "rub": "2.40",  # 1 THB ≈ 2.40 RUB
             # Backward-compat for older tests/menu paths
-            "cny": "0.19",       # 1 THB ≈ 0.19 CNY
+            "cny": "0.19",  # 1 THB ≈ 0.19 CNY
         }
 
         def _with_legacy_keys(rates: Dict[str, str]) -> Dict[str, str]:
@@ -493,15 +518,14 @@ class NewsDataService:
 
         try:
             from src.config import settings
+
             if not settings.exchange_rate_api_key:
                 logger.warning("💱 No EXCHANGE_RATE_API_KEY, using fallback rates")
                 result = _with_legacy_keys(FALLBACK_RATES)
                 self.cache.set(cache_key, result)
                 return result
 
-            url = (
-                f"https://v6.exchangerate-api.com/v6/{settings.exchange_rate_api_key}/latest/THB"
-            )
+            url = f"https://v6.exchangerate-api.com/v6/{settings.exchange_rate_api_key}/latest/THB"
 
             response = await self.client.get(url, timeout=10.0)
             response.raise_for_status()
@@ -636,12 +660,16 @@ class NewsDataService:
                 open_raw = row.get("Open")
 
                 try:
-                    close_val = float(close_raw) if close_raw not in (None, "", "N/A") else None
+                    close_val = (
+                        float(close_raw) if close_raw not in (None, "", "N/A") else None
+                    )
                 except ValueError:
                     close_val = None
 
                 try:
-                    open_val = float(open_raw) if open_raw not in (None, "", "N/A") else None
+                    open_val = (
+                        float(open_raw) if open_raw not in (None, "", "N/A") else None
+                    )
                 except ValueError:
                     open_val = None
 
@@ -665,7 +693,7 @@ class NewsDataService:
     async def get_upcoming_festivals(self) -> List[Dict[str, str]]:
         """
         Get upcoming major festivals in Bangkok/Pattaya.
-        
+
         Uses TAT API if available, otherwise returns static major festivals.
         Layout: Name: ""; Date: ""
         """
@@ -687,6 +715,7 @@ class NewsDataService:
 
         try:
             from src.config import settings
+
             if not settings.tat_api_key:
                 logger.info("🎉 No TAT_API_KEY, using fallback festivals")
                 self.cache.set(cache_key, FALLBACK_FESTIVALS)
@@ -697,13 +726,13 @@ class NewsDataService:
             url = "https://tatapi.tourismthailand.org/tat/api/v1/events"
             headers = {
                 "Authorization": f"Bearer {settings.tat_api_key}",
-                "Accept-Language": "en"
+                "Accept-Language": "en",
             }
-            
+
             # We would fetch here. For now, return fallback to avoid breaking if key is invalid.
             # response = await self.client.get(url, headers=headers, timeout=10.0)
             # ... process response ...
-            
+
             # Returning fallback for now until API is verified
             self.cache.set(cache_key, FALLBACK_FESTIVALS)
             return FALLBACK_FESTIVALS

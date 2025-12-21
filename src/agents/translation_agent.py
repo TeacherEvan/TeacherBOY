@@ -141,7 +141,7 @@ class TranslationAgent(BaseAgent):
         2. Thai text detected (auto-start session)
         3. Session is active for this chat
         4. Sleep command (to properly put bot to sleep)
-        
+
         NOTE: Skip news triggers ("news", "ข่าว") - let NewsAgent handle them.
         """
         chat_id = self._get_chat_id(event)
@@ -218,7 +218,9 @@ class TranslationAgent(BaseAgent):
                 if self._is_private_chat(event) and self.is_private_help_command(text):
                     span.set_attribute("translation.command", "help_private")
                     help_text = self._get_contextual_help(self._is_admin(user_id))
-                    help_message = TextMessage(text=help_text, quickReply=None, quoteToken=None)
+                    help_message = TextMessage(
+                        text=help_text, quickReply=None, quoteToken=None
+                    )
                     if event.reply_token:
                         line_bot_api.reply_message(
                             ReplyMessageRequest(
@@ -368,7 +370,7 @@ class TranslationAgent(BaseAgent):
         if result:
             metrics_service.record_translation("libre", chat_id)
             return result
-        
+
         # Record final failure
         metrics_service.record_failed_translation()
         return "Translation failed"
