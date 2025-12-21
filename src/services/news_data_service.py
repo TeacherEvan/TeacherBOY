@@ -11,6 +11,15 @@ import io
 
 logger = logging.getLogger(__name__)
 
+# Import metrics service at module level to avoid repeated imports
+try:
+    from src.services.metrics_service import metrics_service
+
+    METRICS_AVAILABLE = True
+except ImportError:
+    METRICS_AVAILABLE = False
+    logger.warning("⚠️  metrics_service not available, cache tracking disabled")
+
 
 class DataCache:
     """Simple TTL cache for weather and news data."""
@@ -68,23 +77,15 @@ class DataCache:
 
             if (datetime.now() - cached_at).total_seconds() < ttl:
                 # Record cache hit
-                try:
-                    from src.services.metrics_service import metrics_service
-
+                if METRICS_AVAILABLE:
                     metrics_service.record_cache_hit()
-                except Exception:
-                    pass
                 return data
             else:
                 del self._cache[key]
 
         # Record cache miss
-        try:
-            from src.services.metrics_service import metrics_service
-
+        if METRICS_AVAILABLE:
             metrics_service.record_cache_miss()
-        except Exception:
-            pass
         return None
 
     def set(self, key: str, value: Any):

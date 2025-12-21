@@ -357,7 +357,6 @@ class TranslationAgent(BaseAgent):
                 metrics_service.record_translation("google", chat_id)
                 return result
             logger.warning("⚠️  Google Translate failed, trying LibreTranslate...")
-            metrics_service.record_failed_translation()
 
         # Fallback to LibreTranslate
         with tracer.start_as_current_span("translation.translate.libre") as span:
@@ -371,8 +370,9 @@ class TranslationAgent(BaseAgent):
             metrics_service.record_translation("libre", chat_id)
             return result
 
-        # Record final failure
+        # Record final failure only if both providers failed
         metrics_service.record_failed_translation()
+        return "Translation failed"
         return "Translation failed"
 
     def _get_chat_id(self, event: MessageEvent) -> str:
