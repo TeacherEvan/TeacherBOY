@@ -21,9 +21,6 @@ from src.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Constants for news command
-NEWS_TRIGGER_TEXT = "news"  # Default trigger to use when invoking NewsAgent
-
 
 class AdminAgent(BaseAgent):
     """Agent for handling admin control commands."""
@@ -44,10 +41,6 @@ class AdminAgent(BaseAgent):
             else None
         )
         self._claimed_admin_user_id: str | None = None
-
-        # Optional dependencies for /admin news command
-        self._http_client = http_client
-        self._news_api_key = news_api_key
 
         if self._admin_user_ids:
             logger.info(
@@ -182,12 +175,6 @@ class AdminAgent(BaseAgent):
                     )
                 elif command == "sessions":
                     response = self._list_sessions()
-                elif command == "news":
-                    # Trigger news flow by delegating to NewsAgent
-                    # This allows admins to access news in private chat via /admin news
-                    return await self._handle_news_request(
-                        event, line_bot_api, chat_id, user_id
-                    )
                 else:
                     response = (
                         f"❌ Unknown command: {command}\n\n"
@@ -292,11 +279,6 @@ class AdminAgent(BaseAgent):
             "    → Show service stats dashboard\n\n"
             "  /admin sessions\n"
             "    → List all active sessions\n\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "📰 News Access:\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "  /admin news\n"
-            "    → Request news in private chat (bypasses friend/group restrictions)\n\n"
             "━━━━━━━━━━━━━━━━\n"
             "🚪 Leave Chats:\n"
             "━━━━━━━━━━━━━━━━\n"
@@ -871,101 +853,6 @@ class AdminAgent(BaseAgent):
                 msg += f"  ⏰ Wake in: {remaining}h\n"
 
         return msg
-
-    async def _handle_news_request(
-        self,
-        event: MessageEvent,
-        line_bot_api: MessagingApi,
-        chat_id: str,
-        user_id: str | None,
-    ) -> bool:
-        """
-        Handle /admin news command by triggering news flow.
-
-        This allows admins to access news in private chats or bypass restrictions.
-        We simulate a news trigger by importing and calling the NewsAgent's handler.
-        """
-        try:
-            # Import NewsAgent and news data service
-            from src.agents.news_agent import NewsAgent
-            from src.services.news_data_service import NewsDataService
-
-            # Check if dependencies are available
-            if not self._http_client:
-                error_msg = (
-                    "❌ News feature not available\n\n"
-                    "The /admin news command requires HTTP client initialization. "
-                    "Please contact the administrator."
-                )
-                if event.reply_token:
-                    line_bot_api.reply_message(
-                        ReplyMessageRequest(
-                            replyToken=event.reply_token,
-                            messages=[
-                                TextMessage(
-                                    text=error_msg,
-                                    quickReply=None,
-                                    quoteToken=None,
-                                )
-                            ],
-                            notificationDisabled=False,
-                        )
-                    )
-                return False
-
-            # Create instances with proper dependencies
-            news_data_service = NewsDataService(
-                http_client=self._http_client, news_api_key=self._news_api_key
-            )
-            news_agent = NewsAgent(news_data_service)
-
-            # Simulate a news trigger to start the news flow
-            # Use constant NEWS_TRIGGER_TEXT (English)
-            trigger_text = NEWS_TRIGGER_TEXT
-
-            # Delegate to NewsAgent's handle method
-            result = await news_agent.handle(event, trigger_text, line_bot_api)
-
-            if result:
-                logger.info(
-                    f"🔧 Admin {user_id} triggered news via /admin news in {chat_id}"
-                )
-                return True
-            else:
-                # If NewsAgent couldn't handle it, send error
-                if event.reply_token:
-                    line_bot_api.reply_message(
-                        ReplyMessageRequest(
-                            replyToken=event.reply_token,
-                            messages=[
-                                TextMessage(
-                                    text="❌ Could not start news session. Please try again.",
-                                    quickReply=None,
-                                    quoteToken=None,
-                                )
-                            ],
-                            notificationDisabled=False,
-                        )
-                    )
-                return False
-
-        except Exception as e:
-            logger.error(f"❌ Error in /admin news command: {e}", exc_info=True)
-            if event.reply_token:
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        replyToken=event.reply_token,
-                        messages=[
-                            TextMessage(
-                                text=f"❌ Error starting news: {str(e)}",
-                                quickReply=None,
-                                quoteToken=None,
-                            )
-                        ],
-                        notificationDisabled=False,
-                    )
-                )
-            return False
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         """Extract chat ID from event."""

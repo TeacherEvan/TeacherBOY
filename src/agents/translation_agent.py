@@ -134,6 +134,11 @@ class TranslationAgent(BaseAgent):
         text_clean = re.sub(r"[\s.!?]+$", "", text.lower().strip())
         return text_clean in self._NEWS_TRIGGERS
 
+    def is_special_news_command(self, text: str) -> bool:
+        """Check if text is the reserved /special news command (handled elsewhere)."""
+        text_clean = re.sub(r"\s+", " ", text.lower().strip())
+        return text_clean == "/special news"
+
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
         Handle if:
@@ -168,6 +173,10 @@ class TranslationAgent(BaseAgent):
 
         # Skip news triggers - let NewsAgent handle them
         if self.is_news_trigger(text):
+            return False
+
+        # Skip /special news - let SpecialNewsAgent handle it
+        if self.is_special_news_command(text):
             return False
 
         # Handle if Thai detected or session is active

@@ -163,7 +163,6 @@ class TestAdminAgent:
             mock_session_mgr.wake_chat.assert_called_once()
             mock_line_bot_api.reply_message.assert_called_once()
 
-            # Check response indicates successful wake
             call_args = mock_line_bot_api.reply_message.call_args
             message_text = call_args[0][0].messages[0].text
             assert "woken" in message_text.lower() or "wake" in message_text.lower()
@@ -433,26 +432,15 @@ class TestAdminAgent:
     async def test_handle_news_command(
         self, admin_agent, mock_event, mock_line_bot_api
     ):
-        """Test /admin news command triggers news flow."""
-        with patch("src.agents.news_agent.NewsAgent") as MockNewsAgent, patch(
-            "src.services.news_data_service.NewsDataService"
-        ) as MockNewsDataService:
-            # Setup mocks
-            mock_news_agent_instance = AsyncMock()
-            mock_news_agent_instance.handle = AsyncMock(return_value=True)
-            MockNewsAgent.return_value = mock_news_agent_instance
-            MockNewsDataService.return_value = Mock()
+        """/admin news is deprecated and should not be supported."""
+        result = await admin_agent.handle(mock_event, "/admin news", mock_line_bot_api)
 
-            # Execute command
-            result = await admin_agent.handle(
-                mock_event, "/admin news", mock_line_bot_api
-            )
+        assert result is True
+        mock_line_bot_api.reply_message.assert_called_once()
 
-            # Verify news agent was called
-            assert result is True
-            MockNewsAgent.assert_called_once()
-            MockNewsDataService.assert_called_once()
-            mock_news_agent_instance.handle.assert_called_once()
+        call_args = mock_line_bot_api.reply_message.call_args
+        message_text = call_args[0][0].messages[0].text
+        assert "unknown" in message_text.lower()
 
 
 @pytest.fixture

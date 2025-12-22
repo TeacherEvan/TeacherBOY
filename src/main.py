@@ -45,6 +45,7 @@ from src.services.news_data_service import NewsDataService
 from src.agents.agent_router import AgentRouter
 from src.agents.translation_agent import TranslationAgent
 from src.agents.admin_agent import AdminAgent
+from src.agents.special_news_agent import SpecialNewsAgent
 from src.agents.news_agent import NewsAgent
 from src.handlers.message_handler import (
     handle_join_event,
@@ -202,6 +203,13 @@ async def lifespan(app: FastAPI):
     # Register Translation Agent (Priority: 10)
     translation_agent = TranslationAgent()
     agent_router.register_agent(translation_agent)
+
+    # Register Special News Agent (Priority: 12)
+    from src.services.special_news_service import SpecialNewsService
+
+    special_news_service = SpecialNewsService(http_client=http_client_pool)
+    special_news_agent = SpecialNewsAgent(news_service=special_news_service)
+    agent_router.register_agent(special_news_agent)
 
     # Register News Agent (Priority: 15)
     news_data_service = NewsDataService(
