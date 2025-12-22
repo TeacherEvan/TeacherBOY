@@ -9,7 +9,7 @@
 
 ## Overview
 
-The News Agent now displays headlines **in the language requested by the user**. When a user selects Thai (ไทย) as their language preference, all news headlines are automatically translated from English to Thai.
+The News Agent now displays headlines **in the language requested by the user**. When a user triggers the Thai UI (e.g., `ข่าว` / `นิวส์`), headlines are automatically translated from English to Thai.
 
 ---
 
@@ -18,7 +18,9 @@ The News Agent now displays headlines **in the language requested by the user**.
 ### User Flow
 
 1. **User triggers news:** Type `news` or `ข่าว`
-2. **Language selection:** Choose Thai (1) or English (2)
+2. **Language selection:** Auto-detected from the trigger
+    - `news` → English UI
+    - `ข่าว` / `นิวส์` → Thai UI
 3. **Headlines displayed:**
    - **Thai selected:** Headlines translated to Thai 🇹🇭
    - **English selected:** Headlines shown in English 🇬🇧
@@ -27,12 +29,11 @@ The News Agent now displays headlines **in the language requested by the user**.
 
 ```python
 # In _send_main_menu():
-headlines = await self.news_service.get_news_headlines("en")  # Fetch English RSS
+# Bangkok Post "Thailand" RSS is English; Thai UI translates headlines.
+headlines = await self.news_service.get_news_headlines("th")
 
 if language == "th":
-    headlines = await self._translate_headlines_to_thai(headlines)  # Translate to Thai
-
-# Display in selected language
+    headlines = await self._translate_headlines_to_thai(headlines)
 ```
 
 ### Translation Process
@@ -47,7 +48,7 @@ if language == "th":
 
 ### ❌ Before (Bug)
 
-**User selects Thai (ไทย):**
+**User triggers Thai UI (`ข่าว`):**
 
 ```
 📰 หัวข้อข่าว:
@@ -60,7 +61,7 @@ _(Headlines in English despite Thai selection)_
 
 ### ✅ After (Fixed)
 
-**User selects Thai (ไทย):**
+**User triggers Thai UI (`ข่าว`):**
 
 ```
 📰 หัวข้อข่าว:

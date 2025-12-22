@@ -7,9 +7,9 @@
 ```text
 User: ข่าว
 
-Bot: 📰 Bangkok
+Bot: 📰 Bangkok (อัปเดต: 12:34)
 
-🌡️ อุณหภูมิ: 32°C | 💨 PM2.5: 45
+🌡️ อุณหภูมิ: 32°C | 💨 PM2.5: 45 µg/m³ (ดี 🟢)
 🌧️ 5 ชม.ข้างหน้า: ไม่ (No)
 
 📅 วันหยุดถัดไป: Jan 01 - วันขึ้นปีใหม่
@@ -18,11 +18,11 @@ Bot: 📰 Bangkok
 💱 อัตราแลก (1 THB): USD 0.027, JPY 4.000, ZAR 0.490, AUD 0.041, GBP 0.021, RUB 2.400
 
 📰 หัวข้อข่าว (Thailand):
-1 - รัฐบาลประกาศมาตรการใหม่เพื่อลดมลพิษ...
-2 - กรุงเทพฯ เตรียมพร้อมรับมือฤดูฝน...
-3 - ตลาดหุ้นไทยปิดบวก 15 จุด...
-4 - ท่องเที่ยวไทยคาดนักท่องเที่ยวพุ่ง...
-5 - การศึกษาไทยเตรียมปรับหลักสูตร...
+1. รัฐบาลประกาศมาตรการใหม่เพื่อลดมลพิษ...
+2. กรุงเทพฯ เตรียมพร้อมรับมือฤดูฝน...
+3. ตลาดหุ้นไทยปิดบวก 15 จุด...
+4. ท่องเที่ยวไทยคาดนักท่องเที่ยวพุ่ง...
+5. การศึกษาไทยเตรียมปรับหลักสูตร...
 
 ---
 
@@ -30,9 +30,7 @@ User: 1
 
 Bot: 📰 รัฐบาลประกาศมาตรการใหม่เพื่อลดมลพิษในกรุงเทพมหานคร
 
-🔗 อ่านเพิ่มเติม: https://news.thaipbs.or.th/...
-
-กดข้อความใดก็ได้เพื่อกลับไปเมนู
+🔗 https://www.bangkokpost.com/...
 
 ---
 
@@ -46,9 +44,9 @@ Bot: (Returns to main menu with weather/news)
 ```text
 User: news
 
-Bot: 📰 Bangkok
+Bot: 📰 Bangkok (Updated: 12:34)
 
-🌡️ Temp: 32°C | 💨 PM2.5: 45
+🌡️ Temp: 32°C | 💨 PM2.5: 45 µg/m³ (Good 🟢)
 🌧️ Next 5h rain: No
 
 📅 Next Holiday: Jan 01 - New Year's Day
@@ -57,11 +55,11 @@ Bot: 📰 Bangkok
 💱 FX (1 THB): USD 0.027, JPY 4.000, ZAR 0.490, AUD 0.041, GBP 0.021, RUB 2.400
 
 📰 Headlines (Thailand):
-1 - Government announces new pollution control measures...
-2 - Bangkok prepares for rainy season...
-3 - Thai stock market closes up 15 points...
-4 - Tourism industry expects surge in visitors...
-5 - Education ministry plans curriculum reform...
+1. Government announces new pollution control measures...
+2. Bangkok prepares for rainy season...
+3. Thai stock market closes up 15 points...
+4. Tourism industry expects surge in visitors...
+5. Education ministry plans curriculum reform...
 
 ---
 
@@ -69,9 +67,7 @@ User: 3
 
 Bot: 📰 Thai stock market closes up 15 points amid positive investor sentiment
 
-🔗 Read more: https://www.bangkokpost.com/business/...
-
-Send any message to return to menu
+🔗 https://www.bangkokpost.com/business/...
 
 ---
 
@@ -93,7 +89,7 @@ Bot: 👋 News session ended. Type 'news' or 'ข่าว' to start again!
 
 ```text
 User: news
-Bot: 📰 Bangkok (menu)
+Bot: (menu)
 
 User: abc
 Bot: ❌ Please pick 1-5 (headlines)
@@ -105,7 +101,7 @@ Bot: ❌ Please pick 1-5 (headlines)
 
 ```text
 User: ข่าว
-Bot: 📰 Bangkok (เมนู)
+Bot: (เมนู)
 
 User: ๑
 Bot: (Accepts Thai numeral ๑ as 1, shows headline 1 detail)

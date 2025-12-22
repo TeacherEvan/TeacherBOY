@@ -110,7 +110,7 @@ class TranslationAgent(BaseAgent):
             "- TeacherBoy  (wake)\n"
             "- Thank you TeacherBoy  (sleep 24h)\n"
             "- help  (this message)\n"
-            "- news / ข่าว  (private: keyword translation only)\n"
+            "- news / ข่าว  (private: keyword translation only; admins/mods get full menu)\n"
         )
         if is_admin:
             msg += (

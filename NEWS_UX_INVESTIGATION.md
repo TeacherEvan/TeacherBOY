@@ -128,7 +128,7 @@ This report analyzes the news menu interface based on screenshot evidence and co
 ## 📊 Data Source Quality Analysis
 
 ### Weather & Air Quality (Open-Meteo)
-- ✅ **Reliable:** Free, unlimited, no key required
+- ✅ **Reliable:** No API key for non-commercial use (subject to Open-Meteo terms)
 - ✅ **Accurate:** Professional-grade meteorological data
 - ⚠️ **Cache:** 30 minutes - acceptable for weather, but users should know
 

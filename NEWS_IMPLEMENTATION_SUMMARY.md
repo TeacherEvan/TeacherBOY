@@ -18,8 +18,8 @@ The News Agent feature has been successfully implemented and integrated into Tea
    - HTTP client wrapper for weather and news APIs
    - TTL caching (30min weather, 1hr news)
    - Open-Meteo integration (weather + air quality)
-   - NewsAPI.org integration (optional)
-   - Graceful fallback to placeholders when APIs unavailable
+   - Bangkok Post RSS integration (no API key)
+   - Graceful fallback to placeholder headlines when RSS is unavailable
 
 3. **src/agents/news_agent.py** (336 lines)
    - Priority 15 agent (between Translation and Calendar)
@@ -31,7 +31,7 @@ The News Agent feature has been successfully implemented and integrated into Tea
 ### Configuration
 
 1. **src/config.py** (modified)
-   - Added `news_api_key` (optional)
+   - `news_api_key` is deprecated (RSS-based headlines)
    - Added `weather_cache_ttl_seconds` (default: 1800)
    - Added `news_cache_ttl_seconds` (default: 3600)
    - Added `is_news_api_configured()` helper
@@ -42,7 +42,7 @@ The News Agent feature has been successfully implemented and integrated into Tea
    - Imported `NewsDataService` and `NewsAgent`
    - Instantiated news service with shared HTTP client
    - Registered NewsAgent with priority 15
-   - Conditional logging based on NewsAPI key presence
+   - Uses RSS headlines; no API key required
 
 ### Testing & Documentation
 
@@ -63,7 +63,7 @@ The News Agent feature has been successfully implemented and integrated into Tea
 
 1. **README.md** (modified)
    - Added News Agent feature section
-   - Updated .env example with NEWS_API_KEY
+   - Updated .env example (NewsAPI key deprecated)
 
 ## 🎯 Feature Capabilities
 
@@ -84,31 +84,28 @@ User: "1-5" for headline details
 
 ### Data Sources
 
-- **Weather**: Open-Meteo (free, unlimited)
-- **Air Quality**: Open-Meteo Air Quality API (free, unlimited)
+- **Weather**: Open-Meteo (no API key for non-commercial use; subject to Open-Meteo terms)
+- **Air Quality**: Open-Meteo Air Quality API (no API key for non-commercial use; subject to Open-Meteo terms)
 - **News**: Bangkok Post RSS feeds (no API key)
 
 ### Optimizations
 
 - **Aggressive caching**: 30-min weather, 1-hour news
 - **Shared HTTP client**: Reuses connection pool from main.py
-- **Graceful degradation**: Works without NewsAPI key (shows placeholders)
+- **Graceful degradation**: Falls back to placeholder headlines if RSS is unavailable
 - **Sequential handling**: Processes one message at a time
 - **Short outputs**: Concise messages, no long articles
 
 ## 🔧 Configuration
 
-### Required (None - Uses Free APIs)
+### Required (None)
 
-- No API keys required for basic functionality
-- Open-Meteo provides weather and air quality for free
+- No API keys required for basic functionality (Open-Meteo + RSS)
+- Open-Meteo usage is subject to their terms (e.g., non-commercial limits)
 
 ### Optional
 
 ```bash
-# Optional - for real news headlines (100 req/day free tier)
-NEWS_API_KEY=your_newsapi_org_key_from_newsapi.org
-
 # Optional - adjust cache TTLs
 WEATHER_CACHE_TTL_SECONDS=1800  # Default: 30 minutes
 NEWS_CACHE_TTL_SECONDS=3600     # Default: 1 hour
@@ -169,7 +166,7 @@ tests/test_news_agent.py::test_session_language_selection PASSED
 ### Practical Approach
 
 - Free APIs preferred (Open-Meteo)
-- Optional premium features (NewsAPI.org)
+- RSS headlines (no API key)
 - Graceful degradation when APIs unavailable
 - Caching to reduce API load
 
@@ -183,9 +180,9 @@ tests/test_news_agent.py::test_session_language_selection PASSED
 
 ### API Calls
 
-- **Without caching**: 2 calls per news request (weather + news)
+- **Without caching**: typically 3 network requests per news request (weather + air quality + RSS)
 - **With caching**: ~0.1 calls per news request (most served from cache)
-- **NewsAPI limit**: 100/day (free tier) → ~2 per hour sustained
+- Open-Meteo usage is subject to their terms (e.g., non-commercial call limits)
 
 ### Response Time
 
@@ -199,7 +196,7 @@ tests/test_news_agent.py::test_session_language_selection PASSED
 2. **Multiple Cities** - Support cities beyond Bangkok
 3. **Historical Data** - Past weather/news queries
 4. **Redis Caching** - Persistent cache across restarts
-5. **RSS Fallback** - Unlimited news via ThaiPBS/Bangkok Post RSS
+5. **RSS Fallback** - Additional RSS feed sources
 6. **Webhook Notifications** - Push breaking news to subscribed chats
 
 ## 📝 Code Quality

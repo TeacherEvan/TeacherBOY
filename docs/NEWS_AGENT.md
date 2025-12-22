@@ -6,17 +6,22 @@ The NewsAgent provides real-time weather, air quality, and news headlines for Ba
 
 ## Trigger
 
-- In groups/rooms: type `news` (English) or `ข่าว` (Thai)
-- In private chat: the bot replies with trigger translation only (no menu)
+- In groups/rooms: type `news` (English), `ข่าว` (Thai), or `นิวส์`
+   - Friends (verified via LINE profile lookup) get the full menu (rate limited to 1/hour per chat)
+   - Non-friends get trigger translation only (no menu)
+- In private chat:
+   - Regular users get trigger translation only (no menu)
+   - Admins/moderators get the full menu (no rate limit)
 
 ## Flow
 
 1. **Main Menu** (auto-fetched data)
 
    ```text
-   🌡️ Temperature (Bangkok): 32°C
-   💨 PM2.5 (Bangkok): 45
-   🌧️ Will it rain in next 5 hours: No
+   📰 Bangkok (Updated: 12:34)
+
+   🌡️ Temp: 32°C | 💨 PM2.5: 45 µg/m³ (Good 🟢)
+   🌧️ Next 5h rain: No
 
    📅 Next Holiday: Jan 1 - New Year's Day
    📈 Indices: S&P 500 4,700.00 (+0.50%) | DJIA 37,000.00 (-0.20%) | FTSE 7,500.00 (+0.10%)
@@ -24,16 +29,16 @@ The NewsAgent provides real-time weather, air quality, and news headlines for Ba
    💱 FX (1 THB): USD 0.027, JPY 4.000, ZAR 0.490, AUD 0.041, GBP 0.021, RUB 2.400
 
    📰 Headlines (Thailand):
-   1 - Headline 1...
-   2 - Headline 2...
-   3 - Headline 3...
-   4 - Headline 4...
-   5 - Headline 5...
+   1. Headline 1...
+   2. Headline 2...
+   3. Headline 3...
+   4. Headline 4...
+   5. Headline 5...
    ```
 
 2. **Headline Detail** (if user presses 1-5)
    - Shows full headline + URL
-   - User sends any message to return to menu
+   - Any message returns to the main menu (no extra prompt is displayed)
 
 ## Configuration
 
@@ -46,13 +51,13 @@ NEWS_CACHE_TTL_SECONDS=3600     # 1 hour
 
 ## Data Sources
 
-- **Weather**: [Open-Meteo](https://open-meteo.com) (free, no API key)
-- **Air Quality**: [Open-Meteo Air Quality API](https://air-quality-api.open-meteo.com) (free, no API key)
+- **Weather**: [Open-Meteo](https://open-meteo.com) (no API key for non-commercial use; subject to Open-Meteo terms)
+- **Air Quality**: [Open-Meteo Air Quality API](https://air-quality-api.open-meteo.com) (no API key for non-commercial use; subject to Open-Meteo terms)
 - **News**: Bangkok Post RSS feeds (no API key)
 
 ## Agent Priority
 
-- Priority: **15** (between Translation at 10 and Calendar at 20)
+- Priority: **15** (runs after Translation at 10)
 - Does not interfere with translation features
 - Ignores LINE system messages in brackets `[Name]`
 
@@ -94,8 +99,7 @@ pytest
 
 ## Limitations
 
-- NewsAPI.org free tier: 100 requests/day
-- No historical news (only current day)
+- RSS-based headlines (best-effort; availability depends on feed uptime)
 - Weather limited to Bangkok coordinates (can be extended)
 - In-memory state (no persistence)
 
@@ -105,4 +109,4 @@ pytest
 - Historical weather/news data
 - FlexMessage UI for richer display
 - Persistent session state (Redis)
-- RSS feed fallback for unlimited news
+- Additional RSS feed fallback sources

@@ -49,18 +49,17 @@ Legacy docs at repo root are kept for backward compatibility.
 ### News Agent **NEW!**
 
 - **📰 Real-time News:** Bangkok weather, air quality, PM2.5, and Thai news headlines
-- **🌡️ Weather Data:** Temperature and 5-hour rain forecast via Open-Meteo (free)
+- **🌡️ Weather Data:** Temperature and 5-hour rain forecast via Open-Meteo (no API key for non-commercial use; subject to Open-Meteo terms)
 - **💨 Air Quality:** PM2.5 levels for Bangkok
 - **📱 Auto-Language Detection:** Type "news" for English or "ข่าว" for Thai
 - **🔒 Friend-Gated Access:** Full menu for friends in groups (1 request/hour), translation only for others
 - **👑 Admin & Moderator Access:** 
   - **Admins:** Unlimited news requests + full admin commands
   - **Moderators:** Direct news access in all contexts (private + groups), bypass rate limits
-  - Regular users get translation only in private chats
-- **🌍 Extended Data:** Lucky color, Bitcoin price, exchange rates, Thai holidays, festivals
+    - Regular users get trigger translation only in private chats
+- **📊 Extended Data:** Thai holidays, market indices, crypto prices, exchange rates
 - **🌍 Bilingual:** Full Thai and English support
 - **🔗 Clickable Headlines:** Top 5 news with direct links
-- **📚 Resources:** View data sources (Open-Meteo, NewsAPI, ThaiPBS, Bangkok Post)
 - **⏰ Smart Caching:** 30-min weather, 1-hour news cache (reduces API calls)
 - **Trigger:** Type `news` or `ข่าว` to start
 
@@ -106,7 +105,8 @@ GOOGLE_TRANSLATE_API_KEY=your_google_api_key  # Recommended!
 LIBRETRANSLATE_API_URL=https://libretranslate.de/translate
 
 # News Agent (optional)
-NEWS_API_KEY=your_newsapi_org_key  # Optional - 100 req/day free tier
+# NEWS_API_KEY is deprecated (headlines use RSS feeds; no key required)
+# NEWS_API_KEY=
 
 # Optional: Additional agents
 ADDITIONAL_AGENTS=

@@ -1,5 +1,9 @@
 # NewsAgent Extended Features - Implementation Complete ✅
 
+> ⚠️ **Historical document:** This file describes an earlier “menu item” implementation plan and test counts.
+> The current NewsAgent UX is a single inline dashboard (weather/PM2.5/holiday/indices/crypto/FX) plus selectable headlines (1–5).
+> For the current contract, see `docs/NEWS_AGENT.md`.
+
 ## Summary (Dec 16, 2024)
 
 **Status**: ✅ **PRODUCTION-READY**  
@@ -14,7 +18,7 @@
 
 - ✅ `get_color_of_day()` – Thai lucky color (365-color cycle via day-of-year)
 - ✅ `get_sunset_sunrise_times()` – Bangkok times from Open-Meteo
-- ✅ `get_thai_holidays()` – Calendarific API + static 9-item fallback
+- ✅ `get_thai_holidays()` – `holidays` library (no API key)
 - ✅ `get_bitcoin_price()` – CoinGecko free API (no key needed)
 - ✅ `get_exchange_rates()` – ExchangeRate-API + hardcoded THB fallback
 
@@ -42,8 +46,7 @@
 
 ### 3. **Configuration Extensions** (`src/config.py`)
 
-- ✅ Added 2 new optional API keys:
-  - `calendarific_api_key` (Thai holidays)
+- ✅ Added optional API keys:
   - `exchange_rate_api_key` (Currency conversion)
 - ✅ Added 5 new cache TTL settings with validation ranges:
   - `color_cache_ttl_seconds` (24h default, 1h–24h range)
@@ -137,8 +140,7 @@ Example (Thai):
 
 ```env
 # Optional API keys
-NEWS_API_KEY=your_newsapi_key
-CALENDARIFIC_API_KEY=your_calendarific_key
+# (News headlines use RSS feeds; no API key required)
 EXCHANGE_RATE_API_KEY=your_exchangerate_api_key
 
 # Optional cache TTL tuning (all default to sensible values)
@@ -209,7 +211,6 @@ EXCHANGE_CACHE_TTL_SECONDS=3600
 
 1. **Monitor cache hit rates** in production (adjust TTLs if needed)
 2. **Add optional API keys** to GitHub Secrets:
-   - `CALENDARIFIC_API_KEY`
    - `EXCHANGE_RATE_API_KEY`
 3. **Update .env.example** with new optional keys
 4. **Deploy and test live** with real LINE users
