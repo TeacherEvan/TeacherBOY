@@ -7,7 +7,7 @@ recent timestamps useful for operational visibility.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Set
 from collections import defaultdict
 
@@ -35,7 +35,7 @@ class MetricsSnapshot:
 
 @dataclass
 class MetricsService:
-    _started_at: datetime = field(default_factory=datetime.utcnow)
+    _started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     _translation_requests_total: int = 0
     _translation_google_total: int = 0
@@ -65,7 +65,7 @@ class MetricsService:
             self._translation_libre_total += 1
 
         # Track hourly usage
-        current_hour = datetime.utcnow().hour
+        current_hour = datetime.now(timezone.utc).hour
         self._hourly_requests[current_hour] += 1
 
         # Track unique users/groups
@@ -79,7 +79,7 @@ class MetricsService:
         self._news_requests_total += 1
 
         # Track hourly usage
-        current_hour = datetime.utcnow().hour
+        current_hour = datetime.now(timezone.utc).hour
         self._hourly_requests[current_hour] += 1
 
         # Track unique users/groups
@@ -90,7 +90,7 @@ class MetricsService:
                 self._unique_groups.add(chat_id)
 
     def record_friend_added(self, user_id: Optional[str]) -> None:
-        self._last_friend_added_at = datetime.utcnow()
+        self._last_friend_added_at = datetime.now(timezone.utc)
         self._last_friend_added_user_id = user_id
 
     def record_rate_limited(self) -> None:
@@ -117,7 +117,7 @@ class MetricsService:
         return self._started_at
 
     def get_uptime(self) -> timedelta:
-        return datetime.utcnow() - self._started_at
+        return datetime.now(timezone.utc) - self._started_at
 
     def snapshot(self) -> MetricsSnapshot:
         # Calculate peak hour
