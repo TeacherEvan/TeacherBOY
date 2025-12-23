@@ -207,9 +207,13 @@ async def lifespan(app: FastAPI):
     # Register Special News Agent (Priority: 12)
     from src.services.special_news_service import SpecialNewsService
 
-    special_news_service = SpecialNewsService(http_client=http_client_pool)
+    special_news_service = SpecialNewsService(
+        http_client=http_client_pool,
+        cache_ttl_seconds=300  # 5-minute cache for volatile news data
+    )
     special_news_agent = SpecialNewsAgent(news_service=special_news_service)
     agent_router.register_agent(special_news_agent)
+    logger.info("📰 Special News Agent registered (Thailand tourism, sports, international)")
 
     # Register News Agent (Priority: 15)
     news_data_service = NewsDataService(
