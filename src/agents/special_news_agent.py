@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from linebot.v3.messaging import MessagingApi, ReplyMessageRequest, TextMessage
@@ -200,7 +200,7 @@ class SpecialNewsAgent(BaseAgent):
         """
         parts = [
             "📰 **Special News Update**",
-            f"_{datetime.utcnow().strftime('%B %d, %Y')}_",
+            f"_{datetime.now(timezone.utc).strftime('%B %d, %Y')}_",
             "",
             self._format_section("🧳 **Thailand Tourism**", tourism),
             "",

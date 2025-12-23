@@ -2,7 +2,7 @@
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import httpx
 from linebot.v3.webhooks import MessageEvent
@@ -569,7 +569,7 @@ class AdminAgent(BaseAgent):
         # ====================================================================
         last_friend = "N/A"
         if snap.last_friend_added_at:
-            time_ago = datetime.utcnow() - snap.last_friend_added_at
+            time_ago = datetime.now(timezone.utc) - snap.last_friend_added_at
             if time_ago.total_seconds() < 3600:
                 minutes_ago = int(time_ago.total_seconds() // 60)
                 time_ago_str = f"{minutes_ago}m ago"
@@ -677,7 +677,7 @@ class AdminAgent(BaseAgent):
 
         # Footer with timestamp
         msg += "\n" + "─" * 32 + "\n"
-        msg += f"🕐 Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+        msg += f"🕐 Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC"
 
         return msg
 

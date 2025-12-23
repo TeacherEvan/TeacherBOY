@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import feedparser
@@ -127,7 +127,7 @@ class SpecialNewsService:
             return None
             
         items, cached_at = self._cache[url]
-        age_seconds = (datetime.utcnow() - cached_at).total_seconds()
+        age_seconds = (datetime.now(timezone.utc) - cached_at).total_seconds()
         
         if age_seconds < self._cache_ttl_seconds:
             return items
@@ -138,7 +138,7 @@ class SpecialNewsService:
 
     def _add_to_cache(self, url: str, items: List[Dict[str, str]]) -> None:
         """Add items to cache with current timestamp."""
-        self._cache[url] = (items, datetime.utcnow())
+        self._cache[url] = (items, datetime.now(timezone.utc))
 
     def _get_feed_name(self, url: str) -> str:
         """Extract human-readable feed name from URL."""
