@@ -2,6 +2,7 @@
 
 import logging
 import re
+from datetime import datetime
 from typing import Optional
 import httpx
 from linebot.v3.webhooks import MessageEvent
@@ -486,12 +487,26 @@ class AdminAgent(BaseAgent):
         return msg
 
     async def _get_stats_message(self, line_bot_api: MessagingApi) -> str:
+        """
+        Generate comprehensive admin statistics dashboard.
+        
+        Features:
+        - System health indicators
+        - Usage metrics with trends
+        - User engagement analytics
+        - Cache performance metrics
+        - Session state overview
+        """
         snap = metrics_service.snapshot()
 
-        # LINE monthly quota (best-effort; depends on SDK / channel plan).
+        # ====================================================================
+        # SECTION 1: LINE API Quota (Critical for service continuity)
+        # ====================================================================
         monthly_limit = None
         monthly_used = None
         monthly_left = None
+        quota_status_emoji = "✅"
+        
         try:
             quota = None
             if hasattr(line_bot_api, "get_message_quota"):
@@ -512,80 +527,137 @@ class AdminAgent(BaseAgent):
             monthly_used = _get(consumption, "totalUsage")
             if isinstance(monthly_limit, int) and isinstance(monthly_used, int):
                 monthly_left = max(0, monthly_limit - monthly_used)
-        except Exception:
+                # Set warning emoji if quota is running low
+                if monthly_limit > 0:
+                    usage_pct = (monthly_used / monthly_limit) * 100
+                    if usage_pct >= 90:
+                        quota_status_emoji = "🔴"
+                    elif usage_pct >= 75:
+                        quota_status_emoji = "🟡"
+        except Exception as e:
+            logger.debug(f"Could not fetch LINE quota: {e}")
             monthly_limit = None
 
+        # ====================================================================
+        # SECTION 2: System Metrics
+        # ====================================================================
         uptime = metrics_service.get_uptime()
         uptime_hours = int(uptime.total_seconds() // 3600)
         uptime_minutes = int((uptime.total_seconds() % 3600) // 60)
+        uptime_days = uptime_hours // 24
+        uptime_hours_remaining = uptime_hours % 24
 
         active_sessions = len(session_manager.get_active_sessions())
         sleeping_chats = len(session_manager.get_sleeping_chats())
         pending_confirms = admin_confirmation_service.count_pending()
 
-        # Get news session stats
+        # ====================================================================
+        # SECTION 3: News Session Analytics
+        # ====================================================================
         news_sessions = 0
         try:
             from src.services.news_session_manager import news_session_manager
 
-            # Count active news flows by checking internal state
             if hasattr(news_session_manager, "_news_sessions"):
                 news_session_manager._cleanup_expired_sessions()
                 news_sessions = len(news_session_manager._news_sessions)
         except Exception:
             news_sessions = 0
 
+        # ====================================================================
+        # SECTION 4: Friend Engagement
+        # ====================================================================
         last_friend = "N/A"
         if snap.last_friend_added_at:
-            last_friend = f"{snap.last_friend_added_at.strftime('%Y-%m-%d %H:%M:%S')} UTC ({self._mask_user_id(snap.last_friend_added_user_id)})"
+            time_ago = datetime.utcnow() - snap.last_friend_added_at
+            if time_ago.total_seconds() < 3600:
+                minutes_ago = int(time_ago.total_seconds() // 60)
+                time_ago_str = f"{minutes_ago}m ago"
+            elif time_ago.total_seconds() < 86400:
+                hours_ago = int(time_ago.total_seconds() // 3600)
+                time_ago_str = f"{hours_ago}h ago"
+            else:
+                days_ago = int(time_ago.total_seconds() // 86400)
+                time_ago_str = f"{days_ago}d ago"
+            
+            last_friend = f"{time_ago_str} ({self._mask_user_id(snap.last_friend_added_user_id)})"
 
-        # Build enhanced stats message with better visual grouping
-        msg = "📊 Admin Stats Dashboard\n" + "=" * 24 + "\n\n"
+        # ====================================================================
+        # BUILD DASHBOARD MESSAGE
+        # ====================================================================
+        msg = "📊 **Admin Stats Dashboard**\n" + "═" * 32 + "\n\n"
 
         # System Status Section
-        msg += "🖥️  SYSTEM STATUS\n" + "─" * 24 + "\n"
-        msg += f"⏱️  Uptime: {uptime_hours}h {uptime_minutes}m\n"
+        msg += "🖥️  **SYSTEM STATUS**\n" + "─" * 32 + "\n"
+        
+        # Uptime with days breakdown
+        if uptime_days > 0:
+            msg += f"⏱️  Uptime: {uptime_days}d {uptime_hours_remaining}h {uptime_minutes}m\n"
+        else:
+            msg += f"⏱️  Uptime: {uptime_hours}h {uptime_minutes}m\n"
+        
+        # LINE quota with visual indicator
         if monthly_left is not None:
             percentage = (
                 (monthly_left / monthly_limit * 100) if monthly_limit > 0 else 0
             )
-            msg += f"✉️  LINE quota: {monthly_left:,}/{monthly_limit:,} ({percentage:.1f}%)\n"
+            msg += f"{quota_status_emoji} LINE quota: {monthly_left:,}/{monthly_limit:,} ({percentage:.1f}% remaining)\n"
         else:
-            msg += "✉️  LINE quota: N/A\n"
+            msg += "ℹ️  LINE quota: Not available\n"
         msg += "\n"
 
-        # Usage Metrics Section
-        msg += "📈 USAGE METRICS\n" + "─" * 24 + "\n"
-        msg += f"🧠 Translations: {snap.translation_requests_total:,}\n"
-        msg += f"   └─ Google: {snap.translation_google_total:,}, Libre: {snap.translation_libre_total:,}\n"
+        # Usage Metrics Section (Enhanced)
+        msg += "📈 **USAGE METRICS**\n" + "─" * 32 + "\n"
+        msg += f"🔤 Translations: {snap.translation_requests_total:,} total\n"
+        
+        # Provider breakdown with percentages
+        total_translations = snap.translation_requests_total
+        if total_translations > 0:
+            google_pct = (snap.translation_google_total / total_translations) * 100
+            libre_pct = (snap.translation_libre_total / total_translations) * 100
+            msg += f"   └─ Google: {snap.translation_google_total:,}, Libre: {snap.translation_libre_total:,} ({google_pct:.0f}% / {libre_pct:.0f}%)\n"
+        else:
+            msg += f"   └─ Google: {snap.translation_google_total:,}, Libre: {snap.translation_libre_total:,}\n"
+        
         msg += f"📰 News requests: {snap.news_requests_total:,}\n"
         msg += f"🔧 Admin commands: {snap.admin_commands_total:,}\n"
 
-        # Failure metrics
+        # Error metrics (only show if non-zero)
         if snap.failed_translations > 0 or snap.rate_limited_requests > 0:
-            msg += f"❌ Failed translations: {snap.failed_translations:,}\n"
-            msg += f"⏳ Rate limited: {snap.rate_limited_requests:,}\n"
+            msg += f"\n⚠️  **ERROR METRICS**\n"
+            if snap.failed_translations > 0:
+                msg += f"❌ Failed translations: {snap.failed_translations:,}\n"
+            if snap.rate_limited_requests > 0:
+                msg += f"⏳ Rate limited: {snap.rate_limited_requests:,}\n"
         msg += "\n"
 
-        # User Engagement Section
-        msg += "👥 USER ENGAGEMENT\n" + "─" * 24 + "\n"
+        # User Engagement Section (Enhanced)
+        msg += "👥 **USER ENGAGEMENT**\n" + "─" * 32 + "\n"
         msg += f"👤 Unique users: {snap.unique_users_count:,}\n"
         msg += f"👥 Unique groups: {snap.unique_groups_count:,}\n"
-        msg += f"👤 Last friend: {last_friend}\n"
+        
+        total_unique = snap.unique_users_count + snap.unique_groups_count
+        msg += f"📊 Total reach: {total_unique:,} chats\n"
+        msg += f"👋 Last friend added: {last_friend}\n"
 
-        # Peak usage
+        # Peak usage analytics
         if snap.peak_hour is not None:
-            msg += f"📊 Peak hour: {snap.peak_hour}:00 UTC ({snap.peak_hour_requests:,} req)\n"
+            msg += f"📈 Peak hour: {snap.peak_hour}:00 UTC ({snap.peak_hour_requests:,} req)\n"
         msg += "\n"
 
-        # Active Sessions Section
-        msg += "💬 ACTIVE SESSIONS\n" + "─" * 24 + "\n"
+        # Active Sessions Section (Enhanced)
+        msg += "💬 **ACTIVE SESSIONS**\n" + "─" * 32 + "\n"
         msg += f"✅ Translation sessions: {active_sessions:,}\n"
         msg += f"📰 News flows: {news_sessions:,}\n"
         msg += f"😴 Sleeping chats: {sleeping_chats:,}\n"
         msg += f"🔐 Pending confirmations: {pending_confirms:,}\n"
+        
+        # Total active indicator (only show if there are active sessions)
+        total_active = active_sessions + news_sessions
+        if total_active > 0:
+            msg += f"📊 Total active: {total_active:,} sessions\n"
 
-        # Cache performance (if available)
+        # Cache Performance Section (Enhanced)
         total_cache_ops = snap.cache_hits_total + snap.cache_misses_total
         if total_cache_ops > 0:
             hit_rate = (
@@ -593,11 +665,19 @@ class AdminAgent(BaseAgent):
                 if total_cache_ops > 0
                 else 0
             )
+            
+            # Cache quality indicator
+            cache_quality_emoji = "🟢" if hit_rate >= 80 else "🟡" if hit_rate >= 60 else "🔴"
+            
             msg += "\n"
-            msg += "💾 CACHE PERFORMANCE\n" + "─" * 24 + "\n"
+            msg += "💾 **CACHE PERFORMANCE**\n" + "─" * 32 + "\n"
             msg += f"✅ Hits: {snap.cache_hits_total:,}\n"
             msg += f"❌ Misses: {snap.cache_misses_total:,}\n"
-            msg += f"📊 Hit rate: {hit_rate:.1f}%\n"
+            msg += f"{cache_quality_emoji} Hit rate: {hit_rate:.1f}%\n"
+
+        # Footer with timestamp
+        msg += "\n" + "─" * 32 + "\n"
+        msg += f"🕐 Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
 
         return msg
 
