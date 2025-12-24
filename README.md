@@ -35,7 +35,7 @@ Legacy docs at repo root are kept for backward compatibility.
 ### Translation Agent (Primary)
 
 - **🔥 Smart Auto-Detection:** Automatically starts when Thai text is detected
-- **🔄 Continuous Mode:** Translates EVERY message until you say "Thank you TeacherBoy"
+- **🔄 Continuous Mode:** Translates EVERY message until you say "amen"
 - **😴 Sleep Mode:** Bot sleeps for 24 hours - say "TeacherBoy" alone to wake up
 - **🌐 Professional Quality:** Google Translate (primary) + LibreTranslate (fallback)
 - **�️ Hallucination Prevention:** Detects incomplete sentences and prevents unwanted context injection
