@@ -148,6 +148,16 @@ class TestHeadlineLinkFixes:
 class TestSpecialNewsRSSFixes:
     """Test fixes for special news RSS fetching."""
 
+    @staticmethod
+    def _extract_headline_lines(formatted_text: str) -> list:
+        """Helper to extract headline lines from formatted section text."""
+        lines = formatted_text.split("\n")
+        # Filter for lines that start with numbers (1., 2., etc.) but not section headers or messages
+        return [
+            line.strip() for line in lines 
+            if line.strip() and any(line.strip().startswith(f"{i}.") for i in range(1, 10))
+        ]
+
     @pytest.mark.asyncio
     async def test_format_section_skips_unavailable_items(self, special_news_agent):
         """Test that _format_section skips unavailable items completely."""
@@ -178,9 +188,7 @@ class TestSpecialNewsRSSFixes:
         result = special_news_agent._format_section("🧳 **Test Section**", items)
         
         # First item should have warning emoji, second should not
-        lines = result.split("\n")
-        # Find the headline lines
-        headline_lines = [l for l in lines if l.strip() and not l.startswith("🧳") and not l.startswith("_")]
+        headline_lines = self._extract_headline_lines(result)
         
         # Should have both headlines
         assert len(headline_lines) == 2

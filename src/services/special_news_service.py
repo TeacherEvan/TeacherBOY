@@ -16,6 +16,9 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+# Constants
+TITLE_TRUNCATE_LENGTH = 50  # Max characters to show in log messages
+
 
 class SpecialNewsService:
     """
@@ -101,7 +104,7 @@ class SpecialNewsService:
                     
                     # Validate URL exists
                     if not link or not link.strip():
-                        logger.warning(f"⚠️ Entry '{title[:30]}...' has no URL")
+                        logger.warning(f"⚠️ Entry '{title[:TITLE_TRUNCATE_LENGTH]}...' has no URL")
                         
                     items.append({
                         "title": title.strip(),

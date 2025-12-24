@@ -11,6 +11,9 @@ import io
 
 logger = logging.getLogger(__name__)
 
+# Constants
+TITLE_TRUNCATE_LENGTH = 50  # Max characters to show in log messages
+
 # Import metrics service at module level to avoid repeated imports
 try:
     from src.services.metrics_service import metrics_service
@@ -241,10 +244,10 @@ class NewsDataService:
                 link = getattr(entry, 'link', '')
                 
                 if not link or not link.strip():
-                    logger.warning(f"📰 Entry {i+1} '{title[:30]}...' has no URL")
+                    logger.warning(f"📰 Entry {i+1} '{title[:TITLE_TRUNCATE_LENGTH]}...' has no URL")
                 
                 articles.append({"title": title, "url": link})
-                logger.debug(f"📰 Entry {i+1}: title='{title[:40]}...', url={link}")
+                logger.debug(f"📰 Entry {i+1}: title='{title[:TITLE_TRUNCATE_LENGTH]}...', url={link}")
             
             return articles
         except Exception as e:

@@ -22,7 +22,7 @@ def test_headline_link_fix_demonstration():
     
     # Setup
     mock_http_client = AsyncMock()
-    news_service = NewsDataService(http_client=mock_http_client)
+    news_service = NewsDataService(http_client=mock_http_client, news_api_key=None)
     agent = NewsAgent(news_data_service=news_service)
     
     mock_event = MagicMock()
@@ -131,10 +131,9 @@ def test_special_news_unavailable_fix_demonstration():
     
     result = agent._format_section("🧳 **Thailand Tourism**", missing_url)
     print(f"   After fix:\n{result}\n")
-    # First item should have warning emoji
-    lines = result.split("\n")
-    headline_lines = [l for l in lines if l.strip().startswith("1.") or l.strip().startswith("2.")]
-    assert any("⚠️" in line for line in headline_lines), "Missing URL should show warning emoji"
+    # First item should have warning emoji (no URL), second should be markdown link
+    assert "⚠️" in result, "Missing URL should show warning emoji"
+    assert "[Beach restoration project complete]" in result, "Item with URL should be markdown link"
     
     print(f"✅ Fix validated: Unavailable items handled gracefully with user-friendly messages")
     print("="*80 + "\n")
