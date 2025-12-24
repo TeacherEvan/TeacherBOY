@@ -69,7 +69,7 @@ ADMIN_USER_IDS=U1234567890,U0987654321  # Comma-separated LINE user IDs
 - ✅ Incomplete sentence detection (prevents hallucination)
 - ✅ Parentheses preservation: `(Name)` stays as `(Name)`
 - ✅ Session management per chat
-- ✅ Sleep mode: "Thank you TeacherBoy" → 24h sleep
+- ✅ Sleep mode: "amen" → 24h sleep
 - ✅ Wake command: "TeacherBoy" alone
 
 ## 📰 News Menu (Friends in Groups/Rooms)

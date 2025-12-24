@@ -64,7 +64,7 @@ Follow: [docs/guides/line-setup.md](line-setup.md)
 
 - Send a Thai message (e.g., `สวัสดีครับ`) to start translation mode.
 - Send English/Thai messages; the bot replies with translations.
-- Stop/sleep: `Thank you TeacherBoy`
+- Stop/sleep: `amen`
 - Wake: `TeacherBoy`
 
 ## Deploy on Hugging Face Spaces (Docker)
