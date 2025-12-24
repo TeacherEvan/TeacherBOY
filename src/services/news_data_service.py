@@ -233,12 +233,22 @@ class NewsDataService:
         """Parse RSS feed and return top 5 items."""
         try:
             feed = feedparser.parse(url)
+            logger.info(f"📰 Parsed RSS feed from {url}: {len(feed.entries)} entries")
+            
             articles = []
-            for entry in feed.entries[:5]:
-                articles.append({"title": entry.title, "url": entry.link})
+            for i, entry in enumerate(feed.entries[:5]):
+                title = getattr(entry, 'title', '')
+                link = getattr(entry, 'link', '')
+                
+                if not link or not link.strip():
+                    logger.warning(f"📰 Entry {i+1} '{title[:30]}...' has no URL")
+                
+                articles.append({"title": title, "url": link})
+                logger.debug(f"📰 Entry {i+1}: title='{title[:40]}...', url={link}")
+            
             return articles
         except Exception as e:
-            logger.error(f"📰 RSS parse error for {url}: {e}")
+            logger.error(f"📰 RSS parse error for {url}: {e}", exc_info=True)
             return [
                 {"title": "News unavailable", "url": ""},
                 {"title": "Visit Bangkok Post", "url": "https://www.bangkokpost.com"},

@@ -44,7 +44,7 @@ class SpecialNewsService:
         self, 
         url: str, 
         limit: int = 5,
-        max_retries: int = 2
+        max_retries: int = 3
     ) -> List[Dict[str, str]]:
         """
         Fetch RSS/Atom feed with retry logic and caching.
@@ -63,26 +63,45 @@ class SpecialNewsService:
             logger.debug(f"📦 Cache hit for {url}")
             return cached_items[:limit]
 
+        feed_name = self._get_feed_name(url)
+        logger.info(f"🔍 Fetching {feed_name} from {url}")
+
         # Fetch with retry logic
         for attempt in range(max_retries + 1):
             try:
                 resp = await self._client.get(
                     url, 
-                    timeout=10.0,
+                    timeout=15.0,  # Increased from 10s to 15s
                     follow_redirects=True
                 )
                 resp.raise_for_status()
 
+                # Log response details for debugging
+                logger.debug(f"📥 Response: {len(resp.text)} bytes, Content-Type: {resp.headers.get('content-type', 'unknown')}")
+
                 parsed = feedparser.parse(resp.text)
+                
+                # Check if feedparser encountered errors
+                if hasattr(parsed, 'bozo') and parsed.bozo and hasattr(parsed, 'bozo_exception'):
+                    logger.warning(f"⚠️ Feedparser warning for {url}: {parsed.bozo_exception}")
+                
+                entries = getattr(parsed, "entries", [])
+                logger.info(f"📋 Parsed {len(entries)} entries from {feed_name}")
+                
                 items: List[Dict[str, str]] = []
                 
-                for entry in getattr(parsed, "entries", [])[:limit * 2]:  # Fetch extra in case some are invalid
+                for entry in entries[:limit * 2]:  # Fetch extra in case some are invalid
                     title = getattr(entry, "title", "") or ""
                     link = getattr(entry, "link", "") or ""
                     
                     # Skip entries without titles
                     if not title or not title.strip():
+                        logger.debug(f"⏭️ Skipping entry with empty title")
                         continue
+                    
+                    # Validate URL exists
+                    if not link or not link.strip():
+                        logger.warning(f"⚠️ Entry '{title[:30]}...' has no URL")
                         
                     items.append({
                         "title": title.strip(),
@@ -96,29 +115,32 @@ class SpecialNewsService:
                 # Cache successful results
                 if items:
                     self._add_to_cache(url, items)
-                    logger.info(f"✅ Fetched {len(items)} items from {self._get_feed_name(url)}")
+                    logger.info(f"✅ Fetched {len(items)} items from {feed_name}")
                 else:
-                    logger.warning(f"⚠️ No valid entries found in {url}")
+                    logger.warning(f"⚠️ No valid entries found in {feed_name}")
                 
                 return items[:limit]
                 
             except httpx.TimeoutException:
-                logger.warning(f"⏱️ Timeout fetching {url} (attempt {attempt + 1}/{max_retries + 1})")
+                logger.warning(f"⏱️ Timeout fetching {feed_name} (attempt {attempt + 1}/{max_retries + 1})")
                 if attempt < max_retries:
-                    # Exponential backoff: 0.5s, 1s, 2s...
-                    await asyncio.sleep(0.5 * (2 ** attempt))
+                    # Exponential backoff: 1s, 2s, 4s...
+                    backoff = 1.0 * (2 ** attempt)
+                    logger.debug(f"⏳ Retrying in {backoff}s...")
+                    await asyncio.sleep(backoff)
                     
             except httpx.HTTPStatusError as e:
-                logger.error(f"❌ HTTP {e.response.status_code} for {url}")
+                logger.error(f"❌ HTTP {e.response.status_code} for {feed_name}: {url}")
                 break  # Don't retry on client/server errors
                 
             except Exception as e:
-                logger.error(f"❌ RSS fetch failed for {url}: {type(e).__name__}: {e}")
+                logger.error(f"❌ RSS fetch failed for {feed_name}: {type(e).__name__}: {e}", exc_info=True)
                 if attempt < max_retries:
-                    await asyncio.sleep(0.5 * (2 ** attempt))
+                    backoff = 1.0 * (2 ** attempt)
+                    await asyncio.sleep(backoff)
 
         # All retries exhausted
-        logger.error(f"❌ Failed to fetch {url} after {max_retries + 1} attempts")
+        logger.error(f"❌ Failed to fetch {feed_name} after {max_retries + 1} attempts")
         return []
 
     def _get_from_cache(self, url: str) -> Optional[List[Dict[str, str]]]:
