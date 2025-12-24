@@ -53,21 +53,12 @@ class TranslationAgent(BaseAgent):
         """
         Check if text is a sleep command (puts bot to sleep for 24 hours).
 
-        Sleep patterns: "Thank you TeacherBoy", "Thanks TeacherBoy", etc.
-        Handles common typos: teacherboi, teacherboy, teacherbiy, etc.
+        Sleep pattern: "amen" (case insensitive)
         """
         text_lower = text.lower().strip()
-        # Flexible pattern for "teacherboy" with common typos: boy/boi/biy/boj
-        teacher_pattern = r"teacher(?:boy|boi|biy|boj|boii)"
-        sleep_patterns = [
-            rf"^thanks?\s+{teacher_pattern}[\s.!]*$",
-            rf"^thank\s+you\s+{teacher_pattern}[\s.!]*$",
-            rf"^thx\s+{teacher_pattern}[\s.!]*$",
-            rf"^ty\s+{teacher_pattern}[\s.!]*$",
-            rf"^ขอบคุณ\s*{teacher_pattern}[\s.!]*$",
-            rf"^ขอบใจ\s*{teacher_pattern}[\s.!]*$",
-        ]
-        return any(re.search(pattern, text_lower) for pattern in sleep_patterns)
+        # Simple pattern for "amen" with optional punctuation
+        sleep_pattern = r"^amen[\s.!]*$"
+        return bool(re.search(sleep_pattern, text_lower))
 
     def is_wake_command(self, text: str) -> bool:
         """
@@ -108,7 +99,7 @@ class TranslationAgent(BaseAgent):
             "━━━━━━━━━━━━\n\n"
             "User commands:\n"
             "- TeacherBoy  (wake)\n"
-            "- Thank you TeacherBoy  (sleep 24h)\n"
+            "- amen  (sleep 24h)\n"
             "- help  (this message)\n"
             "- news / ข่าว  (private: keyword translation only; admins/mods get full menu)\n"
         )
@@ -202,7 +193,7 @@ class TranslationAgent(BaseAgent):
                             "Wake the bot:\n"
                             "- TeacherBoy\n\n"
                             "Put the bot to sleep (24h):\n"
-                            "- Thank you TeacherBoy\n\n"
+                            "- amen\n\n"
                             "Admin (if enabled):\n"
                             "- TeacherBoy admin help\n"
                             "- /admin help\n\n"
@@ -624,7 +615,7 @@ class TranslationAgent(BaseAgent):
                         "contents": [
                             {
                                 "type": "text",
-                                "text": '💡 Tip: Say "Thank you TeacherBoy" to sleep for 24h',
+                                "text": '💡 Tip: Say "amen" to sleep for 24h',
                                 "size": "xxs",
                                 "color": text_muted,
                                 "align": "center",

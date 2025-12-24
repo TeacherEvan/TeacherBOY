@@ -105,21 +105,14 @@ class NewsAgent(BaseAgent):
 
     def _is_shutdown_phrase(self, text: str) -> bool:
         """
-        Check if text is a shutdown phrase ("thank you teacherboy").
+        Check if text is a shutdown phrase ("amen").
 
-        This allows users to exit news flow immediately by thanking the bot.
+        This allows users to exit news flow immediately.
         """
         text_lower = text.lower().strip()
-        teacher_pattern = r"teacher(?:boy|boi|biy|boj|boii)"
-        shutdown_patterns = [
-            rf"^thanks?\s+{teacher_pattern}[\s.!]*$",
-            rf"^thank\s+you\s+{teacher_pattern}[\s.!]*$",
-            rf"^thx\s+{teacher_pattern}[\s.!]*$",
-            rf"^ty\s+{teacher_pattern}[\s.!]*$",
-            rf"^ขอบคุณ\s*{teacher_pattern}[\s.!]*$",
-            rf"^ขอบใจ\s*{teacher_pattern}[\s.!]*$",
-        ]
-        return any(re.search(pattern, text_lower) for pattern in shutdown_patterns)
+        # Simple pattern for "amen" with optional punctuation
+        shutdown_pattern = r"^amen[\s.!]*$"
+        return bool(re.search(shutdown_pattern, text_lower))
 
     def _is_group_chat(self, event: MessageEvent) -> bool:
         """Return True when message comes from a group or room."""

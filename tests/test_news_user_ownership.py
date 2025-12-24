@@ -130,7 +130,7 @@ async def test_only_session_owner_can_interact(news_agent, mock_line_api):
 
 @pytest.mark.asyncio
 async def test_shutdown_phrase_ends_news_session(news_agent, mock_line_api):
-    """Test that 'thank you teacherboy' ends the news session immediately."""
+    """Test that 'amen' ends the news session immediately."""
     # Clear any existing sessions and rate limiter
     news_session_manager._news_sessions.clear()
     news_rate_limiter_friend.reset_chat("group_G_TEST")
@@ -145,8 +145,8 @@ async def test_shutdown_phrase_ends_news_session(news_agent, mock_line_api):
     assert session is not None
     
     # Send shutdown phrase
-    event2 = create_mock_event("thank you teacherboy", user_id="U_USER1", group_id="G_TEST")
-    result = await news_agent.handle(event2, "thank you teacherboy", mock_line_api)
+    event2 = create_mock_event("amen", user_id="U_USER1", group_id="G_TEST")
+    result = await news_agent.handle(event2, "amen", mock_line_api)
     assert result is True
     
     # Session should be ended
@@ -161,14 +161,11 @@ async def test_shutdown_phrase_ends_news_session(news_agent, mock_line_api):
 async def test_shutdown_phrase_variations(news_agent, mock_line_api):
     """Test various shutdown phrase variations."""
     shutdown_phrases = [
-        "thank you teacherboy",
-        "thanks teacherboy",
-        "thank you teacherboi",
-        "thx teacherboy",
-        "ty teacherboy",
-        "ขอบคุณ teacherboy",
-        "ขอบใจ teacherboy",
-        "Thank You TeacherBoy!",  # Case insensitive and with punctuation
+        "amen",
+        "Amen",
+        "AMEN",
+        "amen!",
+        "amen.",
     ]
     
     for phrase in shutdown_phrases:
@@ -211,8 +208,8 @@ async def test_shutdown_during_menu_interaction(news_agent, mock_line_api):
     assert session["step"] == "main_menu"
     
     # User can shut down from menu
-    event2 = create_mock_event("thank you teacherboy", user_id="U_USER1", group_id="G_TEST")
-    result = await news_agent.handle(event2, "thank you teacherboy", mock_line_api)
+    event2 = create_mock_event("amen", user_id="U_USER1", group_id="G_TEST")
+    result = await news_agent.handle(event2, "amen", mock_line_api)
     assert result is True
     
     # Session ended
@@ -248,14 +245,14 @@ async def test_session_owner_check_method(news_agent):
 @pytest.mark.asyncio
 async def test_shutdown_phrase_detection_method(news_agent):
     """Test the _is_shutdown_phrase method."""
-    assert news_agent._is_shutdown_phrase("thank you teacherboy") is True
-    assert news_agent._is_shutdown_phrase("thanks teacherboy") is True
-    assert news_agent._is_shutdown_phrase("thx teacherboy") is True
-    assert news_agent._is_shutdown_phrase("Thank You TeacherBoy!") is True
-    assert news_agent._is_shutdown_phrase("ขอบคุณ teacherboy") is True
+    assert news_agent._is_shutdown_phrase("amen") is True
+    assert news_agent._is_shutdown_phrase("Amen") is True
+    assert news_agent._is_shutdown_phrase("AMEN") is True
+    assert news_agent._is_shutdown_phrase("amen!") is True
+    assert news_agent._is_shutdown_phrase("amen.") is True
     
     # Should not match
     assert news_agent._is_shutdown_phrase("teacherboy") is False
-    assert news_agent._is_shutdown_phrase("hello teacherboy") is False
+    assert news_agent._is_shutdown_phrase("hello amen") is False
     assert news_agent._is_shutdown_phrase("thank you") is False
     assert news_agent._is_shutdown_phrase("news") is False
