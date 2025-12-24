@@ -290,9 +290,9 @@ If the bot is misbehaving in a specific chat:
 /admin sessions  # See all active chats and their message counts
 ```
 
-### Wake Bot After "Thank you TeacherBoy"
+### Wake Bot After "amen"
 
-Users can put the bot to sleep with "Thank you TeacherBoy". To override:
+Users can put the bot to sleep with "amen". To override:
 
 ```
 /admin wake user_U123456

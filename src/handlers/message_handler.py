@@ -24,17 +24,10 @@ def contains_thai(text: str) -> bool:
 
 
 def is_sleep_command(text: str) -> bool:
-    """Check if text is a sleep command (Thank you TeacherBoy, etc.)."""
+    """Check if text is a sleep command (amen)."""
     text_lower = text.lower().strip()
-    sleep_patterns = [
-        r"^thanks?\s+teacherboy$",
-        r"^thank\s+you\s+teacherboy$",
-        r"^thx\s+teacherboy$",
-        r"^ty\s+teacherboy$",
-        r"^ขอบคุณ\s*teacherboy$",  # Thai "thank you"
-        r"^ขอบใจ\s*teacherboy$",  # Thai "thanks"
-    ]
-    return any(re.search(pattern, text_lower) for pattern in sleep_patterns)
+    sleep_pattern = r"^amen[\s.!]*$"
+    return bool(re.search(sleep_pattern, text_lower))
 
 
 def is_wake_command(text: str) -> bool:
@@ -227,7 +220,7 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
 
     Features:
     - Auto-detects Thai characters and starts translation mode
-    - Continuous translation until "Thank you TeacherBoy" is said (sleeps for 24h)
+    - Continuous translation until "amen" is said (sleeps for 24h)
     - Say "TeacherBoy" alone to wake up
     - Uses Google Translate if configured, falls back to LibreTranslate
     - Sends response as Flex Message

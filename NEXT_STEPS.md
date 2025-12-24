@@ -75,7 +75,7 @@ Copy the HTTPS URL (e.g., `https://abc123.ngrok.io`)
    - ✅ Should translate to Thai
 4. Send: `ขอบคุณมากครับ`
    - ✅ Should translate to English
-5. Say: `Thank you TeacherBoy`
+5. Say: `amen`
    - ✅ Should end session with goodbye message
 
 **Check Logs:**
@@ -320,7 +320,7 @@ docker run -d --name teacherboy --env-file .env -p 8000:8000 teacherboy
 
 1. Send Thai text first (Thai Unicode required)
 2. Check if session is already active
-3. Say "Thank you TeacherBoy" to reset
+3. Say "amen" to reset
 4. Check logs for routing decisions
 
 ### Agent Not Triggering
