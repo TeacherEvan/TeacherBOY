@@ -6,7 +6,6 @@ from src.agents.news_agent import NewsAgent
 from src.agents.special_news_agent import SpecialNewsAgent
 from src.services.news_data_service import NewsDataService
 from src.services.special_news_service import SpecialNewsService
-from src.services.news_session_manager import news_session_manager
 
 
 def test_headline_link_fix_demonstration():
