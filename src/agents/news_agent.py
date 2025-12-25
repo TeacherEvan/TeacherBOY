@@ -674,6 +674,8 @@ class NewsAgent(BaseAgent):
 
             if index < len(headlines):
                 headline = headlines[index]
+                # Log headline data for debugging
+                logger.info(f"📰 User selected headline {index+1}: title='{headline.get('title', '')[:50]}...', has_url={bool(headline.get('url'))}")
                 news_session_manager.select_headline(chat_id, index)
                 await self._send_headline_detail(
                     event, line_bot_api, headline, session["language"]
@@ -700,14 +702,21 @@ class NewsAgent(BaseAgent):
         title = headline.get("title", "")
         url = headline.get("url", "")
 
+        # Log headline data for debugging
+        logger.info(f"📰 Sending headline detail: title={title[:50]}..., url={url}")
+
         if language == "th":
-            msg = f"📰 {title}\n"
-            if url:
-                msg += f"🔗 {url}\n"
+            msg = f"📰 {title}\n\n"
+            if url and url.strip():
+                msg += f"🔗 อ่านต่อ (Read more):\n{url}"
+            else:
+                msg += "⚠️ ลิงก์ไม่พร้อมใช้งาน\n(Link unavailable)"
         else:
-            msg = f"📰 {title}\n"
-            if url:
-                msg += f"🔗 {url}\n"
+            msg = f"📰 {title}\n\n"
+            if url and url.strip():
+                msg += f"🔗 Read more:\n{url}"
+            else:
+                msg += "⚠️ Link unavailable"
 
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
 

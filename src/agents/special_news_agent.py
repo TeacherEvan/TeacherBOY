@@ -109,32 +109,36 @@ class SpecialNewsAgent(BaseAgent):
 
             tourism, sports, intl = await asyncio.gather(tourism_task, sports_task, intl_task)
 
-            # Pad results to ensure consistent display
-            tourism = self._service.pad_items(tourism, 5)
-            sports = self._service.pad_items(sports, 5)
-            intl = self._service.pad_items(intl, 5)
+            # Log what we got
+            logger.info(f"📊 Fetched: Tourism={len(tourism)}, Sports={len(sports)}, Intl={len(intl)}")
 
-            # Check if we got any real data
-            total_real_items = sum(
-                1 for items in [tourism, sports, intl]
-                for item in items
-                if item.get("title") and item["title"] != "(unavailable)"
-            )
+            # Check if we got any real data (don't pad yet)
+            real_tourism = [item for item in tourism if item.get("title") and item["title"] != "(unavailable)"]
+            real_sports = [item for item in sports if item.get("title") and item["title"] != "(unavailable)"]
+            real_intl = [item for item in intl if item.get("title") and item["title"] != "(unavailable)"]
+            
+            total_real_items = len(real_tourism) + len(real_sports) + len(real_intl)
+            logger.info(f"📈 Real items: Tourism={len(real_tourism)}, Sports={len(real_sports)}, Intl={len(real_intl)}, Total={total_real_items}")
 
             if total_real_items == 0:
                 await self._reply_text(
                     event,
                     line_bot_api,
                     "⚠️ Unable to fetch news at this moment.\n\n"
-                    "🔄 Please try again in a few moments.\n"
-                    "Our news sources may be temporarily unavailable.",
+                    "🔄 Please try again in a few moments.\n\n"
+                    "Our news sources may be temporarily unavailable.\n"
+                    "This could be due to:\n"
+                    "• Network connectivity issues\n"
+                    "• RSS feed maintenance\n"
+                    "• Temporary server downtime",
                 )
                 logger.warning(f"⚠️ All special news feeds returned empty results")
                 return True
 
+            # Format message WITHOUT padding - _format_section will handle empty sections gracefully
             msg = self._format_markdown(tourism, sports, intl)
             await self._reply_text(event, line_bot_api, msg)
-            logger.info(f"✅ Successfully delivered special news ({total_real_items}/15 items)")
+            logger.info(f"✅ Successfully delivered special news ({total_real_items} items)")
             return True
             
         except Exception as e:
@@ -160,23 +164,25 @@ class SpecialNewsAgent(BaseAgent):
         """
         lines: List[str] = [header, ""]  # Add blank line after header for better spacing
         
+        valid_count = 0
         for i, item in enumerate(items[:5], 1):
-            title = (item.get("title") or "").strip() or "(unavailable)"
+            title = (item.get("title") or "").strip()
             url = (item.get("url") or "").strip()
             
-            # Skip unavailable items in display for cleaner output
-            if title == "(unavailable)":
+            # Skip unavailable/empty items completely - don't show them
+            if not title or title == "(unavailable)":
                 continue
-                
+            
+            valid_count += 1
             if url:
                 # Markdown link with number prefix
-                lines.append(f"{i}. [{title}]({url})")
+                lines.append(f"{valid_count}. [{title}]({url})")
             else:
-                # Plain text if no URL
-                lines.append(f"{i}. {title}")
+                # Plain text if no URL (with warning)
+                lines.append(f"{valid_count}. {title} ⚠️")
         
-        # If all items were unavailable, show a message
-        if len(lines) == 2:  # Only header and blank line
+        # If no valid items were found, show a message
+        if valid_count == 0:
             lines.append("_No news available at this moment_")
             
         return "\n".join(lines)
