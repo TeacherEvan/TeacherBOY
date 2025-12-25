@@ -176,6 +176,11 @@ class TestSpecialNewsRSSFixes:
         assert "Real headline 2" in result
         assert "(unavailable)" not in result
         assert result.count("https://example.com/") == 2
+        
+        # Verify sequential numbering (1, 2) not (1, 3)
+        headline_lines = self._extract_headline_lines(result)
+        assert headline_lines[0].startswith("1.")
+        assert headline_lines[1].startswith("2.")
 
     @pytest.mark.asyncio
     async def test_format_section_shows_warning_for_missing_urls(self, special_news_agent):

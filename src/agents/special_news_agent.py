@@ -176,10 +176,10 @@ class SpecialNewsAgent(BaseAgent):
             valid_count += 1
             if url:
                 # Markdown link with number prefix
-                lines.append(f"{i}. [{title}]({url})")
+                lines.append(f"{valid_count}. [{title}]({url})")
             else:
                 # Plain text if no URL (with warning)
-                lines.append(f"{i}. {title} ⚠️")
+                lines.append(f"{valid_count}. {title} ⚠️")
         
         # If no valid items were found, show a message
         if valid_count == 0:
