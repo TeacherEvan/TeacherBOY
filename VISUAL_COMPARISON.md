@@ -142,7 +142,7 @@ December 24, 2024
 🧳 **Thailand Tourism**
 
 1. [Thailand welcomes record 35M tourists in 2024](https://tatnews.org/article1)
-3. [Phuket launches eco-tourism initiative](https://tatnews.org/article2)
+2. [Phuket launches eco-tourism initiative](https://tatnews.org/article2)
 
 ---
 
