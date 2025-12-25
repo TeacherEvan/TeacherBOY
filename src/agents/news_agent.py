@@ -580,7 +580,12 @@ class NewsAgent(BaseAgent):
 
         for i, headline in enumerate(headlines[:5], 1):
             title = headline.get("title", "ไม่มีหัวข้อ")[:80]
+            url = headline.get("url", "")
             msg += f"{i}. {title}\n"
+            if url and url.strip():
+                msg += f"   🔗 {url}\n"
+            else:
+                msg += f"   ⚠️ ลิงก์ไม่พร้อมใช้งาน\n"
 
         return msg
 
@@ -634,7 +639,12 @@ class NewsAgent(BaseAgent):
 
         for i, headline in enumerate(headlines[:5], 1):
             title = headline.get("title", "No title")[:80]
+            url = headline.get("url", "")
             msg += f"{i}. {title}\n"
+            if url and url.strip():
+                msg += f"   🔗 {url}\n"
+            else:
+                msg += f"   ⚠️ Link unavailable\n"
 
         return msg
 

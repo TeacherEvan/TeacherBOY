@@ -115,7 +115,7 @@ Try again in ~45 minutes
 4. 📈 **Indices** → S&P 500, DJIA, FTSE 100 (best-effort)
 5. ₿ **Crypto** → BTC, ETH, USDT (inline, CoinGecko)
 6. 💱 **Exchange Rate** → THB→USD (+ others) (inline, ExchangeRate-API or fallback)
-7. 📰 **Headlines 1-5** → Interactive - select to view full article link (Bangkok Post RSS)
+7. 📰 **Headlines 1-5** → Displayed with URLs inline in main menu; optionally select 1-5 to view full article details (Bangkok Post RSS)
 
 **Output:** Terse, robotic, single emoji per bullet. No instructions or chatter.
 
@@ -129,8 +129,9 @@ Try again in ~45 minutes
 
 **Menu Handlers** ([src/agents/news_agent.py](../src/agents/news_agent.py)):
 
-- `_send_headline_detail()` → Show full article link for selected headline (1-5)
-- Headlines are the only interactive elements; all other data displays inline
+- `_format_menu_thai()` / `_format_menu_english()` → Display all data inline including headline URLs
+- `_send_headline_detail()` → Show full article information for selected headline (1-5) - optional user interaction
+- Headlines now show URLs directly in main menu; selecting 1-5 provides detailed view
 - Deprecated methods (no longer called): `_send_color_sunset_sunrise()`, `_send_holidays_markets()`, `_send_crypto_exchange()`, `_send_festivals()`
 
 **Optional API Keys** ([src/config.py](../src/config.py)):
