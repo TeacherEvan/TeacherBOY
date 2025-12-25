@@ -1,7 +1,7 @@
 """Integration test demonstrating the news feature fixes."""
 
 import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 from src.agents.news_agent import NewsAgent
 from src.agents.special_news_agent import SpecialNewsAgent
 from src.services.news_data_service import NewsDataService
