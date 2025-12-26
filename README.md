@@ -59,8 +59,9 @@ Legacy docs at repo root are kept for backward compatibility.
     - Regular users get trigger translation only in private chats
 - **📊 Extended Data:** Thai holidays, market indices, crypto prices, exchange rates
 - **🌍 Bilingual:** Full Thai and English support
-- **🔗 Clickable Headlines:** Top 5 news with direct links
-- **⏰ Smart Caching:** 30-min weather, 1-hour news cache (reduces API calls)
+- **🔗 Inline URLs:** Top 5 headlines displayed with clickable links directly in menu
+- **📲 Interactive Details:** Select 1-5 to see full article information
+- **⏰ Smart Caching:** 30-min weather, 1-hour news/exchange, 5-min crypto, 7-day holidays (reduces API calls)
 - **Trigger:** Type `news` or `ข่าว` to start
 
 ### Multi-Agent Architecture
