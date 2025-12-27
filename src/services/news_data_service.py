@@ -135,6 +135,14 @@ class NewsDataService:
             logger.info("📰 Using cached weather data")
             return cached
 
+        if self.client is None:
+            logger.warning("📰 HTTP client not available, returning fallback weather data")
+            return {
+                "temperature": "N/A",
+                "pm25": "N/A",
+                "will_rain": None,
+            }
+
         try:
             # Fetch weather and forecast
             weather_url = (
@@ -323,6 +331,13 @@ class NewsDataService:
             logger.info("🌅 Using cached sunset/sunrise times")
             return cached
 
+        if self.client is None:
+            logger.warning("🌅 HTTP client not available, returning fallback sunset/sunrise times")
+            return {
+                "sunrise": "06:30",
+                "sunset": "18:00",
+            }
+
         try:
             url = (
                 f"https://api.open-meteo.com/v1/forecast"
@@ -462,6 +477,13 @@ class NewsDataService:
             logger.info("₿ Using cached Bitcoin price")
             return cached
 
+        if self.client is None:
+            logger.warning("₿ HTTP client not available, returning fallback Bitcoin price")
+            return {
+                "price_usd": "N/A",
+                "change_24h_percent": "N/A",
+            }
+
         try:
             url = (
                 "https://api.coingecko.com/api/v3/simple/price"
@@ -530,6 +552,12 @@ class NewsDataService:
                 combined[f"thb_{k}"] = v
             return combined
 
+        if self.client is None:
+            logger.warning("💱 HTTP client not available, using fallback exchange rates")
+            result = _with_legacy_keys(FALLBACK_RATES)
+            self.cache.set(cache_key, result)
+            return result
+
         try:
             from src.config import settings
 
@@ -590,6 +618,11 @@ class NewsDataService:
             "eth": {"price_usd": "N/A", "change_24h_percent": "N/A"},
             "usdt": {"price_usd": "N/A", "change_24h_percent": "N/A"},
         }
+
+        if self.client is None:
+            logger.warning("₿ HTTP client not available, returning fallback crypto prices")
+            self.cache.set(cache_key, fallback)
+            return fallback
 
         try:
             url = (
@@ -653,6 +686,11 @@ class NewsDataService:
         }
 
         result: Dict[str, str] = {label: "N/A" for label in symbol_map}
+
+        if self.client is None:
+            logger.warning("📈 HTTP client not available, returning N/A market indices")
+            self.cache.set(cache_key, result)
+            return result
 
         try:
             for label, symbol in symbol_map.items():
