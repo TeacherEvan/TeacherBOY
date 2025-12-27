@@ -43,6 +43,7 @@ Legacy docs at repo root are kept for backward compatibility.
 - **👥 Group Chat Support:** Works in 1-on-1, groups, and multi-person chats
 - **📝 Text-Only Responses:** Clean, simple text translations (no distracting cards)
 - **🤫 Silent Join:** Bot joins groups silently - only speaks when Thai is detected
+- **👋 Welcome Message:** Sends "Welcome friend / ยินดีต้อนรับเพื่อน" when added as friend
 - **🎯 Session Management:** Independent sessions per chat
 - **📋 Parentheses Preservation:** Names and notes in (parentheses) are never translated- **⏱️ Rate Limiting:** 10 requests per minute (admins unlimited)
 
@@ -53,7 +54,7 @@ Legacy docs at repo root are kept for backward compatibility.
 - **💨 Air Quality:** PM2.5 levels for Bangkok
 - **📱 Auto-Language Detection:** Type "news" for English or "ข่าว" for Thai
 - **🔒 Friend-Gated Access:** Full menu for friends in groups (1 request/hour), translation only for others
-- **👑 Admin & Moderator Access:** 
+- **👑 Admin & Moderator Access:**
   - **Admins:** Unlimited news requests + full admin commands
   - **Moderators:** Direct news access in all contexts (private + groups), bypass rate limits
     - Regular users get trigger translation only in private chats
@@ -61,8 +62,9 @@ Legacy docs at repo root are kept for backward compatibility.
 - **🌍 Bilingual:** Full Thai and English support
 - **🔗 Inline URLs:** Top 5 headlines displayed with clickable links directly in menu
 - **📲 Interactive Details:** Select 1-5 to see full article information
-- **⏰ Smart Caching:** 30-min weather, 1-hour news/exchange, 5-min crypto, 7-day holidays (reduces API calls)
+- **⏰ Smart Caching:** 30-min weather, 2-hour news/exchange, 5-min crypto, 7-day holidays (reduces API calls)
 - **Trigger:** Type `news` or `ข่าว` to start
+- **📰 Special News:** `/special news` in DM provides interactive carousel with tourism, sports, international headlines
 
 ### Multi-Agent Architecture
 
@@ -72,6 +74,7 @@ Legacy docs at repo root are kept for backward compatibility.
 - **🎨 Clean API:** Simple `BaseAgent` class to inherit from
 - **📊 Priority System:** Control which agent handles messages first
 - **🔧 Admin Commands:** In-chat control commands for authorized admins **NEW!**
+- **📊 Admin Stats:** Enhanced dashboard with current tourism news headlines
 
 ### Performance & Scalability
 
@@ -164,16 +167,19 @@ ngrok http 8000
 For bot management and privileged access, TeacherBOY supports two levels:
 
 **Admin Users (Full Control):**
+
 - `/admin` commands for bot management (status, sleep, wake, reset, etc.)
 - Unlimited API access (bypass rate limits)
 - Direct news access without translation
 
 **Moderator Users (News Access):**
+
 - Direct news access in all contexts (private chats + groups)
 - Bypass rate limits for news requests
 - No admin command access
 
 **Setup Steps:**
+
 1. Get your LINE user ID from server logs (appears when you send a message)
 2. Add to `.env`:
    - Admins: `ADMIN_USER_IDS=U1234567890abcdef`

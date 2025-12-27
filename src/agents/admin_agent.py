@@ -339,6 +339,7 @@ class AdminAgent(BaseAgent):
                     to=user_id,
                     messages=[TextMessage(text=text, quickReply=None, quoteToken=None)],
                     notificationDisabled=False,
+                    customAggregationUnits=[],
                 )
             )
             return True
@@ -579,8 +580,25 @@ class AdminAgent(BaseAgent):
             else:
                 days_ago = int(time_ago.total_seconds() // 86400)
                 time_ago_str = f"{days_ago}d ago"
-            
+
             last_friend = f"{time_ago_str} ({self._mask_user_id(snap.last_friend_added_user_id)})"
+
+        # ====================================================================
+        # SECTION 5: Current Tourism News Headlines
+        # ====================================================================
+        tourism_headlines = []
+        try:
+            from src.services.news_data_service import NewsDataService
+            from src.config import settings
+
+            # Create a news service instance for fetching tourism news
+            news_svc = NewsDataService(http_client=None, news_api_key=settings.news_api_key)
+            # Use cached news as proxy for tourism news
+            tourism_news = await news_svc.get_news_headlines(language="en")
+            tourism_headlines = [item.get("title", "")[:50] + "..." if len(item.get("title", "")) > 50 else item.get("title", "") for item in tourism_news[:3] if item.get("title")]
+        except Exception as e:
+            logger.debug(f"Could not fetch tourism news for stats: {e}")
+            tourism_headlines = []
 
         # ====================================================================
         # BUILD DASHBOARD MESSAGE
@@ -597,7 +615,7 @@ class AdminAgent(BaseAgent):
             msg += f"⏱️  Uptime: {uptime_hours}h {uptime_minutes}m\n"
         
         # LINE quota with visual indicator
-        if monthly_left is not None:
+        if monthly_left is not None and monthly_limit is not None:
             percentage = (
                 (monthly_left / monthly_limit * 100) if monthly_limit > 0 else 0
             )
@@ -645,6 +663,13 @@ class AdminAgent(BaseAgent):
             msg += f"📈 Peak hour: {snap.peak_hour}:00 UTC ({snap.peak_hour_requests:,} req)\n"
         msg += "\n"
 
+        # Tourism News Section (New)
+        if tourism_headlines:
+            msg += "🧳 **CURRENT TOURISM NEWS**\n" + "─" * 32 + "\n"
+            for i, headline in enumerate(tourism_headlines, 1):
+                msg += f"{i}. {headline}\n"
+            msg += "\n"
+
         # Active Sessions Section (Enhanced)
         msg += "💬 **ACTIVE SESSIONS**\n" + "─" * 32 + "\n"
         msg += f"✅ Translation sessions: {active_sessions:,}\n"
@@ -681,7 +706,7 @@ class AdminAgent(BaseAgent):
 
         return msg
 
-    def _purge_chat(self, current_chat_id: str, target_chat_id: str = None) -> str:
+    def _purge_chat(self, current_chat_id: str, target_chat_id: str | None = None) -> str:
         """Clear bot internal history/state for a chat (best-effort)."""
         chat_id = target_chat_id or current_chat_id
 
@@ -809,7 +834,7 @@ class AdminAgent(BaseAgent):
             logger.error(f"❌ Failed to leave {kind} {target_id}: {e}", exc_info=True)
 
     def _get_status_message(
-        self, current_chat_id: str, target_chat_id: str = None
+        self, current_chat_id: str, target_chat_id: str | None = None
     ) -> str:
         """Get status information for a chat."""
         chat_id = target_chat_id or current_chat_id
@@ -840,7 +865,7 @@ class AdminAgent(BaseAgent):
 
         return status
 
-    def _wake_chat(self, current_chat_id: str, target_chat_id: str = None) -> str:
+    def _wake_chat(self, current_chat_id: str, target_chat_id: str | None = None) -> str:
         """Wake a sleeping chat."""
         chat_id = target_chat_id or current_chat_id
 
@@ -851,7 +876,7 @@ class AdminAgent(BaseAgent):
         logger.info(f"🔧 Admin force-woke chat {chat_id}")
         return f"☀️ Chat {chat_id} has been woken up!\n\nThe bot is now ready to translate."
 
-    def _sleep_chat(self, current_chat_id: str, arg: str = None) -> str:
+    def _sleep_chat(self, current_chat_id: str, arg: str | None = None) -> str:
         """Put a chat to sleep."""
         # Parse arguments: could be "chat_id hours" or just "hours" or just "chat_id"
         if not arg:
@@ -884,7 +909,7 @@ class AdminAgent(BaseAgent):
         logger.info(f"🔧 Admin put chat {chat_id} to sleep for {hours} hours")
         return f"😴 Chat {chat_id} is now sleeping for {hours} hour(s).\n\nUse '/admin wake' to wake early."
 
-    def _reset_chat(self, current_chat_id: str, target_chat_id: str = None) -> str:
+    def _reset_chat(self, current_chat_id: str, target_chat_id: str | None = None) -> str:
         """Reset chat session and history."""
         chat_id = target_chat_id or current_chat_id
 

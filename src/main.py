@@ -5,6 +5,7 @@ This module implements a FastAPI application with intelligent agent routing,
 high-performance async I/O, and production-ready error handling.
 """
 
+import asyncio
 import logging
 import httpx
 from datetime import datetime
@@ -371,20 +372,21 @@ async def webhook(request: Request) -> JSONResponse:
         # Parse and validate events using LINE SDK v3
         events = webhook_parser.parse(body_text, signature)  # type: ignore[union-attr]
 
+        # Ensure events is a list
+        if not isinstance(events, list):
+            events = []
+
         # Create API client for sending replies
         with ApiClient(configuration) as api_client:
             line_bot_api = MessagingApi(api_client)
 
             # Process each event
-            for event in events:  # type: ignore[union-attr]
+            for event in events:
                 try:
                     if isinstance(event, MessageEvent):
                         # CRITICAL: Check if message is from bot itself (prevent infinite loop)
-                        if (
-                            bot_user_id
-                            and hasattr(event.source, "user_id")
-                            and event.source.user_id == bot_user_id
-                        ):
+                        user_id = getattr(event.source, "user_id", None) if event.source else None
+                        if bot_user_id and user_id == bot_user_id:
                             logger.info(
                                 f"🔒 Skipping bot's own message (self-message detection)"
                             )
@@ -407,6 +409,20 @@ async def webhook(request: Request) -> JSONResponse:
                         )
                         metrics_service.record_friend_added(user_id)
                         logger.info("➕ Follow event received (friend added)")
+
+                        # Send welcome message
+                        if user_id:
+                            welcome_msg = TextMessage(text="Welcome friend\n\nยินดีต้อนรับเพื่อน")  # type: ignore[call-arg]
+                            try:
+                                await asyncio.to_thread(
+                                    line_bot_api.push_message,
+                                    PushMessageRequest(  # type: ignore[call-arg]
+                                        to=user_id, messages=[welcome_msg]
+                                    ),
+                                )
+                                logger.info(f"✅ Sent welcome message to new friend {user_id}")
+                            except Exception as e:
+                                logger.error(f"❌ Failed to send welcome message: {e}")
 
                     elif isinstance(event, UnfollowEvent):
                         # User blocked/removed bot

@@ -52,8 +52,8 @@ class DataCache:
             # Conservative fallback if settings can't be imported (e.g., in unusual test contexts)
             self._ttl_seconds = {
                 "weather": 1800,  # 30 minutes
-                "news_th": 3600,  # 1 hour
-                "news_en": 3600,  # 1 hour
+                "news_th": 7200,  # 2 hours
+                "news_en": 7200,  # 2 hours
                 "thai_holidays": 604800,  # 7 days
                 "bitcoin_price": 300,  # 5 minutes
                 "crypto_prices": 300,  # 5 minutes
@@ -106,7 +106,7 @@ class NewsDataService:
     """Service for fetching weather, air quality, and news data."""
 
     def __init__(
-        self, http_client: httpx.AsyncClient, news_api_key: Optional[str] = None
+        self, http_client: Optional[httpx.AsyncClient], news_api_key: Optional[str] = None
     ):
         """
         Initialize news data service.

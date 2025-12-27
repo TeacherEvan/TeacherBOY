@@ -11,9 +11,9 @@ import asyncio
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from linebot.v3.messaging import MessagingApi, ReplyMessageRequest, TextMessage
+from linebot.v3.messaging import MessagingApi, ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer
 from linebot.v3.messaging.exceptions import ApiException
 from linebot.v3.webhooks import MessageEvent
 
@@ -135,10 +135,20 @@ class SpecialNewsAgent(BaseAgent):
                 logger.warning(f"⚠️ All special news feeds returned empty results")
                 return True
 
-            # Format message WITHOUT padding - _format_section will handle empty sections gracefully
-            msg = self._format_markdown(tourism, sports, intl)
-            await self._reply_text(event, line_bot_api, msg)
-            logger.info(f"✅ Successfully delivered special news ({total_real_items} items)")
+            # Try Flex message for enhanced visual experience
+            flex_dict = self._create_special_news_flex(tourism, sports, intl)
+            if flex_dict:
+                flex_container = FlexContainer.from_dict(flex_dict)
+                flex_message = FlexMessage(  # type: ignore[call-arg]
+                    altText=f"Special News - {total_real_items} headlines", contents=flex_container
+                )
+                await self._reply_flex(event, line_bot_api, flex_message)
+                logger.info(f"✅ Successfully delivered special news as Flex ({total_real_items} items)")
+            else:
+                # Fallback to text
+                msg = self._format_markdown(tourism, sports, intl)
+                await self._reply_text(event, line_bot_api, msg)
+                logger.info(f"✅ Successfully delivered special news as text ({total_real_items} items)")
             return True
             
         except Exception as e:
@@ -223,6 +233,131 @@ class SpecialNewsAgent(BaseAgent):
             "_Tap any headline to read the full story_",
         ]
         return "\n".join(parts)
+
+    def _create_special_news_flex(
+        self,
+        tourism: List[Dict[str, str]],
+        sports: List[Dict[str, str]],
+        intl: List[Dict[str, str]],
+    ) -> Optional[Dict[str, Any]]:
+        """Create a Flex carousel for special news with enhanced visuals."""
+        try:
+            bubbles = []
+
+            # Tourism section
+            tourism_bubble = self._create_section_bubble("🧳 Tourism News", tourism, "#0D8186")
+            if tourism_bubble:
+                bubbles.append(tourism_bubble)
+
+            # Sports section
+            sports_bubble = self._create_section_bubble("🏟️ Sports News", sports, "#FF6B35")
+            if sports_bubble:
+                bubbles.append(sports_bubble)
+
+            # International section
+            intl_bubble = self._create_section_bubble("🌍 International News", intl, "#2E8B57")
+            if intl_bubble:
+                bubbles.append(intl_bubble)
+
+            if not bubbles:
+                return None
+
+            return {
+                "type": "carousel",
+                "contents": bubbles
+            }
+        except Exception as e:
+            logger.error(f"Error creating special news flex: {e}")
+            return None
+
+    def _create_section_bubble(self, title: str, items: List[Dict[str, str]], accent_color: str) -> Optional[Dict[str, Any]]:
+        """Create a single bubble for a news section."""
+        valid_items = [item for item in items[:3] if item.get("title") and item["title"] != "(unavailable)"]
+        if not valid_items:
+            return None
+
+        box_contents = []
+        for i, item in enumerate(valid_items, 1):
+            title_text = item.get("title", "").strip()
+            url = item.get("url", "").strip()
+
+            # Truncate title if too long
+            if len(title_text) > 40:
+                title_text = title_text[:37] + "..."
+
+            content_box = {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": f"{i}. {title_text}",
+                        "size": "sm",
+                        "color": "#333333",
+                        "wrap": True,
+                        "action": {
+                            "type": "uri",
+                            "label": "Read",
+                            "uri": url
+                        } if url else None
+                    }
+                ],
+                "spacing": "sm",
+                "margin": "md"
+            }
+            box_contents.append(content_box)
+
+        return {
+            "type": "bubble",
+            "size": "giga",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": title,
+                        "weight": "bold",
+                        "size": "lg",
+                        "color": accent_color
+                    }
+                ],
+                "backgroundColor": "#F8F8F8",
+                "paddingAll": "lg"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": box_contents,
+                "spacing": "md"
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "Tap headline to read full story",
+                        "size": "xs",
+                        "color": "#888888",
+                        "align": "center"
+                    }
+                ],
+                "paddingTop": "sm"
+            }
+        }
+
+    async def _reply_flex(self, event: MessageEvent, line_bot_api: MessagingApi, flex_message: FlexMessage) -> None:
+        """Reply with Flex message."""
+        if not event.reply_token:
+            return
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[flex_message],
+                notificationDisabled=False,
+            )
+        )
 
     async def _reply_text(self, event: MessageEvent, line_bot_api: MessagingApi, text: str) -> None:
         if not event.reply_token:

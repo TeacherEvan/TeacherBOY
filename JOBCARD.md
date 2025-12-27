@@ -1,13 +1,50 @@
-# Job Card — Remove “Legalities” From News Menu
+# Job Cards
+
+## Job Card: TeacherBOY Enhancements - Welcome Message, News Frequency, Special News, Admin Stats
 
 **Status:** Completed ✅
 
 ## Summary
 
-- Removed the “legalities” section from NewsAgent output so the Bangkok news menu no longer shows cannabis/e-cig/alcohol status.
-- Updated documentation to reflect the current NewsAgent menu (weather/PM2.5/rain, next holiday, indices, crypto incl. USDT, FX rates, headlines 1–5 interactive).
+- Changed welcome message to "Welcome friend" with Thai translation "ยินดีต้อนรับเพื่อน" sent on FollowEvent.
+- Updated news headlines/sources update frequency from 1 hour to 2 hours by changing cache TTL.
+- Dramatically enhanced "/special news" command with Flex Message carousel for better visual experience, showing tourism, sports, and international news in interactive bubbles.
+- Enhanced "/admin stats" to display current tourism news headlines in the dashboard.
+
+## Changes Made
+
+1. **Welcome Message:** Added push message on FollowEvent in main.py for new friends.
+2. **News Frequency:** Modified cache TTL in news_data_service.py from 3600 to 7200 seconds.
+3. **Special News Enhancement:** Converted to Flex carousel with tappable headlines, fallback to text.
+4. **Admin Stats Tourism News:** Added section fetching and displaying recent tourism news in stats dashboard.
 
 ## 5 Important Notes
+
+1. Welcome message uses push API since FollowEvent has no reply_token.
+2. News cache TTL change affects all news refreshes, improving API efficiency.
+3. Special news Flex messages provide premium UX, with text fallback for compatibility.
+4. Admin stats tourism news uses existing news service, no additional API calls.
+5. All changes maintain backward compatibility and error handling.
+
+## Suggested Validation
+
+- Test welcome message by adding bot as friend.
+- Verify news updates every 2 hours by checking cache timestamps.
+- Test /special news in DM to see Flex carousel.
+- Check /admin stats includes tourism news section.
+
+---
+
+## Job Card — Remove “Legalities” From News Menu
+
+**Status:** Completed ✅
+
+## Summary of Removal
+
+- Removed the "legalities" section from NewsAgent output so the Bangkok news menu no longer shows cannabis/e-cig/alcohol status.
+- Updated documentation to reflect the current NewsAgent menu (weather/PM2.5/rain, next holiday, indices, crypto incl. USDT, FX rates, headlines 1–5 interactive).
+
+## Important Notes on Removal
 
 1. Free-tier message limits: Prefer local unit tests/mocks over live LINE messages to avoid consuming free-tier quotas.
 2. Keep manual validation minimal: after tests are green, validate with 1–2 real messages in a test group only.
@@ -22,7 +59,7 @@
 
 ---
 
-# Job Card: TeacherBOY Overhaul (Historical)
+## Job Card: TeacherBOY Overhaul (Historical)
 
 **Status:** Completed ✅  
 **Date:** December 9, 2025  
