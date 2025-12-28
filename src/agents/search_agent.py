@@ -68,28 +68,17 @@ class SearchAgent(BaseAgent):
         """
         Handle if:
         1. Text starts with 'Zeus search'
-        2. User is Admin OR Chat is Private (DM)
         """
         if not self._parse_search_command(text):
             return False
-            
+
+        # Access control at routing time:
+        # - Admins can search anywhere
+        # - Non-admins are DM-only
         user_id = getattr(event.source, "user_id", None)
-        is_private = self._is_private_chat(event)
-        is_admin = self._is_admin(user_id)
-        
-        # Admin can use it anywhere
-        if is_admin:
-            if not is_private:
-                logger.info(f"🔓 Admin {user_id} can use Zeus search in group chat")
+        if self._is_admin(user_id):
             return True
-            
-        # Regular user must be in DM
-        if is_private:
-            return True
-        
-        # Regular user in group - deny
-        logger.debug(f"❌ Non-admin {user_id} cannot use Zeus search in group chat")
-        return False
+        return self._is_private_chat(event)
 
     async def handle(
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi
@@ -102,6 +91,30 @@ class SearchAgent(BaseAgent):
         user_id = getattr(event.source, "user_id", None)
         is_private = self._is_private_chat(event)
         logger.info(f"🔍 Zeus search from {user_id} ({'DM' if is_private else 'group'}): {query[:50]}...")
+
+        # Access control: admins anywhere; regular users DM-only.
+        if not self._is_admin(user_id) and not is_private:
+            logger.info(
+                f"🔒 Zeus search denied for non-admin user_id={user_id} in group chat"
+            )
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[
+                        TextMessage(
+                            text=(
+                                "🔒 Zeus search is DM-only for non-admins.\n\n"
+                                "Try this in a private chat with the bot, or ask an admin."
+                            ),
+                            quickReply=None,
+                            quoteToken=None,
+                        )
+                    ],
+                    notificationDisabled=False,
+                ),
+            )
+            return True
 
         with tracer.start_as_current_span("search_agent.handle") as span:
             span.set_attribute("search.query", query)

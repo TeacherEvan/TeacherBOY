@@ -64,29 +64,32 @@ class LLMAgent(BaseAgent):
             return query
         return None
 
+    def _is_search_command(self, text: str) -> bool:
+        """Return True if text is a Zeus search command (reserved for SearchAgent)."""
+        return bool(
+            re.match(
+                r"^/?(?:Zeus|Zues)\s+search\b",
+                text.strip(),
+                re.IGNORECASE,
+            )
+        )
+
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
         Handle if:
         1. Text starts with 'Zeus'
-        2. User is Admin (ONLY admins can use Zeus LLM)
+        2. This is NOT a Zeus search command (reserved for SearchAgent)
         """
         if not self._parse_command(text):
             return False
+
+        # Reserve Zeus search for SearchAgent (priority 8)
+        if self._is_search_command(text):
+            return False
             
-        user_id = getattr(event.source, "user_id", None)
-        is_private = self._is_private_chat(event)
-        is_admin = self._is_admin(user_id)
-        
-        # Only admins can use Zeus LLM (anywhere - group or DM)
-        if is_admin:
-            if not is_private:
-                logger.info(f"🔓 Admin {user_id} can use Zeus in group chat")
-            return True
-        
-        # Regular users are blocked from Zeus LLM entirely
-        context = "DM" if is_private else "group chat"
-        logger.debug(f"❌ Non-admin {user_id} cannot use Zeus in {context} (admin-only feature)")
-        return False
+        # Always handle Zeus here so users get an explicit denial message
+        # instead of silent ignore when they are not an admin.
+        return True
 
     async def handle(
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi
@@ -96,9 +99,29 @@ class LLMAgent(BaseAgent):
         if not query:
             return False
 
-        user_id = getattr(event.source, "user_id", None)
+        user_id = getattr(event.source, "user_id", None) if event.source else None
         is_private = self._is_private_chat(event)
-        logger.info(f"🤖 Zeus query from {user_id} ({'DM' if is_private else 'group'}): {query[:50]}...")
+
+        # Admin gate: Zeus LLM is admin-only everywhere.
+        if not self._is_admin(user_id):
+            context = "DM" if is_private else "group chat"
+            logger.info(
+                f"🔒 Zeus LLM denied for non-admin user_id={user_id} in {context}"
+            )
+            await self._send_reply(
+                event,
+                line_bot_api,
+                (
+                    "🔒 Zeus is admin-only.\n\n"
+                    "If you think you are an admin, run: /admin whoami\n"
+                    "Then add your LINE user ID to ADMIN_USER_IDS in HF/GitHub secrets and restart."
+                ),
+            )
+            return True
+
+        logger.info(
+            f"🤖 Zeus query from {user_id} ({'DM' if is_private else 'group'}): {query[:50]}..."
+        )
 
         with tracer.start_as_current_span("llm_agent.handle") as span:
             span.set_attribute("llm.query", query)

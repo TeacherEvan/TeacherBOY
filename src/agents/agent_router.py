@@ -53,7 +53,15 @@ class AgentRouter:
                 return False
 
             text = event.message.text.strip()
-            logger.info(f"🔍 Routing message: '{text[:50]}...'")
+            source = getattr(event, "source", None)
+            source_type = getattr(source, "type", None) if source else None
+            user_id = getattr(source, "user_id", None) if source else None
+            group_id = getattr(source, "group_id", None) if source else None
+            room_id = getattr(source, "room_id", None) if source else None
+
+            logger.info(
+                f"🔍 Routing message ({source_type}) user_id={user_id} group_id={group_id} room_id={room_id}: '{text[:50]}...'"
+            )
             span.set_attribute("line.message.type", "text")
             span.set_attribute("message.length", len(text))
 

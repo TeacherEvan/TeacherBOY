@@ -129,8 +129,12 @@ class AdminAgent(BaseAgent):
         if not user_id:
             return False
 
-        # Allow bootstrap claim when configured (even if user isn't an admin yet)
+        # Allow certain diagnostic commands for anyone.
         cmd, _ = self._parse_admin_command(text)
+        if cmd in {"whoami", "id"}:
+            return True
+
+        # Allow bootstrap claim when configured (even if user isn't an admin yet)
         if cmd == "claim" and self._admin_setup_key:
             return True
 
@@ -155,6 +159,8 @@ class AdminAgent(BaseAgent):
                 # Bootstrap: /admin claim <key>
                 if command == "claim":
                     response = self._claim_admin(user_id, chat_id, arg)
+                elif command in {"whoami", "id"}:
+                    response = self._whoami(event)
                 # Normal admin commands
 
                 # Execute command
@@ -356,8 +362,49 @@ class AdminAgent(BaseAgent):
                 )
             )
             return True
+
         except Exception:
             return False
+
+    def _whoami(self, event: MessageEvent) -> str:
+        """Return basic identity info for debugging admin ID issues."""
+        source = getattr(event, "source", None)
+        source_type = getattr(source, "type", None) if source else None
+        user_id = getattr(source, "user_id", None) if source else None
+        group_id = getattr(source, "group_id", None) if source else None
+        room_id = getattr(source, "room_id", None) if source else None
+
+        is_claimed = bool(
+            privilege_service.is_claimed_admin(user_id) if user_id else False
+        )
+        is_env_admin = bool(user_id and user_id in (self._admin_user_ids or []))
+        is_admin = is_claimed or is_env_admin
+
+        lines: list[str] = []
+        lines.append("🆔 Identity")
+        lines.append(f"source.type: {source_type}")
+        lines.append(f"user_id: {user_id}")
+        if group_id:
+            lines.append(f"group_id: {group_id}")
+        if room_id:
+            lines.append(f"room_id: {room_id}")
+        lines.append("")
+        lines.append("🔐 Admin detection")
+        lines.append(f"env admin: {is_env_admin}")
+        lines.append(f"claimed admin: {is_claimed}")
+        lines.append(f"is_admin (effective): {is_admin}")
+
+        if not user_id:
+            lines.append("")
+            lines.append("⚠️ user_id is missing in this context.")
+            lines.append("Try this command in a 1-on-1 chat with the bot.")
+        else:
+            lines.append("")
+            lines.append(
+                "If you should be admin, ensure ADMIN_USER_IDS includes EXACTLY this user_id, then restart the app."
+            )
+
+        return "\n".join(lines)
 
     async def _request_confirm_leave(
         self,
