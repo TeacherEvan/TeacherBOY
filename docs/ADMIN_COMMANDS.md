@@ -35,8 +35,6 @@ TeacherBOY supports **two levels of privileged access**:
 ### Step 1: Get Your LINE User ID
 
 Your LINE user ID is automatically logged when you send a message to the bot. To find it:
-
-1. Send any message to the bot (e.g., "test")
 2. Check the server logs for a line like:
    ```
    User ID: U1234567890abcdef
@@ -80,6 +78,15 @@ uvicorn src.main:app --reload
 
 You should see in the logs:
 ```
+
+### Zeus-trigger equivalents (admins)
+
+If you prefer using the Zeus trigger instead of `/admin ...`, these are supported:
+
+- `Zeus send <alias> <text>`
+- `Zeus llm_send <alias> <prompt>`
+- `Zeus send_weather <alias>`
+- `Zeus send the weather to my <alias>`
 ✅ AdminAgent initialized with 2 authorized admin(s)
 🔧 Admin Agent registered with 2 authorized admin(s)
 ```

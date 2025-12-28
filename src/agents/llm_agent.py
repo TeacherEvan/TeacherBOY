@@ -8,6 +8,7 @@ from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
     MessagingApi,
     ReplyMessageRequest,
+    PushMessageRequest,
     TextMessage,
 )
 
@@ -74,6 +75,79 @@ class LLMAgent(BaseAgent):
             )
         )
 
+    def _get_named_users(self) -> dict[str, str]:
+        """Return alias -> LINE user ID mapping from USER_<ALIAS> env vars."""
+        try:
+            return settings.get_named_user_ids()
+        except Exception:
+            return {}
+
+    def _resolve_named_user_id(self, alias: str | None) -> str | None:
+        alias_clean = (alias or "").strip().lower()
+        if not alias_clean:
+            return None
+        return self._get_named_users().get(alias_clean)
+
+    def _truncate_for_line(self, text: str, max_chars: int = 4500) -> str:
+        cleaned = (text or "").strip()
+        if len(cleaned) <= max_chars:
+            return cleaned
+        return cleaned[:max_chars].rstrip() + "..."
+
+    def _push_text(self, line_bot_api: MessagingApi, to_user_id: str, text: str) -> bool:
+        """Best-effort push text message to a LINE user ID."""
+        try:
+            if not hasattr(line_bot_api, "push_message"):
+                return False
+            line_bot_api.push_message(
+                PushMessageRequest(
+                    to=to_user_id,
+                    messages=[TextMessage(text=text, quickReply=None, quoteToken=None)],
+                    notificationDisabled=False,
+                    customAggregationUnits=[],
+                )
+            )
+            return True
+        except Exception:
+            return False
+
+    def _parse_zeus_action(self, query: str) -> tuple[str | None, str | None, str | None]:
+        """Parse Zeus admin actions.
+
+        Returns (action, alias, payload).
+
+        Supported:
+        - send <alias> <text>
+        - llm_send <alias> <prompt>
+        - send_weather <alias>
+        - send the weather to (my) <alias>
+        """
+        q = (query or "").strip()
+        if not q:
+            return None, None, None
+
+        m = re.match(r"^send_weather\s+(\S+)\s*$", q, flags=re.IGNORECASE)
+        if m:
+            return "send_weather", m.group(1), None
+
+        m = re.match(r"^send\s+(\S+)\s+(.+)$", q, flags=re.IGNORECASE)
+        if m:
+            return "send", m.group(1), m.group(2)
+
+        m = re.match(r"^llm_send\s+(\S+)\s+(.+)$", q, flags=re.IGNORECASE)
+        if m:
+            return "llm_send", m.group(1), m.group(2)
+
+        m = re.match(
+            r"^send\s+(?:the\s+)?weather\s+to\s+(?:my\s+)?(\S+)\s*$",
+            q,
+            flags=re.IGNORECASE,
+        )
+        if m:
+            return "send_weather", m.group(1), None
+
+        return None, None, None
+
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
         Handle if:
@@ -118,6 +192,106 @@ class LLMAgent(BaseAgent):
                 ),
             )
             return True
+
+        # Admin-only Zeus outbound messaging helpers (named recipients).
+        action, alias, payload = self._parse_zeus_action(query)
+        if action:
+            target_user_id = self._resolve_named_user_id(alias)
+            if not target_user_id:
+                await self._send_reply(
+                    event,
+                    line_bot_api,
+                    (
+                        f"❌ Unknown alias: {alias}\n\n"
+                        "Configure: USER_<ALIAS>=<LINE_USER_ID> in your environment."
+                    ),
+                )
+                return True
+
+            if action == "send":
+                msg = self._truncate_for_line(payload or "")
+                pushed = await asyncio.to_thread(
+                    self._push_text, line_bot_api, target_user_id, msg
+                )
+                await self._send_reply(
+                    event,
+                    line_bot_api,
+                    "✅ Sent." if pushed else "❌ Failed to push message.",
+                )
+                return True
+
+            if action == "send_weather":
+                # Use the shared httpx client set during lifespan.
+                client = getattr(self.llm_service, "client", None)
+                if client is None:
+                    await self._send_reply(
+                        event,
+                        line_bot_api,
+                        "❌ Weather send unavailable (HTTP client not initialized).",
+                    )
+                    return True
+
+                try:
+                    from src.services.news_data_service import NewsDataService
+
+                    service = NewsDataService(http_client=client, news_api_key=None)
+                    data = await service.get_weather_data()
+                    temp = data.get("temperature", "N/A")
+                    pm25 = data.get("pm25", "N/A")
+                    will_rain = data.get("will_rain")
+                    rain_text = "Yes" if will_rain else "No" if will_rain is not None else "N/A"
+                    msg = (
+                        "🌡️ Bangkok weather\n"
+                        f"Temp: {temp}°C\n"
+                        f"PM2.5: {pm25}\n"
+                        f"Next 5h rain: {rain_text}"
+                    )
+                    pushed = await asyncio.to_thread(
+                        self._push_text, line_bot_api, target_user_id, msg
+                    )
+                    await self._send_reply(
+                        event,
+                        line_bot_api,
+                        "✅ Weather sent." if pushed else "❌ Failed to push weather.",
+                    )
+                    return True
+                except Exception as e:
+                    logger.error(f"❌ Zeus send_weather failed: {e}", exc_info=True)
+                    await self._send_reply(event, line_bot_api, "❌ Failed to fetch/send weather.")
+                    return True
+
+            if action == "llm_send":
+                if not self.llm_service.is_configured():
+                    await self._send_reply(
+                        event,
+                        line_bot_api,
+                        "❌ OpenRouter is not configured (missing OPENROUTER_API_KEY).",
+                    )
+                    return True
+
+                messages = [
+                    {
+                        "role": "system",
+                        "content": settings.llm_system_prompt
+                        + "\n\nYou will draft a short message to be sent to another person. Output plain text only.",
+                    },
+                    {"role": "user", "content": payload or ""},
+                ]
+                drafted = await self.llm_service.chat_completion(messages, temperature=0.4)
+                if not drafted:
+                    await self._send_reply(event, line_bot_api, "❌ LLM failed to generate a message.")
+                    return True
+
+                msg = self._truncate_for_line(drafted)
+                pushed = await asyncio.to_thread(
+                    self._push_text, line_bot_api, target_user_id, msg
+                )
+                await self._send_reply(
+                    event,
+                    line_bot_api,
+                    "✅ LLM message sent." if pushed else "❌ Failed to push message.",
+                )
+                return True
 
         logger.info(
             f"🤖 Zeus query from {user_id} ({'DM' if is_private else 'group'}): {query[:50]}..."

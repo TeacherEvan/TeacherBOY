@@ -46,6 +46,20 @@ USER_BOSS=U1234567890abcdef
 - **AI (OpenRouter LLM):** `Zeus <your question>` (also accepts `/zeus ...`, typo `Zues ...`)
   - **Admins:** allowed in any chat context
   - **Regular users:** **admin-only** (denied everywhere)
+
+### 📨 Zeus outbound messaging (admins)
+
+Requires configuring named recipients:
+
+```env
+USER_BOSS=U1234567890abcdef
+```
+
+Then:
+
+- `Zeus send <alias> <text>`
+- `Zeus llm_send <alias> <prompt>`
+- `Zeus send_weather <alias>` (also accepts `Zeus send the weather to my <alias>`)
 - **Web search (Brave Search):** `Zeus search <query>` (also accepts `/zeus search ...`, typo `Zues search ...`)
   - **Admins:** allowed in any chat context
   - **Regular users:** **DM only** (1-on-1)
