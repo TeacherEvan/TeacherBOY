@@ -30,6 +30,12 @@ def create_mock_event(text: str, user_id: str = "U_TEST", group_id: str = None):
     return event
 
 
+def clear_session_state(chat_id: str):
+    """Helper to clear session state for testing."""
+    session_manager.end_session(chat_id)
+    session_manager.wake_chat(chat_id)
+
+
 @pytest.fixture
 def translation_agent():
     """Create a TranslationAgent instance for testing."""
@@ -47,8 +53,7 @@ async def test_amen_without_active_session(translation_agent, mock_line_api):
     """Test that 'amen' works even without an active translation session."""
     # Clear any existing sessions
     chat_id = "user_U_TEST"
-    session_manager.end_session(chat_id)
-    session_manager.wake_chat(chat_id)
+    clear_session_state(chat_id)
     
     # Verify no active session
     assert not session_manager.is_session_active(chat_id)
@@ -80,8 +85,7 @@ async def test_amen_variations_without_session(translation_agent, mock_line_api)
     for variation in variations:
         # Clear state
         chat_id = "user_U_TEST"
-        session_manager.end_session(chat_id)
-        session_manager.wake_chat(chat_id)
+        clear_session_state(chat_id)
         mock_line_api.reset_mock()
         
         # Verify no active session
@@ -108,8 +112,7 @@ async def test_amen_with_active_session_still_works(translation_agent, mock_line
     chat_id = "user_U_TEST"
     
     # Clear state and start a session
-    session_manager.end_session(chat_id)
-    session_manager.wake_chat(chat_id)
+    clear_session_state(chat_id)
     session_manager.start_session(chat_id, "U_TEST")
     
     # Verify session is active
