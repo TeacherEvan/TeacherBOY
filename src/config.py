@@ -6,7 +6,7 @@ following production best practices for environment-based configuration manageme
 """
 
 from pydantic_settings import BaseSettings
-from pydantic import Field, field_validator, HttpUrl
+from pydantic import Field, field_validator, HttpUrl, AliasChoices
 from typing import Optional, Dict, Any
 import json
 import logging
@@ -144,6 +144,7 @@ class Settings(BaseSettings):
     openrouter_default_model: str = Field(
         default="google/gemma-2-9b-it",
         description="Default model to use for OpenRouter (must be a free model)",
+        validation_alias=AliasChoices("OPENROUTER_DEFAULT_MODEL", "DEFAULT_MODEL"),
     )
 
     llm_system_prompt: str = Field(
