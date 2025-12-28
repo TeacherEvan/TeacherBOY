@@ -158,9 +158,9 @@ class TranslationAgent(BaseAgent):
         if session_manager.is_sleeping(chat_id):
             return False
 
-        # Always handle sleep commands if session is active
+        # Always handle sleep commands (like wake commands)
         if self.is_sleep_command(text):
-            return session_manager.is_session_active(chat_id)
+            return True
 
         # Skip news triggers - let NewsAgent handle them
         if self.is_news_trigger(text):
