@@ -69,3 +69,7 @@ temp/
 # Local scratch
 roo
 roo/
+
+# Local tracking notes (do not commit)
+JOBCARD.md
+
