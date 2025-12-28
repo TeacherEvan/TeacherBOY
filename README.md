@@ -118,6 +118,10 @@ ADDITIONAL_AGENTS=
 # Admin Control (for bot management)
 ADMIN_USER_IDS=
 
+# Optional: named recipients for admin push messaging
+# Format: USER_<ALIAS>=<LINE_USER_ID>
+USER_BOSS=
+
 DEBUG=False
 ```
 
@@ -184,6 +188,7 @@ For bot management and privileged access, TeacherBOY supports two levels:
 2. Add to `.env`:
    - Admins: `ADMIN_USER_IDS=U1234567890abcdef`
    - Moderators: `MODERATOR_USER_IDS=U9876543210fedcba,U1111222233334444`
+    - Optional named recipients (admin push): `USER_BOSS=Uaaaaaaaaaaaaaaaa`
 3. Restart bot
 
 **See [Admin Commands Guide](docs/ADMIN_COMMANDS.md) for complete documentation.**

@@ -18,6 +18,24 @@ Start from `.env.example`.
 - `ADMIN_USER_IDS` (comma-separated)
 - `ADMIN_SETUP_KEY` (temporary bootstrap)
 
+## Named Users (Outbound Messaging)
+
+Configure named recipients the admin can message via `/admin send` and `/admin llm_send`.
+
+- `USER_<ALIAS>=<LINE_USER_ID>`
+
+Example:
+
+```env
+USER_BOSS=U1234567890abcdef
+USER_ALICE=Uabcdef0123456789
+```
+
+Notes:
+
+- Aliases are case-insensitive (stored as lowercase).
+- Recipients are **whitelisted** by env var only (prevents pushing to arbitrary IDs).
+
 ## Moderators
 
 - `MODERATOR_USER_IDS` (comma-separated)

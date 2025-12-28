@@ -31,3 +31,15 @@ Common:
 - `/admin sleep [chat_id] [hours]`
 - `/admin wake [chat_id]`
 - `/admin reset [chat_id]`
+
+## Outbound messaging (named recipients)
+
+You can whitelist users for admin push messaging via environment variables:
+
+- `USER_<ALIAS>=<LINE_USER_ID>` (example: `USER_BOSS=U123...`)
+
+Then use:
+
+- `/admin send <alias> <text>`
+- `/admin llm_send <alias> <prompt>`
+- `/admin send_weather <alias>`

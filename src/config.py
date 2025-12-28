@@ -10,6 +10,7 @@ from pydantic import Field, field_validator, HttpUrl, AliasChoices
 from typing import Optional, Dict, Any
 import json
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -338,6 +339,39 @@ class Settings(BaseSettings):
         if not self.moderator_user_ids:
             return []
         return [uid.strip() for uid in self.moderator_user_ids.split(",") if uid.strip()]
+
+    def get_named_user_ids(self, prefix: str = "USER_") -> Dict[str, str]:
+        """Return a mapping of user aliases to LINE user IDs from environment variables.
+
+        This supports admin-safe outbound messaging to known recipients.
+
+        Format:
+            USER_<ALIAS>=<LINE_USER_ID>
+
+        Example:
+            USER_BOSS=U1234567890abcdef
+
+        Notes:
+        - Aliases are stored case-insensitively (lowercased).
+        - Values are trimmed and may be quoted.
+        - Only variables with names starting with the prefix are considered.
+        """
+        result: Dict[str, str] = {}
+        for key, value in os.environ.items():
+            if not key.startswith(prefix):
+                continue
+
+            alias = key[len(prefix) :].strip()
+            if not alias:
+                continue
+
+            user_id = (value or "").strip().strip("\"'")
+            if not user_id:
+                continue
+
+            result[alias.lower()] = user_id
+
+        return result
 
     def get_http_client_config(self) -> Dict[str, Any]:
         """

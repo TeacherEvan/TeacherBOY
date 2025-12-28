@@ -217,6 +217,57 @@ The chat is now in fresh state!
 #### `/admin` or `/admin help`
 Show help message with all available commands.
 
+---
+
+## 📨 Outbound Messaging (Admin)
+
+TeacherBOY can **push** messages to specific people (1-on-1 users) *only* if you whitelist them via environment variables.
+
+### Step 1: Add named recipients
+
+Add one or more `USER_<ALIAS>` env vars:
+
+```env
+USER_BOSS=U1234567890abcdef
+USER_TEAMMATE=Uabcdef0123456789
+```
+
+Aliases are case-insensitive.
+
+### Step 2: Use admin commands
+
+#### `/admin send <alias> <text>`
+Push plain text to a named recipient.
+
+Example:
+
+```text
+/admin send boss Meeting moved to 3pm.
+```
+
+#### `/admin llm_send <alias> <prompt>`
+Uses the OpenRouter LLM to draft a short message, then pushes it.
+
+Example:
+
+```text
+/admin llm_send boss Write a short, polite note that I'm running 10 minutes late.
+```
+
+Requirements:
+
+- `OPENROUTER_API_KEY` configured
+- (optional) `OPENROUTER_DEFAULT_MODEL`
+
+#### `/admin send_weather <alias>`
+Push current Bangkok weather (temperature, PM2.5, rain in next 5h).
+
+Example:
+
+```text
+/admin send_weather boss
+```
+
 **Example:**
 ```
 /admin

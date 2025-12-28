@@ -27,6 +27,9 @@ LINE_CHANNEL_ACCESS_TOKEN=your_access_token
 GOOGLE_TRANSLATE_API_KEY=your_google_api_key  # Optional but recommended
 ADMIN_USER_IDS=U1234567890,U0987654321  # Comma-separated LINE user IDs
 MODERATOR_USER_IDS=U1234567890  # Optional: Moderators get direct news access
+
+# Optional: named outbound recipients (admin push)
+USER_BOSS=U1234567890abcdef
 ```
 
 ## 🤖 Agent Priority Order
@@ -42,7 +45,7 @@ MODERATOR_USER_IDS=U1234567890  # Optional: Moderators get direct news access
 
 - **AI (OpenRouter LLM):** `Zeus <your question>` (also accepts `/zeus ...`, typo `Zues ...`)
   - **Admins:** allowed in any chat context
-  - **Regular users:** **DM only** (1-on-1)
+  - **Regular users:** **admin-only** (denied everywhere)
 - **Web search (Brave Search):** `Zeus search <query>` (also accepts `/zeus search ...`, typo `Zues search ...`)
   - **Admins:** allowed in any chat context
   - **Regular users:** **DM only** (1-on-1)
@@ -88,6 +91,10 @@ Notes:
 /admin wake            - Wake up chat
 /admin reset           - Reset rate limiter
 /admin stats           - View session stats (includes tourism news)
+/admin send            - Push text to USER_<ALIAS>
+/admin llm_send        - Draft via LLM then push
+/admin send_weather    - Push Bangkok weather
+/admin whoami          - Show your LINE user_id (debug)
 ```
 
 ## 📋 Translation Features

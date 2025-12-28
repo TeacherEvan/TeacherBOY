@@ -23,6 +23,7 @@ from src.services.rate_limiter import rate_limiter
 from src.services.metrics_service import metrics_service
 from src.services.admin_confirmation_service import admin_confirmation_service
 from src.services.privilege_service import privilege_service
+from src.services.openrouter_service import openrouter_service
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -168,6 +169,15 @@ class AdminAgent(BaseAgent):
                     response = self._get_help_message()
                 elif command == "stats":
                     response = await self._get_stats_message(line_bot_api)
+                elif command == "send":
+                    alias, rest = self._parse_alias_and_rest(arg)
+                    response = await self._admin_send_named(line_bot_api, alias, rest)
+                elif command == "llm_send":
+                    alias, rest = self._parse_alias_and_rest(arg)
+                    response = await self._admin_llm_send_named(line_bot_api, alias, rest)
+                elif command == "send_weather":
+                    alias, _ = self._parse_alias_and_rest(arg)
+                    response = await self._admin_send_weather_named(line_bot_api, alias)
                 elif command == "confirm":
                     response = await self._confirm_action(
                         chat_id, user_id, arg, line_bot_api
@@ -299,6 +309,19 @@ class AdminAgent(BaseAgent):
             "    → Show service stats dashboard\n\n"
             "  /admin sessions\n"
             "    → List all active sessions\n\n"
+
+            "  /admin whoami\n"
+            "    → Show your LINE user_id + admin detection (debug)\n\n"
+
+            "━━━━━━━━━━━━━━━━\n"
+            "📨 Outbound Messaging (named recipients)\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "  /admin send <alias> <text>\n"
+            "    → Push a message to USER_<ALIAS>\n\n"
+            "  /admin llm_send <alias> <prompt>\n"
+            "    → Draft via LLM then push (admin-only)\n\n"
+            "  /admin send_weather <alias>\n"
+            "    → Push current Bangkok weather\n\n"
             "━━━━━━━━━━━━━━━━\n"
             "🚪 Leave Chats:\n"
             "━━━━━━━━━━━━━━━━\n"
@@ -345,6 +368,161 @@ class AdminAgent(BaseAgent):
         if len(user_id) <= 6:
             return user_id
         return f"{user_id[:3]}…{user_id[-3:]}"
+
+    def _get_named_users(self) -> dict[str, str]:
+        """Return alias -> LINE user ID mapping from USER_<ALIAS> environment variables."""
+        try:
+            return settings.get_named_user_ids()
+        except Exception:
+            return {}
+
+    def _resolve_named_user_id(self, alias: str | None) -> str | None:
+        alias_clean = (alias or "").strip().lower()
+        if not alias_clean:
+            return None
+        return self._get_named_users().get(alias_clean)
+
+    def _parse_alias_and_rest(self, arg: str | None) -> tuple[str | None, str | None]:
+        raw = (arg or "").strip()
+        if not raw:
+            return None, None
+        parts = raw.split(maxsplit=1)
+        alias = parts[0] if parts else None
+        rest = parts[1] if len(parts) > 1 else None
+        return alias, rest
+
+    def _truncate_for_line(self, text: str, max_chars: int = 4500) -> str:
+        cleaned = (text or "").strip()
+        if len(cleaned) <= max_chars:
+            return cleaned
+        return cleaned[:max_chars].rstrip() + "..."
+
+    def _push_text(self, line_bot_api: MessagingApi, to_user_id: str, text: str) -> bool:
+        """Best-effort push text message to a LINE user ID."""
+        try:
+            if not hasattr(line_bot_api, "push_message"):
+                return False
+            line_bot_api.push_message(
+                PushMessageRequest(
+                    to=to_user_id,
+                    messages=[TextMessage(text=text, quickReply=None, quoteToken=None)],
+                    notificationDisabled=False,
+                    customAggregationUnits=[],
+                )
+            )
+            return True
+        except Exception:
+            return False
+
+    async def _admin_send_named(
+        self,
+        line_bot_api: MessagingApi,
+        alias: str | None,
+        text: str | None,
+    ) -> str:
+        if not alias or not text:
+            return "Usage: /admin send <alias> <text>"
+
+        target_user_id = self._resolve_named_user_id(alias)
+        if not target_user_id:
+            return (
+                f"❌ Unknown alias: {alias}\n\n"
+                "Configure a recipient as USER_<ALIAS>=<LINE_USER_ID> in your environment."
+            )
+
+        msg = self._truncate_for_line(text)
+        pushed = await asyncio.to_thread(self._push_text, line_bot_api, target_user_id, msg)
+        if pushed:
+            return f"✅ Sent to {alias} ({self._mask_user_id(target_user_id)})"
+        return "❌ Failed to push message (push_message unavailable or API error)."
+
+    async def _admin_llm_send_named(
+        self,
+        line_bot_api: MessagingApi,
+        alias: str | None,
+        prompt: str | None,
+    ) -> str:
+        if not alias or not prompt:
+            return "Usage: /admin llm_send <alias> <prompt>"
+
+        target_user_id = self._resolve_named_user_id(alias)
+        if not target_user_id:
+            return (
+                f"❌ Unknown alias: {alias}\n\n"
+                "Configure a recipient as USER_<ALIAS>=<LINE_USER_ID> in your environment."
+            )
+
+        if not openrouter_service.is_configured():
+            return "❌ OpenRouter is not configured (missing OPENROUTER_API_KEY)."
+
+        messages = [
+            {
+                "role": "system",
+                "content": settings.llm_system_prompt
+                + "\n\nYou will draft a short message to be sent to another person. Output plain text only.",
+            },
+            {"role": "user", "content": prompt},
+        ]
+
+        drafted = await openrouter_service.chat_completion(messages, temperature=0.4)
+        if not drafted:
+            status_code, err_text, model_used = openrouter_service.get_last_error()
+            if status_code:
+                detail = (err_text or "").strip()
+                if len(detail) > 200:
+                    detail = detail[:200] + "..."
+                return (
+                    f"❌ OpenRouter error ({status_code}).\n"
+                    f"Model: {model_used or 'unknown'}\n"
+                    f"Details: {detail}"
+                )
+            return "❌ LLM failed to generate a message."
+
+        msg = self._truncate_for_line(drafted)
+        pushed = await asyncio.to_thread(self._push_text, line_bot_api, target_user_id, msg)
+        if pushed:
+            return f"✅ LLM message sent to {alias} ({self._mask_user_id(target_user_id)})"
+        return "❌ Failed to push message (push_message unavailable or API error)."
+
+    async def _admin_send_weather_named(self, line_bot_api: MessagingApi, alias: str | None) -> str:
+        if not alias:
+            return "Usage: /admin send_weather <alias>"
+
+        target_user_id = self._resolve_named_user_id(alias)
+        if not target_user_id:
+            return (
+                f"❌ Unknown alias: {alias}\n\n"
+                "Configure a recipient as USER_<ALIAS>=<LINE_USER_ID> in your environment."
+            )
+
+        if not self._http_client:
+            return "❌ Weather send unavailable (HTTP client not initialized)."
+
+        try:
+            from src.services.news_data_service import NewsDataService
+
+            service = self._news_data_service or NewsDataService(
+                http_client=self._http_client, news_api_key=None
+            )
+            data = await service.get_weather_data()
+            temp = data.get("temperature", "N/A")
+            pm25 = data.get("pm25", "N/A")
+            will_rain = data.get("will_rain")
+            rain_text = "Yes" if will_rain else "No" if will_rain is not None else "N/A"
+
+            msg = (
+                "🌡️ Bangkok weather\n"
+                f"Temp: {temp}°C\n"
+                f"PM2.5: {pm25}\n"
+                f"Next 5h rain: {rain_text}"
+            )
+            pushed = await asyncio.to_thread(self._push_text, line_bot_api, target_user_id, msg)
+            if pushed:
+                return f"✅ Weather sent to {alias} ({self._mask_user_id(target_user_id)})"
+            return "❌ Failed to push message (push_message unavailable or API error)."
+        except Exception as e:
+            logger.error(f"❌ send_weather failed: {e}", exc_info=True)
+            return "❌ Failed to fetch/send weather."
 
     def _push_to_admin(
         self, line_bot_api: MessagingApi, user_id: str, text: str
