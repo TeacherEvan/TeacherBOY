@@ -32,6 +32,7 @@ from linebot.v3.messaging import (
     ApiClient,
     MessagingApi,
     ReplyMessageRequest,
+    PushMessageRequest,  # For FollowEvent welcome message (push to user)
     TextMessage,
     FlexMessage,
     FlexBubble,
@@ -226,6 +227,11 @@ async def lifespan(app: FastAPI):
         logger.info("📰 News Agent registered with NewsAPI.org key")
     else:
         logger.info("📰 News Agent registered (using Open-Meteo only, no NewsAPI key)")
+
+    # Update AdminAgent with news_data_service if it was registered
+    if admin_user_ids or admin_setup_key:
+        # Re-inject news_data_service into admin_agent for stats dashboard
+        admin_agent._news_data_service = news_data_service
 
     # ========================================================================
     # PHASE 5: Startup Summary
@@ -426,6 +432,12 @@ async def webhook(request: Request) -> JSONResponse:
 
                     elif isinstance(event, UnfollowEvent):
                         # User blocked/removed bot
+                        user_id = (
+                            getattr(event.source, "user_id", None)
+                            if getattr(event, "source", None)
+                            else None
+                        )
+                        metrics_service.record_friend_removed(user_id)
                         logger.info("➖ Unfollow event received")
 
                     elif isinstance(event, LeaveEvent):

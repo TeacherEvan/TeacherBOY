@@ -1,31 +1,42 @@
 # TeacherBOY Documentation
 
-This folder is the single source of truth for docs.
+**📍 This folder is the single source of truth for all documentation.**
 
 > **📚 For a complete documentation index, see [DOCUMENTATION_INDEX.md](../DOCUMENTATION_INDEX.md)**
 
-## Start here
+## Start Here
 
-- If you want the bot running fast: [docs/guides/quickstart.md](guides/quickstart.md)
-- If you need LINE tokens + webhook setup: [docs/guides/line-setup.md](guides/line-setup.md)
-- If you’re deploying to a host: [docs/guides/deployment.md](guides/deployment.md)
+- **Quick Start:** [guides/quickstart.md](guides/quickstart.md) - Get the bot running in 5 steps
+- **LINE Setup:** [guides/line-setup.md](guides/line-setup.md) - Get LINE tokens & configure webhook
+- **Deployment:** [guides/deployment.md](guides/deployment.md) - Deploy to production (Docker/cloud)
+- **Quick Reference:** [reference/quick-reference.md](reference/quick-reference.md) - Essential info at a glance ⚡
 
-## Operating the bot
+## Operating the Bot
 
-- Admin commands (sleep/wake/reset/status): [docs/guides/admin.md](guides/admin.md)
-- Tracing (OpenTelemetry + VS Code AI Toolkit): [docs/TRACING.md](TRACING.md)
+- **Admin Commands:** [guides/admin.md](guides/admin.md) or [ADMIN_COMMANDS.md](ADMIN_COMMANDS.md) - Sleep/wake/reset/stats
+- **Tracing:** [TRACING.md](TRACING.md) - OpenTelemetry tracing with VS Code AI Toolkit
 
-## Developer docs
+## Developer Documentation
 
-- System overview (what runs where): [docs/architecture/overview.md](architecture/overview.md)
-- Agent system (priorities, adding agents): [docs/architecture/agents.md](architecture/agents.md)
+- **System Overview:** [architecture/overview.md](architecture/overview.md) - Async design, HTTP pooling, FastAPI
+- **Agent System:** [architecture/agents.md](architecture/agents.md) - Priorities, routing, adding new agents
+
+## Feature Documentation
+
+- **News Agent:** [NEWS_AGENT.md](NEWS_AGENT.md) - Weather, headlines, access control
+- **News Usage:** [NEWS_USAGE_EXAMPLES.md](NEWS_USAGE_EXAMPLES.md) - How to use news features
+- **Translation:** [INCOMPLETE_SENTENCE_FIX.md](INCOMPLETE_SENTENCE_FIX.md) - Hallucination prevention
 
 ## Reference
 
-- Environment variables: [docs/reference/environment.md](reference/environment.md)
-- Legacy/archived docs (still present at repo root):
-  - [DEPLOYMENT_INSTRUCTIONS.md](../DEPLOYMENT_INSTRUCTIONS.md)
-  - [IMPLEMENTATION_SUMMARY.md](../IMPLEMENTATION_SUMMARY.md)
-  - [IMPLEMENTATION_COMPLETE.md](../IMPLEMENTATION_COMPLETE.md)
-  - [OPTIMIZATION_GUIDE.md](../OPTIMIZATION_GUIDE.md)
-  - [SECURITY_FIXES.md](../SECURITY_FIXES.md)
+- **Environment Variables:** [reference/environment.md](reference/environment.md) - All settings explained
+- **Quick Reference Card:** [reference/quick-reference.md](reference/quick-reference.md) - Commands, rate limits, file locations
+
+## Legacy Documentation (Root Directory)
+
+The following files remain in the root directory for backward compatibility but have been superseded by this docs/ folder:
+
+- [../ARCHITECTURE.md](../ARCHITECTURE.md) → See [architecture/](architecture/)
+- [../DEPLOYMENT_GUIDE.md](../DEPLOYMENT_GUIDE.md) → See [guides/deployment.md](guides/deployment.md)
+- [../QUICK_START.md](../QUICK_START.md) → Redirect to [guides/quickstart.md](guides/quickstart.md)
+- [../QUICK_REFERENCE.md](../QUICK_REFERENCE.md) → Redirect to [reference/quick-reference.md](reference/quick-reference.md)

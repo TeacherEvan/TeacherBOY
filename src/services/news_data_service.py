@@ -229,21 +229,40 @@ class NewsDataService:
             return []
 
     async def _fetch_thai_news(self) -> List[Dict[str, str]]:
-        """Fetch Thai news from Bangkok Post RSS (Thailand section)."""
+        """Fetch Thai news from Bangkok Post RSS (Thailand section).
+        
+        Note: This is an async wrapper for consistency and future extensibility.
+        In the future, this could fetch from multiple sources in parallel or apply
+        language-specific filtering/translation logic.
+        """
         # Note: Bangkok Post RSS is in English, but covers local Thai news.
         # Ideally we would use a Thai language RSS feed, but for now this ensures reliability.
         rss_url = "https://www.bangkokpost.com/rss/data/thailand.xml"
-        return self._parse_rss_feed(rss_url)
+        return await self._parse_rss_feed(rss_url)
 
     async def _fetch_english_news(self) -> List[Dict[str, str]]:
-        """Fetch English news from Bangkok Post RSS (Top Stories)."""
+        """Fetch English news from Bangkok Post RSS (Top Stories).
+        
+        Note: This is an async wrapper for consistency and future extensibility.
+        In the future, this could fetch from multiple sources in parallel or apply
+        language-specific filtering/translation logic.
+        """
         rss_url = "https://www.bangkokpost.com/rss/data/topstories.xml"
-        return self._parse_rss_feed(rss_url)
+        return await self._parse_rss_feed(rss_url)
 
-    def _parse_rss_feed(self, url: str) -> List[Dict[str, str]]:
+    async def _parse_rss_feed(self, url: str) -> List[Dict[str, str]]:
         """Parse RSS feed and return top 5 items."""
         try:
-            feed = feedparser.parse(url)
+            # Prefer async HTTP fetch to avoid blocking the event loop.
+            if self.client is not None:
+                resp = await self.client.get(url, timeout=10.0, follow_redirects=True)
+                resp.raise_for_status()
+                feed = feedparser.parse(resp.text)
+            else:
+                # Fallback: feedparser will do its own network I/O.
+                # Use a conservative sync parse for unusual test contexts.
+                feed = feedparser.parse(url)
+
             logger.info(f"📰 Parsed RSS feed from {url}: {len(feed.entries)} entries")
             
             articles = []

@@ -365,6 +365,8 @@ class TestAdminAgent:
                 news_requests_total=50,
                 last_friend_added_at=None,
                 last_friend_added_user_id=None,
+                friends_follow_events_total=12,
+                friends_unfollow_events_total=3,
                 rate_limited_requests=5,
                 failed_translations=3,
                 admin_commands_total=10,

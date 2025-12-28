@@ -165,6 +165,12 @@ class Settings(BaseSettings):
         le=14400,
         description="Exchange rate cache TTL (default: 1 hour)",
     )
+    friend_cache_ttl_seconds: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        description="Friend status cache TTL in seconds (default: 5 minutes)",
+    )
 
     # ============================================================================
     # HTTP Client Configuration

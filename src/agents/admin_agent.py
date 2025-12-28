@@ -3,7 +3,7 @@
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import httpx
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
@@ -12,6 +12,9 @@ from linebot.v3.messaging import (
     PushMessageRequest,
     TextMessage,
 )
+
+if TYPE_CHECKING:
+    from src.services.news_data_service import NewsDataService
 
 from .base_agent import BaseAgent
 from src.services.session_manager import session_manager
@@ -30,11 +33,14 @@ class AdminAgent(BaseAgent):
         self,
         http_client: Optional[httpx.AsyncClient] = None,
         news_api_key: str | None = None,
+        news_data_service: Optional["NewsDataService"] = None,
     ):
         super().__init__(
             name="AdminAgent",
             description="Admin commands for bot management and control",
         )
+        self._http_client = http_client
+        self._news_data_service = news_data_service
         self._admin_user_ids = settings.get_admin_user_ids()
         self._admin_setup_key = (
             settings.admin_setup_key.strip()
@@ -587,18 +593,14 @@ class AdminAgent(BaseAgent):
         # SECTION 5: Current Tourism News Headlines
         # ====================================================================
         tourism_headlines = []
-        try:
-            from src.services.news_data_service import NewsDataService
-            from src.config import settings
-
-            # Create a news service instance for fetching tourism news
-            news_svc = NewsDataService(http_client=None, news_api_key=settings.news_api_key)
-            # Use cached news as proxy for tourism news
-            tourism_news = await news_svc.get_news_headlines(language="en")
-            tourism_headlines = [item.get("title", "")[:50] + "..." if len(item.get("title", "")) > 50 else item.get("title", "") for item in tourism_news[:3] if item.get("title")]
-        except Exception as e:
-            logger.debug(f"Could not fetch tourism news for stats: {e}")
-            tourism_headlines = []
+        # Reuse news_data_service if available (avoids creating new instance)
+        if self._news_data_service:
+            try:
+                tourism_news = await self._news_data_service.get_news_headlines(language="en")
+                tourism_headlines = [item.get("title", "")[:50] + "..." if len(item.get("title", "")) > 50 else item.get("title", "") for item in tourism_news[:3] if item.get("title")]
+            except Exception as e:
+                logger.debug(f"Could not fetch tourism news for stats: {e}")
+                tourism_headlines = []
 
         # ====================================================================
         # BUILD DASHBOARD MESSAGE
@@ -656,6 +658,10 @@ class AdminAgent(BaseAgent):
         
         total_unique = snap.unique_users_count + snap.unique_groups_count
         msg += f"📊 Total reach: {total_unique:,} chats\n"
+        net_friends = snap.friends_follow_events_total - snap.friends_unfollow_events_total
+        msg += (
+            f"🤝 Friends (since boot): +{snap.friends_follow_events_total:,} / -{snap.friends_unfollow_events_total:,} / net {net_friends:,}\n"
+        )
         msg += f"👋 Last friend added: {last_friend}\n"
 
         # Peak usage analytics

@@ -1,91 +1,100 @@
 # TeacherBOY Documentation Index
 
 > **Complete documentation directory for TeacherBOY multi-agent LINE bot**
+>
+> **📍 Primary Documentation Location:** [docs/](docs/) folder
 
 ## 📚 Quick Links
 
-### Getting Started
+### Getting Started (New Users Start Here)
 
-- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Essential info at a glance ⚡
-- **[README.md](README.md)** - Project overview and features
-- **[QUICK_START.md](QUICK_START.md)** - Fast deployment guide
-- **[docs/guides/quickstart.md](docs/guides/quickstart.md)** - Detailed quickstart guide
+- **[README.md](README.md)** - Project overview, features, and setup guide
+- **[docs/guides/quickstart.md](docs/guides/quickstart.md)** - Fast deployment in 5 steps
+- **[docs/guides/line-setup.md](docs/guides/line-setup.md)** - LINE Bot token configuration
+- **[docs/reference/quick-reference.md](docs/reference/quick-reference.md)** - Essential info at a glance ⚡
 
 ### Setup & Deployment
 
-- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Comprehensive deployment instructions
-- **[DEPLOYMENT_INSTRUCTIONS.md](DEPLOYMENT_INSTRUCTIONS.md)** - Step-by-step deployment
-- **[docs/guides/deployment.md](docs/guides/deployment.md)** - Docker & cloud deployment
-- **[docs/guides/line-setup.md](docs/guides/line-setup.md)** - LINE Bot configuration
+- **[docs/guides/deployment.md](docs/guides/deployment.md)** - Docker, cloud deployment, production setup
+- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Legacy comprehensive deployment guide
+- **[docs/guides/line-setup.md](docs/guides/line-setup.md)** - LINE Bot webhook & token configuration
 
 ### Architecture & Development
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture overview
-- **[docs/architecture/overview.md](docs/architecture/overview.md)** - Detailed architecture
-- **[docs/architecture/agents.md](docs/architecture/agents.md)** - Agent system design
-- **[MULTI_AGENT_GUIDE.md](MULTI_AGENT_GUIDE.md)** - Guide to multi-agent system
+- **[docs/architecture/overview.md](docs/architecture/overview.md)** - System architecture, async design, HTTP pooling
+- **[docs/architecture/agents.md](docs/architecture/agents.md)** - Agent system, priorities, adding new agents
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Legacy architecture overview (see docs/architecture/ for current)
+- **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - AI agent coding instructions (developer reference)
 
 ### Features & Implementation
 
-- **[TRANSLATION_HALLUCINATION_FIX.md](TRANSLATION_HALLUCINATION_FIX.md)** - Incomplete sentence detection
-- **[IMPLEMENTATION_PARENTHESES.md](IMPLEMENTATION_PARENTHESES.md)** - Parentheses preservation
-- **[NEWS_IMPLEMENTATION_SUMMARY.md](NEWS_IMPLEMENTATION_SUMMARY.md)** - News Agent overview
-- **[EXTENDED_NEWS_IMPLEMENTATION.md](EXTENDED_NEWS_IMPLEMENTATION.md)** - Extended news features
-- **[docs/NEWS_AGENT.md](docs/NEWS_AGENT.md)** - News Agent documentation
-- **[docs/NEWS_USAGE_EXAMPLES.md](docs/NEWS_USAGE_EXAMPLES.md)** - Usage examples
+- **[docs/NEWS_AGENT.md](docs/NEWS_AGENT.md)** - News Agent: weather, headlines, access control
+- **[docs/NEWS_USAGE_EXAMPLES.md](docs/NEWS_USAGE_EXAMPLES.md)** - News Agent usage patterns
+- **[docs/NEWS_LANGUAGE_DISPLAY.md](docs/NEWS_LANGUAGE_DISPLAY.md)** - Bilingual news display
+- **[docs/INCOMPLETE_SENTENCE_FIX.md](docs/INCOMPLETE_SENTENCE_FIX.md)** - Translation hallucination prevention
 
 ### Admin & Operations
 
-- **[ADMIN_COMMANDS_SUMMARY.md](ADMIN_COMMANDS_SUMMARY.md)** - Admin commands overview
-- **[docs/ADMIN_COMMANDS.md](docs/ADMIN_COMMANDS.md)** - Detailed admin reference
-- **[docs/ADMIN_QUICK_START.md](docs/ADMIN_QUICK_START.md)** - Admin quickstart
-- **[docs/guides/admin.md](docs/guides/admin.md)** - Admin guide
+- **[docs/ADMIN_COMMANDS.md](docs/ADMIN_COMMANDS.md)** - Complete admin command reference
+- **[docs/ADMIN_QUICK_START.md](docs/ADMIN_QUICK_START.md)** - Admin setup and first commands
+- **[docs/guides/admin.md](docs/guides/admin.md)** - Admin operations guide
 
 ### Configuration & Security
 
-- **[docs/reference/environment.md](docs/reference/environment.md)** - Environment variables
-- **[SECURITY_FIXES.md](SECURITY_FIXES.md)** - Security updates
+- **[docs/reference/environment.md](docs/reference/environment.md)** - All environment variables explained
+- **[docs/reference/quick-reference.md](docs/reference/quick-reference.md)** - Quick reference card
 
 ### Monitoring & Debugging
 
-- **[docs/TRACING.md](docs/TRACING.md)** - OpenTelemetry tracing setup
-- **[OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md)** - Performance optimization
+- **[docs/TRACING.md](docs/TRACING.md)** - OpenTelemetry tracing with VS Code AI Toolkit
 
 ### Project Management
 
-- **[CHANGELOG.md](CHANGELOG.md)** - Version history and changes
-- **[JOBCARD.md](JOBCARD.md)** - Development tracking
-- **[NEXT_STEPS.md](NEXT_STEPS.md)** - Planned features
-
-### Implementation Summaries
-
-- **[IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md)** - Completed features
-- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Implementation overview
-- **[PRODUCTION_OVERHAUL_SUMMARY.md](PRODUCTION_OVERHAUL_SUMMARY.md)** - Production improvements
-
-### Code Reviews
-
-- **[CODE_REVIEW_NEWS_AGENT.md](CODE_REVIEW_NEWS_AGENT.md)** - News Agent code review
-- **[TRANSLATION_FIX_COMPARISON.md](TRANSLATION_FIX_COMPARISON.md)** - Translation fix analysis
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history and notable changes
 
 ## 🗂️ Documentation by Category
 
 ### 🚀 For New Users
 
-1. [README.md](README.md) - Start here
-2. [QUICK_START.md](QUICK_START.md) - Get running fast
-3. [docs/guides/line-setup.md](docs/guides/line-setup.md) - LINE Bot setup
-4. [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) - Deploy to production
+1. **[README.md](README.md)** - Start here (project overview, features)
+2. **[docs/guides/quickstart.md](docs/guides/quickstart.md)** - Get bot running in 5 steps
+3. **[docs/guides/line-setup.md](docs/guides/line-setup.md)** - Get LINE tokens and configure webhook
+4. **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** or **[docs/guides/deployment.md](docs/guides/deployment.md)** - Deploy to production
 
 ### 👨‍💻 For Developers
 
-1. [ARCHITECTURE.md](ARCHITECTURE.md) - Understand the system
-2. [docs/architecture/agents.md](docs/architecture/agents.md) - Agent patterns
-3. [MULTI_AGENT_GUIDE.md](MULTI_AGENT_GUIDE.md) - Build new agents
-4. [.github/copilot-instructions.md](.github/copilot-instructions.md) - AI coding guide
-5. [OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md) - Performance tips
+1. **[docs/architecture/overview.md](docs/architecture/overview.md)** - Understand system design
+2. **[docs/architecture/agents.md](docs/architecture/agents.md)** - Learn agent patterns
+3. **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - AI coding agent instructions
+4. **[docs/reference/quick-reference.md](docs/reference/quick-reference.md)** - Quick lookup for commands and patterns
 
 ### 🔧 For Administrators
+
+1. **[docs/ADMIN_QUICK_START.md](docs/ADMIN_QUICK_START.md)** - Set up admin access
+2. **[docs/ADMIN_COMMANDS.md](docs/ADMIN_COMMANDS.md)** - All admin commands explained
+3. **[docs/guides/admin.md](docs/guides/admin.md)** - Admin operations
+
+### 📰 For News Feature Users
+
+1. **[docs/NEWS_AGENT.md](docs/NEWS_AGENT.md)** - News Agent overview
+2. **[docs/NEWS_USAGE_EXAMPLES.md](docs/NEWS_USAGE_EXAMPLES.md)** - How to use news features
+3. **[docs/NEWS_LANGUAGE_DISPLAY.md](docs/NEWS_LANGUAGE_DISPLAY.md)** - Language detection and display
+
+## 📍 Legacy Documentation (Root Directory)
+
+These files remain in the root for backward compatibility but have been superseded by docs/ folder:
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** → See [docs/architecture/](docs/architecture/)
+- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** → See [docs/guides/deployment.md](docs/guides/deployment.md)
+- **[QUICK_START.md](QUICK_START.md)** → Redirect to [docs/guides/quickstart.md](docs/guides/quickstart.md)
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** → Redirect to [docs/reference/quick-reference.md](docs/reference/quick-reference.md)
+
+## 📝 Notes
+
+- **Primary Source of Truth:** [docs/](docs/) folder contains current, maintained documentation
+- **Root Directory:** Legacy docs kept for backward compatibility; redirects point to docs/
+- **Contributing:** When adding features, update docs/ folder and CHANGELOG.md
+- **AI Coding:** See [.github/copilot-instructions.md](.github/copilot-instructions.md) for development patterns
 
 1. [docs/ADMIN_COMMANDS.md](docs/ADMIN_COMMANDS.md) - Command reference
 2. [docs/ADMIN_QUICK_START.md](docs/ADMIN_QUICK_START.md) - Quick admin setup
@@ -97,26 +106,23 @@
 1. [CHANGELOG.md](CHANGELOG.md) - Recent changes
 2. [SECURITY_FIXES.md](SECURITY_FIXES.md) - Security updates
 3. [docs/TRACING.md](docs/TRACING.md) - Debug with traces
-4. [TRANSLATION_HALLUCINATION_FIX.md](TRANSLATION_HALLUCINATION_FIX.md) - Translation issues
+4. [docs/INCOMPLETE_SENTENCE_FIX.md](docs/INCOMPLETE_SENTENCE_FIX.md) - Translation issues
 
 ## 📦 By Feature
 
 ### Translation Features
 
-- [TRANSLATION_HALLUCINATION_FIX.md](TRANSLATION_HALLUCINATION_FIX.md) - Incomplete sentence detection
+- [docs/INCOMPLETE_SENTENCE_FIX.md](docs/INCOMPLETE_SENTENCE_FIX.md) - Incomplete sentence detection
 - [IMPLEMENTATION_PARENTHESES.md](IMPLEMENTATION_PARENTHESES.md) - Parentheses handling
-- [TRANSLATION_FIX_COMPARISON.md](TRANSLATION_FIX_COMPARISON.md) - Before/after comparison
 
 ### News Features
 
 - [docs/NEWS_AGENT.md](docs/NEWS_AGENT.md) - News Agent overview
 - [docs/NEWS_USAGE_EXAMPLES.md](docs/NEWS_USAGE_EXAMPLES.md) - Usage examples
-- [NEWS_IMPLEMENTATION_SUMMARY.md](NEWS_IMPLEMENTATION_SUMMARY.md) - Implementation details
 - [EXTENDED_NEWS_IMPLEMENTATION.md](EXTENDED_NEWS_IMPLEMENTATION.md) - Extended features
 
 ### Admin Features
 
-- [ADMIN_COMMANDS_SUMMARY.md](ADMIN_COMMANDS_SUMMARY.md) - Command summary
 - [docs/ADMIN_COMMANDS.md](docs/ADMIN_COMMANDS.md) - Full reference
 - [docs/guides/admin.md](docs/guides/admin.md) - Admin guide
 
@@ -125,7 +131,7 @@
 **Looking for:**
 
 - **How to deploy?** → [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
-- **Translation not working?** → [TRANSLATION_HALLUCINATION_FIX.md](TRANSLATION_HALLUCINATION_FIX.md)
+- **Translation not working?** → [docs/INCOMPLETE_SENTENCE_FIX.md](docs/INCOMPLETE_SENTENCE_FIX.md)
 - **Adding a new agent?** → [MULTI_AGENT_GUIDE.md](MULTI_AGENT_GUIDE.md)
 - **Admin commands?** → [docs/ADMIN_COMMANDS.md](docs/ADMIN_COMMANDS.md)
 - **Environment variables?** → [docs/reference/environment.md](docs/reference/environment.md)

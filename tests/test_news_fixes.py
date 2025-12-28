@@ -295,27 +295,34 @@ class TestRSSParsingLogging:
     @pytest.mark.asyncio
     async def test_news_data_service_logs_missing_urls(self, news_data_service):
         """Test that NewsDataService logs warnings for missing URLs."""
-        with patch('feedparser.parse') as mock_parse:
-            # Mock feedparser to return entries with missing URLs
-            mock_feed = MagicMock()
-            mock_entry1 = MagicMock()
-            mock_entry1.title = "Article with URL"
-            mock_entry1.link = "https://example.com/1"
+        # Mock HTTP client to return RSS feed with entries that have missing URLs
+        mock_response = MagicMock()
+        mock_response.text = """<?xml version="1.0"?>
+        <rss version="2.0">
+            <channel>
+                <item>
+                    <title>Article with URL</title>
+                    <link>https://example.com/1</link>
+                </item>
+                <item>
+                    <title>Article without URL</title>
+                    <link></link>
+                </item>
+            </channel>
+        </rss>"""
+        mock_response.status_code = 200
+        
+        news_data_service.client.get = AsyncMock(return_value=mock_response)
+        
+        with patch('src.services.news_data_service.logger') as mock_logger:
+            result = await news_data_service._parse_rss_feed("https://example.com/feed")
             
-            mock_entry2 = MagicMock()
-            mock_entry2.title = "Article without URL"
-            mock_entry2.link = ""
+            # Should log warning for missing URL
+            warning_calls = [call for call in mock_logger.warning.call_args_list 
+                           if "has no URL" in str(call)]
+            assert len(warning_calls) > 0
             
-            mock_feed.entries = [mock_entry1, mock_entry2]
-            mock_parse.return_value = mock_feed
-            
-            with patch('src.services.news_data_service.logger') as mock_logger:
-                result = news_data_service._parse_rss_feed("https://example.com/feed")
-                
-                # Should log warning for missing URL
-                warning_calls = [call for call in mock_logger.warning.call_args_list 
-                               if "has no URL" in str(call)]
-                assert len(warning_calls) > 0
-                
-                # Should still return both articles
-                assert len(result) == 2
+            # Should still return both articles
+            assert len(result) == 2
+            assert result[0]["url"] == "https://example.com/1"
+            assert result[1]["url"] == ""

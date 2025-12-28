@@ -154,13 +154,33 @@ class TranslationAgent(BaseAgent):
         if self.is_wake_command(text):
             return True
 
+        # Always handle sleep commands (even if no active translation session).
+        # Exception: if the chat is currently in a NewsAgent flow, let NewsAgent
+        # own the shutdown phrase so it can exit its flow cleanly.
+        if self.is_sleep_command(text):
+            try:
+                from src.services.news_session_manager import news_session_manager
+            except ImportError as exc:
+                logger.warning(
+                    "⚠️ news_session_manager not available when handling sleep command: %s",
+                    exc,
+                    exc_info=True,
+                )
+            else:
+                try:
+                    if news_session_manager.is_in_news_flow(chat_id):
+                        return False
+                except Exception as exc:
+                    logger.error(
+                        "❌ Error while checking news flow state in TranslationAgent: %s",
+                        exc,
+                        exc_info=True,
+                    )
+            return True
+
         # Don't handle anything else if sleeping
         if session_manager.is_sleeping(chat_id):
             return False
-
-        # Always handle sleep commands if session is active
-        if self.is_sleep_command(text):
-            return session_manager.is_session_active(chat_id)
 
         # Skip news triggers - let NewsAgent handle them
         if self.is_news_trigger(text):
@@ -372,7 +392,6 @@ class TranslationAgent(BaseAgent):
 
         # Record final failure only if both providers failed
         metrics_service.record_failed_translation()
-        return "Translation failed"
         return "Translation failed"
 
     def _get_chat_id(self, event: MessageEvent) -> str:

@@ -19,6 +19,7 @@ from linebot.v3.webhooks import MessageEvent
 
 from .base_agent import BaseAgent
 from src.services.special_news_service import SpecialNewsService
+from src.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,10 @@ class SpecialNewsAgent(BaseAgent):
             description="/special news (DM-only) - 15 headlines in 3 sections",
         )
         self._service = news_service
+
+        # Cache friendship checks to reduce LINE API calls
+        # {user_id: (is_friend, cached_at_utc)}
+        self._friend_cache: Dict[str, tuple[bool, datetime]] = {}
 
         # Feeds
         self._tourism_feed = "https://www.tatnews.org/feed/"
@@ -61,11 +66,20 @@ class SpecialNewsAgent(BaseAgent):
         if not user_id:
             return False
 
+        cached = self._friend_cache.get(user_id)
+        if cached:
+            is_friend, cached_at = cached
+            age = (datetime.now(timezone.utc) - cached_at).total_seconds()
+            if age < settings.friend_cache_ttl_seconds:
+                return is_friend
+
         try:
             # LINE returns error for non-friends.
             line_bot_api.get_profile(user_id)
+            self._friend_cache[user_id] = (True, datetime.now(timezone.utc))
             return True
         except ApiException:
+            self._friend_cache[user_id] = (False, datetime.now(timezone.utc))
             return False
         except Exception:
             return False
@@ -272,7 +286,11 @@ class SpecialNewsAgent(BaseAgent):
 
     def _create_section_bubble(self, title: str, items: List[Dict[str, str]], accent_color: str) -> Optional[Dict[str, Any]]:
         """Create a single bubble for a news section."""
-        valid_items = [item for item in items[:3] if item.get("title") and item["title"] != "(unavailable)"]
+        valid_items = [
+            item
+            for item in items[:5]
+            if item.get("title") and item["title"] != "(unavailable)"
+        ]
         if not valid_items:
             return None
 

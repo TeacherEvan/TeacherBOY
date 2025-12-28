@@ -5,7 +5,7 @@ Auto-detects language from trigger: 'news' = English, 'ข่าว' = Thai (no 
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
@@ -43,6 +43,10 @@ class NewsAgent(BaseAgent):
         self.news_service = news_data_service
         self._admin_user_ids = settings.get_admin_user_ids()
         self._moderator_user_ids = settings.get_moderator_user_ids()
+
+        # Cache friendship checks to avoid repeated LINE API calls.
+        # {user_id: (is_friend, cached_at_utc)}
+        self._friend_cache: Dict[str, tuple[bool, datetime]] = {}
         # Import translation services for headline translation
         from src.services.google_translation import google_translation_service
         from src.services.translation_service import (
@@ -129,9 +133,17 @@ class NewsAgent(BaseAgent):
             logger.warning(f"📰 No user_id found for friendship check")
             return False
 
+        cached = self._friend_cache.get(user_id)
+        if cached:
+            is_friend, cached_at = cached
+            age = (datetime.now(timezone.utc) - cached_at).total_seconds()
+            if age < settings.friend_cache_ttl_seconds:
+                return is_friend
+
         try:
             line_bot_api.get_profile(user_id)
             logger.info(f"📰 User {user_id} is a friend (verified via LINE API)")
+            self._friend_cache[user_id] = (True, datetime.now(timezone.utc))
             return True
         except ApiException as e:
             status = getattr(e, "status_code", "unknown")
@@ -139,6 +151,7 @@ class NewsAgent(BaseAgent):
                 f"📰 User {user_id} is NOT a friend (ApiException: {status})",
                 exc_info=False,
             )
+            self._friend_cache[user_id] = (False, datetime.now(timezone.utc))
             return False
         except Exception as e:
             logger.warning(
@@ -303,23 +316,6 @@ class NewsAgent(BaseAgent):
             await self._send_error_message(event, line_bot_api)
             news_session_manager.end_news_flow(chat_id)
             return False
-
-    async def _send_language_selection(
-        self, event: MessageEvent, line_bot_api: MessagingApi
-    ):
-        """Send language selection prompt."""
-        message = "📰 News / ข่าว\n\nSelect language:\n1 = Thai (ไทย)\n2 = English"
-
-        text_msg = TextMessage(text=message, quickReply=None, quoteToken=None)
-
-        if event.reply_token:
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    replyToken=event.reply_token,
-                    messages=[text_msg],
-                    notificationDisabled=False,
-                )
-            )
 
     async def _send_main_menu(
         self, event: MessageEvent, line_bot_api: MessagingApi, language: str
@@ -727,182 +723,6 @@ class NewsAgent(BaseAgent):
                 msg += f"🔗 Read more:\n{url}"
             else:
                 msg += "⚠️ Link unavailable"
-
-        text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-
-        if event.reply_token:
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    replyToken=event.reply_token,
-                    messages=[text_msg],
-                    notificationDisabled=False,
-                )
-            )
-
-    async def _send_color_sunset_sunrise(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
-        """Send lucky color of day + sunset/sunrise times."""
-        try:
-            color_data = await self.news_service.get_color_of_day()
-            time_data = await self.news_service.get_sunset_sunrise_times()
-
-            if language == "th":
-                color_name = color_data.get("color_name_th", "ไม่ทราบ")
-                msg = f"🎨 สีแม่น้ำวันนี้: {color_name}\n"
-                msg += f"   (ฐานะดี / Lucky)\n\n"
-                msg += f"🌅 พระอาทิตย์ขึ้น: {time_data.get('sunrise', 'N/A')}\n"
-                msg += f"🌇 พระอาทิตย์ตก: {time_data.get('sunset', 'N/A')}"
-            else:
-                color_name = color_data.get("color_name_en", "Unknown")
-                msg = f"🎨 Lucky color: {color_name}\n\n"
-                msg += f"🌅 Sunrise: {time_data.get('sunrise', 'N/A')}\n"
-                msg += f"🌇 Sunset: {time_data.get('sunset', 'N/A')}"
-
-            text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-            if event.reply_token:
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        replyToken=event.reply_token,
-                        messages=[text_msg],
-                        notificationDisabled=False,
-                    )
-                )
-        except Exception as e:
-            logger.error(f"📰 Error sending color/sunset: {e}", exc_info=True)
-            await self._send_error_message(event, line_bot_api)
-
-    async def _send_holidays_markets(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
-        """Send Thai holidays + SET market info."""
-        try:
-            holidays = await self.news_service.get_thai_holidays()
-
-            if language == "th":
-                msg = "📅 วันหยุดราชการ (ต.ค.-ธ.ค.):\n"
-                for holiday in holidays[:3]:  # Top 3 holidays
-                    date = holiday.get("date", "")
-                    name = holiday.get("name_th", "")
-                    msg += f"• {date}: {name}\n"
-                msg += "\n🏛️ ตลาดหุ้น SET (ปิด):\n"
-                msg += "• วันเสาร์-อาทิตย์\n"
-                msg += "• วันหยุดราชการ"
-            else:
-                msg = "📅 Thai Holidays (Oct-Dec):\n"
-                for holiday in holidays[:3]:  # Top 3 holidays
-                    date = holiday.get("date", "")
-                    name = holiday.get("name_en", "")
-                    msg += f"• {date}: {name}\n"
-                msg += "\n🏛️ SET Market (Closed):\n"
-                msg += "• Saturday-Sunday\n"
-                msg += "• Thai holidays"
-
-            text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-            if event.reply_token:
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        replyToken=event.reply_token,
-                        messages=[text_msg],
-                        notificationDisabled=False,
-                    )
-                )
-        except Exception as e:
-            logger.error(f"📰 Error sending holidays/markets: {e}", exc_info=True)
-            await self._send_error_message(event, line_bot_api)
-
-    async def _send_crypto_exchange(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
-        """Send Bitcoin price + exchange rates."""
-        try:
-            btc_data = await self.news_service.get_bitcoin_price()
-            rates_data = await self.news_service.get_exchange_rates()
-
-            if language == "th":
-                msg = f"₿ Bitcoin (USD): {btc_data.get('price_usd', 'N/A')}\n"
-                msg += f"   24h: {btc_data.get('change_24h_percent', 'N/A')}\n\n"
-                msg += "💱 อัตราแลก (1 THB):\n"
-                msg += f"• USD: {rates_data.get('thb_usd', 'N/A')}\n"
-                msg += f"• ZAR: {rates_data.get('thb_zar', 'N/A')}\n"
-                msg += f"• CNY: {rates_data.get('thb_cny', 'N/A')}"
-            else:
-                msg = f"₿ Bitcoin (USD): {btc_data.get('price_usd', 'N/A')}\n"
-                msg += f"   24h: {btc_data.get('change_24h_percent', 'N/A')}\n\n"
-                msg += "💱 Exchange (1 THB):\n"
-                msg += f"• USD: {rates_data.get('thb_usd', 'N/A')}\n"
-                msg += f"• ZAR: {rates_data.get('thb_zar', 'N/A')}\n"
-                msg += f"• CNY: {rates_data.get('thb_cny', 'N/A')}"
-
-            text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-            if event.reply_token:
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        replyToken=event.reply_token,
-                        messages=[text_msg],
-                        notificationDisabled=False,
-                    )
-                )
-        except Exception as e:
-            logger.error(f"📰 Error sending crypto/exchange: {e}", exc_info=True)
-            await self._send_error_message(event, line_bot_api)
-
-    async def _send_festivals(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
-        """Send upcoming festivals."""
-        try:
-            festivals = await self.news_service.get_upcoming_festivals()
-
-            if language == "th":
-                msg = "🎉 เทศกาลที่กำลังจะมาถึง (กทม./พัทยา):\n\n"
-                for fest in festivals:
-                    name = fest.get("name", "")
-                    date = fest.get("date", "")
-                    msg += f"• {name}\n  📅 {date}\n"
-            else:
-                msg = "🎉 Upcoming Festivals (BKK/Pattaya):\n\n"
-                for fest in festivals:
-                    name = fest.get("name", "")
-                    date = fest.get("date", "")
-                    msg += f"• {name}\n  📅 {date}\n"
-
-            text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-            if event.reply_token:
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        replyToken=event.reply_token,
-                        messages=[text_msg],
-                        notificationDisabled=False,
-                    )
-                )
-        except Exception as e:
-            logger.error(f"📰 Error sending festivals: {e}", exc_info=True)
-            await self._send_error_message(event, line_bot_api)
-
-    async def _send_resources(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
-        """Send API resources list."""
-        msg = ""
-        if language == "th":
-            msg = "📚 แหล่งข้อมูล / Resources:\n\n"
-            msg += "🌡️ สภาพอากาศ: Open-Meteo\n"
-            msg += "https://open-meteo.com\n\n"
-            msg += "📰 ข่าว:\n"
-            msg += "• ThaiPBS: https://news.thaipbs.or.th\n"
-            msg += "• Bangkok Post: https://bangkokpost.com\n"
-            msg += "• The Nation: https://nationthailand.com\n\n"
-            msg += "ขอบคุณที่ใช้บริการ! 🙏"
-        else:
-            msg = "📚 Resources:\n\n"
-            msg += "🌡️ Weather: Open-Meteo\n"
-            msg += "https://open-meteo.com\n\n"
-            msg += "📰 News:\n"
-            msg += "• ThaiPBS: https://news.thaipbs.or.th/en\n"
-            msg += "• Bangkok Post: https://bangkokpost.com\n"
-            msg += "• The Nation: https://nationthailand.com\n\n"
-            msg += "Thank you for using TeacherBOY! 🙏"
 
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
 

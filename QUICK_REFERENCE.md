@@ -1,8 +1,14 @@
-# TeacherBOY Quick Reference Card
+# Quick Reference (moved)
 
-> **Essential information at a glance**
+This quick reference has been relocated to the docs/ folder for better organization.
 
-## 🚀 Quick Start Commands
+**New location:** [docs/reference/quick-reference.md](docs/reference/quick-reference.md)
+
+Related docs:
+
+- [docs/README.md](docs/README.md) - Documentation home
+- [docs/guides/quickstart.md](docs/guides/quickstart.md) - Quick start guide
+- [docs/ADMIN_COMMANDS.md](docs/ADMIN_COMMANDS.md) - Admin reference
 
 ```bash
 # Local development

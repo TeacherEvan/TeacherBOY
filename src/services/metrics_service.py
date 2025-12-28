@@ -21,6 +21,8 @@ class MetricsSnapshot:
     news_requests_total: int
     last_friend_added_at: Optional[datetime]
     last_friend_added_user_id: Optional[str]
+    friends_follow_events_total: int
+    friends_unfollow_events_total: int
     # New metrics
     rate_limited_requests: int
     failed_translations: int
@@ -45,6 +47,9 @@ class MetricsService:
 
     _last_friend_added_at: Optional[datetime] = None
     _last_friend_added_user_id: Optional[str] = None
+
+    _friends_follow_events_total: int = 0
+    _friends_unfollow_events_total: int = 0
 
     # New metrics tracking
     _rate_limited_requests: int = 0
@@ -92,6 +97,12 @@ class MetricsService:
     def record_friend_added(self, user_id: Optional[str]) -> None:
         self._last_friend_added_at = datetime.now(timezone.utc)
         self._last_friend_added_user_id = user_id
+        self._friends_follow_events_total += 1
+
+    def record_friend_removed(self, user_id: Optional[str]) -> None:
+        # LINE does not provide a way to query total friend count; this is a
+        # process-local best-effort counter based on follow/unfollow events.
+        self._friends_unfollow_events_total += 1
 
     def record_rate_limited(self) -> None:
         """Record a rate-limited request."""
@@ -135,6 +146,8 @@ class MetricsService:
             news_requests_total=self._news_requests_total,
             last_friend_added_at=self._last_friend_added_at,
             last_friend_added_user_id=self._last_friend_added_user_id,
+            friends_follow_events_total=self._friends_follow_events_total,
+            friends_unfollow_events_total=self._friends_unfollow_events_total,
             rate_limited_requests=self._rate_limited_requests,
             failed_translations=self._failed_translations,
             admin_commands_total=self._admin_commands_total,
