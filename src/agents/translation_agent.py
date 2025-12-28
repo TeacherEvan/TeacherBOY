@@ -69,20 +69,19 @@ class TranslationAgent(BaseAgent):
         """
         Check if text is a wake command (wakes bot from sleep).
 
-        Wake pattern: "TeacherBoy" alone (exact match, not among other text)
-        Handles common typos: teacherboi, teacherboy, teacherbiy, etc.
+        Wake pattern: "Dear Zeus" alone (exact match, not among other text)
         """
-        # Allow for case-insensitive "teacherboy" with common typos and optional trailing punctuation/whitespace
-        teacher_pattern = r"^teacher(?:boy|boi|biy|boj|boii)[\s.!]*$"
-        return bool(re.match(teacher_pattern, text.lower().strip()))
+        # Allow for case-insensitive "dear zeus" with optional trailing punctuation/whitespace
+        zeus_pattern = r"^dear\s+zeus[\s.!]*$"
+        return bool(re.match(zeus_pattern, text.lower().strip()))
 
     def is_help_command(self, text: str) -> bool:
         """Check if text is a help command for the bot."""
         text_lower = text.lower().strip()
-        teacher_pattern = r"teacher(?:boy|boi|biy|boj|boii)"
+        zeus_pattern = r"dear\s+zeus"
         help_patterns = [
-            rf"^{teacher_pattern}\s+--help[\s.!?]*$",
-            rf"^{teacher_pattern}\s+help[\s.!?]*$",
+            rf"^{zeus_pattern}\s+--help[\s.!?]*$",
+            rf"^{zeus_pattern}\s+help[\s.!?]*$",
         ]
         return any(re.match(pattern, text_lower) for pattern in help_patterns)
 
@@ -103,7 +102,7 @@ class TranslationAgent(BaseAgent):
             "Help\n"
             "━━━━━━━━━━━━\n\n"
             "User commands:\n"
-            "- TeacherBoy  (wake)\n"
+            "- Dear Zeus  (wake)\n"
             "- amen  (sleep 24h)\n"
             "- help  (this message)\n"
             "- news / ข่าว  (private: keyword translation only; admins/mods get full menu)\n"
@@ -213,14 +212,14 @@ class TranslationAgent(BaseAgent):
                     span.set_attribute("translation.command", "help")
                     help_message = TextMessage(
                         text=(
-                            "TeacherBOY Help\n"
+                            "Zeus Help\n"
                             "━━━━━━━━━━━━\n\n"
                             "Wake the bot:\n"
-                            "- TeacherBoy\n\n"
+                            "- Dear Zeus\n\n"
                             "Put the bot to sleep (24h):\n"
                             "- amen\n\n"
                             "Admin (if enabled):\n"
-                            "- TeacherBoy admin help\n"
+                            "- Dear Zeus admin help\n"
                             "- /admin help\n\n"
                             "Tips:\n"
                             "- Send Thai to start auto-translation\n"
@@ -476,7 +475,7 @@ class TranslationAgent(BaseAgent):
                             },
                             {
                                 "type": "text",
-                                "text": "TeacherBOY Translate",
+                                "text": "Zeus Translate",
                                 "weight": "bold",
                                 "size": "lg",
                                 "color": "#ffffff",
@@ -806,8 +805,8 @@ class TranslationAgent(BaseAgent):
         """
         message_text = (
             "😴 ราตรีสวัสดิ์ Good Night!\n\n"
-            "TeacherBOY is sleeping for 24 hours.\n\n"
-            '☀️ Say "TeacherBoy" to wake me up anytime!'
+            "Zeus is sleeping for 24 hours.\n\n"
+            '☀️ Say "Dear Zeus" to wake me up anytime!'
         )
 
         return TextMessage(text=message_text, quickReply=None, quoteToken=None)
@@ -823,7 +822,7 @@ class TranslationAgent(BaseAgent):
         """
         message_text = (
             "☀️ สวัสดี! Good Morning!\n\n"
-            "TeacherBOY is now awake and ready!\n\n"
+            "Zeus is now awake and ready!\n\n"
             "🚀 Send Thai text to start translating!"
         )
 

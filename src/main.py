@@ -1,5 +1,5 @@
 """
-TeacherBOY - Production-Grade Multi-Agent LINE Translation Bot.
+"""Zeus - Production-Grade Multi-Agent LINE Translation Bot.
 
 This module implements a FastAPI application with intelligent agent routing,
 high-performance async I/O, and production-ready error handling.
@@ -128,7 +128,7 @@ async def lifespan(app: FastAPI):
     global bot_user_id
 
     logger.info("=" * 80)
-    logger.info("🚀 TeacherBOY Multi-Agent System - Starting Up")
+    logger.info("🚀 Zeus Multi-Agent System - Starting Up")
     logger.info("=" * 80)
 
     # Tracing (OpenTelemetry) - optional, controlled by settings.enable_tracing
@@ -268,7 +268,7 @@ async def lifespan(app: FastAPI):
         )
 
     logger.info("=" * 80)
-    logger.info("✅ TeacherBOY is READY to serve! 🎉")
+    logger.info("✅ Zeus is READY to serve! 🎉")
     logger.info("=" * 80)
 
     yield
@@ -277,7 +277,7 @@ async def lifespan(app: FastAPI):
     # GRACEFUL SHUTDOWN
     # ========================================================================
     logger.info("=" * 80)
-    logger.info("🛑 TeacherBOY - Shutting down gracefully...")
+    logger.info("🛑 Zeus - Shutting down gracefully...")
     logger.info("=" * 80)
 
     scheduler_service.stop()
@@ -286,7 +286,7 @@ async def lifespan(app: FastAPI):
     await http_client_pool.aclose()
     logger.info("✅ HTTP client pool closed")
 
-    logger.info("👋 TeacherBOY shutdown complete. Goodbye!")
+    logger.info("👋 Zeus shutdown complete. Goodbye!")
     logger.info("=" * 80)
 
 
@@ -294,7 +294,7 @@ async def lifespan(app: FastAPI):
 # FastAPI Application Initialization
 # ============================================================================
 app = FastAPI(
-    title="TeacherBOY - Multi-Agent Translation Bot",
+    title="Zeus - Multi-Agent Translation Bot",
     description="Production-grade Thai/English translation bot for LINE with intelligent agent routing",
     version="3.0.0",
     lifespan=lifespan,
@@ -327,7 +327,7 @@ async def root() -> Dict[str, Any]:
     """
     return {
         "status": "operational",
-        "service": "TeacherBOY Multi-Agent Translation Bot",
+        "service": "Zeus Multi-Agent Translation Bot",
         "version": "3.0.0",
         "api_docs": "/docs" if settings.debug else "disabled",
         "features": {

@@ -31,8 +31,8 @@ def is_sleep_command(text: str) -> bool:
 
 
 def is_wake_command(text: str) -> bool:
-    """Check if text is a wake command (TeacherBoy alone)."""
-    return text.lower().strip() == "teacherboy"
+    """Check if text is a wake command (Dear Zeus alone)."""
+    return text.lower().strip() == "dear zeus"
 
 
 def is_exit_command(text: str) -> bool:
@@ -77,7 +77,7 @@ def create_translation_flex_dict(
                     "contents": [
                         {
                             "type": "text",
-                            "text": "TeacherBOY",
+                            "text": "Zeus",
                             "weight": "bold",
                             "color": primary_color,
                             "size": "sm",
@@ -221,12 +221,7 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
     Features:
     - Auto-detects Thai characters and starts translation mode
     - Continuous translation until "amen" is said (sleeps for 24h)
-    - Say "TeacherBoy" alone to wake up
-    - Uses Google Translate if configured, falls back to LibreTranslate
-    - Sends response as Flex Message
-
-    Args:
-        event: LINE message event
+        - Say "Dear Zeus" alone to wake up
         line_bot_api: MessagingApi instance (v3)
     """
     text = event.message.text

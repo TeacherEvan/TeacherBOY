@@ -1,4 +1,4 @@
-# TeacherBOY Quick Reference Card
+# Zeus Quick Reference Card
 
 > **Essential information at a glance**
 
@@ -118,7 +118,7 @@ Notes:
 - ✅ Parentheses preservation: `(Name)` stays as `(Name)`
 - ✅ Session management per chat
 - ✅ Sleep mode: "amen" → 24h sleep
-- ✅ Wake command: "TeacherBoy" alone
+- ✅ Wake command: "Dear Zeus" alone
 
 ## 📰 News Menu (Friends/Admins/Moderators)
 

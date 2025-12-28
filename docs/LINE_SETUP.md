@@ -4,7 +4,7 @@
 >
 > - [docs/guides/line-setup.md](guides/line-setup.md)
 
-This guide will help you set up your LINE Bot and obtain the necessary tokens for TeacherBOY translation bot.
+This guide will help you set up your LINE Bot and obtain the necessary tokens for Zeus translation bot.
 
 ## Prerequisites
 
@@ -22,7 +22,7 @@ This guide will help you set up your LINE Bot and obtain the necessary tokens fo
 ### 2. Create a Provider
 
 1. Click on "Create a new provider"
-2. Enter a provider name (e.g., "TeacherBOY")
+2. Enter a provider name (e.g., "Zeus")
 3. Click "Create"
 
 ### 3. Create a Messaging API Channel
@@ -30,7 +30,7 @@ This guide will help you set up your LINE Bot and obtain the necessary tokens fo
 1. In your provider page, click "Create a new channel"
 2. Select "Messaging API"
 3. Fill in the required information:
-   - **Channel name**: TeacherBOY Translation Bot
+   - **Channel name**: Zeus Translation Bot
    - **Channel description**: Automatic Thai/English translation bot
    - **Category**: Education or Communication
    - **Subcategory**: Choose appropriate subcategory
@@ -96,8 +96,8 @@ docker-compose up -d
 #### Using Docker
 
 ```bash
-docker build -t teacherboy .
-docker run -p 8000:8000 --env-file .env teacherboy
+docker build -t zeus .
+docker run -p 8000:8000 --env-file .env zeus
 ```
 
 #### Local Development

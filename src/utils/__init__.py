@@ -1,1 +1,1 @@
-"""Utility package for TeacherBOY."""
+"""Utility package for Zeus."""

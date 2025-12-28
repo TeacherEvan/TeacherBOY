@@ -1,6 +1,6 @@
 # Quick Start
 
-Goal: run TeacherBOY locally (Docker) and connect it to LINE.
+Goal: run Zeus locally (Docker) and connect it to LINE.
 
 ## Prerequisites
 
@@ -28,8 +28,8 @@ Goal: run TeacherBOY locally (Docker) and connect it to LINE.
 ### Option A: Docker (recommended)
 
 ```bash
-docker build -t teacherboy .
-docker run --env-file .env -p 8000:8000 teacherboy
+docker build -t zeus .
+docker run --env-file .env -p 8000:8000 zeus
 ```
 
 Health endpoints:
@@ -63,7 +63,7 @@ Follow: [docs/guides/line-setup.md](line-setup.md)
 - Send a Thai message (e.g., `สวัสดีครับ`) to start translation mode.
 - Send English/Thai messages; the bot replies with translations.
 - Stop/sleep: `amen`
-- Wake: `TeacherBoy`
+- Wake: `Dear Zeus`
 
 ### Optional: AI + Web Search (DM-only for regular users)
 

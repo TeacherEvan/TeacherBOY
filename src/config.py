@@ -1,7 +1,7 @@
 """
 Application configuration and settings management.
 
-This module provides type-safe, validated configuration for the TeacherBOY application,
+This module provides type-safe, validated configuration for the Zeus application,
 following production best practices for environment-based configuration management.
 """
 
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     """
 
     # ============================================================================
-    # LINE Bot Configuration - Primary Agent (TeacherBOY)
+    # LINE Bot Configuration - Primary Agent (Zeus)
     # ============================================================================
     line_channel_secret: str = Field(
         default="test_secret_for_testing_only",
@@ -150,7 +150,7 @@ class Settings(BaseSettings):
 
     llm_system_prompt: str = Field(
         default=(
-            "You are TeacherBOY. Personality: Zeus - God-KING of Olympus and Humble Servant to all LINE friends. "
+            "You are Zeus, God-KING of Olympus and Humble Servant to all LINE friends. "
             "Answer concisely and helpfully."
         ),
         description=(
@@ -243,7 +243,7 @@ class Settings(BaseSettings):
     )
 
     otel_service_name: str = Field(
-        default="TeacherBOY",
+        default="Zeus",
         description="OpenTelemetry service.name resource attribute",
     )
 

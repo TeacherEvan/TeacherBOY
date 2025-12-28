@@ -1,5 +1,5 @@
 ---
-title: TeacherBOY
+title: Zeus
 emoji: 👨‍🏫
 colorFrom: blue
 colorTo: green
@@ -7,11 +7,11 @@ sdk: docker
 app_port: 8000
 ---
 
-## TeacherBOY 👨‍🏫
+## Zeus 👨‍🏫
 
 **SMOOTH automatic Thai - English translator with Multi-Agent Architecture for LINE.**
 
-TeacherBOY is a high-performance, asynchronous LINE Bot featuring a modular multi-agent system. The Translation Agent provides intelligent Thai/English translation with smart session management. Easily extensible with additional specialized agents.
+Zeus is a high-performance, asynchronous LINE Bot featuring a modular multi-agent system. The Translation Agent provides intelligent Thai/English translation with smart session management. Easily extensible with additional specialized agents.
 
 ## 📚 Documentation
 
@@ -36,7 +36,7 @@ Legacy docs at repo root are kept for backward compatibility.
 
 - **🔥 Smart Auto-Detection:** Automatically starts when Thai text is detected
 - **🔄 Continuous Mode:** Translates EVERY message until you say "amen"
-- **😴 Sleep Mode:** Bot sleeps for 24 hours - say "TeacherBoy" alone to wake up
+- **😴 Sleep Mode:** Bot sleeps for 24 hours - say "Dear Zeus" alone to wake up
 - **🌐 Professional Quality:** Google Translate (primary) + LibreTranslate (fallback)
 - **�️ Hallucination Prevention:** Detects incomplete sentences and prevents unwanted context injection
 - **💬 Bi-directional:** Thai 🇹🇭 → English 🇬🇧 and English 🇬🇧 → Thai 🇹🇭
@@ -100,7 +100,7 @@ See **[LINE Setup Guide](docs/guides/line-setup.md)** for detailed instructions.
 **Already have tokens?** Create a `.env` file:
 
 ```env
-# Primary Agent - TeacherBOY (Translation)
+# Primary Agent - Zeus (Translation)
 LINE_CHANNEL_SECRET=your_channel_secret
 LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
 
@@ -129,8 +129,8 @@ DEBUG=False
 
 ```bash
 # With Docker (recommended)
-docker build -t teacherboy .
-docker run --env-file .env -p 8000:8000 teacherboy
+docker build -t zeus .
+docker run --env-file .env -p 8000:8000 zeus
 
 # Or with Python directly
 pip install -r requirements.txt
@@ -160,7 +160,7 @@ ngrok http 8000
 - Send: `Hello` → Translates to Thai automatically
 - Send: `How are you?` → Keeps translating
 - Say: `amen` → Bot sleeps for 24 hours 😴
-- Say: `TeacherBoy` → Bot wakes up! ☀️
+- Say: `Dear Zeus` → Bot wakes up! ☀️
 
 **The bot will translate EVERY message until you say "amen"!**
 
@@ -168,7 +168,7 @@ ngrok http 8000
 
 ### 6. Admin & Moderator Setup (Optional)
 
-For bot management and privileged access, TeacherBOY supports two levels:
+For bot management and privileged access, Zeus supports two levels:
 
 **Admin Users (Full Control):**
 
@@ -188,14 +188,14 @@ For bot management and privileged access, TeacherBOY supports two levels:
 2. Add to `.env`:
    - Admins: `ADMIN_USER_IDS=U1234567890abcdef`
    - Moderators: `MODERATOR_USER_IDS=U9876543210fedcba,U1111222233334444`
-    - Optional named recipients (admin push): `USER_BOSS=Uaaaaaaaaaaaaaaaa`
+   - Optional named recipients (admin push): `USER_BOSS=Uaaaaaaaaaaaaaaaa`
 3. Restart bot
 
 **See [Admin Commands Guide](docs/ADMIN_COMMANDS.md) for complete documentation.**
 
 ## 🏗️ Architecture
 
-TeacherBOY uses a **modular multi-agent architecture** where messages are routed to specialized agents based on content and context.
+Zeus uses a **modular multi-agent architecture** where messages are routed to specialized agents based on content and context.
 
 ```text
 LINE Webhook → Agent Router → [TranslationAgent | MathAgent | CodeAgent | ...]
@@ -288,7 +288,7 @@ pytest --cov=src --cov-report=html
 - Google Translate + LibreTranslate fallback
 - Session management per chat
 - "amen" sleep command (24h)
-- "TeacherBoy" wake command
+- "Dear Zeus" wake command
 - Rate limiting (10 translations/minute)
 
 ✅ **Group Chat Support:**

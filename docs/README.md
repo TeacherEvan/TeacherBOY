@@ -1,4 +1,4 @@
-# TeacherBOY Documentation
+# Zeus Documentation
 
 **📍 This folder is the single source of truth for all documentation.**
 

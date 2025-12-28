@@ -1,6 +1,6 @@
 # Admin Control
 
-TeacherBOY includes an Admin Agent (priority 5) for in-chat operations.
+Zeus includes an Admin Agent (priority 5) for in-chat operations.
 
 ## Enable admin
 
@@ -14,7 +14,6 @@ Set `ADMIN_USER_IDS` to a comma-separated list of LINE user IDs.
 
 1. Set `ADMIN_SETUP_KEY` to a random string (temporary).
 2. In LINE, send:
-
    - `/admin claim <ADMIN_SETUP_KEY>`
 
 3. The bot replies with your LINE user ID.

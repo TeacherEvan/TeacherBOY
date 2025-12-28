@@ -77,8 +77,8 @@ class OpenRouterService:
         try:
             headers = {
                 "Authorization": f"Bearer {settings.openrouter_api_key}",
-                "HTTP-Referer": "https://github.com/TeacherEvan/TeacherBOY",  # Optional (OpenRouter app attribution)
-                "X-Title": "TeacherBOY",  # Optional (OpenRouter app attribution)
+                "HTTP-Referer": "https://github.com/TeacherEvan/Zeus",  # Optional (OpenRouter app attribution)
+                "X-Title": "Zeus",  # Optional (OpenRouter app attribution)
                 "Content-Type": "application/json",
             }
             

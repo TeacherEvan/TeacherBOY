@@ -1,6 +1,6 @@
 # Environment variables
 
-TeacherBOY reads configuration from `.env` (local) and environment variables (production).
+Zeus reads configuration from `.env` (local) and environment variables (production).
 
 Start from `.env.example`.
 
@@ -43,7 +43,7 @@ Notes:
 ## Tracing
 
 - `ENABLE_TRACING` (default: `False`)
-- `OTEL_SERVICE_NAME` (default: `TeacherBOY`)
+- `OTEL_SERVICE_NAME` (default: `Zeus`)
 - `OTEL_EXPORTER_OTLP_ENDPOINT` (default: `http://localhost:4318`)
 
 ## Server

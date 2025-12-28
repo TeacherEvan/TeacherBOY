@@ -1,4 +1,4 @@
-"""Flex Message templates for TeacherBOY."""
+"""Flex Message templates for Zeus."""
 
 
 def create_translation_flex(
@@ -39,7 +39,7 @@ def create_translation_flex(
                     "contents": [
                         {
                             "type": "text",
-                            "text": "TeacherBOY",
+                            "text": "Zeus",
                             "weight": "bold",
                             "color": primary_color,
                             "size": "sm",

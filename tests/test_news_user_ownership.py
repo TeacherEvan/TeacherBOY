@@ -252,7 +252,7 @@ async def test_shutdown_phrase_detection_method(news_agent):
     assert news_agent._is_shutdown_phrase("amen.") is True
     
     # Should not match
-    assert news_agent._is_shutdown_phrase("teacherboy") is False
+    assert news_agent._is_shutdown_phrase("dear zeus") is False
     assert news_agent._is_shutdown_phrase("hello amen") is False
     assert news_agent._is_shutdown_phrase("thank you") is False
     assert news_agent._is_shutdown_phrase("news") is False

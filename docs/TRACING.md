@@ -1,6 +1,6 @@
 # Tracing (OpenTelemetry)
 
-TeacherBOY supports comprehensive OpenTelemetry tracing for:
+Zeus supports comprehensive OpenTelemetry tracing for:
 
 - **Incoming FastAPI requests** (webhook, health checks)
 - **Outgoing HTTP calls** (translation APIs, news sources, weather/finance APIs)
@@ -24,11 +24,11 @@ This starts the OTLP receiver on `localhost:4318` and opens the trace viewer.
 
 ```env
 ENABLE_TRACING=true
-OTEL_SERVICE_NAME=TeacherBOY
+OTEL_SERVICE_NAME=Zeus
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 ```
 
-### 3. Start TeacherBOY
+### 3. Start Zeus
 
 **Local:**
 
@@ -105,7 +105,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=https://your-collector.example.com:4318
 ### AI Toolkit Defaults
 
 - **Endpoint:** `http://localhost:4318/v1/traces`
-- **Service Name:** `TeacherBOY`
+- **Service Name:** `Zeus`
 
 ## Troubleshooting
 

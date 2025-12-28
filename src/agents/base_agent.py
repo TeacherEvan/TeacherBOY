@@ -1,4 +1,4 @@
-"""Base agent class for TeacherBOY multi-agent system."""
+"""Base agent class for Zeus multi-agent system."""
 
 import logging
 from abc import ABC, abstractmethod
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class BaseAgent(ABC):
-    """Base class for all agents in TeacherBOY."""
+    """Base class for all agents in Zeus."""
 
     def __init__(self, name: str, description: str):
         """

@@ -1,4 +1,4 @@
-"""Agent system for TeacherBOY - Multi-agent architecture."""
+"""Agent system for Zeus - Multi-agent architecture."""
 
 from .base_agent import BaseAgent
 from .translation_agent import TranslationAgent

@@ -1,6 +1,6 @@
-# TeacherBOY Documentation Index
+# Zeus Documentation Index
 
-> **Complete documentation directory for TeacherBOY multi-agent LINE bot**
+> **Complete documentation directory for Zeus multi-agent LINE bot**
 >
 > **📍 Primary Documentation Location:** [docs/](docs/) folder
 

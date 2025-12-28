@@ -29,7 +29,7 @@ def test_root_endpoint(client):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "operational"  # Updated from "ok"
-    assert "TeacherBOY" in data["service"]
+    assert "Zeus" in data["service"]]
 
 
 def test_health_check(client):

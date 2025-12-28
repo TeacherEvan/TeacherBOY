@@ -73,8 +73,8 @@ class TestAdminAgent:
         assert admin_agent._is_admin_command("/admin status") is True
         assert admin_agent._is_admin_command("!admin help") is True
         assert admin_agent._is_admin_command("/ADMIN HELP") is True
-        assert admin_agent._is_admin_command("TeacherBoy admin help") is True
-        assert admin_agent._is_admin_command("teacherboi admin status") is True
+        assert admin_agent._is_admin_command("Dear Zeus admin help") is True
+        assert admin_agent._is_admin_command("dear zeus admin status") is True
 
     def test_is_admin_command_invalid(self, admin_agent):
         """Test admin command detection with invalid commands."""

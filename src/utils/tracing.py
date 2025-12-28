@@ -1,4 +1,4 @@
-"""OpenTelemetry tracing setup for TeacherBOY.
+"""OpenTelemetry tracing setup for Zeus.
 
 This module wires up OpenTelemetry tracing with:
 - FastAPI auto-instrumentation (incoming requests)

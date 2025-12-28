@@ -80,8 +80,8 @@ class AdminAgent(BaseAgent):
         if text_lower.startswith("/admin") or text_lower.startswith("!admin"):
             return True
 
-        teacher_pattern = r"teacher(?:boy|boi|biy|boj|boii)"
-        return bool(re.match(rf"^{teacher_pattern}\s+admin\b", text_lower))
+        zeus_pattern = r"dear\s+zeus"
+        return bool(re.match(rf"^{zeus_pattern}\s+admin\b", text_lower))
 
     def _parse_admin_command(self, text: str) -> tuple[str | None, str | None]:
         """Parse an admin command into (cmd, args).
@@ -89,7 +89,7 @@ class AdminAgent(BaseAgent):
         Supported formats:
         - /admin <cmd> [args...]
         - !admin <cmd> [args...]
-        - TeacherBoy admin <cmd> [args...]
+        - Dear Zeus admin <cmd> [args...]
         """
         raw = text.strip()
         raw_lower = raw.lower()
@@ -102,9 +102,9 @@ class AdminAgent(BaseAgent):
             arg = parts[2] if len(parts) > 2 else None
             return cmd, arg
 
-        teacher_pattern = r"teacher(?:boy|boi|biy|boj|boii)"
+        zeus_pattern = r"dear\s+zeus"
         match = re.match(
-            rf"^\s*(?P<teacher>{teacher_pattern})\s+admin(?:\s+(?P<rest>.*))?$",
+            rf"^\s*(?P<zeus>{zeus_pattern})\s+admin(?:\s+(?P<rest>.*))?$",
             raw,
             flags=re.IGNORECASE,
         )
@@ -205,7 +205,7 @@ class AdminAgent(BaseAgent):
                 else:
                     response = (
                         f"❌ Unknown command: {command}\n\n"
-                        "Use TeacherBoy admin help (or /admin help) for available commands."
+                        "Use Dear Zeus admin help (or /admin help) for available commands."
                     )
 
             # Send response
@@ -298,7 +298,7 @@ class AdminAgent(BaseAgent):
             "🔧 Admin Commands\n"
             "━━━━━━━━━━━━━━━━\n\n"
             "You can run commands as:\n"
-            "  TeacherBoy admin <command>\n"
+            "  Dear Zeus admin <command>\n"
             "  /admin <command>\n\n"
             "━━━━━━━━━━━━━━━━\n"
             "📊 Status & Info:\n"
