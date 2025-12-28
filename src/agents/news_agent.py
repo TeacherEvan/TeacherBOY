@@ -22,6 +22,7 @@ from src.services.news_data_service import NewsDataService
 from src.services.rate_limiter import RateLimiter
 from src.services.metrics_service import metrics_service
 from src.config import settings
+from src.services.privilege_service import privilege_service
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ class NewsAgent(BaseAgent):
             description="Weather, air quality, and news headlines for Bangkok",
         )
         self.news_service = news_data_service
+        # Cache env-based privileges (tests patch module-local `settings`).
         self._admin_user_ids = settings.get_admin_user_ids()
         self._moderator_user_ids = settings.get_moderator_user_ids()
 
@@ -59,6 +61,8 @@ class NewsAgent(BaseAgent):
 
     def _is_admin(self, user_id: Optional[str]) -> bool:
         """Check if user is an admin (admins bypass rate limits)."""
+        if privilege_service.is_claimed_admin(user_id):
+            return True
         return user_id in self._admin_user_ids if user_id else False
 
     def _is_moderator(self, user_id: Optional[str]) -> bool:

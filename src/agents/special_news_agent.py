@@ -20,6 +20,7 @@ from linebot.v3.webhooks import MessageEvent
 from .base_agent import BaseAgent
 from src.services.special_news_service import SpecialNewsService
 from src.config import settings
+from src.services.privilege_service import privilege_service
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +44,13 @@ class SpecialNewsAgent(BaseAgent):
         self._sports_feed = "https://www.bangkokpost.com/rss/data/sports.xml"
         self._international_feed = "https://www.bangkokpost.com/rss/data/world.xml"
 
+        # Cache env-based privileges (tests patch module-local `settings`).
         self._admin_user_ids = settings.get_admin_user_ids()
         self._moderator_user_ids = settings.get_moderator_user_ids()
 
     def _is_admin(self, user_id: Optional[str]) -> bool:
+        if privilege_service.is_claimed_admin(user_id):
+            return True
         return user_id in self._admin_user_ids if user_id else False
 
     def _is_moderator(self, user_id: Optional[str]) -> bool:

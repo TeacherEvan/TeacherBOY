@@ -21,6 +21,7 @@ from src.services.rate_limiter import rate_limiter
 from src.services.metrics_service import metrics_service
 from src.utils.tracing import get_tracer
 from src.config import settings
+from src.services.privilege_service import privilege_service
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -36,6 +37,7 @@ class TranslationAgent(BaseAgent):
             name="TranslationAgent",
             description="Thai/English translation with continuous session mode",
         )
+        # Cache env admins (tests patch module-local `settings`).
         self._admin_user_ids = settings.get_admin_user_ids()
 
     def get_priority(self) -> int:
@@ -44,6 +46,8 @@ class TranslationAgent(BaseAgent):
 
     def _is_admin(self, user_id: Optional[str]) -> bool:
         """Check if user is an admin (admins bypass rate limits)."""
+        if privilege_service.is_claimed_admin(user_id):
+            return True
         return user_id in self._admin_user_ids if user_id else False
 
     def contains_thai(self, text: str) -> bool:

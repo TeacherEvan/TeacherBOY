@@ -22,6 +22,7 @@ from src.services.session_manager import session_manager
 from src.services.rate_limiter import rate_limiter
 from src.services.metrics_service import metrics_service
 from src.services.admin_confirmation_service import admin_confirmation_service
+from src.services.privilege_service import privilege_service
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,8 @@ class AdminAgent(BaseAgent):
 
     def _is_admin(self, user_id: str) -> bool:
         """Check if user is authorized as admin."""
+        if privilege_service.is_claimed_admin(user_id):
+            return True
         if not self._admin_user_ids:
             return False
         return user_id in self._admin_user_ids
@@ -261,6 +264,7 @@ class AdminAgent(BaseAgent):
         if user_id not in self._admin_user_ids:
             self._admin_user_ids.append(user_id)
         self._claimed_admin_user_id = user_id
+        privilege_service.claim_admin(user_id)
 
         return (
             "✅ Admin claim successful (for this running instance).\n\n"
