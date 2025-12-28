@@ -1,5 +1,6 @@
 """Admin agent - Handles admin control commands for bot management."""
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timezone
@@ -190,14 +191,15 @@ class AdminAgent(BaseAgent):
 
             # Send response
             if event.reply_token:
-                line_bot_api.reply_message(
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
                         messages=[
                             TextMessage(text=response, quickReply=None, quoteToken=None)
                         ],
                         notificationDisabled=False,
-                    )
+                    ),
                 )
 
             # Record admin command execution
@@ -212,7 +214,8 @@ class AdminAgent(BaseAgent):
 
             # Send error message
             if event.reply_token:
-                line_bot_api.reply_message(
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
                         messages=[
@@ -223,7 +226,7 @@ class AdminAgent(BaseAgent):
                             )
                         ],
                         notificationDisabled=False,
-                    )
+                    ),
                 )
             return False
 
@@ -384,7 +387,9 @@ class AdminAgent(BaseAgent):
             f"Cancel: /admin cancel {pending.token}"
         )
 
-        pushed = self._push_to_admin(line_bot_api, user_id, confirm_text)
+        pushed = await asyncio.to_thread(
+            self._push_to_admin, line_bot_api, user_id, confirm_text
+        )
         if pushed:
             return "✅ Confirmation sent to your private chat."
 
@@ -424,7 +429,9 @@ class AdminAgent(BaseAgent):
             f"Cancel: /admin cancel {pending.token}"
         )
 
-        pushed = self._push_to_admin(line_bot_api, user_id, confirm_text)
+        pushed = await asyncio.to_thread(
+            self._push_to_admin, line_bot_api, user_id, confirm_text
+        )
         if pushed:
             return "✅ Confirmation sent to your private chat."
 
@@ -461,9 +468,9 @@ class AdminAgent(BaseAgent):
             target_id = str(pending.payload.get("target_id"))
             try:
                 if kind == "group":
-                    line_bot_api.leave_group(target_id)
+                    await asyncio.to_thread(line_bot_api.leave_group, target_id)
                 else:
-                    line_bot_api.leave_room(target_id)
+                    await asyncio.to_thread(line_bot_api.leave_room, target_id)
                 return f"✅ Left {kind} {target_id}."
             except Exception as e:
                 logger.error(
@@ -806,35 +813,37 @@ class AdminAgent(BaseAgent):
         if error or not kind or not target_id:
             message = error or "❌ Could not determine leave target."
             if event.reply_token:
-                line_bot_api.reply_message(
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
                         messages=[
                             TextMessage(text=message, quickReply=None, quoteToken=None)
                         ],
                         notificationDisabled=False,
-                    )
+                    ),
                 )
             return
 
         # Reply first so the admin sees confirmation even if leaving succeeds immediately.
         leaving_msg = f"🚪 Leaving {kind} {target_id}..."
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[
                         TextMessage(text=leaving_msg, quickReply=None, quoteToken=None)
                     ],
                     notificationDisabled=False,
-                )
+                ),
             )
 
         try:
             if kind == "group":
-                line_bot_api.leave_group(target_id)
+                await asyncio.to_thread(line_bot_api.leave_group, target_id)
             else:
-                line_bot_api.leave_room(target_id)
+                await asyncio.to_thread(line_bot_api.leave_room, target_id)
             logger.info(f"🚪 Left {kind} {target_id} by admin request")
         except Exception as e:
             logger.error(f"❌ Failed to leave {kind} {target_id}: {e}", exc_info=True)

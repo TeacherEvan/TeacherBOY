@@ -1,5 +1,6 @@
 """Search Agent - Handles web search requests."""
 
+import asyncio
 import logging
 import re
 from typing import Optional
@@ -52,8 +53,9 @@ class SearchAgent(BaseAgent):
         Trigger: 'Zeus search <query>'
         Returns query string or None.
         """
-        # Regex for trigger: "Zeus search" followed by query
-        match = re.match(r"^Zeus\s+search\s+(.+)$", text.strip(), re.IGNORECASE)
+        # Regex for trigger: "Zeus search" followed by query.
+        # Accept optional leading slash and common typo "Zues".
+        match = re.match(r"^/?(?:Zeus|Zues)\s+search\s+(.+)$", text.strip(), re.IGNORECASE)
         if match:
             return match.group(1).strip()
         return None
@@ -113,12 +115,13 @@ class SearchAgent(BaseAgent):
                 # Send response
                 reply_message = TextMessage(text=message_text, quickReply=None, quoteToken=None)
                 if event.reply_token:
-                    line_bot_api.reply_message(
+                    await asyncio.to_thread(
+                        line_bot_api.reply_message,
                         ReplyMessageRequest(
                             replyToken=event.reply_token,
                             messages=[reply_message],
                             notificationDisabled=False,
-                        )
+                        ),
                     )
                 
                 logger.info(f"✅ Sent search results for '{query}'")
@@ -132,10 +135,11 @@ class SearchAgent(BaseAgent):
     async def _send_error(self, event: MessageEvent, line_bot_api: MessagingApi, message: str):
         """Send error message."""
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[TextMessage(text=message, quickReply=None, quoteToken=None)],
                     notificationDisabled=False,
-                )
+                ),
             )

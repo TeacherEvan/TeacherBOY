@@ -1,5 +1,6 @@
 """LLM Agent - Handles general questions using OpenRouter."""
 
+import asyncio
 import logging
 import re
 from typing import Optional
@@ -51,16 +52,18 @@ class LLMAgent(BaseAgent):
         Trigger: 'Zeus <query>'
         Returns query string or None.
         """
-        # Regex for trigger: "Zeus" followed by query
-        match = re.match(r"^Zeus\s+(.+)$", text.strip(), re.IGNORECASE)
+        # Regex for trigger: "Zeus" followed by query.
+        # Accept optional leading slash and common typo "Zues".
+        match = re.match(r"^/?(?:Zeus|Zues)\s+(.+)$", text.strip(), re.IGNORECASE)
         if match:
-            return match.group(1).strip()
+            query = match.group(1).strip()
+            return query
         return None
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
         Handle if:
-        1. Text starts with 'Zeus' (and not 'Zeus search')
+        1. Text starts with 'Zeus'
         2. User is Admin OR Chat is Private (DM)
         """
         if not self._parse_command(text):
@@ -129,10 +132,11 @@ class LLMAgent(BaseAgent):
     async def _send_reply(self, event: MessageEvent, line_bot_api: MessagingApi, message: str):
         """Send text reply."""
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[TextMessage(text=message, quickReply=None, quoteToken=None)],
                     notificationDisabled=False,
-                )
+                ),
             )

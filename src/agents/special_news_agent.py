@@ -75,7 +75,7 @@ class SpecialNewsAgent(BaseAgent):
 
         try:
             # LINE returns error for non-friends.
-            line_bot_api.get_profile(user_id)
+            await asyncio.to_thread(line_bot_api.get_profile, user_id)
             self._friend_cache[user_id] = (True, datetime.now(timezone.utc))
             return True
         except ApiException:
@@ -369,21 +369,23 @@ class SpecialNewsAgent(BaseAgent):
         """Reply with Flex message."""
         if not event.reply_token:
             return
-        line_bot_api.reply_message(
+        await asyncio.to_thread(
+            line_bot_api.reply_message,
             ReplyMessageRequest(
                 replyToken=event.reply_token,
                 messages=[flex_message],
                 notificationDisabled=False,
-            )
+            ),
         )
 
     async def _reply_text(self, event: MessageEvent, line_bot_api: MessagingApi, text: str) -> None:
         if not event.reply_token:
             return
-        line_bot_api.reply_message(
+        await asyncio.to_thread(
+            line_bot_api.reply_message,
             ReplyMessageRequest(
                 replyToken=event.reply_token,
                 messages=[TextMessage(text=text, quickReply=None, quoteToken=None)],
                 notificationDisabled=False,
-            )
+            ),
         )

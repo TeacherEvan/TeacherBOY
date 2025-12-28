@@ -3,6 +3,7 @@
 Auto-detects language from trigger: 'news' = English, 'ข่าว' = Thai (no selection prompt).
 """
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timezone
@@ -141,7 +142,7 @@ class NewsAgent(BaseAgent):
                 return is_friend
 
         try:
-            line_bot_api.get_profile(user_id)
+            await asyncio.to_thread(line_bot_api.get_profile, user_id)
             logger.info(f"📰 User {user_id} is a friend (verified via LINE API)")
             self._friend_cache[user_id] = (True, datetime.now(timezone.utc))
             return True
@@ -204,12 +205,13 @@ class NewsAgent(BaseAgent):
                     quoteToken=None,
                 )
                 if event.reply_token:
-                    line_bot_api.reply_message(
+                    await asyncio.to_thread(
+                        line_bot_api.reply_message,
                         ReplyMessageRequest(
                             replyToken=event.reply_token,
                             messages=[goodbye_msg],
                             notificationDisabled=False,
-                        )
+                        ),
                     )
                 logger.info(
                     f"📰 User ended news session with shutdown phrase in chat {chat_id}"
@@ -374,12 +376,13 @@ class NewsAgent(BaseAgent):
         text_msg = TextMessage(text=message, quickReply=None, quoteToken=None)
 
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[text_msg],
                     notificationDisabled=False,
-                )
+                ),
             )
 
     async def _translate_headlines_to_thai(
@@ -727,12 +730,13 @@ class NewsAgent(BaseAgent):
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
 
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[text_msg],
                     notificationDisabled=False,
-                )
+                ),
             )
 
     async def _send_trigger_translation(
@@ -750,12 +754,13 @@ class NewsAgent(BaseAgent):
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
 
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[text_msg],
                     notificationDisabled=False,
-                )
+                ),
             )
 
     async def _send_invalid_choice(
@@ -770,12 +775,13 @@ class NewsAgent(BaseAgent):
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
 
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[text_msg],
                     notificationDisabled=False,
-                )
+                ),
             )
 
     async def _send_rate_limit_message(
@@ -801,12 +807,13 @@ class NewsAgent(BaseAgent):
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
 
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[text_msg],
                     notificationDisabled=False,
-                )
+                ),
             )
 
     async def _send_error_message(
@@ -819,10 +826,11 @@ class NewsAgent(BaseAgent):
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
 
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[text_msg],
                     notificationDisabled=False,
-                )
+                ),
             )

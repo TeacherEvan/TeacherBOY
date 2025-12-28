@@ -141,7 +141,7 @@ async def lifespan(app: FastAPI):
         with ApiClient(configuration) as api_client:
             line_bot_api = MessagingApi(api_client)
             # Get bot's own profile to extract user ID
-            bot_info = line_bot_api.get_bot_info()
+            bot_info = await asyncio.to_thread(line_bot_api.get_bot_info)
             bot_user_id = bot_info.user_id
             logger.info(
                 f"🤖 Bot User ID: {bot_user_id} (self-message detection enabled)"

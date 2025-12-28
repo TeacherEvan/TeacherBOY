@@ -1,5 +1,6 @@
 """Translation agent - Handles Thai/English translation with session management."""
 
+import asyncio
 import logging
 import re
 from typing import Optional
@@ -225,12 +226,13 @@ class TranslationAgent(BaseAgent):
                         quoteToken=None,
                     )
                     if event.reply_token:
-                        line_bot_api.reply_message(
+                        await asyncio.to_thread(
+                            line_bot_api.reply_message,
                             ReplyMessageRequest(
                                 replyToken=event.reply_token,
                                 messages=[help_message],
                                 notificationDisabled=False,
-                            )
+                            ),
                         )
                     return True
 
@@ -242,12 +244,13 @@ class TranslationAgent(BaseAgent):
                         text=help_text, quickReply=None, quoteToken=None
                     )
                     if event.reply_token:
-                        line_bot_api.reply_message(
+                        await asyncio.to_thread(
+                            line_bot_api.reply_message,
                             ReplyMessageRequest(
                                 replyToken=event.reply_token,
                                 messages=[help_message],
                                 notificationDisabled=False,
-                            )
+                            ),
                         )
                     return True
 
@@ -258,12 +261,13 @@ class TranslationAgent(BaseAgent):
                         session_manager.wake_chat(chat_id)
                         wake_message = self._create_wake_message()
                         if event.reply_token:
-                            line_bot_api.reply_message(
+                            await asyncio.to_thread(
+                                line_bot_api.reply_message,
                                 ReplyMessageRequest(
                                     replyToken=event.reply_token,
                                     messages=[wake_message],
                                     notificationDisabled=False,
-                                )
+                                ),
                             )
                         logger.info(f"☀️ Chat {chat_id} woken up by user")
                     else:
@@ -274,12 +278,13 @@ class TranslationAgent(BaseAgent):
                             quoteToken=None,
                         )
                         if event.reply_token:
-                            line_bot_api.reply_message(
+                            await asyncio.to_thread(
+                                line_bot_api.reply_message,
                                 ReplyMessageRequest(
                                     replyToken=event.reply_token,
                                     messages=[already_awake_msg],
                                     notificationDisabled=False,
-                                )
+                                ),
                             )
                         logger.info(f"✅ Chat {chat_id} confirmed awake status")
                     return True
@@ -290,12 +295,13 @@ class TranslationAgent(BaseAgent):
                     session_manager.sleep_chat(chat_id, hours=24)
                     sleep_message = self._create_sleep_message()
                     if event.reply_token:
-                        line_bot_api.reply_message(
+                        await asyncio.to_thread(
+                            line_bot_api.reply_message,
                             ReplyMessageRequest(
                                 replyToken=event.reply_token,
                                 messages=[sleep_message],
                                 notificationDisabled=False,
-                            )
+                            ),
                         )
                     logger.info(f"😴 Chat {chat_id} put to sleep for 24 hours")
                     return True
@@ -307,12 +313,13 @@ class TranslationAgent(BaseAgent):
                     reset_seconds = rate_limiter.get_reset_time(chat_id)
                     rate_limit_message = self._create_rate_limit_message(reset_seconds)
                     if event.reply_token:
-                        line_bot_api.reply_message(
+                        await asyncio.to_thread(
+                            line_bot_api.reply_message,
                             ReplyMessageRequest(
                                 replyToken=event.reply_token,
                                 messages=[rate_limit_message],
                                 notificationDisabled=False,
-                            )
+                            ),
                         )
                     logger.warning(f"⚠️  Rate limited chat {chat_id}")
                     return True
@@ -345,12 +352,13 @@ class TranslationAgent(BaseAgent):
                     )
 
                     if event.reply_token:
-                        line_bot_api.reply_message(
+                        await asyncio.to_thread(
+                            line_bot_api.reply_message,
                             ReplyMessageRequest(
                                 replyToken=event.reply_token,
                                 messages=[text_message],
                                 notificationDisabled=False,
-                            )
+                            ),
                         )
                     logger.info(f"✅ Translation sent for chat {chat_id}")
                     span.set_attribute("translation.success", True)

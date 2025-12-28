@@ -39,7 +39,6 @@ Use this to validate your bot before deploying.
 2. Runtime: Docker.
 3. Internal port: `8000`.
 4. Add env vars/secrets:
-
    - `LINE_CHANNEL_SECRET`
    - `LINE_CHANNEL_ACCESS_TOKEN`
    - `GOOGLE_TRANSLATE_API_KEY` (recommended)
@@ -57,6 +56,11 @@ Key notes:
 - Your Space must be **Public** for LINE to reach your webhook.
 - Configure LINE to call: `https://<your-space-host>.hf.space/webhook`
 - Store secrets in **Space Settings → Secrets** (do not commit `.env`).
+
+Gotcha (common cause of "it deployed but features are missing"):
+
+- Do not keep two copies of the app code (e.g., both top-level `src/` and a nested `TeacherBOY/src/`).
+- The Docker build runs `uvicorn src.main:app` and typically only copies the top-level `src/`, so any nested `src/` changes will be ignored unless the Dockerfile copy paths are updated.
 
 ### Push updates (recommended workflow)
 
@@ -84,7 +88,6 @@ Spaces are git repos. Pushing triggers an automatic rebuild/restart.
    ```
 
    Authentication:
-
    - Username: your Hugging Face username
    - Password: a Hugging Face **Access Token** (not your account password)
 

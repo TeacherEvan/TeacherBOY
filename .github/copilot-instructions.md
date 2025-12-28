@@ -43,13 +43,29 @@ First agent with should_handle()=true → calls handle()
 
 ## 🤖 Agent Hierarchy (Priority Order)
 
-| Agent                | Priority | Status      | Trigger                                   | Notes                                                                                                                                                                                                                                                 |
-| -------------------- | -------- | ----------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **AdminAgent**       | 5        | Conditional | `/admin` or `!admin` prefix               | Only registered if `ADMIN_USER_IDS` env is set                                                                                                                                                                                                        |
-| **TranslationAgent** | 10       | Always on   | Non-admin messages (fallback)             | Detects language, calls Google or LibreTranslate, applies session/rate-limit rules                                                                                                                                                                    |
-| **NewsAgent**        | 15       | Conditional | `news` or `ข่าว` (group-only for friends) | **Friend-gated**: Groups—friends see full 8-item menu (weather, PM2.5, legal, color, holidays, Bitcoin, rates); non-friends get trigger translation only. Private chats always translate trigger. See [News Access Model](#-news-access-model) below. |
+| Agent                | Priority | Status      | Trigger               | Notes                                                                                                                                                                                         |
+| -------------------- | -------- | ----------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AdminAgent**       | 5        | Conditional | `/admin ...`          | Registered if `ADMIN_USER_IDS` is set OR bootstrap is enabled via `ADMIN_SETUP_KEY`                                                                                                           |
+| **SearchAgent**      | 8        | Conditional | `Zeus search <query>` | Registered only if Brave Search is configured (`BRAVE_SEARCH_API_KEY`); handled before `LLMAgent`                                                                                             |
+| **LLMAgent**         | 9        | Always on   | `Zeus <prompt>`       | Uses OpenRouter; returns config error if `OPENROUTER_API_KEY` missing; excludes `Zeus search ...`                                                                                             |
+| **TranslationAgent** | 10       | Always on   | Default/fallback      | Detects language, calls Google or LibreTranslate, applies session/rate-limit rules                                                                                                            |
+| **SpecialNewsAgent** | 12       | Always on   | `/special news`       | DM-only for regular users; gated by triggers                                                                                                                                                  |
+| **NewsAgent**        | 15       | Always on   | `news` or `ข่าว`      | Friend-gated in groups/rooms; translation-only for non-friends. Privileged users (admin/moderator) can access full menu in private chats. See [News Access Model](#-news-access-model) below. |
 
-## � News Access Model
+## 🤖 Zeus Commands (AI + Search)
+
+Triggers accepted:
+
+- `Zeus ...` and `/zeus ...`
+- Common typo tolerance: `Zues ...` and `/zues ...`
+
+Routing notes:
+
+- `Zeus search ...` is reserved for `SearchAgent` (runs before `LLMAgent`).
+- Regular users are DM-only for Zeus commands; admins can run them anywhere.
+- If an integration is not configured, the agent replies with a configuration error.
+
+## 📰 News Access Model
 
 **NewsAgent enforces friend-based access control:**
 
@@ -57,7 +73,8 @@ First agent with should_handle()=true → calls handle()
 | ---------------- | ---------------- | ------------------------------ | ---------------------------------------------------------- |
 | **Group/Room**   | `news` or `ข่าว` | Friend (verified via LINE API) | Full menu: weather, PM2.5, stocks, headlines (1–5 options) |
 | **Group/Room**   | `news` or `ข่าว` | Non-friend                     | Trigger translation only: `news → ข่าว` or vice versa      |
-| **Private Chat** | `news` or `ข่าว` | Any user                       | Trigger translation only (no menu/data shown)              |
+| **Private Chat** | `news` or `ข่าว` | Admin/Moderator                | Full menu                                                  |
+| **Private Chat** | `news` or `ข่าว` | Regular user                   | Trigger translation only (no menu/data shown)              |
 
 **Implementation**:
 
@@ -152,7 +169,7 @@ Try again in ~45 minutes
 | bitcoin_cache_ttl_seconds  | BITCOIN_CACHE_TTL_SECONDS  | 300     | 60–3600      | Bitcoin price (volatile) |
 | exchange_cache_ttl_seconds | EXCHANGE_CACHE_TTL_SECONDS | 3600    | 300–14400    | Exchange rates (hourly)  |
 
-## �📋 Session & Rate-Limiting Rules (TranslationAgent Only)
+## 📋 Session & Rate-Limiting Rules (TranslationAgent Only)
 
 All enforced via singletons in [src/services](../src/services):
 
@@ -218,6 +235,7 @@ pytest tests/test_translation_agent.py    # Single file
 - **Logging:** Always use `logger = logging.getLogger(__name__)` at module level; prefix messages with emoji (✅ success, ❌ error, 🔍 debug, ⚠️ warning)
 - **Tracing:** Import `get_tracer(__name__)` from `src/utils/tracing`; wrap agent logic in `tracer.start_as_current_span()`
 - **Error handling:** Catch `linebot.v3.exceptions.ApiException` and `httpx.TimeoutException` separately; log before rethrowing or responding with fallback
+- **Async + LINE SDK:** LINE SDK v3 calls are sync; in async code use `await asyncio.to_thread(...)` for `reply_message`, `push_message`, `get_profile`, `get_bot_info`, etc.
 - **Chat ID extraction:** Use `_get_chat_id(event)` pattern (see `TranslationAgent` & `NewsAgent` for examples)
 - **Environment variables:** Load from `src/config.py` settings singleton; never hardcode secrets
 - **Friend gating** (NewsAgent pattern):
@@ -244,3 +262,4 @@ pytest tests/test_translation_agent.py    # Single file
 - **LINE SDK v3:** Uses `linebot.v3.webhooks` and `linebot.v3.messaging`; avoid v2 imports
 - **NewsAgent access control:** Friend gating enforced via LINE API `get_profile()` call; non-friends and private chats fallback to trigger translation only. No menu/data shown outside eligible contexts.
 - **NewsAgent multi-step flow:** Uses `news_session_manager` to track conversation state; test thoroughly if modifying state transitions. Output is terse (robotic): single emoji per bullet, no instructions or explanations.
+- **Hugging Face Spaces (Docker) gotcha:** Avoid having multiple copies of the code (e.g., both top-level `src/` and nested `TeacherBOY/src/`). The Docker build runs `uvicorn src.main:app` from the top-level `src/`, so nested code will be ignored unless the Dockerfile is updated.

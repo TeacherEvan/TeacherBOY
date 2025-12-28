@@ -40,10 +40,10 @@ MODERATOR_USER_IDS=U1234567890  # Optional: Moderators get direct news access
 
 ## 🤖 AI & Search Commands (Zeus)
 
-- **AI (OpenRouter LLM):** `Zeus <your question>`
+- **AI (OpenRouter LLM):** `Zeus <your question>` (also accepts `/zeus ...`, typo `Zues ...`)
   - **Admins:** allowed in any chat context
   - **Regular users:** **DM only** (1-on-1)
-- **Web search (Brave Search):** `Zeus search <query>`
+- **Web search (Brave Search):** `Zeus search <query>` (also accepts `/zeus search ...`, typo `Zues search ...`)
   - **Admins:** allowed in any chat context
   - **Regular users:** **DM only** (1-on-1)
 
@@ -51,6 +51,10 @@ Notes:
 
 - `Zeus search ...` is handled by SearchAgent before LLMAgent.
 - If `OPENROUTER_API_KEY` or `BRAVE_SEARCH_API_KEY` is missing, the bot replies with a configuration error.
+
+## 🚢 Hugging Face Spaces (Docker) gotcha
+
+- Avoid having multiple copies of the code (e.g., both top-level `src/` and nested `TeacherBOY/src/`). The container runs `uvicorn src.main:app` from the top-level `src/`, so nested code will be ignored unless the Dockerfile is updated.
 
 ## ⏱️ Rate Limits
 

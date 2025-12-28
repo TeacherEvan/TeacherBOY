@@ -67,8 +67,8 @@ Follow: [docs/guides/line-setup.md](line-setup.md)
 
 ### Optional: AI + Web Search (DM-only for regular users)
 
-- **AI (OpenRouter):** `Zeus <your question>`
-- **Web search (Brave Search):** `Zeus search <query>`
+- **AI (OpenRouter):** `Zeus <your question>` (also accepts `/zeus ...`, and typo `Zues ...`)
+- **Web search (Brave Search):** `Zeus search <query>` (also accepts `/zeus search ...`, and typo `Zues search ...`)
 
 Access rules:
 
@@ -88,3 +88,7 @@ Access rules:
 4. Set LINE webhook URL to:
 
 - `https://<your-username>-<your-space>.hf.space/webhook`
+
+Gotcha:
+
+- Avoid having both a top-level `src/` and a nested `TeacherBOY/src/`. Docker Spaces typically runs `uvicorn src.main:app` from the top-level `src/`, so nested code won’t take effect unless the Dockerfile copy paths are updated.
