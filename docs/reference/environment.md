@@ -42,7 +42,7 @@ Start from `.env.example`.
 ## LLM (OpenRouter)
 
 - `OPENROUTER_API_KEY`
-- `OPENROUTER_DEFAULT_MODEL` (default: `google/gemma-2-9b-it:free`)
+- `OPENROUTER_DEFAULT_MODEL` (default: `google/gemma-2-9b-it`)
 - `LLM_SYSTEM_PROMPT` (optional; controls bot personality/tone)
 
 ## Web Search (Brave)

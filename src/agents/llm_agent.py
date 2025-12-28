@@ -107,11 +107,34 @@ class LLMAgent(BaseAgent):
                 response_text = await self.llm_service.chat_completion(messages)
                 
                 if not response_text:
-                    await self._send_reply(
-                        event,
-                        line_bot_api,
-                        "Sorry, I couldn't generate an answer right now. Please try again in a moment, and contact support if this keeps happening.",
-                    )
+                    status_code, err_text, model_used = self.llm_service.get_last_error()
+                    if status_code:
+                        if status_code == 404 and model_used:
+                            await self._send_reply(
+                                event,
+                                line_bot_api,
+                                (
+                                    f"OpenRouter error (404): model not available: {model_used}\n\n"
+                                    "Fix: set OPENROUTER_DEFAULT_MODEL to a supported model in your host/Space Secrets, then restart.\n"
+                                    "Models: https://openrouter.ai/models"
+                                ),
+                            )
+                        else:
+                            await self._send_reply(
+                                event,
+                                line_bot_api,
+                                (
+                                    f"OpenRouter error ({status_code}).\n\n"
+                                    "Fix: check OPENROUTER_API_KEY and OPENROUTER_DEFAULT_MODEL in your host/Space Secrets, then restart.\n"
+                                    "Models: https://openrouter.ai/models"
+                                ),
+                            )
+                    else:
+                        await self._send_reply(
+                            event,
+                            line_bot_api,
+                            "Sorry, I couldn't generate an answer right now. Please try again in a moment.",
+                        )
                     return True
 
                 # Send response

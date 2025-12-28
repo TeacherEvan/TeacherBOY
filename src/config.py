@@ -142,7 +142,7 @@ class Settings(BaseSettings):
         description="OpenRouter API key for LLM access",
     )
     openrouter_default_model: str = Field(
-        default="google/gemma-2-9b-it:free",
+        default="google/gemma-2-9b-it",
         description="Default model to use for OpenRouter (must be a free model)",
     )
 

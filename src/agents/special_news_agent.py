@@ -43,6 +43,18 @@ class SpecialNewsAgent(BaseAgent):
         self._sports_feed = "https://www.bangkokpost.com/rss/data/sports.xml"
         self._international_feed = "https://www.bangkokpost.com/rss/data/world.xml"
 
+        self._admin_user_ids = settings.get_admin_user_ids()
+        self._moderator_user_ids = settings.get_moderator_user_ids()
+
+    def _is_admin(self, user_id: Optional[str]) -> bool:
+        return user_id in self._admin_user_ids if user_id else False
+
+    def _is_moderator(self, user_id: Optional[str]) -> bool:
+        return user_id in self._moderator_user_ids if user_id else False
+
+    def _is_privileged_user(self, user_id: Optional[str]) -> bool:
+        return self._is_admin(user_id) or self._is_moderator(user_id)
+
     def get_priority(self) -> int:
         # Runs after Admin (5) and Translation (10), before NewsAgent (15)
         return 12
@@ -85,14 +97,27 @@ class SpecialNewsAgent(BaseAgent):
             return False
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
-        return self._is_special_news_command(text)
+        if not self._is_special_news_command(text):
+            return False
+
+        user_id = getattr(event.source, "user_id", None) if event.source else None
+
+        # Privileged users can run it anywhere.
+        if self._is_privileged_user(user_id):
+            return True
+
+        # Regular users must use DM.
+        return self._is_private_chat(event)
 
     async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         if not self._is_special_news_command(text):
             return False
 
-        # Hard fail in groups/rooms (DM-only)
-        if not self._is_private_chat(event):
+        user_id = getattr(event.source, "user_id", None) if event.source else None
+        is_privileged = self._is_privileged_user(user_id)
+
+        # Regular users: DM-only
+        if not is_privileged and not self._is_private_chat(event):
             await self._reply_text(
                 event,
                 line_bot_api,
@@ -101,8 +126,12 @@ class SpecialNewsAgent(BaseAgent):
             )
             return True
 
-        # Friends-of-the-bot ACL
-        is_friend = await self._is_friend(event, line_bot_api)
+        # Friends-of-the-bot ACL (bypass for privileged users)
+        if not is_privileged:
+            is_friend = await self._is_friend(event, line_bot_api)
+        else:
+            is_friend = True
+
         if not is_friend:
             await self._reply_text(
                 event,
@@ -292,7 +321,54 @@ class SpecialNewsAgent(BaseAgent):
             if item.get("title") and item["title"] != "(unavailable)"
         ]
         if not valid_items:
-            return None
+            # Always return a bubble so the carousel consistently shows 3 sections.
+            return {
+                "type": "bubble",
+                "size": "giga",
+                "header": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": title,
+                            "weight": "bold",
+                            "size": "lg",
+                            "color": accent_color,
+                        }
+                    ],
+                    "backgroundColor": "#F8F8F8",
+                    "paddingAll": "lg",
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "No news available right now.",
+                            "size": "sm",
+                            "color": "#666666",
+                            "wrap": True,
+                        }
+                    ],
+                    "spacing": "md",
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "Try again later",
+                            "size": "xs",
+                            "color": "#888888",
+                            "align": "center",
+                        }
+                    ],
+                    "paddingTop": "sm",
+                },
+            }
 
         box_contents = []
         for i, item in enumerate(valid_items, 1):

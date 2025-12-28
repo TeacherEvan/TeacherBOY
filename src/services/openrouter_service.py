@@ -25,6 +25,15 @@ class OpenRouterService:
         self.api_key = settings.openrouter_api_key
         self.default_model = settings.openrouter_default_model
 
+        # Best-effort diagnostics for the last request (useful for user-facing errors).
+        self._last_error: Optional[str] = None
+        self._last_status_code: Optional[int] = None
+        self._last_model: Optional[str] = None
+
+    def get_last_error(self) -> tuple[Optional[int], Optional[str], Optional[str]]:
+        """Return (status_code, error_text, model) from the last request."""
+        return self._last_status_code, self._last_error, self._last_model
+
     def set_client(self, client: httpx.AsyncClient):
         """Set the shared HTTP client."""
         self.client = client
@@ -60,9 +69,14 @@ class OpenRouterService:
 
         target_model = model or self.default_model
 
+        # Reset diagnostics
+        self._last_error = None
+        self._last_status_code = None
+        self._last_model = target_model
+
         try:
             headers = {
-                "Authorization": f"Bearer {self.api_key}",
+                "Authorization": f"Bearer {settings.openrouter_api_key}",
                 "HTTP-Referer": "https://github.com/TeacherEvan/TeacherBOY",  # Optional (OpenRouter app attribution)
                 "X-Title": "TeacherBOY",  # Optional (OpenRouter app attribution)
                 "Content-Type": "application/json",
@@ -79,7 +93,16 @@ class OpenRouterService:
             )
             
             if response.status_code != 200:
-                logger.error(f"❌ OpenRouter error {response.status_code}: {response.text}")
+                # Keep a truncated copy of the error for user-facing diagnostics.
+                err_text = (response.text or "").strip()
+                if len(err_text) > 1000:
+                    err_text = err_text[:1000] + "..."
+                self._last_status_code = response.status_code
+                self._last_error = err_text
+
+                logger.error(
+                    f"❌ OpenRouter error {response.status_code} (model={target_model}): {err_text}"
+                )
                 return None
                 
             data = response.json()
