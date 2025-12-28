@@ -255,6 +255,13 @@ class NewsAgent(BaseAgent):
 
                 # Check if user is privileged (admin or moderator)
                 is_privileged = self._is_privileged_user(user_id)
+                
+                # Log privilege check result for group chats
+                if self._is_group_chat(event):
+                    if is_privileged:
+                        logger.info(f"🔓 Privileged user {user_id} accessing news in group chat {chat_id} - bypassing friend check")
+                    else:
+                        logger.debug(f"📰 Non-privileged user {user_id} in group chat {chat_id} - will check friendship")
 
                 # For non-privileged users in groups: check friendship
                 if not is_privileged:
@@ -286,8 +293,8 @@ class NewsAgent(BaseAgent):
                         )
                         return True
                 elif user_id:
-                    logger.debug(
-                        f"🔓 Privileged user {user_id} bypassed news rate limit"
+                    logger.info(
+                        f"🔓 Privileged user {user_id} bypassed news rate limit in chat {chat_id}"
                     )
 
                 # Track successful news request (menu will be shown)

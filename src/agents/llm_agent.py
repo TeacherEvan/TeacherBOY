@@ -68,21 +68,24 @@ class LLMAgent(BaseAgent):
         """
         Handle if:
         1. Text starts with 'Zeus'
-        2. User is Admin OR Chat is Private (DM)
+        2. User is Admin (ONLY admins can use Zeus LLM)
         """
         if not self._parse_command(text):
             return False
             
         user_id = getattr(event.source, "user_id", None)
+        is_private = self._is_private_chat(event)
+        is_admin = self._is_admin(user_id)
         
-        # Admin can use it anywhere
-        if self._is_admin(user_id):
+        # Only admins can use Zeus LLM (anywhere - group or DM)
+        if is_admin:
+            if not is_private:
+                logger.info(f"🔓 Admin {user_id} can use Zeus in group chat")
             return True
-            
-        # Regular user must be in DM
-        if self._is_private_chat(event):
-            return True
-            
+        
+        # Regular users are blocked from Zeus LLM entirely
+        context = "DM" if is_private else "group chat"
+        logger.debug(f"❌ Non-admin {user_id} cannot use Zeus in {context} (admin-only feature)")
         return False
 
     async def handle(
@@ -92,6 +95,10 @@ class LLMAgent(BaseAgent):
         query = self._parse_command(text)
         if not query:
             return False
+
+        user_id = getattr(event.source, "user_id", None)
+        is_private = self._is_private_chat(event)
+        logger.info(f"🤖 Zeus query from {user_id} ({'DM' if is_private else 'group'}): {query[:50]}...")
 
         with tracer.start_as_current_span("llm_agent.handle") as span:
             span.set_attribute("llm.query", query)

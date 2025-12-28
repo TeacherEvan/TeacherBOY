@@ -74,15 +74,21 @@ class SearchAgent(BaseAgent):
             return False
             
         user_id = getattr(event.source, "user_id", None)
+        is_private = self._is_private_chat(event)
+        is_admin = self._is_admin(user_id)
         
         # Admin can use it anywhere
-        if self._is_admin(user_id):
+        if is_admin:
+            if not is_private:
+                logger.info(f"🔓 Admin {user_id} can use Zeus search in group chat")
             return True
             
         # Regular user must be in DM
-        if self._is_private_chat(event):
+        if is_private:
             return True
-            
+        
+        # Regular user in group - deny
+        logger.debug(f"❌ Non-admin {user_id} cannot use Zeus search in group chat")
         return False
 
     async def handle(
@@ -92,6 +98,10 @@ class SearchAgent(BaseAgent):
         query = self._parse_search_command(text)
         if not query:
             return False
+
+        user_id = getattr(event.source, "user_id", None)
+        is_private = self._is_private_chat(event)
+        logger.info(f"🔍 Zeus search from {user_id} ({'DM' if is_private else 'group'}): {query[:50]}...")
 
         with tracer.start_as_current_span("search_agent.handle") as span:
             span.set_attribute("search.query", query)
