@@ -49,6 +49,10 @@ from src.agents.translation_agent import TranslationAgent
 from src.agents.admin_agent import AdminAgent
 from src.agents.special_news_agent import SpecialNewsAgent
 from src.agents.news_agent import NewsAgent
+from src.agents.llm_agent import LLMAgent
+from src.agents.search_agent import SearchAgent
+from src.services.openrouter_service import openrouter_service
+from src.services.brave_search_service import brave_search_service
 from src.handlers.message_handler import (
     handle_join_event,
     handle_leave_event,
@@ -152,6 +156,8 @@ async def lifespan(app: FastAPI):
     logger.info("📡 Initializing optimized HTTP client pool...")
     http_client_pool = create_optimized_http_client()
     translation_service.set_client(http_client_pool)
+    openrouter_service.set_client(http_client_pool)
+    brave_search_service.set_client(http_client_pool)
     logger.info("✅ HTTP client pool ready with connection pooling enabled")
 
     # ========================================================================
@@ -205,6 +211,22 @@ async def lifespan(app: FastAPI):
     # Register Translation Agent (Priority: 10)
     translation_agent = TranslationAgent()
     agent_router.register_agent(translation_agent)
+
+    # Register LLM Agent (Priority: 9)
+    llm_agent = LLMAgent()
+    agent_router.register_agent(llm_agent)
+    if settings.is_openrouter_configured():
+        logger.info(f"🤖 LLM Agent registered (Model: {settings.openrouter_default_model})")
+    else:
+        logger.info("🤖 LLM Agent registered (API key missing - will return errors)")
+
+    # Register Search Agent (Priority: 8 - Mutually exclusive with LLM via triggers)
+    if settings.is_brave_search_configured():
+        search_agent = SearchAgent()
+        agent_router.register_agent(search_agent)
+        logger.info("🔍 [Startup] Search Agent registered (Brave Search enabled)")
+    else:
+        logger.info("🔍 [Startup] Search Agent not registered (BRAVE_SEARCH_API_KEY missing)")
 
     # Register Special News Agent (Priority: 12)
     from src.services.special_news_service import SpecialNewsService

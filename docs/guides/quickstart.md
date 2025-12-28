@@ -17,12 +17,10 @@ Goal: run TeacherBOY locally (Docker) and connect it to LINE.
    ```
 
 2. Fill in at minimum:
-
    - `LINE_CHANNEL_SECRET`
    - `LINE_CHANNEL_ACCESS_TOKEN`
 
 3. Recommended (better translation quality):
-
    - `GOOGLE_TRANSLATE_API_KEY`
 
 ## 2) Run the bot
@@ -67,12 +65,21 @@ Follow: [docs/guides/line-setup.md](line-setup.md)
 - Stop/sleep: `amen`
 - Wake: `TeacherBoy`
 
+### Optional: AI + Web Search (DM-only for regular users)
+
+- **AI (OpenRouter):** `Zeus <your question>`
+- **Web search (Brave Search):** `Zeus search <query>`
+
+Access rules:
+
+- **Admins:** can use these commands anywhere
+- **Regular users:** must use these commands in **DM (1-on-1)**
+
 ## Deploy on Hugging Face Spaces (Docker)
 
 1. Create a Space: <https://huggingface.co/new-space> (SDK: Docker)
 2. Push this repo to the Space (Git remote) and wait for build.
 3. In Space settings, add Secrets:
-
    - `LINE_CHANNEL_SECRET`
    - `LINE_CHANNEL_ACCESS_TOKEN`
    - `GOOGLE_TRANSLATE_API_KEY` (recommended)

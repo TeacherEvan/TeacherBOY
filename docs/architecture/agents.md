@@ -2,6 +2,23 @@
 
 TeacherBOY uses a priority-based multi-agent router.
 
+## Default agents (current)
+
+The router evaluates agents in ascending priority (lower runs first):
+
+<!-- markdownlint-disable MD060 -->
+
+| Agent            | Priority | Trigger / Notes                                                  |
+| :--------------- | -------: | :--------------------------------------------------------------- |
+| AdminAgent       |        5 | Admin commands (`/admin ...`)                                    |
+| SearchAgent      |        8 | `Zeus search <query>` (DM-only for non-admins)                   |
+| LLMAgent         |        9 | `Zeus <prompt>` (DM-only for non-admins; excludes `Zeus search`) |
+| TranslationAgent |       10 | Default translation behavior                                     |
+| SpecialNewsAgent |       12 | `/special news` (DM-only)                                        |
+| NewsAgent        |       15 | `news` / `ข่าว` (friend-gated in groups)                         |
+
+<!-- markdownlint-enable MD060 -->
+
 ## Router contract
 
 The router evaluates agents in ascending `get_priority()` order and stops at the first agent that returns `True` from `handle()`.
@@ -16,7 +33,6 @@ Key behaviors:
 
 1. Create a new class implementing `BaseAgent`.
 1. Implement:
-
    - `should_handle(event, text) -> bool`
    - `handle(event, text, line_bot_api) -> bool`
 

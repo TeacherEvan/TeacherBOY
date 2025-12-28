@@ -32,9 +32,25 @@ MODERATOR_USER_IDS=U1234567890  # Optional: Moderators get direct news access
 ## 🤖 Agent Priority Order
 
 1. **AdminAgent** (Priority 5) - `/admin` commands
-2. **TranslationAgent** (Priority 10) - Thai ↔ English translation
-3. **SpecialNewsAgent** (Priority 12) - `/special news` command (DM-only)
-4. **NewsAgent** (Priority 15) - `news` or `ข่าว` trigger
+2. **SearchAgent** (Priority 8) - `Zeus search ...` (DM-only for non-admins)
+3. **LLMAgent** (Priority 9) - `Zeus ...` (DM-only for non-admins)
+4. **TranslationAgent** (Priority 10) - Thai ↔ English translation
+5. **SpecialNewsAgent** (Priority 12) - `/special news` command (DM-only)
+6. **NewsAgent** (Priority 15) - `news` or `ข่าว` trigger
+
+## 🤖 AI & Search Commands (Zeus)
+
+- **AI (OpenRouter LLM):** `Zeus <your question>`
+  - **Admins:** allowed in any chat context
+  - **Regular users:** **DM only** (1-on-1)
+- **Web search (Brave Search):** `Zeus search <query>`
+  - **Admins:** allowed in any chat context
+  - **Regular users:** **DM only** (1-on-1)
+
+Notes:
+
+- `Zeus search ...` is handled by SearchAgent before LLMAgent.
+- If `OPENROUTER_API_KEY` or `BRAVE_SEARCH_API_KEY` is missing, the bot replies with a configuration error.
 
 ## ⏱️ Rate Limits
 
@@ -49,16 +65,20 @@ MODERATOR_USER_IDS=U1234567890  # Optional: Moderators get direct news access
 
 ## 📰 News Agent Access Matrix
 
+<!-- markdownlint-disable MD060 -->
+
 | Context    | User Type       | Trigger          | Response         |
-| ---------- | --------------- | ---------------- | ---------------- |
+| :--------- | :-------------- | :--------------- | :--------------- |
 | Group/Room | Friend          | `news` or `ข่าว` | Full menu        |
 | Group/Room | Non-friend      | `news` or `ข่าว` | Translation only |
 | Private    | Admin/Moderator | `news` or `ข่าว` | Full menu        |
 | Private    | Regular user    | `news` or `ข่าว` | Translation only |
 
+<!-- markdownlint-enable MD060 -->
+
 ## 🛠️ Admin Commands
 
-```
+```text
 /admin status          - Show bot status
 /admin sleep [hours]   - Put chat to sleep
 /admin wake            - Wake up chat
@@ -95,18 +115,22 @@ MODERATOR_USER_IDS=U1234567890  # Optional: Moderators get direct news access
 
 ## 🔍 Key File Locations
 
-```
+```text
 src/
 ├── main.py                    # FastAPI entry point
 ├── config.py                  # Settings & environment
 ├── agents/
 │   ├── agent_router.py        # Agent dispatch
 │   ├── base_agent.py          # Abstract base
+│   ├── llm_agent.py           # OpenRouter LLM (Zeus ...)
+│   ├── search_agent.py        # Brave Search (Zeus search ...)
 │   ├── translation_agent.py   # Translation logic
 │   ├── news_agent.py          # News logic
 │   ├── special_news_agent.py  # Special news (DM-only)
 │   └── admin_agent.py         # Admin commands
 ├── services/
+│   ├── openrouter_service.py       # OpenRouter client
+│   ├── brave_search_service.py     # Brave Search client
 │   ├── translation_service.py      # LibreTranslate
 │   ├── google_translation.py       # Google Translate
 │   ├── news_data_service.py        # News/weather data

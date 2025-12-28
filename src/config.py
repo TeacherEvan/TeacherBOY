@@ -134,6 +134,36 @@ class Settings(BaseSettings):
         description="Tourism Authority of Thailand (TAT) API key for events/festivals",
     )
 
+    # ============================================================================
+    # OpenRouter Configuration (LLM)
+    # ============================================================================
+    openrouter_api_key: Optional[str] = Field(
+        default=None,
+        description="OpenRouter API key for LLM access",
+    )
+    openrouter_default_model: str = Field(
+        default="google/gemma-2-9b-it:free",
+        description="Default model to use for OpenRouter (must be a free model)",
+    )
+
+    llm_system_prompt: str = Field(
+        default=(
+            "You are TeacherBOY. Personality: Zeus - God-KING of Olympus and Humble Servant to all LINE friends. "
+            "Answer concisely and helpfully."
+        ),
+        description=(
+            "System prompt for the LLM agent (OpenRouter). Controls the bot's personality/tone."
+        ),
+    )
+
+    # ============================================================================
+    # Search Agent Configuration
+    # ============================================================================
+    brave_search_api_key: Optional[str] = Field(
+        default=None,
+        description="Brave Search API key for web search capabilities",
+    )
+
     # Cache TTLs for new menu items
     color_cache_ttl_seconds: int = Field(
         default=86400,
@@ -277,6 +307,14 @@ class Settings(BaseSettings):
     def is_news_api_configured(self) -> bool:
         """Check if NewsAPI.org is properly configured."""
         return bool(self.news_api_key and len(self.news_api_key) > 10)
+
+    def is_openrouter_configured(self) -> bool:
+        """Check if OpenRouter is properly configured."""
+        return bool(self.openrouter_api_key and len(self.openrouter_api_key) > 10)
+
+    def is_brave_search_configured(self) -> bool:
+        """Check if Brave Search API is properly configured."""
+        return bool(self.brave_search_api_key and len(self.brave_search_api_key) > 10)
 
     def get_admin_user_ids(self) -> list[str]:
         """

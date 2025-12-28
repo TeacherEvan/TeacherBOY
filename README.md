@@ -95,7 +95,7 @@ Legacy docs at repo root are kept for backward compatibility.
 
 ### 1. Get LINE Tokens
 
-See **[LINE Setup Guide](docs/LINE_SETUP.md)** for detailed instructions.
+See **[LINE Setup Guide](docs/guides/line-setup.md)** for detailed instructions.
 
 **Already have tokens?** Create a `.env` file:
 
@@ -160,7 +160,7 @@ ngrok http 8000
 
 **The bot will translate EVERY message until you say "amen"!**
 
-**Need help?** See **[Quick Start Guide](QUICK_START.md)** or **[Deployment Guide](DEPLOYMENT_GUIDE.md)** for detailed instructions.
+**Need help?** See **[Quick Start Guide](docs/guides/quickstart.md)** or **[Deployment Guide](docs/guides/deployment.md)**.
 
 ### 6. Admin & Moderator Setup (Optional)
 
@@ -196,7 +196,7 @@ TeacherBOY uses a **modular multi-agent architecture** where messages are routed
 LINE Webhook → Agent Router → [TranslationAgent | MathAgent | CodeAgent | ...]
 ```
 
-**Want to understand how it all works?** See **[Architecture Guide](ARCHITECTURE.md)** and **[Multi-Agent Guide](MULTI_AGENT_GUIDE.md)** for:
+**Want to understand how it all works?** See **[Architecture Guide](docs/architecture/overview.md)** and **[Agents Guide](docs/architecture/agents.md)** for:
 
 - Complete data flow diagrams
 - Webhook explanation
@@ -222,7 +222,7 @@ src/
 
 ## 🤖 Adding Custom Agents
 
-Building new agents is simple! See **[Multi-Agent Guide](MULTI_AGENT_GUIDE.md)** for complete tutorial.
+Building new agents is simple! See **[Agents Guide](docs/architecture/agents.md)** for the pattern and priority rules.
 
 ```python
 from src.agents.base_agent import BaseAgent
@@ -308,7 +308,7 @@ pytest --cov=src --cov-report=html
 - **VPS** - Full control (DigitalOcean, AWS, etc.)
 - **Render.com** - Simple alternative to Heroku
 
-See **[Deployment Guide](DEPLOYMENT_GUIDE.md)** for complete instructions for each option.
+See **[Deployment Guide](docs/guides/deployment.md)** for complete instructions for each option.
 
 ## �� License
 
