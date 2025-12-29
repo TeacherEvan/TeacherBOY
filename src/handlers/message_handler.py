@@ -218,11 +218,13 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
     """
     Handle incoming text messages with smart Thai detection and session management.
 
-    Features:
-    - Auto-detects Thai characters and starts translation mode
-    - Continuous translation until "amen" is said (sleeps for 24h)
-        - Say "Dear Zeus" alone to wake up
-        line_bot_api: MessagingApi instance (v3)
+    This handler auto-detects Thai characters and starts translation mode,
+    keeps translating continuously until the user says "amen" (sleeping the chat
+    for 24 hours), and can be woken up by sending "Dear Zeus" alone.
+
+    Args:
+        event: LINE message event containing the incoming text message.
+        line_bot_api: MessagingApi instance (v3) used to send replies.
     """
     text = event.message.text
     reply_token = event.reply_token
@@ -280,9 +282,10 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
 
     if google_translation_service.is_configured():
         logger.info("Using Google Cloud Translation API")
-        translated_text, source_lang = await google_translation_service.auto_translate(
-            text
-        )
+        translated_text = await google_translation_service.auto_translate(text)
+        if translated_text:
+            # Prefer cheap heuristic for source language to avoid double-calling Google
+            source_lang = "th" if contains_thai(text) else "en"
 
     if not translated_text:
         logger.info("Using LibreTranslate (fallback)")

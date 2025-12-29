@@ -81,7 +81,7 @@ class TestAdminAgent:
         assert admin_agent._is_admin_command("admin help") is False
         assert admin_agent._is_admin_command("hello") is False
         assert admin_agent._is_admin_command("/not_admin") is False
-        assert admin_agent._is_admin_command("TeacherBoy help") is False
+        assert admin_agent._is_admin_command("RandomWord help") is False
 
     @pytest.mark.asyncio
     async def test_should_handle_authorized_admin_command(
