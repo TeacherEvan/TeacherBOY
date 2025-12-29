@@ -77,7 +77,7 @@ class Settings(BaseSettings):
 
     # LibreTranslate API (Fallback/Development)
     libretranslate_api_url: str = Field(
-        default="https://libretranslate.de/translate",
+        default="https://libretranslate.com/translate",
         description="LibreTranslate API endpoint URL",
     )
     libretranslate_api_key: Optional[str] = Field(
@@ -271,6 +271,22 @@ class Settings(BaseSettings):
         case_sensitive = False
         # Allow extra fields for forward compatibility
         extra = "ignore"
+
+    @field_validator("debug", mode='before')
+    @classmethod
+    def validate_debug(cls, v) -> bool:
+        """Convert string values to boolean for debug field."""
+        if isinstance(v, str):
+            # Handle common string representations of boolean
+            if v.upper() in ('TRUE', '1', 'YES', 'ON', 'WARN'):
+                return True
+            elif v.upper() in ('FALSE', '0', 'NO', 'OFF'):
+                return False
+            else:
+                # Default to False for unrecognized strings
+                logger.warning(f"Unrecognized debug value '{v}', defaulting to False")
+                return False
+        return v
 
     @field_validator("additional_agents")
     @classmethod

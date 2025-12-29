@@ -2,18 +2,18 @@
 
 ## 📋 Index
 
-- [🎯 Quick Context](#quick-context)
-- [🔄 Webhook Flow](#webhook-flow-read-first)
-- [🤖 Agent Hierarchy](#agent-hierarchy-priority-order)
-- [📰 News Access Model](#news-access-model)
-- [📰 Extended News Menu](#extended-news-menu-8-items-for-friends)
-- [⏱️ Rate Limiting](#rate-limiting-rules)
-- [📋 Session & Rate-Limiting Rules](#session--rate-limiting-rules-translationagent-only)
-- [🌐 Translation Provider Stack](#translation-provider-stack)
-- [🛠️ Developer Workflows](#developer-workflows)
-- [➕ Adding a New Agent](#adding-a-new-agent-pattern)
-- [📝 Code Patterns to Follow](#code-patterns-to-follow)
-- [⚠️ Known Gotchas & Legacy](#known-gotchas--legacy)
+- [🎯 Quick Context](#-quick-context)
+- [🔄 Webhook Flow](#-webhook-flow-read-first)
+- [🤖 Agent Hierarchy](#-agent-hierarchy-priority-order)
+- [📰 News Access Model](#-news-access-model)
+- [📰 Extended News Menu](#-extended-news-menu-8-items-for-friends)
+- [⏱️ Rate Limiting](#️-rate-limiting-rules)
+- [📋 Session & Rate-Limiting Rules](#-session--rate-limiting-rules-translationagent-only)
+- [🌐 Translation Provider Stack](#-translation-provider-stack)
+- [🛠️ Developer Workflows](#️-developer-workflows)
+- [➕ Adding a New Agent](#-adding-a-new-agent-pattern)
+- [📝 Code Patterns to Follow](#-code-patterns-to-follow)
+- [⚠️ Known Gotchas & Legacy](#️-known-gotchas--legacy)
 
 ## 🎯 Quick Context
 
@@ -46,11 +46,11 @@ First agent with should_handle()=true → calls handle()
 | Agent                | Priority | Status      | Trigger               | Notes                                                                                                                                                                                         |
 | -------------------- | -------- | ----------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **AdminAgent**       | 5        | Conditional | `/admin ...`          | Registered if `ADMIN_USER_IDS` is set OR bootstrap is enabled via `ADMIN_SETUP_KEY`                                                                                                           |
-| **SearchAgent**      | 8        | Conditional | `Zeus search <query>` | Registered only if Brave Search is configured (`BRAVE_SEARCH_API_KEY`); handled before `LLMAgent`                                                                                             |
+| **SearchAgent**      | 8        | Conditional | `Zeus search<query>` | Registered only if Brave Search is configured (`BRAVE_SEARCH_API_KEY`); handled before `LLMAgent`                                                                                             |
 | **LLMAgent**         | 9        | Always on   | `Zeus <prompt>`       | Uses OpenRouter; returns config error if `OPENROUTER_API_KEY` missing; excludes `Zeus search ...`                                                                                             |
 | **TranslationAgent** | 10       | Always on   | Default/fallback      | Detects language, calls Google or LibreTranslate, applies session/rate-limit rules                                                                                                            |
 | **SpecialNewsAgent** | 12       | Always on   | `/special news`       | DM-only for regular users; gated by triggers                                                                                                                                                  |
-| **NewsAgent**        | 15       | Always on   | `news` or `ข่าว`      | Friend-gated in groups/rooms; translation-only for non-friends. Privileged users (admin/moderator) can access full menu in private chats. See [News Access Model](#news-access-model) below. |
+| **NewsAgent**        | 15       | Always on   | `news` or `ข่าว`      | Friend-gated in groups/rooms; translation-only for non-friends. Privileged users (admin/moderator) can access full menu in private chats. See [News Access Model](#-news-access-model) below. |
 
 ## 🤖 Zeus Commands (AI + Search)
 
@@ -218,7 +218,7 @@ pytest tests/test_translation_agent.py    # Single file
    - `async def handle(event, text, line_bot_api) -> bool` — return True if successful
    - `get_priority() -> int` — return 0-100 (lower = runs first)
 3. **Pick priority wisely:**
-   - `<10`: Preempts translation (rarely needed; AdminAgent is exception at 5)
+   - `    <10`: Preempts translation (rarely needed; AdminAgent is exception at 5)
    - `10-20`: Runs after translation checks
    - `>20`: Fallback behavior
 4. **Register in `src/main.py` lifespan:**

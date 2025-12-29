@@ -51,6 +51,8 @@
 ### Project Management
 
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history and notable changes
+- **[JOBCARD.md](JOBCARD.md)** - Current development tasks and tracking
+- **[CODE_REVIEW.md](CODE_REVIEW.md)** - Comprehensive code review and improvement recommendations
 
 ## 🗂️ Documentation by Category
 
@@ -106,4 +108,4 @@ These files remain in the root for backward compatibility but have been supersed
 - Tracing/monitoring: [docs/TRACING.md](docs/TRACING.md)
 - Translation troubleshooting: [docs/INCOMPLETE_SENTENCE_FIX.md](docs/INCOMPLETE_SENTENCE_FIX.md)
 
-Last updated: 2025-12-28
+Last updated: 2025-12-29

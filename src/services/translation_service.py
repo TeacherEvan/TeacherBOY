@@ -6,6 +6,7 @@ from typing import Optional, Tuple
 from langdetect import detect, LangDetectException
 
 from src.config import settings
+from src.services.cache_service import cache_service
 from src.utils.text_preprocessing import (
     extract_parenthesized_text,
     restore_parenthesized_text,
@@ -72,6 +73,14 @@ class TranslationService:
         Returns:
             Translated text or None if translation fails
         """
+        # Check cache first if TTL is enabled
+        if settings.translation_cache_ttl_seconds > 0:
+            cache_key = f"{source_lang}:{target_lang}:{text}"
+            cached_result = cache_service.get("translation", cache_key)
+            if cached_result is not None:
+                logger.debug(f"Cache hit for translation: {cache_key}")
+                return cached_result
+
         try:
             # Detect and handle incomplete sentences to prevent hallucination
             processed_text = text
@@ -117,6 +126,11 @@ class TranslationService:
 
             # Restore parenthesized text
             translated_text = restore_parenthesized_text(translated_text, extracted_items)
+
+            # Cache the result if caching is enabled
+            if settings.translation_cache_ttl_seconds > 0:
+                cache_key = f"{source_lang}:{target_lang}:{text}"
+                cache_service.set("translation", cache_key, translated_text)
 
             logger.info(f"Translation successful: {source_lang} -> {target_lang}")
             return translated_text

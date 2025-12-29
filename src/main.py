@@ -344,14 +344,80 @@ async def root() -> Dict[str, Any]:
 
 
 @app.get("/health", tags=["Health"])
-async def health_check() -> Dict[str, str]:
+async def health_check() -> Dict[str, Any]:
     """
     Kubernetes-style health check endpoint.
 
     Returns HTTP 200 if the service is healthy and ready to serve traffic.
+    Includes checks for critical external dependencies.
     """
-    # TODO: [OPTIMIZATION] Add actual health checks (DB connection, external APIs, etc.)
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "checks": {}
+    }
+
+    # Check LINE Bot API connectivity
+    try:
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            # Simple check - get bot info (already cached in bot_user_id)
+            if bot_user_id:
+                health_status["checks"]["line_api"] = "healthy"
+            else:
+                health_status["checks"]["line_api"] = "degraded"
+                health_status["status"] = "degraded"
+    except Exception as e:
+        logger.warning(f"LINE API health check failed: {e}")
+        health_status["checks"]["line_api"] = "unhealthy"
+        health_status["status"] = "unhealthy"
+
+    # Check Google Translate API if configured
+    if settings.is_google_translate_configured():
+        try:
+            # Simple test translation
+            test_result = await google_translation_service.translate("Hello", "en", "th")
+            if test_result:
+                health_status["checks"]["google_translate"] = "healthy"
+            else:
+                health_status["checks"]["google_translate"] = "degraded"
+        except Exception as e:
+            logger.warning(f"Google Translate health check failed: {e}")
+            health_status["checks"]["google_translate"] = "unhealthy"
+            # Don't mark overall unhealthy if fallback exists
+
+    # Check LibreTranslate API
+    try:
+        test_result = await translation_service.translate("Hello", "en", "th")
+        if test_result:
+            health_status["checks"]["libretranslate"] = "healthy"
+        else:
+            health_status["checks"]["libretranslate"] = "unhealthy"
+            if not settings.is_google_translate_configured():
+                health_status["status"] = "unhealthy"
+    except Exception as e:
+        logger.warning(f"LibreTranslate health check failed: {e}")
+        health_status["checks"]["libretranslate"] = "unhealthy"
+        if not settings.is_google_translate_configured():
+            health_status["status"] = "unhealthy"
+
+    # Check OpenRouter if configured
+    if settings.is_openrouter_configured():
+        try:
+            # Simple connectivity check (don't make expensive LLM call)
+            health_status["checks"]["openrouter"] = "configured"
+        except Exception as e:
+            logger.warning(f"OpenRouter health check failed: {e}")
+            health_status["checks"]["openrouter"] = "unhealthy"
+
+    # Check agent registration
+    agents_count = len(agent_router.list_agents())
+    health_status["checks"]["agents_registered"] = agents_count
+    if agents_count == 0:
+        health_status["status"] = "unhealthy"
+        health_status["checks"]["agents_registered"] = "no_agents"
+
+    return health_status
 
 
 @app.get("/readiness", tags=["Health"])

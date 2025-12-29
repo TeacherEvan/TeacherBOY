@@ -8,6 +8,7 @@ pydantic-settings==2.1.0
 langdetect==1.0.9
 holidays==0.41.0
 feedparser==6.0.10
+cachetools==5.3.0
 
 # Tracing / Observability (OpenTelemetry)
 opentelemetry-api==1.29.0
