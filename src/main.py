@@ -51,6 +51,7 @@ from src.agents.special_news_agent import SpecialNewsAgent
 from src.agents.news_agent import NewsAgent
 from src.agents.llm_agent import LLMAgent
 from src.agents.search_agent import SearchAgent
+from src.agents.help_agent import HelpAgent
 from src.services.openrouter_service import openrouter_service
 from src.services.brave_search_service import brave_search_service
 from src.handlers.message_handler import (
@@ -178,6 +179,11 @@ async def lifespan(app: FastAPI):
     # PHASE 3: Agent Registration
     # ========================================================================
     logger.info("📋 Registering intelligent agents...")
+
+    # Register Help Agent (Priority: 5 - Highest)
+    help_agent = HelpAgent()
+    agent_router.register_agent(help_agent)
+    logger.info("🗡️ Help Agent registered (comprehensive contextual help)")
 
     # Register Admin Agent if configured (Priority: 5 - Highest)
     admin_user_ids: list[str] = []

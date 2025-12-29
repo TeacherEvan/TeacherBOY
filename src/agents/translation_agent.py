@@ -75,20 +75,7 @@ class TranslationAgent(BaseAgent):
         zeus_pattern = r"^dear\s+zeus[\s.!]*$"
         return bool(re.match(zeus_pattern, text.lower().strip()))
 
-    def is_help_command(self, text: str) -> bool:
-        """Check if text is a help command for the bot."""
-        text_lower = text.lower().strip()
-        zeus_pattern = r"dear\s+zeus"
-        help_patterns = [
-            rf"^{zeus_pattern}\s+--help[\s.!?]*$",
-            rf"^{zeus_pattern}\s+help[\s.!?]*$",
-        ]
-        return any(re.match(pattern, text_lower) for pattern in help_patterns)
 
-    def is_private_help_command(self, text: str) -> bool:
-        """Return True for plain 'help' (intended for 1:1 chat)."""
-        text_clean = re.sub(r"[\s.!?]+$", "", text.lower().strip())
-        return text_clean == "help"
 
     def _is_private_chat(self, event: MessageEvent) -> bool:
         if event.source and getattr(event.source, "group_id", None):
@@ -97,27 +84,7 @@ class TranslationAgent(BaseAgent):
             return False
         return True
 
-    def _get_contextual_help(self, is_admin: bool) -> str:
-        msg = (
-            "Help\n"
-            "━━━━━━━━━━━━\n\n"
-            "User commands:\n"
-            "- Dear Zeus  (wake)\n"
-            "- amen  (sleep 24h)\n"
-            "- help  (this message)\n"
-            "- news / ข่าว  (private: keyword translation only; admins/mods get full menu)\n"
-        )
-        if is_admin:
-            msg += (
-                "\nAdmin commands:\n"
-                "- /admin help\n"
-                "- /admin stats\n"
-                "- /admin leave ... (confirmation)\n"
-                "- /admin purge ... (confirmation)\n"
-                "- /admin confirm <token>\n"
-                "- /admin cancel <token>\n"
-            )
-        return msg
+
 
     def is_exit_command(self, text: str) -> bool:
         """Check if text is an exit command (ends session but doesn't sleep)."""
@@ -146,13 +113,7 @@ class TranslationAgent(BaseAgent):
         """
         chat_id = self._get_chat_id(event)
 
-        # Always handle help command (even if sleeping)
-        if self.is_help_command(text):
-            return True
 
-        # Plain help in private chat
-        if self._is_private_chat(event) and self.is_private_help_command(text):
-            return True
 
         # Always handle wake command (even if not sleeping)
         if self.is_wake_command(text):
@@ -207,55 +168,7 @@ class TranslationAgent(BaseAgent):
         with tracer.start_as_current_span("translation_agent.handle") as span:
             span.set_attribute("chat.id", chat_id)
             try:
-                # Help command
-                if self.is_help_command(text):
-                    span.set_attribute("translation.command", "help")
-                    help_message = TextMessage(
-                        text=(
-                            "Zeus Help\n"
-                            "━━━━━━━━━━━━\n\n"
-                            "Wake the bot:\n"
-                            "- Dear Zeus\n\n"
-                            "Put the bot to sleep (24h):\n"
-                            "- amen\n\n"
-                            "Admin (if enabled):\n"
-                            "- Dear Zeus admin help\n"
-                            "- /admin help\n\n"
-                            "Tips:\n"
-                            "- Send Thai to start auto-translation\n"
-                            "- Translation continues until sleep"
-                        ),
-                        quickReply=None,
-                        quoteToken=None,
-                    )
-                    if event.reply_token:
-                        await asyncio.to_thread(
-                            line_bot_api.reply_message,
-                            ReplyMessageRequest(
-                                replyToken=event.reply_token,
-                                messages=[help_message],
-                                notificationDisabled=False,
-                            ),
-                        )
-                    return True
 
-                # Private chat: contextual help (plain 'help')
-                if self._is_private_chat(event) and self.is_private_help_command(text):
-                    span.set_attribute("translation.command", "help_private")
-                    help_text = self._get_contextual_help(self._is_admin(user_id))
-                    help_message = TextMessage(
-                        text=help_text, quickReply=None, quoteToken=None
-                    )
-                    if event.reply_token:
-                        await asyncio.to_thread(
-                            line_bot_api.reply_message,
-                            ReplyMessageRequest(
-                                replyToken=event.reply_token,
-                                messages=[help_message],
-                                notificationDisabled=False,
-                            ),
-                        )
-                    return True
 
                 # Handle wake command
                 if self.is_wake_command(text):
@@ -310,11 +223,11 @@ class TranslationAgent(BaseAgent):
                     return True
 
                 # Check for rate limiting (skip for admins)
-                if not self._is_admin(user_id) and not rate_limiter.is_allowed(chat_id):
+                if not self._is_admin(user_id) and not rate_limiter.is_allowed(chat_id, user_id):
                     span.set_attribute("translation.rate_limited", True)
                     metrics_service.record_rate_limited()
-                    reset_seconds = rate_limiter.get_reset_time(chat_id)
-                    rate_limit_message = self._create_rate_limit_message(reset_seconds)
+                    reset_seconds = rate_limiter.get_reset_time(chat_id, user_id)
+                    rate_limit_message = self._create_rate_limit_message(reset_seconds, user_id)
                     if event.reply_token:
                         await asyncio.to_thread(
                             line_bot_api.reply_message,
@@ -324,7 +237,7 @@ class TranslationAgent(BaseAgent):
                                 notificationDisabled=False,
                             ),
                         )
-                    logger.warning(f"⚠️  Rate limited chat {chat_id}")
+                    logger.warning(f"⚠️  Rate limited chat {chat_id}, user {user_id}")
                     return True
                 elif self._is_admin(user_id):
                     logger.debug(f"🔓 Admin {user_id} bypassed rate limit")
@@ -774,23 +687,43 @@ class TranslationAgent(BaseAgent):
             quickReply=None,
         )
 
-    def _create_rate_limit_message(self, reset_seconds: int) -> TextMessage:
+    def _create_rate_limit_message(self, reset_seconds: int, user_id: Optional[str] = None) -> TextMessage:
         """
-        Create a friendly rate limit notification message.
+        Create a friendly rate limit notification message with premium upgrade options.
 
         Args:
             reset_seconds: Seconds until rate limit resets
+            user_id: User ID to check for premium eligibility
 
         Returns:
             TextMessage with rate limit notification
         """
-        message_text = (
-            "⏳ Rate Limit Reached\n"
-            "คุณแปลเร็วเกินไปค่ะ!\n\n"
-            f"Please wait {reset_seconds} seconds\n"
-            "กรุณารอสักครู่นะคะ 😊\n\n"
-            "💡 Limit: 10 translations per minute"
-        )
+        import os
+        user_name = os.getenv("USER_NAME")
+
+        # Check if this is a user-based limit breach
+        is_user_limit = user_id and user_name and user_id == user_name
+
+        if is_user_limit:
+            message_text = (
+                "⚡ Premium User Rate Limit\n"
+                "You've reached your daily interaction limit!\n\n"
+                f"⏳ Reset in: {reset_seconds // 3600}h {(reset_seconds % 3600) // 60}m\n\n"
+                "💎 Upgrade to premium for unlimited access:\n"
+                "• Higher daily limits\n"
+                "• Priority support\n"
+                "• Advanced features\n\n"
+                "Contact admin for premium upgrade options!"
+            )
+        else:
+            message_text = (
+                "⏳ Rate Limit Reached\n"
+                "คุณแปลเร็วเกินไปค่ะ!\n\n"
+                f"Please wait {reset_seconds} seconds\n"
+                "กรุณารอสักครู่นะคะ 😊\n\n"
+                "💡 Limit: 10 translations per minute\n\n"
+                "💎 Premium users get higher limits!"
+            )
 
         return TextMessage(text=message_text, quickReply=None, quoteToken=None)
 

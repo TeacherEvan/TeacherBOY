@@ -34,12 +34,13 @@ USER_BOSS=U1234567890abcdef
 
 ## 🤖 Agent Priority Order
 
-1. **AdminAgent** (Priority 5) - `/admin` commands
-2. **SearchAgent** (Priority 8) - `Zeus search ...` (DM-only for non-admins)
-3. **LLMAgent** (Priority 9) - `Zeus ...` (DM-only for non-admins)
-4. **TranslationAgent** (Priority 10) - Thai ↔ English translation
-5. **SpecialNewsAgent** (Priority 12) - `/special news` command (DM-only)
-6. **NewsAgent** (Priority 15) - `news` or `ข่าว` trigger
+1. **HelpAgent** (Priority 5) - Comprehensive help system (`help`, `Dear Zeus help`, etc.)
+2. **AdminAgent** (Priority 5) - `/admin` commands
+3. **SearchAgent** (Priority 8) - `Zeus search ...` (DM-only for non-admins)
+4. **LLMAgent** (Priority 9) - `Zeus ...` (DM-only for non-admins)
+5. **TranslationAgent** (Priority 10) - Thai ↔ English translation
+6. **SpecialNewsAgent** (Priority 12) - `/special news` command (DM-only)
+7. **NewsAgent** (Priority 15) - `news` or `ข่าว` trigger
 
 ## 🤖 AI & Search Commands (Zeus)
 
@@ -78,11 +79,15 @@ Notes:
 | Agent           | User Type          | Limit            | Time Window           |
 | --------------- | ------------------ | ---------------- | --------------------- |
 | **Translation** | Admin              | Unlimited        | -                     |
-| **Translation** | Standard           | 10 requests      | 60 seconds            |
+| **Translation** | Premium (USER_NAME)| 3 interactions   | 24 hours (daily)      |
+| **Translation** | Premium (USER_NAME)| 1 interaction    | 60 seconds (burst)    |
+| **Translation** | Standard           | 10 requests      | 60 seconds (chat)     |
 | **News**        | Admin/Moderator    | Unlimited        | -                     |
 | **News**        | Friend (group)     | 1 request        | 3600 seconds (1 hour) |
 | **News**        | Non-friend (group) | Translation only | -                     |
 | **News**        | Private chat       | Translation only | -                     |
+
+**Premium Access:** Set `USER_NAME=<LINE_USER_ID>` for authenticated user limits with upgrade messaging.
 
 ## 📰 News Agent Access Matrix
 
@@ -147,6 +152,7 @@ src/
 ├── agents/
 │   ├── agent_router.py        # Agent dispatch
 │   ├── base_agent.py          # Abstract base
+│   ├── help_agent.py          # Comprehensive help system
 │   ├── llm_agent.py           # OpenRouter LLM (Zeus ...)
 │   ├── search_agent.py        # Brave Search (Zeus search ...)
 │   ├── translation_agent.py   # Translation logic
