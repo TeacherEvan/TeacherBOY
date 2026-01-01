@@ -2,18 +2,18 @@
 
 ## 📋 Index
 
-- [🎯 Quick Context](#quick-context)
-- [🔄 Webhook Flow](#webhook-flow-read-first)
-- [🤖 Agent Hierarchy](#agent-hierarchy-priority-order)
-- [📰 News Access Model](#news-access-model)
-- [📰 Extended News Menu](#extended-news-menu-8-items-for-friends)
-- [⏱️ Rate Limiting](#rate-limiting-rules)
-- [📋 Session & Rate-Limiting Rules](#session--rate-limiting-rules-translationagent-only)
-- [🌐 Translation Provider Stack](#translation-provider-stack)
-- [🛠️ Developer Workflows](#developer-workflows)
-- [➕ Adding a New Agent](#adding-a-new-agent-pattern)
-- [📝 Code Patterns to Follow](#code-patterns-to-follow)
-- [⚠️ Known Gotchas & Legacy](#known-gotchas--legacy)
+- [🎯 Quick Context](#🎯-quick-context)
+- [🔄 Webhook Flow](#🔄-webhook-flow-read-first)
+- [🤖 Agent Hierarchy](#🤖-agent-hierarchy-priority-order)
+- [📰 News Access Model](#📰-news-access-model)
+- [📰 Extended News Menu](#📰-extended-news-menu-8-items-for-friends)
+- [⏱️ Rate Limiting](#⏱️-rate-limiting)
+- [📋 Session & Rate-Limiting Rules](#📋-session--rate-limiting-rules-translationagent-only)
+- [🌐 Translation Provider Stack](#🌐-translation-provider-stack)
+- [🛠️ Developer Workflows](#🛠️-developer-workflows)
+- [➕ Adding a New Agent](#➕-adding-a-new-agent-pattern)
+- [📝 Code Patterns to Follow](#📝-code-patterns-to-follow)
+- [⚠️ Known Gotchas & Legacy](#⚠️-known-gotchas--legacy)
 
 ## 🎯 Quick Context
 
@@ -50,7 +50,7 @@ First agent with should_handle()=true → calls handle()
 | **LLMAgent**         | 9        | Always on   | `Zeus <prompt>`       | Uses GitHub Models or OpenRouter with conversation memory; excludes `Zeus search ...`; supports `Zeus clear/forget/reset` for memory                                                         |
 | **TranslationAgent** | 10       | Always on   | Default/fallback      | Detects language, calls Google or LibreTranslate, applies session/rate-limit rules                                                                                                           |
 | **SpecialNewsAgent** | 12       | Always on   | `/special news`       | DM-only for regular users; gated by triggers                                                                                                                                                 |
-| **NewsAgent**        | 15       | Always on   | `news` or `ข่าว`      | Friend-gated in groups/rooms; translation-only for non-friends. Privileged users (admin/moderator) can access full menu in private chats. See [News Access Model](#news-access-model) below. |
+| **NewsAgent**        | 15       | Always on   | `news` or `ข่าว`      | Friend-gated in groups/rooms; translation-only for non-friends. Privileged users (admin/moderator) can access full menu in private chats. See [News Access Model](#📰-news-access-model) below. |
 
 ## 🤖 Zeus Commands (AI + Search)
 
