@@ -40,7 +40,8 @@ class SpecialNewsAgent(BaseAgent):
         self._friend_cache: Dict[str, tuple[bool, datetime]] = {}
 
         # Feeds
-        self._tourism_feed = "https://www.tatnews.org/feed/"
+        # Note: TAT News (tatnews.org) returns 403, using Bangkok Post Travel instead
+        self._tourism_feed = "https://www.bangkokpost.com/rss/data/travel.xml"
         self._sports_feed = "https://www.bangkokpost.com/rss/data/sports.xml"
         self._international_feed = "https://www.bangkokpost.com/rss/data/world.xml"
 

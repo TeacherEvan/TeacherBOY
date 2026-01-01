@@ -167,7 +167,7 @@ class SpecialNewsService:
 
     def _get_feed_name(self, url: str) -> str:
         """Extract human-readable feed name from URL."""
-        if "tatnews" in url:
+        if "tatnews" in url or "travel" in url:
             return "Thailand Tourism"
         elif "sports" in url:
             return "Sports"
