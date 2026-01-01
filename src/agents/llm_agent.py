@@ -1,4 +1,4 @@
-"""LLM Agent - Handles general questions using OpenRouter."""
+"""LLM Agent - Handles general questions using GitHub Models or OpenRouter."""
 
 import asyncio
 import logging
@@ -14,6 +14,7 @@ from linebot.v3.messaging import (
 
 from .base_agent import BaseAgent
 from src.services.openrouter_service import openrouter_service
+from src.services.github_models_service import github_models_service
 from src.utils.tracing import get_tracer
 from src.config import settings
 from src.services.privilege_service import privilege_service
@@ -23,16 +24,47 @@ tracer = get_tracer(__name__)
 
 
 class LLMAgent(BaseAgent):
-    """Agent for handling general questions using OpenRouter LLMs."""
+    """Agent for handling general questions using GitHub Models or OpenRouter LLMs."""
 
     def __init__(self):
         super().__init__(
             name="LLMAgent",
-            description="General Q&A using OpenRouter LLMs",
+            description="General Q&A using GitHub Models or OpenRouter LLMs",
         )
+        # Services for LLM providers
+        self.github_service = github_models_service
+        self.openrouter_service = openrouter_service
+        # Keep legacy reference for admin actions that use llm_service.client
         self.llm_service = openrouter_service
         # Cache env admins (tests patch module-local `settings`).
         self._admin_user_ids = settings.get_admin_user_ids()
+
+    def _get_configured_provider(self) -> tuple[Optional[object], str]:
+        """
+        Get the first configured LLM provider based on priority settings.
+        
+        Returns:
+            Tuple of (service_instance, provider_name) or (None, "") if none configured
+        """
+        priority = settings.get_llm_provider_priority()
+        
+        for provider in priority:
+            if provider == "github" and self.github_service.is_configured():
+                return self.github_service, "GitHub Models"
+            elif provider == "openrouter" and self.openrouter_service.is_configured():
+                return self.openrouter_service, "OpenRouter"
+        
+        # Fallback: try any configured provider
+        if self.github_service.is_configured():
+            return self.github_service, "GitHub Models"
+        if self.openrouter_service.is_configured():
+            return self.openrouter_service, "OpenRouter"
+        
+        return None, ""
+
+    def _is_any_llm_configured(self) -> bool:
+        """Check if any LLM provider is configured."""
+        return self.github_service.is_configured() or self.openrouter_service.is_configured()
 
     def get_priority(self) -> int:
         """
@@ -261,11 +293,12 @@ class LLMAgent(BaseAgent):
                     return True
 
             if action == "llm_send":
-                if not self.llm_service.is_configured():
+                llm_provider, provider_name = self._get_configured_provider()
+                if not llm_provider:
                     await self._send_reply(
                         event,
                         line_bot_api,
-                        "❌ OpenRouter is not configured (missing OPENROUTER_API_KEY).",
+                        "❌ No LLM provider configured.\n\nSet GITHUB_MODELS_PAT or OPENROUTER_API_KEY.",
                     )
                     return True
 
@@ -277,7 +310,7 @@ class LLMAgent(BaseAgent):
                     },
                     {"role": "user", "content": payload or ""},
                 ]
-                drafted = await self.llm_service.chat_completion(messages, temperature=0.4)
+                drafted = await llm_provider.chat_completion(messages, temperature=0.4)
                 if not drafted:
                     await self._send_reply(event, line_bot_api, "❌ LLM failed to generate a message.")
                     return True
@@ -301,9 +334,23 @@ class LLMAgent(BaseAgent):
             span.set_attribute("llm.query", query)
             
             try:
-                if not self.llm_service.is_configured():
-                    await self._send_reply(event, line_bot_api, "LLM service is not configured (missing API key).")
+                # Get the configured LLM provider
+                llm_provider, provider_name = self._get_configured_provider()
+                
+                if not llm_provider:
+                    await self._send_reply(
+                        event, 
+                        line_bot_api, 
+                        (
+                            "⚠️ No LLM service configured.\n\n"
+                            "Configure one of:\n"
+                            "• GITHUB_MODELS_PAT (free tier)\n"
+                            "• OPENROUTER_API_KEY"
+                        )
+                    )
                     return True
+
+                span.set_attribute("llm.provider", provider_name)
 
                 # Prepare prompt
                 messages = [
@@ -311,20 +358,38 @@ class LLMAgent(BaseAgent):
                     {"role": "user", "content": query}
                 ]
 
-                # Call LLM
-                response_text = await self.llm_service.chat_completion(messages)
+                # Call LLM with primary provider
+                response_text = await llm_provider.chat_completion(messages)
+                
+                # If primary fails and we have a fallback, try it
+                if not response_text:
+                    fallback_provider, fallback_name = self._get_fallback_provider(provider_name)
+                    if fallback_provider:
+                        logger.warning(f"⚠️ {provider_name} failed, trying fallback: {fallback_name}")
+                        response_text = await fallback_provider.chat_completion(messages)
+                        if response_text:
+                            provider_name = fallback_name
                 
                 if not response_text:
-                    status_code, err_text, model_used = self.llm_service.get_last_error()
+                    status_code, err_text, model_used = llm_provider.get_last_error()
                     if status_code:
                         if status_code == 404 and model_used:
                             await self._send_reply(
                                 event,
                                 line_bot_api,
                                 (
-                                    f"OpenRouter error (404): model not available: {model_used}\n\n"
-                                    "Fix: set OPENROUTER_DEFAULT_MODEL to a supported model in your host/Space Secrets, then restart.\n"
-                                    "Models: https://openrouter.ai/models"
+                                    f"{provider_name} error (404): model not available: {model_used}\n\n"
+                                    "Fix: update the default model in your environment settings."
+                                ),
+                            )
+                        elif status_code == 429:
+                            await self._send_reply(
+                                event,
+                                line_bot_api,
+                                (
+                                    f"⏳ {provider_name} rate limit reached.\n\n"
+                                    "Free tier limits: ~15 requests/minute.\n"
+                                    "Please wait a moment and try again."
                                 ),
                             )
                         else:
@@ -332,9 +397,8 @@ class LLMAgent(BaseAgent):
                                 event,
                                 line_bot_api,
                                 (
-                                    f"OpenRouter error ({status_code}).\n\n"
-                                    "Fix: check OPENROUTER_API_KEY and OPENROUTER_DEFAULT_MODEL in your host/Space Secrets, then restart.\n"
-                                    "Models: https://openrouter.ai/models"
+                                    f"{provider_name} error ({status_code}).\n\n"
+                                    "Check your API key/PAT configuration."
                                 ),
                             )
                     else:
@@ -348,7 +412,7 @@ class LLMAgent(BaseAgent):
                 # Send response
                 await self._send_reply(event, line_bot_api, response_text)
                 
-                logger.info(f"✅ Sent LLM response for '{query}'")
+                logger.info(f"✅ Sent LLM response via {provider_name} for '{query[:30]}...'")
                 return True
 
             except Exception as e:
@@ -359,6 +423,14 @@ class LLMAgent(BaseAgent):
                     # If replying fails (e.g., invalid reply token), still treat as handled
                     pass
                 return True
+
+    def _get_fallback_provider(self, primary_name: str) -> tuple[Optional[object], str]:
+        """Get fallback provider if primary fails."""
+        if primary_name == "GitHub Models" and self.openrouter_service.is_configured():
+            return self.openrouter_service, "OpenRouter"
+        elif primary_name == "OpenRouter" and self.github_service.is_configured():
+            return self.github_service, "GitHub Models"
+        return None, ""
 
     async def _send_reply(self, event: MessageEvent, line_bot_api: MessagingApi, message: str):
         """Send text reply."""

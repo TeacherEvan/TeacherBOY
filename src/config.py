@@ -171,6 +171,32 @@ class Settings(BaseSettings):
         description="Brave Search API key for web search capabilities",
     )
 
+    # ============================================================================
+    # GitHub Models Configuration (Alternative to OpenRouter)
+    # ============================================================================
+    github_models_pat: Optional[str] = Field(
+        default=None,
+        description=(
+            "GitHub Personal Access Token (PAT) with 'models:read' scope for GitHub Models API. "
+            "Create at https://github.com/settings/tokens"
+        ),
+    )
+    github_models_default_model: str = Field(
+        default="openai/gpt-4o",
+        description=(
+            "Default model for GitHub Models API. Options include: "
+            "openai/gpt-4o, openai/gpt-4o-mini, xai/grok-3, deepseek/deepseek-r1, "
+            "meta/llama-3.3-70b-instruct. See https://github.com/marketplace/models"
+        ),
+    )
+    llm_provider_priority: str = Field(
+        default="github,openrouter",
+        description=(
+            "Comma-separated priority list for LLM providers. "
+            "Options: 'github', 'openrouter'. First configured provider is used."
+        ),
+    )
+
     # Cache TTLs for new menu items
     color_cache_ttl_seconds: int = Field(
         default=86400,
@@ -338,6 +364,21 @@ class Settings(BaseSettings):
     def is_brave_search_configured(self) -> bool:
         """Check if Brave Search API is properly configured."""
         return bool(self.brave_search_api_key and len(self.brave_search_api_key) > 10)
+
+    def is_github_models_configured(self) -> bool:
+        """Check if GitHub Models API is properly configured with a PAT."""
+        return bool(self.github_models_pat and len(self.github_models_pat) > 10)
+
+    def get_llm_provider_priority(self) -> list[str]:
+        """
+        Get ordered list of LLM providers to try.
+        
+        Returns:
+            List of provider names in priority order (e.g., ['github', 'openrouter'])
+        """
+        if not self.llm_provider_priority:
+            return ["github", "openrouter"]
+        return [p.strip().lower() for p in self.llm_provider_priority.split(",") if p.strip()]
 
     def get_admin_user_ids(self) -> list[str]:
         """
