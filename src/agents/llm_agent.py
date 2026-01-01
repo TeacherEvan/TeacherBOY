@@ -374,9 +374,10 @@ class LLMAgent(BaseAgent):
                         event, 
                         line_bot_api, 
                         (
-                            "⚠️ No LLM service configured.\n\n"
-                            "Configure one of:\n"
-                            "• GITHUB_MODELS_PAT (free tier)\n"
+                            "⚠️ Zeus cannot speak without an Oracle!\n\n"
+                            "No LLM service is configured for divine wisdom.\n\n"
+                            "🔧 Configure one of:\n"
+                            "• GITHUB_MODELS_PAT (Classic PAT with models:read)\n"
                             "• OPENROUTER_API_KEY"
                         )
                     )
@@ -428,8 +429,9 @@ class LLMAgent(BaseAgent):
                                 event,
                                 line_bot_api,
                                 (
-                                    f"{provider_name} error (404): model not available: {model_used}\n\n"
-                                    "Fix: update the default model in your environment settings."
+                                    f"🏛️ The Oracle you seek has wandered from Mount Olympus!\n\n"
+                                    f"Model '{model_used}' is not available in the {provider_name} pantheon.\n\n"
+                                    "⚡ Decree: Update the default model in your environment settings."
                                 ),
                             )
                         elif status_code == 429:
@@ -437,9 +439,24 @@ class LLMAgent(BaseAgent):
                                 event,
                                 line_bot_api,
                                 (
-                                    f"⏳ {provider_name} rate limit reached.\n\n"
-                                    "Free tier limits: ~15 requests/minute.\n"
-                                    "Please wait a moment and try again."
+                                    "⏳ Even the God of Thunder must rest between lightning strikes!\n\n"
+                                    f"The {provider_name} Olympian scrolls are briefly sealed.\n"
+                                    "Free tier: ~15 requests per minute.\n\n"
+                                    "🌩️ Patience, mortal. Try again in a moment."
+                                ),
+                            )
+                        elif status_code == 403:
+                            await self._send_reply(
+                                event,
+                                line_bot_api,
+                                (
+                                    "⚡ By the thunderbolts of Olympus! The gates of wisdom are CLOSED!\n\n"
+                                    f"Error 403: {provider_name} denies entry to Zeus.\n\n"
+                                    "🔑 Mortal decrees to restore access:\n"
+                                    "• Use a CLASSIC PAT (not fine-grained)\n"
+                                    "• Enable 'models:read' scope\n"
+                                    "• Visit github.com/marketplace/models first\n\n"
+                                    "⚠️ Fine-grained PATs lack the divine 'models' permission!"
                                 ),
                             )
                         else:
@@ -447,15 +464,20 @@ class LLMAgent(BaseAgent):
                                 event,
                                 line_bot_api,
                                 (
-                                    f"{provider_name} error ({status_code}).\n\n"
-                                    "Check your API key/PAT configuration."
+                                    f"🌩️ Storm clouds obscure my vision! ({provider_name} error {status_code})\n\n"
+                                    "The Oracle's connection to Olympus falters.\n"
+                                    "Check your API key/PAT configuration and try again."
                                 ),
                             )
                     else:
                         await self._send_reply(
                             event,
                             line_bot_api,
-                            "Sorry, I couldn't generate an answer right now. Please try again in a moment.",
+                            (
+                                "🌩️ The mists of Olympus cloud my thoughts...\n\n"
+                                "Zeus cannot summon an answer at this moment.\n"
+                                "Try again shortly, brave mortal!"
+                            ),
                         )
                     return True
 
@@ -473,7 +495,15 @@ class LLMAgent(BaseAgent):
             except Exception as e:
                 logger.error(f"❌ LLM agent error: {e}", exc_info=True)
                 try:
-                    await self._send_reply(event, line_bot_api, "Sorry, something went wrong.")
+                    await self._send_reply(
+                        event, 
+                        line_bot_api, 
+                        (
+                            "⚡ A divine mishap on Mount Olympus!\n\n"
+                            "Zeus encountered an unexpected storm.\n"
+                            "The gods are working to restore order."
+                        )
+                    )
                 except Exception:
                     # If replying fails (e.g., invalid reply token), still treat as handled
                     pass
