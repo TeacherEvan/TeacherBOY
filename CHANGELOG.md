@@ -5,6 +5,19 @@ All notable changes to TeacherBOY will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.1] - 2026-01-01
+
+### 🐛 Fixed
+
+#### Special News Tourism Feed
+
+- **TAT News RSS 403 Error:** Replaced `tatnews.org/feed/` (HTTP 403 Forbidden) with Bangkok Post Travel RSS
+- All three special news feeds now use reliable Bangkok Post RSS sources:
+  - Tourism: `bangkokpost.com/rss/data/travel.xml`
+  - Sports: `bangkokpost.com/rss/data/sports.xml`
+  - International: `bangkokpost.com/rss/data/world.xml`
+- Updated feed name detection to recognize "travel" URL as "Thailand Tourism"
+
 ## [3.2.0] - 2025-12-16
 
 ### 🚀 Added

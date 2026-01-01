@@ -52,6 +52,8 @@
         "uvicorn",
         "webhook",
         "yday",
+        "tatnews",
+        "bangkokpost",
         "ขอบคุณ",
         "ข่าวทดสอบ",
         "ชมพู",
