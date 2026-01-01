@@ -5,6 +5,7 @@ This guide explains how to use **GitHub Models** as your primary LLM provider fo
 ## 🎯 Overview
 
 GitHub Models is a **free AI inference API** that lets you access state-of-the-art models like:
+
 - **OpenAI GPT-4o, GPT-4o-mini, GPT-4.1**
 - **xAI Grok-3, Grok-3-mini**
 - **DeepSeek-R1**
@@ -13,12 +14,12 @@ GitHub Models is a **free AI inference API** that lets you access state-of-the-a
 
 ### Why Use GitHub Models?
 
-| Feature | GitHub Models | OpenRouter |
-|---------|--------------|------------|
-| **Cost** | Free tier included | Pay per token |
-| **Auth** | GitHub PAT | API key |
-| **Rate Limits** | 15-150 req/day (free) | Varies by credit |
-| **Models** | GPT-4o, Grok, DeepSeek | 100+ models |
+| Feature         | GitHub Models          | OpenRouter       |
+| --------------- | ---------------------- | ---------------- |
+| **Cost**        | Free tier included     | Pay per token    |
+| **Auth**        | GitHub PAT             | API key          |
+| **Rate Limits** | 15-150 req/day (free)  | Varies by credit |
+| **Models**      | GPT-4o, Grok, DeepSeek | 100+ models      |
 
 ---
 
@@ -75,14 +76,14 @@ Visit [github.com/marketplace/models](https://github.com/marketplace/models) for
 
 ### Recommended Models
 
-| Model ID | Description | Rate Limit Tier |
-|----------|-------------|-----------------|
-| `openai/gpt-4o` | Best overall, multimodal | Low |
-| `openai/gpt-4o-mini` | Fast, cost-effective | Low |
-| `xai/grok-3` | X.AI's latest | Special (1 rpm) |
-| `xai/grok-3-mini` | Faster Grok variant | Special (2 rpm) |
-| `deepseek/deepseek-r1` | Reasoning specialist | Special (1 rpm) |
-| `meta/llama-3.3-70b-instruct` | Open weights | Low |
+| Model ID                      | Description              | Rate Limit Tier |
+| ----------------------------- | ------------------------ | --------------- |
+| `openai/gpt-4o`               | Best overall, multimodal | Low             |
+| `openai/gpt-4o-mini`          | Fast, cost-effective     | Low             |
+| `xai/grok-3`                  | X.AI's latest            | Special (1 rpm) |
+| `xai/grok-3-mini`             | Faster Grok variant      | Special (2 rpm) |
+| `deepseek/deepseek-r1`        | Reasoning specialist     | Special (1 rpm) |
+| `meta/llama-3.3-70b-instruct` | Open weights             | Low             |
 
 ---
 
@@ -90,12 +91,14 @@ Visit [github.com/marketplace/models](https://github.com/marketplace/models) for
 
 GitHub Models has tiered rate limits based on your Copilot subscription:
 
-| Tier | Requests/Min | Requests/Day | Tokens (in/out) |
-|------|--------------|--------------|-----------------|
-| **Low** (most models) | 15 | 150 | 8000/4000 |
-| **High** (large models) | 10 | 50 | 8000/4000 |
-| **Grok-3** | 1 | 15 | 4000/4000 |
-| **DeepSeek-R1** | 1 | 8 | 4000/4000 |
+These limits are subject to change without notice (see the official link in Resources).
+
+| Tier                    | Requests/Min | Requests/Day | Tokens (in/out) |
+| ----------------------- | ------------ | ------------ | --------------- |
+| **Low** (most models)   | 15           | 150          | 8000/4000       |
+| **High** (large models) | 10           | 50           | 8000/4000       |
+| **Grok-3**              | 1            | 15           | 4000/4000       |
+| **DeepSeek-R1**         | 1            | 8            | 4000/4000       |
 
 Zeus automatically handles rate limits with exponential backoff retry.
 
@@ -121,12 +124,13 @@ If the primary provider fails (rate limited, error), Zeus automatically tries th
 
 Send a message to your LINE bot:
 
-```
+```text
 Zeus What is the capital of France?
 ```
 
 Check the logs for:
-```
+
+```text
 🤖 GitHub Models response from openai/gpt-4o (523 chars, 42+127 tokens)
 ✅ Sent LLM response via GitHub Models for 'What is the capital...'
 ```
@@ -165,25 +169,29 @@ GitHub Models uses an OpenAI-compatible API:
 **Endpoint:** `https://models.github.ai/inference/chat/completions`
 
 **Headers:**
+
 ```http
 Authorization: Bearer YOUR_GITHUB_PAT
 X-GitHub-Api-Version: 2022-11-28
 Content-Type: application/json
+Accept: application/vnd.github+json
 ```
 
 **Request Body:**
+
 ```json
 {
   "model": "openai/gpt-4o",
   "messages": [
-    {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "user", "content": "Hello!"}
+    { "role": "system", "content": "You are a helpful assistant." },
+    { "role": "user", "content": "Hello!" }
   ],
   "temperature": 0.7
 }
 ```
 
 **Response:**
+
 ```json
 {
   "choices": [

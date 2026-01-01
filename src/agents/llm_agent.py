@@ -15,6 +15,7 @@ from linebot.v3.messaging import (
 from .base_agent import BaseAgent
 from src.services.openrouter_service import openrouter_service
 from src.services.github_models_service import github_models_service
+from src.services.conversation_memory_service import get_conversation_memory
 from src.utils.tracing import get_tracer
 from src.config import settings
 from src.services.privilege_service import privilege_service
@@ -65,6 +66,18 @@ class LLMAgent(BaseAgent):
     def _is_any_llm_configured(self) -> bool:
         """Check if any LLM provider is configured."""
         return self.github_service.is_configured() or self.openrouter_service.is_configured()
+
+    def _get_chat_id(self, event: MessageEvent) -> str:
+        """Extract chat ID from event for conversation memory."""
+        source = event.source
+        if source:
+            if hasattr(source, "group_id") and source.group_id:
+                return f"group_{source.group_id}"
+            if hasattr(source, "room_id") and source.room_id:
+                return f"room_{source.room_id}"
+            if hasattr(source, "user_id") and source.user_id:
+                return f"user_{source.user_id}"
+        return "unknown"
 
     def get_priority(self) -> int:
         """
@@ -326,6 +339,25 @@ class LLMAgent(BaseAgent):
                 )
                 return True
 
+        # Handle memory clear command: "Zeus clear" or "Zeus forget"
+        if query.lower().strip() in ("clear", "forget", "reset"):
+            chat_id = self._get_chat_id(event)
+            memory = get_conversation_memory()
+            if memory:
+                await memory.clear_conversation(chat_id)
+                await self._send_reply(
+                    event,
+                    line_bot_api,
+                    "🧹 Conversation memory cleared.\n\nI've forgotten our previous chat. Start fresh!",
+                )
+            else:
+                await self._send_reply(
+                    event,
+                    line_bot_api,
+                    "💭 Memory is not enabled.\n\nNo conversation history to clear.",
+                )
+            return True
+
         logger.info(
             f"🤖 Zeus query from {user_id} ({'DM' if is_private else 'group'}): {query[:50]}..."
         )
@@ -352,11 +384,29 @@ class LLMAgent(BaseAgent):
 
                 span.set_attribute("llm.provider", provider_name)
 
-                # Prepare prompt
-                messages = [
-                    {"role": "system", "content": settings.llm_system_prompt},
-                    {"role": "user", "content": query}
-                ]
+                # Get conversation context from memory service
+                chat_id = self._get_chat_id(event)
+                memory = get_conversation_memory()
+                context_messages = []
+                
+                if memory and settings.conversation_memory_enabled:
+                    # Add user message to memory first
+                    await memory.add_message(chat_id, "user", query, user_id)
+                    # Get conversation context (includes system prompt hint)
+                    context_messages = await memory.get_context_messages(chat_id)
+                    logger.debug(f"💭 Retrieved {len(context_messages)} context messages for {chat_id}")
+
+                # Build messages with conversation context
+                messages = [{"role": "system", "content": settings.llm_system_prompt}]
+                
+                if context_messages:
+                    # Add context messages (excluding current query, already added to memory)
+                    # Context includes previous exchanges for multi-turn conversation
+                    for ctx_msg in context_messages[:-1]:  # Exclude last (current query)
+                        messages.append(ctx_msg)
+                
+                # Add current query
+                messages.append({"role": "user", "content": query})
 
                 # Call LLM with primary provider
                 response_text = await llm_provider.chat_completion(messages)
@@ -408,6 +458,11 @@ class LLMAgent(BaseAgent):
                             "Sorry, I couldn't generate an answer right now. Please try again in a moment.",
                         )
                     return True
+
+                # Save assistant response to conversation memory
+                if memory and settings.conversation_memory_enabled:
+                    await memory.add_message(chat_id, "assistant", response_text)
+                    logger.debug(f"💭 Saved assistant response to memory for {chat_id}")
 
                 # Send response
                 await self._send_reply(event, line_bot_api, response_text)

@@ -172,6 +172,76 @@ class Settings(BaseSettings):
     )
 
     # ============================================================================
+    # Conversation Memory Configuration (HF Hub Persistence)
+    # ============================================================================
+    hf_memory_token: Optional[str] = Field(
+        default=None,
+        description=(
+            "Hugging Face API token for conversation memory persistence. "
+            "Create at https://huggingface.co/settings/tokens with 'write' scope."
+        ),
+    )
+    hf_memory_repo_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Hugging Face dataset repo ID for storing conversation memory. "
+            "Example: 'username/zeus-memory'. Will be created as private if it doesn't exist."
+        ),
+    )
+    conversation_memory_enabled: bool = Field(
+        default=True,
+        description="Enable conversation memory for contextual multi-turn LLM conversations.",
+    )
+    conversation_max_messages: int = Field(
+        default=20,
+        ge=5,
+        le=50,
+        description="Maximum messages to retain per conversation session.",
+    )
+    conversation_ttl_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+        description="Hours before conversation session expires (1-168, default: 24).",
+    )
+
+    # ============================================================================
+    # History Logging Configuration
+    # ============================================================================
+    history_log_enabled: bool = Field(
+        default=True,
+        description="Enable comprehensive history logging for audit trails.",
+    )
+    history_log_path: str = Field(
+        default="./data/logs",
+        description="Local directory for storing history logs.",
+    )
+    history_log_encryption_key: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional encryption key for sensitive log data. "
+            "When set, logs are encrypted using AES (requires 'cryptography' package)."
+        ),
+    )
+    history_log_hf_repo_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Hugging Face dataset repo ID for cloud log backup. "
+            "Example: 'username/zeus-logs'. Will be created as private if it doesn't exist."
+        ),
+    )
+    history_log_rotation_days: int = Field(
+        default=7,
+        ge=1,
+        le=30,
+        description="Days before old logs are archived (1-30, default: 7).",
+    )
+    zeus_error_style: bool = Field(
+        default=True,
+        description="Format error messages in Zeus's mythological, authoritative style.",
+    )
+
+    # ============================================================================
     # GitHub Models Configuration (Alternative to OpenRouter)
     # ============================================================================
     github_models_pat: Optional[str] = Field(
@@ -368,6 +438,27 @@ class Settings(BaseSettings):
     def is_github_models_configured(self) -> bool:
         """Check if GitHub Models API is properly configured with a PAT."""
         return bool(self.github_models_pat and len(self.github_models_pat) > 10)
+
+    def is_conversation_memory_configured(self) -> bool:
+        """Check if Hugging Face conversation memory storage is configured."""
+        return bool(
+            self.conversation_memory_enabled
+            and self.hf_memory_token
+            and self.hf_memory_repo_id
+            and len(self.hf_memory_token) > 10
+        )
+
+    def is_history_log_configured(self) -> bool:
+        """Check if history logging is enabled and configured."""
+        return bool(self.history_log_enabled)
+
+    def is_history_log_hf_configured(self) -> bool:
+        """Check if HF Hub backup for history logs is configured."""
+        return bool(
+            self.history_log_enabled
+            and self.hf_memory_token  # Reuse memory token
+            and self.history_log_hf_repo_id
+        )
 
     def get_llm_provider_priority(self) -> list[str]:
         """

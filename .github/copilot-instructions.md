@@ -43,13 +43,13 @@ First agent with should_handle()=true → calls handle()
 
 ## 🤖 Agent Hierarchy (Priority Order)
 
-| Agent                | Priority | Status      | Trigger               | Notes                                                                                                                                                                                         |
-| -------------------- | -------- | ----------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **AdminAgent**       | 5        | Conditional | `/admin ...`          | Registered if `ADMIN_USER_IDS` is set OR bootstrap is enabled via `ADMIN_SETUP_KEY`                                                                                                           |
-| **SearchAgent**      | 8        | Conditional | `Zeus search <query>` | Registered only if Brave Search is configured (`BRAVE_SEARCH_API_KEY`); handled before `LLMAgent`                                                                                             |
-| **LLMAgent**         | 9        | Always on   | `Zeus <prompt>`       | Uses OpenRouter; returns config error if `OPENROUTER_API_KEY` missing; excludes `Zeus search ...`                                                                                             |
-| **TranslationAgent** | 10       | Always on   | Default/fallback      | Detects language, calls Google or LibreTranslate, applies session/rate-limit rules                                                                                                            |
-| **SpecialNewsAgent** | 12       | Always on   | `/special news`       | DM-only for regular users; gated by triggers                                                                                                                                                  |
+| Agent                | Priority | Status      | Trigger               | Notes                                                                                                                                                                                        |
+| -------------------- | -------- | ----------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AdminAgent**       | 5        | Conditional | `/admin ...`          | Registered if `ADMIN_USER_IDS` is set OR bootstrap is enabled via `ADMIN_SETUP_KEY`                                                                                                          |
+| **SearchAgent**      | 8        | Conditional | `Zeus search <query>` | Registered only if Brave Search is configured (`BRAVE_SEARCH_API_KEY`); handled before `LLMAgent`                                                                                            |
+| **LLMAgent**         | 9        | Always on   | `Zeus <prompt>`       | Uses GitHub Models or OpenRouter with conversation memory; excludes `Zeus search ...`; supports `Zeus clear/forget/reset` for memory                                                         |
+| **TranslationAgent** | 10       | Always on   | Default/fallback      | Detects language, calls Google or LibreTranslate, applies session/rate-limit rules                                                                                                           |
+| **SpecialNewsAgent** | 12       | Always on   | `/special news`       | DM-only for regular users; gated by triggers                                                                                                                                                 |
 | **NewsAgent**        | 15       | Always on   | `news` or `ข่าว`      | Friend-gated in groups/rooms; translation-only for non-friends. Privileged users (admin/moderator) can access full menu in private chats. See [News Access Model](#news-access-model) below. |
 
 ## 🤖 Zeus Commands (AI + Search)
@@ -64,6 +64,24 @@ Routing notes:
 - `Zeus search ...` is reserved for `SearchAgent` (runs before `LLMAgent`).
 - Regular users are DM-only for Zeus commands; admins can run them anywhere.
 - If an integration is not configured, the agent replies with a configuration error.
+
+### Zeus Memory Commands
+
+Zeus maintains conversation memory for multi-turn chats:
+
+| Command       | Description                               |
+| ------------- | ----------------------------------------- |
+| `Zeus clear`  | Clear conversation memory and start fresh |
+| `Zeus forget` | Same as `Zeus clear`                      |
+| `Zeus reset`  | Same as `Zeus clear`                      |
+
+**Memory Configuration:**
+
+- `CONVERSATION_MEMORY_ENABLED` (default: `true`) — Enable/disable memory
+- `HF_MEMORY_TOKEN` — Hugging Face token for persistent storage (optional)
+- `HF_MEMORY_REPO_ID` — HF dataset repo ID (e.g., `username/zeus-memory`)
+- `CONVERSATION_MAX_MESSAGES` (default: `20`) — Max messages per session
+- `CONVERSATION_TTL_HOURS` (default: `24`) — Session expiration
 
 ## 📰 News Access Model
 

@@ -62,6 +62,16 @@ from src.handlers.message_handler import (
     handle_member_left_event,
 )
 from src.services.metrics_service import metrics_service
+from src.services.conversation_memory_service import (
+    init_conversation_memory,
+    get_conversation_memory,
+)
+from src.services.history_log_service import (
+    init_history_log,
+    get_history_log,
+    EventType,
+    LogLevel,
+)
 from src.utils.tracing import setup_tracing
 
 # ============================================================================
@@ -164,7 +174,52 @@ async def lifespan(app: FastAPI):
     logger.info("✅ HTTP client pool ready with connection pooling enabled")
 
     # ========================================================================
-    # PHASE 2: Translation Services Configuration
+    # PHASE 2a: Conversation Memory Initialization
+    # ========================================================================
+    if settings.conversation_memory_enabled:
+        if settings.is_conversation_memory_configured():
+            memory_service = init_conversation_memory(
+                hf_token=settings.hf_memory_token,
+                hf_repo_id=settings.hf_memory_repo_id,
+            )
+            logger.info(
+                f"💭 Conversation memory enabled (HF Hub: {settings.hf_memory_repo_id})"
+            )
+        else:
+            memory_service = init_conversation_memory()  # In-memory only
+            logger.info("💭 Conversation memory enabled (in-memory only)")
+    else:
+        logger.info("💭 Conversation memory disabled")
+
+    # ========================================================================
+    # PHASE 2a2: History Logging Initialization
+    # ========================================================================
+    if settings.is_history_log_configured():
+        history_log = init_history_log(
+            storage_path=settings.history_log_path,
+            hf_token=settings.hf_memory_token if settings.is_history_log_hf_configured() else None,
+            hf_repo_id=settings.history_log_hf_repo_id,
+            encryption_key=settings.history_log_encryption_key,
+        )
+        logger.info(f"📜 History logging enabled (path: {settings.history_log_path})")
+        
+        # Log startup event
+        await history_log.log(
+            event_type=EventType.STARTUP,
+            message="⚡ Zeus Multi-Agent System starting up!",
+            level=LogLevel.INFO,
+            zeus_style=settings.zeus_error_style,
+        )
+        
+        if settings.is_history_log_hf_configured():
+            logger.info(f"☁️ History log HF sync enabled: {settings.history_log_hf_repo_id}")
+        if settings.history_log_encryption_key:
+            logger.info("🔐 History log encryption enabled")
+    else:
+        logger.info("📜 History logging disabled")
+
+    # ========================================================================
+    # PHASE 2b: Translation Services Configuration
     # ========================================================================
     if settings.is_google_translate_configured():
         google_translation_service.api_key = settings.google_translate_api_key
@@ -288,8 +343,25 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Zeus - Shutting down gracefully...")
     logger.info("=" * 80)
 
+    # Log shutdown event
+    history_svc = get_history_log()
+    if history_svc:
+        await history_svc.log(
+            event_type=EventType.SHUTDOWN,
+            message="🛑 Zeus Multi-Agent System shutting down gracefully",
+            level=LogLevel.INFO,
+        )
+        history_svc.stop()
+        logger.info("✅ History log scheduler stopped")
+
     scheduler_service.stop()
     logger.info("✅ Scheduler stopped")
+
+    # Stop conversation memory scheduler (HF Hub sync)
+    memory_svc = get_conversation_memory()
+    if memory_svc:
+        memory_svc.stop()
+        logger.info("✅ Conversation memory scheduler stopped")
 
     await http_client_pool.aclose()
     logger.info("✅ HTTP client pool closed")
