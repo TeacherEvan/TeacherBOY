@@ -335,14 +335,17 @@ class LogEncryption:
         
         if encryption_key:
             try:
-                from cryptography.fernet import Fernet
+                import importlib
+
+                fernet_mod = importlib.import_module("cryptography.fernet")
+                Fernet = getattr(fernet_mod, "Fernet")
                 # Derive a key from the provided string
                 key_bytes = hashlib.sha256(encryption_key.encode()).digest()
                 self._key = base64.urlsafe_b64encode(key_bytes)
                 self._fernet = Fernet(self._key)
                 self.enabled = True
                 logger.info("🔐 Log encryption enabled")
-            except ImportError:
+            except ModuleNotFoundError:
                 logger.warning("⚠️ cryptography package not installed, encryption disabled")
             except Exception as e:
                 logger.warning(f"⚠️ Encryption setup failed: {e}")
@@ -455,10 +458,19 @@ class HistoryLogService:
     
     def _setup_hf_storage(self) -> None:
         """Initialize Hugging Face Hub storage for logs."""
+        if not self.hf_token or not self.hf_repo_id:
+            self._hf_enabled = False
+            return
+
         try:
-            from huggingface_hub import HfApi, CommitScheduler
-            
-            self._hf_api = HfApi(token=self.hf_token)
+            import importlib
+
+            hf = importlib.import_module("huggingface_hub")
+            HfApi = getattr(hf, "HfApi")
+            CommitScheduler = getattr(hf, "CommitScheduler")
+
+            hf_api = HfApi(token=self.hf_token)
+            self._hf_api = hf_api
             
             # Create logs subdirectory
             logs_path = self.storage_path / "hf_sync"
@@ -466,7 +478,7 @@ class HistoryLogService:
             
             # Ensure repo exists
             try:
-                self._hf_api.create_repo(
+                hf_api.create_repo(
                     repo_id=self.hf_repo_id,
                     repo_type="dataset",
                     private=True,
@@ -490,7 +502,7 @@ class HistoryLogService:
             
             logger.info(f"☁️ HF Hub log sync enabled: {self.hf_repo_id}")
             
-        except ImportError:
+        except ModuleNotFoundError:
             logger.warning("⚠️ huggingface_hub not installed for log sync")
             self._hf_enabled = False
         except Exception as e:

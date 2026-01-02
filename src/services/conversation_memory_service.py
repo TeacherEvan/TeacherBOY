@@ -83,10 +83,19 @@ class ConversationMemoryService:
 
     def _setup_hf_storage(self):
         """Initialize Hugging Face Hub storage backend."""
+        if not self.hf_token or not self.hf_repo_id:
+            self._hf_enabled = False
+            return
+
         try:
-            from huggingface_hub import HfApi, CommitScheduler
-            
-            self._hf_api = HfApi(token=self.hf_token)
+            import importlib
+
+            hf = importlib.import_module("huggingface_hub")
+            HfApi = getattr(hf, "HfApi")
+            CommitScheduler = getattr(hf, "CommitScheduler")
+
+            hf_api = HfApi(token=self.hf_token)
+            self._hf_api = hf_api
             
             # Create local storage directory for CommitScheduler
             self._local_storage_path = Path("./data/conversations")
@@ -94,7 +103,7 @@ class ConversationMemoryService:
             
             # Ensure the dataset repo exists
             try:
-                self._hf_api.create_repo(
+                hf_api.create_repo(
                     repo_id=self.hf_repo_id,
                     repo_type="dataset",
                     private=True,
@@ -122,7 +131,7 @@ class ConversationMemoryService:
             
             logger.info(f"💭 Conversation memory initialized with HF Hub persistence")
             
-        except ImportError:
+        except ModuleNotFoundError:
             logger.warning("⚠️ huggingface_hub not installed, using in-memory storage only")
             self._hf_enabled = False
         except Exception as e:
@@ -402,7 +411,14 @@ class ConversationMemoryService:
             return
         
         try:
-            from huggingface_hub import hf_hub_download, list_repo_files
+            import importlib
+
+            hf = importlib.import_module("huggingface_hub")
+            hf_hub_download = getattr(hf, "hf_hub_download")
+            list_repo_files = getattr(hf, "list_repo_files")
+
+            if not self.hf_repo_id or not self.hf_token:
+                return
             
             # List files in the repo
             try:
@@ -457,6 +473,9 @@ class ConversationMemoryService:
             
             if loaded > 0:
                 logger.info(f"💭 Loaded {loaded} conversation(s) from HF Hub")
+
+        except ModuleNotFoundError:
+            logger.info("💭 huggingface_hub not installed; skipping HF Hub conversation preload")
                 
         except Exception as e:
             logger.error(f"❌ Failed to load conversations from HF Hub: {e}")

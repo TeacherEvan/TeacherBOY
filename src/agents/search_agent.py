@@ -51,6 +51,13 @@ class SearchAgent(BaseAgent):
         """Check if chat is private (1-on-1)."""
         return event.source is not None and event.source.type == "user"
 
+    def _get_group_room_ids(self, event: MessageEvent) -> tuple[Optional[str], Optional[str]]:
+        """Return (group_id, room_id) from event source."""
+        source = getattr(event, "source", None)
+        group_id = getattr(source, "group_id", None) if source else None
+        room_id = getattr(source, "room_id", None) if source else None
+        return group_id, room_id
+
     def _parse_search_command(self, text: str) -> Optional[str]:
         """
         Parse search command.
@@ -74,11 +81,17 @@ class SearchAgent(BaseAgent):
 
         # Access control at routing time:
         # - Admins can search anywhere
-        # - Non-admins are DM-only
+        # - Private chats always allowed
+        # - Group/room obeys Zeus group rules (allowlist/denylist)
         user_id = getattr(event.source, "user_id", None)
         if self._is_admin(user_id):
             return True
-        return self._is_private_chat(event)
+
+        if self._is_private_chat(event):
+            return True
+
+        group_id, room_id = self._get_group_room_ids(event)
+        return settings.is_zeus_allowed_in_group(group_id, room_id, user_is_admin=False)
 
     async def handle(
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi
@@ -92,29 +105,30 @@ class SearchAgent(BaseAgent):
         is_private = self._is_private_chat(event)
         logger.info(f"🔍 Zeus search from {user_id} ({'DM' if is_private else 'group'}): {query[:50]}...")
 
-        # Access control: admins anywhere; regular users DM-only.
+        # Access control: admins anywhere; private chats always; group/room per Zeus rules.
         if not self._is_admin(user_id) and not is_private:
-            logger.info(
-                f"🔒 Zeus search denied for non-admin user_id={user_id} in group chat"
-            )
-            await asyncio.to_thread(
-                line_bot_api.reply_message,
-                ReplyMessageRequest(
-                    replyToken=event.reply_token,
-                    messages=[
-                        TextMessage(
-                            text=(
-                                "🔒 Zeus search is DM-only for non-admins.\n\n"
-                                "Try this in a private chat with the bot, or ask an admin."
-                            ),
-                            quickReply=None,
-                            quoteToken=None,
-                        )
-                    ],
-                    notificationDisabled=False,
-                ),
-            )
-            return True
+            group_id, room_id = self._get_group_room_ids(event)
+            if not settings.is_zeus_allowed_in_group(
+                group_id, room_id, user_is_admin=False
+            ):
+                logger.info(
+                    f"🔒 Zeus search denied for non-admin user_id={user_id} in group chat"
+                )
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[
+                            TextMessage(
+                                text=("🔒 Zeus search is not enabled in this group."),
+                                quickReply=None,
+                                quoteToken=None,
+                            )
+                        ],
+                        notificationDisabled=False,
+                    ),
+                )
+                return True
 
         with tracer.start_as_current_span("search_agent.handle") as span:
             span.set_attribute("search.query", query)

@@ -1,283 +1,190 @@
+# TeacherBOY (Zeus) — Copilot Instructions
+
+## Architecture & flow
+
+- Entry point is [src/main.py](../src/main.py): FastAPI app + `lifespan` startup, `/webhook`, shared `httpx.AsyncClient`.
+- Webhook flow: validate LINE signature → skip self-messages (`bot_user_id`) → route text via [src/agents/agent_router.py](../src/agents/agent_router.py).
+- Agent routing is **first-match wins** in **ascending** `get_priority()`; only one agent should handle a message.
+
+## Agent conventions
+
+- Implement agents by subclassing [src/agents/base_agent.py](../src/agents/base_agent.py) with async `should_handle()` + async `handle()`.
+- Choose priorities carefully: `<10` preempts translation; default translation is [src/agents/translation_agent.py](../src/agents/translation_agent.py) at `10`.
+- Runtime (in-memory) admin is tracked by [src/services/privilege_service.py](../src/services/privilege_service.py) (used by `/admin claim …`).
+
+## LINE + async I/O rules
+
+- LINE SDK v3 calls are sync; in async code wrap them with `await asyncio.to_thread(...)` (see patterns in [src/main.py](../src/main.py)).
+- Do not create new `httpx.AsyncClient` instances; reuse the singleton created in `lifespan` and injected into services.
+
+## Feature-specific gotchas
+
+- Do not modify [src/handlers/message_handler.py](../src/handlers/message_handler.py) for production behavior; it’s legacy (agent router is the real path).
+- News is stateful and friend-gated: groups/rooms require friend check via LINE `get_profile`; non-friends (and most private chats) get “trigger translation” only (see [src/agents/news_agent.py](../src/agents/news_agent.py)).
+- Translation uses preprocessing: preserve parentheses + mark incomplete sentences (see [src/utils/text_preprocessing.py](../src/utils/text_preprocessing.py)).
+
+## Testing & debugging
+
+- Run tests with `pytest` (asyncio mode is enabled in [pytest.ini](../pytest.ini)). Prefer targeting a single file first (e.g. `pytest tests/test_news_agent.py`).
+- When changing env-driven behavior in tests: agents cache admin IDs in `__init__`, and tests often patch **module-local** `settings` before instantiation.
+
+## Observability
+
+- Tracing is optional; enable via `ENABLE_TRACING=true` and see [docs/TRACING.md](../docs/TRACING.md). Tracing setup lives in [src/utils/tracing.py](../src/utils/tracing.py).
+
+## Key env vars (feature gates)
+
+- Required: `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`.
+- Translation: `GOOGLE_TRANSLATE_API_KEY` (primary; otherwise LibreTranslate fallback).
+- Search: `BRAVE_SEARCH_API_KEY`.
+- LLM: `GITHUB_MODELS_PAT` and/or `OPENROUTER_API_KEY`, plus `LLM_PROVIDER_PRIORITY`.
+
 # TeacherBOY — AI Coding Agent Instructions
-
-## 📋 Index
-
-- [🎯 Quick Context](#🎯-quick-context)
-- [🔄 Webhook Flow](#🔄-webhook-flow-read-first)
-- [🤖 Agent Hierarchy](#🤖-agent-hierarchy-priority-order)
-- [📰 News Access Model](#📰-news-access-model)
-- [📰 Extended News Menu](#📰-extended-news-menu-8-items-for-friends)
-- [⏱️ Rate Limiting](#⏱️-rate-limiting)
-- [📋 Session & Rate-Limiting Rules](#📋-session--rate-limiting-rules-translationagent-only)
-- [🌐 Translation Provider Stack](#🌐-translation-provider-stack)
-- [🛠️ Developer Workflows](#🛠️-developer-workflows)
-- [➕ Adding a New Agent](#➕-adding-a-new-agent-pattern)
-- [📝 Code Patterns to Follow](#📝-code-patterns-to-follow)
-- [⚠️ Known Gotchas & Legacy](#⚠️-known-gotchas--legacy)
 
 ## 🎯 Quick Context
 
-**What:** Production LINE bot with async multi-agent architecture. Thai ↔ English translation is the primary feature, with optional admin commands and news/weather data.
+**What:** Production LINE bot with async multi-agent architecture. Thai ↔ English translation is the primary feature, with optional admin commands, news/weather data, and LLM Q&A.
 
 **Key files:**
 
 - Entry point: [src/main.py](../src/main.py) — FastAPI app with `lifespan` context, `/webhook` endpoint, HTTP client pool
 - Agent dispatch: [src/agents/agent_router.py](../src/agents/agent_router.py) — priority-based routing
 - Base contract: [src/agents/base_agent.py](../src/agents/base_agent.py) — abstract `should_handle()` + async `handle()`
+- Settings: [src/config.py](../src/config.py) — Pydantic settings with environment validation
 
-## 🔄 Webhook Flow (Read First)
+## 🔄 Webhook Flow
 
 ```
-LINE sends POST → FastAPI /webhook
+LINE POST /webhook → Validate signature → Skip bot's own messages (bot_user_id check)
   ↓
-Validate signature (InvalidSignatureError if fails)
+AgentRouter.route_message() → try agents in priority order (ascending)
   ↓
-Skip self-messages via bot_user_id check (prevents loops)
-  ↓
-AgentRouter.route_message() → try agents in priority order
-  ↓
-First agent with should_handle()=true → calls handle()
+First agent with should_handle()=True wins → calls handle()
 ```
 
-**Critical:** Agents run **in ascending priority order** (`get_priority()`); first match wins. The event loop is **async-only** — all agent methods are `async def`.
+**Critical:** Agents run in **ascending** `get_priority()` order; first match wins. **Async-only** — all agent methods must be `async def`.
 
-## 🤖 Agent Hierarchy (Priority Order)
+## 🤖 Agent Hierarchy
 
-| Agent                | Priority | Status      | Trigger               | Notes                                                                                                                                                                                        |
-| -------------------- | -------- | ----------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **AdminAgent**       | 5        | Conditional | `/admin ...`          | Registered if `ADMIN_USER_IDS` is set OR bootstrap is enabled via `ADMIN_SETUP_KEY`                                                                                                          |
-| **SearchAgent**      | 8        | Conditional | `Zeus search <query>` | Registered only if Brave Search is configured (`BRAVE_SEARCH_API_KEY`); handled before `LLMAgent`                                                                                            |
-| **LLMAgent**         | 9        | Always on   | `Zeus <prompt>`       | Uses GitHub Models or OpenRouter with conversation memory; excludes `Zeus search ...`; supports `Zeus clear/forget/reset` for memory                                                         |
-| **TranslationAgent** | 10       | Always on   | Default/fallback      | Detects language, calls Google or LibreTranslate, applies session/rate-limit rules                                                                                                           |
-| **SpecialNewsAgent** | 12       | Always on   | `/special news`       | DM-only for regular users; gated by triggers                                                                                                                                                 |
-| **NewsAgent**        | 15       | Always on   | `news` or `ข่าว`      | Friend-gated in groups/rooms; translation-only for non-friends. Privileged users (admin/moderator) can access full menu in private chats. See [News Access Model](#📰-news-access-model) below. |
-
-## 🤖 Zeus Commands (AI + Search)
-
-Triggers accepted:
-
-- `Zeus ...` and `/zeus ...`
-- Common typo tolerance: `Zues ...` and `/zues ...`
-
-Routing notes:
-
-- `Zeus search ...` is reserved for `SearchAgent` (runs before `LLMAgent`).
-- Regular users are DM-only for Zeus commands; admins can run them anywhere.
-- If an integration is not configured, the agent replies with a configuration error.
-
-### Zeus Memory Commands
-
-Zeus maintains conversation memory for multi-turn chats:
-
-| Command       | Description                               |
-| ------------- | ----------------------------------------- |
-| `Zeus clear`  | Clear conversation memory and start fresh |
-| `Zeus forget` | Same as `Zeus clear`                      |
-| `Zeus reset`  | Same as `Zeus clear`                      |
-
-**Memory Configuration:**
-
-- `CONVERSATION_MEMORY_ENABLED` (default: `true`) — Enable/disable memory
-- `HF_MEMORY_TOKEN` — Hugging Face token for persistent storage (optional)
-- `HF_MEMORY_REPO_ID` — HF dataset repo ID (e.g., `username/zeus-memory`)
-- `CONVERSATION_MAX_MESSAGES` (default: `20`) — Max messages per session
-- `CONVERSATION_TTL_HOURS` (default: `24`) — Session expiration
+| Agent                | Priority | Trigger               | Notes                                                              |
+| -------------------- | -------- | --------------------- | ------------------------------------------------------------------ |
+| **HelpAgent**        | 5        | `help`, `/help`       | Contextual help; shows different commands per chat type/privileges |
+| **AdminAgent**       | 5        | `/admin ...`          | Registered if `ADMIN_USER_IDS` or `ADMIN_SETUP_KEY` is set         |
+| **SearchAgent**      | 8        | `Zeus search <query>` | Conditional: requires `BRAVE_SEARCH_API_KEY`                       |
+| **LLMAgent**         | 9        | `Zeus <prompt>`       | GitHub Models → OpenRouter fallback; conversation memory           |
+| **TranslationAgent** | 10       | Default/fallback      | Thai ↔ English; Google Translate → LibreTranslate fallback         |
+| **SpecialNewsAgent** | 12       | `/special news`       | DM-only interactive news carousel                                  |
+| **NewsAgent**        | 15       | `news` or `ข่าว`      | Friend-gated in groups; admins/moderators get full menu in DMs     |
 
 ## 📰 News Access Model
 
-**NewsAgent enforces friend-based access control:**
-
-| Context          | Trigger          | User Type                      | Response                                                   |
-| ---------------- | ---------------- | ------------------------------ | ---------------------------------------------------------- |
-| **Group/Room**   | `news` or `ข่าว` | Friend (verified via LINE API) | Full menu: weather, PM2.5, stocks, headlines (1–5 options) |
-| **Group/Room**   | `news` or `ข่าว` | Non-friend                     | Trigger translation only: `news → ข่าว` or vice versa      |
-| **Private Chat** | `news` or `ข่าว` | Admin/Moderator                | Full menu                                                  |
-| **Private Chat** | `news` or `ข่าว` | Regular user                   | Trigger translation only (no menu/data shown)              |
-
-**Implementation**:
-
-- `_is_group_chat(event)` → checks for `group_id` or `room_id`
-- `await _is_friend(event, line_bot_api)` → calls LINE API `get_profile(user_id)`; returns `False` on `ApiException`
-- `_send_trigger_translation(...)` → responds with translated keyword only (robotic, no chatter)
+| Context      | User Type                      | Response                                     |
+| ------------ | ------------------------------ | -------------------------------------------- |
+| Group/Room   | Friend (verified via LINE API) | Full menu: weather, PM2.5, stocks, headlines |
+| Group/Room   | Non-friend                     | Trigger translation only: `news → ข่าว`      |
+| Private Chat | Admin/Moderator                | Full menu                                    |
+| Private Chat | Regular user                   | Trigger translation only                     |
 
 ## ⏱️ Rate Limiting
 
-**Rate limiting enforces fair usage and prevents API quota exhaustion:**
-
-### TranslationAgent Rate Limits
-
-- **Default Users:** 10 requests per 60 seconds per chat
-- **Admin Users:** Unlimited (bypass all rate limits)
-- **Implementation:** `rate_limiter.is_allowed(chat_id)` check in `handle()` method
-- **Admin Check:** `_is_admin(user_id)` returns True if user in `settings.get_admin_user_ids()`
-
-### NewsAgent Rate Limits
-
-- **Friend Users (groups):** 1 news request per hour (3600 seconds)
-- **Non-Friends (groups):** Translation only (no menu access)
-- **Private Chats:** Translation only (no menu access)
-- **Admin Users:** Unlimited (bypass all rate limits)
-- **Implementation:** `news_rate_limiter_friend.is_allowed(chat_id)` check before menu display
-- **Rate Limiter:** `RateLimiter(max_requests=1, time_window_seconds=3600)`
-
-### Rate Limit Response
-
-When rate limited, users receive:
-
-```text
-⏳ Only 1 news request per hour
-Total requests left: 0
-
-Try again in ~45 minutes
-
-คุณขอข่าวเร็วเกินไปค่ะ! 📰
-เหลืออีก: 0 ครั้ง
-กรุณารอ ~45 นาที 😊
-```
-
-**Admin Bypass Logging:**
-
-- `"🔓 Admin {user_id} bypassed rate limit"` for TranslationAgent
-- `"🔓 Admin {user_id} bypassed news rate limit"` for NewsAgent
-
-## 📰 News Menu (Inline Display + Interactive Headlines)
-
-**Menu Structure (All Data Shown Immediately):**
-
-1. **Weather & Air Quality** 🌡️💨 → Bangkok temperature + PM2.5 (inline, Open-Meteo)
-2. **Rain Forecast** 🌧️ → 5-hour rain prediction (inline, Open-Meteo)
-3. 📅 **Next Holiday** → Next upcoming Thai holiday (inline, `holidays` library)
-4. 📈 **Indices** → S&P 500, DJIA, FTSE 100 (best-effort)
-5. ₿ **Crypto** → BTC, ETH, USDT (inline, CoinGecko)
-6. 💱 **Exchange Rate** → THB→USD (+ others) (inline, ExchangeRate-API or fallback)
-7. 📰 **Headlines 1-5** → Displayed with URLs inline in main menu; optionally select 1-5 to view full article details (Bangkok Post RSS)
-
-**Output:** Terse, robotic, single emoji per bullet. No instructions or chatter.
-
-**Data Methods** ([src/services/news_data_service.py](../src/services/news_data_service.py)):
-
-- `get_weather_data()` → Temperature, PM2.5, rain forecast (30-min cache, Open-Meteo)
-- `get_thai_holidays()` → Uses 'holidays' Python library (7d cache, no API key)
-- `get_bitcoin_price()` → CoinGecko free API (5-min cache, volatile data)
-- `get_exchange_rates()` → ExchangeRate-API or hardcoded THB rates (1h cache)
-- `get_news_headlines(language)` → RSS feeds from Bangkok Post (1h cache)
-
-**Menu Handlers** ([src/agents/news_agent.py](../src/agents/news_agent.py)):
-
-- `_format_menu_thai()` / `_format_menu_english()` → Display all data inline including headline URLs
-- `_send_headline_detail()` → Show full article information for selected headline (1-5) - optional user interaction
-- Headlines now show URLs directly in main menu; selecting 1-5 provides detailed view
-- Deprecated methods (no longer called): `_send_color_sunset_sunrise()`, `_send_holidays_markets()`, `_send_crypto_exchange()`, `_send_festivals()`
-
-**Optional API Keys** ([src/config.py](../src/config.py)):
-
-| Service          | Env Variable          | Default | Plan             | Fallback              |
-| ---------------- | --------------------- | ------- | ---------------- | --------------------- |
-| ExchangeRate-API | EXCHANGE_RATE_API_KEY | None    | 1500 req/mo free | Hardcoded rates (THB) |
-| Open-Meteo       | (none needed)         | Free    | Unlimited        | N/A (always works)    |
-| CoinGecko        | (none needed)         | Free    | Unlimited        | N/A (always works)    |
-
-**Cache TTLs** ([src/config.py](../src/config.py)):
-
-| Setting                    | Env Variable               | Default | Range        | Purpose                  |
-| -------------------------- | -------------------------- | ------- | ------------ | ------------------------ |
-| weather_cache_ttl_seconds  | WEATHER_CACHE_TTL_SECONDS  | 1800    | 300–7200     | Weather/air quality      |
-| news_cache_ttl_seconds     | NEWS_CACHE_TTL_SECONDS     | 3600    | 600–14400    | News headlines (RSS)     |
-| holiday_cache_ttl_seconds  | HOLIDAY_CACHE_TTL_SECONDS  | 604800  | 86400–604800 | Thai holidays (weekly)   |
-| bitcoin_cache_ttl_seconds  | BITCOIN_CACHE_TTL_SECONDS  | 300     | 60–3600      | Bitcoin price (volatile) |
-| exchange_cache_ttl_seconds | EXCHANGE_CACHE_TTL_SECONDS | 3600    | 300–14400    | Exchange rates (hourly)  |
-
-## 📋 Session & Rate-Limiting Rules (TranslationAgent Only)
-
-All enforced via singletons in [src/services](../src/services):
-
-- **Chat ID format:** `user_<id>`, `group_<id>`, `room_<id>` (normalized in `_get_chat_id()`)
-- **Session state** ([src/services/session_manager.py](../src/services/session_manager.py)):
-  - `is_session_active(chat_id)` → checks sleep mode + active sessions
-  - Sleep mode: `sleep_chat(chat_id, hours=24)` blocks translation; wake: `wake_chat(chat_id)`
-  - Dedup: `is_duplicate_message(chat_id, text)` within 60s window (per-chat history)
-- **Rate limiting** ([src/services/rate_limiter.py](../src/services/rate_limiter.py)):
-  - **Hard limit:** 10 requests / 60 seconds per chat
-  - Returns `429` if breached; respects `Retry-After` headers from translation APIs
-
-## 🌐 Translation Provider Stack
-
-**Shared HTTP client** (singleton `httpx.AsyncClient`) created in [src/main.py](../src/main.py):
-
-1. **Primary:** Google Translate ([src/services/google_translation.py](../src/services/google_translation.py))
-   - Async with automatic retry (`with_retry()`) controlled by `settings.translation_max_retries`
-   - Used by `TranslationAgent.translate()`
-2. **Fallback:** LibreTranslate ([src/services/translation_service.py](../src/services/translation_service.py))
-   - Public instance (https://libretranslate.de) or self-hosted
-   - Also detects language via `detect_language(text)`
-
-**Do not create multiple `httpx.AsyncClient` instances** — reuse the singleton from context.
+- **TranslationAgent:** 10 requests/60s per chat (admins: unlimited)
+- **NewsAgent:** 1 request/hour for friends in groups (admins: unlimited)
+- **Admin check:** `_is_admin(user_id)` + `privilege_service.is_claimed_admin(user_id)`
 
 ## 🛠️ Developer Workflows
 
 ```bash
-# Local development (requires .env)
+# Local development
 python -m uvicorn src.main:app --reload --port 8000
 
-# Docker (see docker-compose.yml)
+# Docker
 docker-compose up --build
 
-# Testing (pytest with asyncio support; see pytest.ini)
-pytest                                    # Run all
+# Testing (pytest with asyncio auto mode - see pytest.ini)
+pytest                                    # All tests
 pytest --cov=src --cov-report=html       # With coverage
-pytest tests/test_translation_agent.py    # Single file
+pytest tests/test_news_agent.py          # Single file
 ```
 
-## ➕ Adding a New Agent (Pattern)
+## ➕ Adding a New Agent
 
-1. **Create** `src/agents/<your_agent>.py` and subclass `BaseAgent`
-2. **Implement:**
-   - `async def should_handle(event, text) -> bool` — return True if this agent matches
-   - `async def handle(event, text, line_bot_api) -> bool` — return True if successful
-   - `get_priority() -> int` — return 0-100 (lower = runs first)
-3. **Pick priority wisely:**
-   - `<10`: Preempts translation (rarely needed; AdminAgent is exception at 5)
-   - `10-20`: Runs after translation checks
-   - `>20`: Fallback behavior
-4. **Register in `src/main.py` lifespan:**
+1. Create `src/agents/<your_agent>.py` subclassing `BaseAgent`
+2. Implement:
+   - `async def should_handle(event, text) -> bool`
+   - `async def handle(event, text, line_bot_api) -> bool`
+   - `def get_priority() -> int` (lower = runs first; use <10 only if must preempt translation)
+3. Register in `src/main.py` lifespan:
    ```python
-   @asynccontextmanager
-   async def lifespan(app: FastAPI):
-       # ... existing setup ...
-       agent_router.register_agent(YourAgent(settings, client))
-       yield
+   agent_router.register_agent(YourAgent())
    ```
 
-## 📝 Code Patterns to Follow
+## 📝 Code Patterns
 
-- **Logging:** Always use `logger = logging.getLogger(__name__)` at module level; prefix messages with emoji (✅ success, ❌ error, 🔍 debug, ⚠️ warning)
-- **Tracing:** Import `get_tracer(__name__)` from `src/utils/tracing`; wrap agent logic in `tracer.start_as_current_span()`
-- **Error handling:** Catch `linebot.v3.exceptions.ApiException` and `httpx.TimeoutException` separately; log before rethrowing or responding with fallback
-- **Async + LINE SDK:** LINE SDK v3 calls are sync; in async code use `await asyncio.to_thread(...)` for `reply_message`, `push_message`, `get_profile`, `get_bot_info`, etc.
-- **Chat ID extraction:** Use `_get_chat_id(event)` pattern (see `TranslationAgent` & `NewsAgent` for examples)
-- **Environment variables:** Load from `src/config.py` settings singleton; never hardcode secrets
-- **Friend gating** (NewsAgent pattern):
+**Logging:** `logger = logging.getLogger(__name__)` with emoji prefixes (✅/❌/🔍/⚠️)
 
-  ```python
-  def _is_group_chat(self, event: MessageEvent) -> bool:
-      """Check if message is from group or room."""
-      return bool(getattr(event.source, "group_id", None) or getattr(event.source, "room_id", None))
+**Tracing:** `from src.utils.tracing import get_tracer` → `tracer.start_as_current_span()`
 
-  async def _is_friend(self, event: MessageEvent, line_bot_api: MessagingApi) -> bool:
-      """Verify friendship via LINE API; returns False if non-friend or error."""
-      try:
-          line_bot_api.get_profile(getattr(event.source, "user_id", None))
-          return True
-      except ApiException:
-          return False
-  ```
+**LINE SDK v3 async:** Use `await asyncio.to_thread(...)` for sync LINE API calls:
 
-## ⚠️ Known Gotchas & Legacy
+```python
+await asyncio.to_thread(line_bot_api.reply_message, ReplyMessageRequest(...))
+```
 
-- **Do not edit** [src/handlers/message_handler.py](../src/handlers/message_handler.py) (older Flex-message handler) unless a test explicitly requires it — production uses agent routing
-- **Self-message loop prevention:** Check `event.source.user_id == bot_user_id` before processing (done in webhook handler)
-- **Async-only code:** No `time.sleep()`, no blocking I/O — use `await asyncio.sleep()` and async libraries
-- **LINE SDK v3:** Uses `linebot.v3.webhooks` and `linebot.v3.messaging`; avoid v2 imports
-- **NewsAgent access control:** Friend gating enforced via LINE API `get_profile()` call; non-friends and private chats fallback to trigger translation only. No menu/data shown outside eligible contexts.
-- **NewsAgent multi-step flow:** Uses `news_session_manager` to track conversation state; test thoroughly if modifying state transitions. Output is terse (robotic): single emoji per bullet, no instructions or explanations.
-- **Hugging Face Spaces (Docker) gotcha:** Avoid having multiple copies of the code (e.g., both top-level `src/` and nested `TeacherBOY/src/`). The Docker build runs `uvicorn src.main:app` from the top-level `src/`, so nested code will be ignored unless the Dockerfile is updated.
+**Chat ID extraction:** Normalize to `user_<id>`, `group_<id>`, `room_<id>`:
+
+```python
+def _get_chat_id(self, event: MessageEvent) -> str:
+    if group_id := getattr(event.source, "group_id", None): return f"group_{group_id}"
+    if room_id := getattr(event.source, "room_id", None): return f"room_{room_id}"
+    return f"user_{getattr(event.source, 'user_id', 'unknown')}"
+```
+
+**Admin checks:** Combine env-based + runtime-claimed:
+
+```python
+def _is_admin(self, user_id: Optional[str]) -> bool:
+    if privilege_service.is_claimed_admin(user_id): return True
+    return user_id in self._admin_user_ids if user_id else False
+```
+
+**HTTP client:** Reuse the singleton `httpx.AsyncClient` from `src/main.py` lifespan—never create new ones.
+
+## ⚠️ Known Gotchas
+
+- **Do not edit** [src/handlers/message_handler.py](../src/handlers/message_handler.py) — legacy Flex handler; production uses agent routing
+- **Self-message loop:** Handled in webhook via `bot_user_id` check
+- **Async-only:** No `time.sleep()` or blocking I/O—use `await asyncio.sleep()` and async libraries
+- **LINE SDK v3:** Use `linebot.v3.webhooks` and `linebot.v3.messaging`; avoid v2 imports
+- **Tests patch `settings`:** Agents cache `settings.get_admin_user_ids()` in `__init__`; tests must patch module-local `settings` before instantiation
+- **HF Spaces Docker:** Avoid nested `src/` directories; Dockerfile runs from top-level `src/`
+
+## 🌐 Translation Provider Stack
+
+1. **Primary:** Google Translate ([src/services/google_translation.py](../src/services/google_translation.py)) — auto-retry via `@with_retry()`
+2. **Fallback:** LibreTranslate ([src/services/translation_service.py](../src/services/translation_service.py))
+3. **Text preprocessing:** Parentheses preserved, incomplete sentence detection in [src/utils/text_preprocessing.py](../src/utils/text_preprocessing.py)
+
+## 📊 Data Services
+
+| Service                                                                      | API              | Cache TTL |
+| ---------------------------------------------------------------------------- | ---------------- | --------- |
+| Weather/PM2.5 ([news_data_service.py](../src/services/news_data_service.py)) | Open-Meteo       | 30 min    |
+| Holidays                                                                     | `holidays` lib   | 7 days    |
+| Crypto (BTC/ETH/USDT)                                                        | CoinGecko        | 5 min     |
+| Exchange rates                                                               | ExchangeRate-API | 1 hour    |
+| News headlines                                                               | Bangkok Post RSS | 1 hour    |
+
+## 🔧 Environment Variables (Key)
+
+```env
+LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN  # Required
+GOOGLE_TRANSLATE_API_KEY                        # Primary translation
+ADMIN_USER_IDS                                  # Comma-separated admin LINE IDs
+MODERATOR_USER_IDS                              # Comma-separated moderator IDs
+GITHUB_MODELS_PAT                               # For Zeus AI (priority)
+OPENROUTER_API_KEY                              # Zeus AI fallback
+BRAVE_SEARCH_API_KEY                            # Zeus search feature
+LLM_PROVIDER_PRIORITY=github,openrouter         # LLM provider order
+```
+
+See [src/config.py](../src/config.py) for full list with validation ranges.

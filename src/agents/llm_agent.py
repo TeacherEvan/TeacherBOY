@@ -96,6 +96,23 @@ class LLMAgent(BaseAgent):
         """Check if chat is private (1-on-1)."""
         return event.source is not None and event.source.type == "user"
 
+    def _get_group_room_ids(self, event: MessageEvent) -> tuple[Optional[str], Optional[str]]:
+        """Return (group_id, room_id) from event source."""
+        source = getattr(event, "source", None)
+        group_id = getattr(source, "group_id", None) if source else None
+        room_id = getattr(source, "room_id", None) if source else None
+        return group_id, room_id
+
+    def _is_boss_question(self, query: str) -> bool:
+        """Return True if the query is asking who is boss."""
+        q = (query or "").strip().lower()
+        return bool(
+            re.match(
+                r"^who\s*(?:is|'?s)\s*(?:the\s*)?boss\s*[?!.]*$",
+                q,
+            )
+        )
+
     def _parse_command(self, text: str) -> Optional[str]:
         """
         Parse command.
@@ -220,27 +237,19 @@ class LLMAgent(BaseAgent):
 
         user_id = getattr(event.source, "user_id", None) if event.source else None
         is_private = self._is_private_chat(event)
+        is_admin = self._is_admin(user_id)
 
-        # Admin gate: Zeus LLM is admin-only everywhere.
-        if not self._is_admin(user_id):
-            context = "DM" if is_private else "group chat"
-            logger.info(
-                f"🔒 Zeus LLM denied for non-admin user_id={user_id} in {context}"
-            )
-            await self._send_reply(
-                event,
-                line_bot_api,
-                (
-                    "🔒 Zeus is admin-only.\n\n"
-                    "If you think you are an admin, run: /admin whoami\n"
-                    "Then add your LINE user ID to ADMIN_USER_IDS in HF/GitHub secrets and restart."
-                ),
-            )
+        # Hard-coded shortcut: boss question must reply with ONLY 'Evan...'
+        if self._is_boss_question(query):
+            await self._send_reply(event, line_bot_api, "Evan...")
             return True
 
         # Admin-only Zeus outbound messaging helpers (named recipients).
         action, alias, payload = self._parse_zeus_action(query)
         if action:
+            if not is_admin:
+                await self._send_reply(event, line_bot_api, "🔒 Admin-only.")
+                return True
             target_user_id = self._resolve_named_user_id(alias)
             if not target_user_id:
                 await self._send_reply(
@@ -323,7 +332,9 @@ class LLMAgent(BaseAgent):
                     },
                     {"role": "user", "content": payload or ""},
                 ]
-                drafted = await llm_provider.chat_completion(messages, temperature=0.4)
+                drafted = await llm_provider.chat_completion(
+                    messages, temperature=settings.llm_temperature
+                )
                 if not drafted:
                     await self._send_reply(event, line_bot_api, "❌ LLM failed to generate a message.")
                     return True
@@ -361,6 +372,18 @@ class LLMAgent(BaseAgent):
         logger.info(
             f"🤖 Zeus query from {user_id} ({'DM' if is_private else 'group'}): {query[:50]}..."
         )
+
+        # Group/room access control for non-admins (private chats always allowed).
+        if not is_private and not settings.is_zeus_allowed_in_group(
+            *self._get_group_room_ids(event),
+            user_is_admin=is_admin,
+        ):
+            await self._send_reply(
+                event,
+                line_bot_api,
+                "🔒 Zeus is not enabled in this group.",
+            )
+            return True
 
         with tracer.start_as_current_span("llm_agent.handle") as span:
             span.set_attribute("llm.query", query)
@@ -410,14 +433,18 @@ class LLMAgent(BaseAgent):
                 messages.append({"role": "user", "content": query})
 
                 # Call LLM with primary provider
-                response_text = await llm_provider.chat_completion(messages)
+                response_text = await llm_provider.chat_completion(
+                    messages, temperature=settings.llm_temperature
+                )
                 
                 # If primary fails and we have a fallback, try it
                 if not response_text:
                     fallback_provider, fallback_name = self._get_fallback_provider(provider_name)
                     if fallback_provider:
                         logger.warning(f"⚠️ {provider_name} failed, trying fallback: {fallback_name}")
-                        response_text = await fallback_provider.chat_completion(messages)
+                        response_text = await fallback_provider.chat_completion(
+                            messages, temperature=settings.llm_temperature
+                        )
                         if response_text:
                             provider_name = fallback_name
                 

@@ -189,11 +189,9 @@ class TestLogEncryption:
     
     def test_encryption_with_key(self):
         """Test encryption with a key (if cryptography is available)."""
-        try:
-            import cryptography
-            has_crypto = True
-        except ImportError:
-            has_crypto = False
+        import importlib.util
+
+        has_crypto = importlib.util.find_spec("cryptography") is not None
         
         enc = LogEncryption(encryption_key="my-secret-key-123")
         
@@ -449,6 +447,7 @@ class TestLogActionDecorator:
         with tempfile.TemporaryDirectory() as tmpdir:
             init_history_log(storage_path=tmpdir)
             service = get_history_log()
+            assert service is not None
             
             @log_action(agent_name="TestAgent")
             async def successful_function():
@@ -468,6 +467,7 @@ class TestLogActionDecorator:
         with tempfile.TemporaryDirectory() as tmpdir:
             init_history_log(storage_path=tmpdir)
             service = get_history_log()
+            assert service is not None
             
             @log_action(agent_name="FailingAgent", zeus_errors=True)
             async def failing_function():

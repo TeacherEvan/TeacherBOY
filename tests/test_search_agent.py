@@ -66,10 +66,7 @@ async def test_should_handle_search_triggers(search_agent, message_event):
 async def test_should_not_handle_search_in_group_for_non_admin(
     search_agent, group_message_event
 ):
-    assert (
-        await search_agent.should_handle(group_message_event, "Zeus search python")
-        is False
-    )
+    assert await search_agent.should_handle(group_message_event, "Zeus search python") is True
 
 
 @pytest.mark.asyncio
@@ -79,6 +76,25 @@ async def test_should_handle_search_in_group_for_admin(search_agent, group_messa
         await search_agent.should_handle(group_message_event, "Zeus search python")
         is True
     )
+
+
+@pytest.mark.asyncio
+async def test_should_not_handle_search_in_group_when_allowlist_denies(
+    search_agent, group_message_event, monkeypatch
+):
+    # Switch to allowlist mode and do not include this group.
+    from src.agents import search_agent as search_agent_module
+
+    monkeypatch.setattr(
+        search_agent_module.settings, "zeus_group_access_mode", "allowlist", raising=False
+    )
+    monkeypatch.setattr(
+        search_agent_module.settings,
+        "zeus_allowed_group_ids",
+        "some_other_group",
+        raising=False,
+    )
+    assert await search_agent.should_handle(group_message_event, "Zeus search python") is False
 
 @pytest.mark.asyncio
 async def test_should_not_handle_other_text(search_agent, message_event):

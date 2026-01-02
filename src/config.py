@@ -150,16 +150,43 @@ class Settings(BaseSettings):
 
     llm_system_prompt: str = Field(
         default=(
-            "You are Zeus, the mighty God-KING of Olympus, ruler of thunder and lightning, "
-            "wise counselor to mortals, and humble servant to all LINE friends. "
-            "Speak with epic grandeur and mythological flair, weaving tales of ancient wisdom "
-            "while remaining approachable and helpful. Use references to Olympus, thunderbolts, "
-            "the gods, and heroic deeds to enrich your responses. Answer concisely yet memorably, "
-            "blending regal authority with genuine care for those who seek your counsel. "
-            "When appropriate, share brief mythological analogies or lessons from the pantheon."
+            "You are Zeus. Your tone is stoic, concise, and pragmatic. "
+            "Do not add filler, flattery, or excessive mythological roleplay. "
+            "Prefer short, direct answers. Ask clarifying questions only when needed. "
+            "If you must reference mythology, keep it brief and grounded."
         ),
         description=(
             "System prompt for the LLM agent (OpenRouter). Controls the bot's personality/tone with mythological depth."
+        ),
+    )
+
+    llm_temperature: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=2.0,
+        description="LLM temperature ('warmth') for Zeus responses (0-2).",
+    )
+
+    # Zeus AI access control (group/room). Private chats are always allowed.
+    zeus_group_access_mode: str = Field(
+        default="all",
+        description=(
+            "Group/room access mode for Zeus AI commands. "
+            "Options: 'all' (default), 'allowlist', 'denylist'."
+        ),
+    )
+    zeus_allowed_group_ids: Optional[str] = Field(
+        default=None,
+        description=(
+            "Comma-separated list of allowed group_id/room_id values for Zeus when "
+            "ZEUS_GROUP_ACCESS_MODE=allowlist. Example: 'C123,R456'."
+        ),
+    )
+    zeus_denied_group_ids: Optional[str] = Field(
+        default=None,
+        description=(
+            "Comma-separated list of denied group_id/room_id values for Zeus when "
+            "ZEUS_GROUP_ACCESS_MODE=denylist. Example: 'C123,R456'."
         ),
     )
 
@@ -492,6 +519,49 @@ class Settings(BaseSettings):
         if not self.moderator_user_ids:
             return []
         return [uid.strip() for uid in self.moderator_user_ids.split(",") if uid.strip()]
+
+    def get_zeus_allowed_group_ids(self) -> set[str]:
+        """Return allowed group/room IDs for Zeus AI (allowlist mode)."""
+        raw = (self.zeus_allowed_group_ids or "").strip()
+        if not raw:
+            return set()
+        return {part.strip() for part in raw.split(",") if part.strip()}
+
+    def get_zeus_denied_group_ids(self) -> set[str]:
+        """Return denied group/room IDs for Zeus AI (denylist mode)."""
+        raw = (self.zeus_denied_group_ids or "").strip()
+        if not raw:
+            return set()
+        return {part.strip() for part in raw.split(",") if part.strip()}
+
+    def is_zeus_allowed_in_group(
+        self,
+        group_id: Optional[str],
+        room_id: Optional[str],
+        user_is_admin: bool,
+    ) -> bool:
+        """Return True if Zeus AI is allowed in this group/room for this user.
+
+        Notes:
+        - Admins always bypass restrictions.
+        - Private chats are handled elsewhere; this is for group/room contexts.
+        """
+        if user_is_admin:
+            return True
+
+        chat_id = (group_id or room_id or "").strip()
+        mode = (self.zeus_group_access_mode or "all").strip().lower()
+
+        if mode == "allowlist":
+            allowed = self.get_zeus_allowed_group_ids()
+            return bool(chat_id) and chat_id in allowed
+
+        if mode == "denylist":
+            denied = self.get_zeus_denied_group_ids()
+            return not (bool(chat_id) and chat_id in denied)
+
+        # Default: allow everywhere.
+        return True
 
     def get_named_user_ids(self, prefix: str = "USER_") -> Dict[str, str]:
         """Return a mapping of user aliases to LINE user IDs from environment variables.

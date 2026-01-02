@@ -5,6 +5,64 @@ All notable changes to TeacherBOY will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-01-02
+
+### 🚀 Added
+
+#### Conversation Memory Service
+
+- **Multi-Turn Conversations:** Zeus LLM agent now maintains context across multiple messages
+- **Hugging Face Hub Sync:** Optional cloud persistence via HF datasets with automatic CommitScheduler
+- **Session Management:**
+  - Configurable TTL (default: 24 hours)
+  - Max messages per session (default: 20)
+  - Automatic session cleanup
+  - Privacy-focused session hashing
+- **Configuration:**
+  - `CONVERSATION_MEMORY_ENABLED` (default: true)
+  - `HF_MEMORY_TOKEN` (optional HF API token)
+  - `HF_MEMORY_REPO_ID` (optional HF dataset repo)
+  - `CONVERSATION_MAX_MESSAGES` (default: 20)
+  - `CONVERSATION_TTL_HOURS` (default: 24)
+
+#### History Logging Service
+
+- **Comprehensive Audit Trail:** Logs all bot events (startup, shutdown, errors, commands, API calls)
+- **AES Encryption:** Optional encryption for sensitive log data
+- **Cloud Backup:** Hugging Face Hub sync for log persistence
+- **Log Rotation:** Automatic archival after configurable days (default: 7)
+- **Zeus-Style Formatting:** Mythological, authoritative error messages when enabled
+- **Rich Event Types:** STARTUP, SHUTDOWN, ERROR, MESSAGE, COMMAND, API_CALL, USER_ACTION, SYSTEM_EVENT
+- **Log Levels:** DEBUG, INFO, WARNING, ERROR, CRITICAL
+- **Configuration:**
+  - `HISTORY_LOG_ENABLED` (default: true)
+  - `HISTORY_LOG_PATH` (default: ./data/logs)
+  - `HISTORY_LOG_ENCRYPTION_KEY` (optional AES key)
+  - `HISTORY_LOG_HF_REPO_ID` (optional HF dataset repo)
+  - `HISTORY_LOG_ROTATION_DAYS` (default: 7)
+  - `ZEUS_ERROR_STYLE` (default: true)
+
+#### Testing
+
+- **28 History Log Tests:** Full coverage of encryption, HF sync, rotation, Zeus formatting
+- **6 Conversation Memory Tests:** Session management, cleanup, HF integration
+- **Test Suite:** 261/264 tests passing (3 pre-existing failures unrelated)
+
+### 🔧 Technical Details
+
+- Added `src/services/conversation_memory_service.py` (350+ lines)
+- Added `src/services/history_log_service.py` (550+ lines)
+- Extended `src/config.py` with 10 new configuration fields
+- Integrated services in `src/main.py` lifespan with graceful shutdown
+- Added `cryptography` to requirements.txt for optional encryption
+- Created comprehensive documentation in `docs/CONVERSATION_MEMORY.md`
+
+### 📝 Documentation
+
+- New guide: `docs/CONVERSATION_MEMORY.md`
+- Updated configuration reference with new settings
+- Added Zeus-style error formatting examples
+
 ## [3.2.1] - 2026-01-01
 
 ### 🐛 Fixed

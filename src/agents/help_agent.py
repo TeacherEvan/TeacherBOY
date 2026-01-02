@@ -72,7 +72,13 @@ class HelpAgent(BaseAgent):
 
         return any(re.match(pattern, text_lower) for pattern in help_patterns)
 
-    def _get_command_categories(self, is_admin: bool, chat_type: str) -> Dict[str, List[Dict[str, Any]]]:
+    def _get_command_categories(
+        self,
+        is_admin: bool,
+        chat_type: str,
+        zeus_available: bool,
+        search_available: bool,
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """Get categorized command list based on user permissions and context."""
         categories = {
             "Core Commands": [
@@ -114,13 +120,13 @@ class HelpAgent(BaseAgent):
                     "command": "Zeus <question>",
                     "description": "Ask Zeus AI general questions",
                     "examples": ["Zeus what is the weather?", "Zeus tell me a joke"],
-                    "available": is_admin
+                    "available": zeus_available
                 },
                 {
                     "command": "Zeus search <query>",
                     "description": "Search the web for information",
                     "examples": ["Zeus search Python tutorials"],
-                    "available": settings.is_brave_search_configured()
+                    "available": search_available
                 }
             ],
             "News & Information": [
@@ -390,6 +396,22 @@ class HelpAgent(BaseAgent):
         is_admin = self._is_admin(user_id)
         chat_type = self._get_chat_type(event)
 
+        # Availability is contextual.
+        # - Private chats: Zeus AI/search are allowed (if configured)
+        # - Groups/rooms: obey Zeus group rules for non-admins (admins bypass)
+        source = getattr(event, "source", None)
+        group_id = getattr(source, "group_id", None) if source else None
+        room_id = getattr(source, "room_id", None) if source else None
+
+        if chat_type == "private chat":
+            zeus_available = True
+            search_available = settings.is_brave_search_configured()
+        else:
+            zeus_available = settings.is_zeus_allowed_in_group(
+                group_id, room_id, user_is_admin=is_admin
+            )
+            search_available = settings.is_brave_search_configured() and zeus_available
+
         with tracer.start_as_current_span("help_agent.handle") as span:
             span.set_attribute("help.user_id", user_id or "unknown")
             span.set_attribute("help.is_admin", is_admin)
@@ -397,7 +419,9 @@ class HelpAgent(BaseAgent):
 
             try:
                 # Get contextual command categories and tips
-                categories = self._get_command_categories(is_admin, chat_type)
+                categories = self._get_command_categories(
+                    is_admin, chat_type, zeus_available, search_available
+                )
                 tips = self._get_adaptive_tips(is_admin, chat_type)
 
                 # Create help message

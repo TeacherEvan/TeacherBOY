@@ -75,6 +75,10 @@ class TranslationAgent(BaseAgent):
         zeus_pattern = r"^dear\s+zeus[\s.!]*$"
         return bool(re.match(zeus_pattern, text.lower().strip()))
 
+    def is_help_command(self, text: str) -> bool:
+        """Check if text is a help command."""
+        return text.lower().strip() in {"help", "/help"}
+
 
 
     def _is_private_chat(self, event: MessageEvent) -> bool:
@@ -112,6 +116,11 @@ class TranslationAgent(BaseAgent):
         NOTE: Skip news triggers ("news", "ข่าว") - let NewsAgent handle them.
         """
         chat_id = self._get_chat_id(event)
+
+        # Help is handled by HelpAgent in production, but keep a minimal help
+        # path here for backwards-compatible tests and direct invocation.
+        if self.is_help_command(text):
+            return True
 
 
 
@@ -168,6 +177,39 @@ class TranslationAgent(BaseAgent):
         with tracer.start_as_current_span("translation_agent.handle") as span:
             span.set_attribute("chat.id", chat_id)
             try:
+
+                # Minimal help path (HelpAgent handles this in production).
+                if self.is_help_command(text):
+                    is_admin = self._is_admin(user_id)
+                    msg = (
+                        "User commands\n"
+                        "- Send Thai to translate to English\n"
+                        "- Send English to translate to Thai\n"
+                        "- Dear Zeus (wake)\n"
+                        "- amen (sleep)\n"
+                    )
+                    if is_admin:
+                        msg += (
+                            "\nAdmin commands\n"
+                            "- /admin help\n"
+                            "- /admin stats\n"
+                        )
+                    if event.reply_token:
+                        await asyncio.to_thread(
+                            line_bot_api.reply_message,
+                            ReplyMessageRequest(
+                                replyToken=event.reply_token,
+                                messages=[
+                                    TextMessage(
+                                        text=msg,
+                                        quickReply=None,
+                                        quoteToken=None,
+                                    )
+                                ],
+                                notificationDisabled=False,
+                            ),
+                        )
+                    return True
 
 
                 # Handle wake command

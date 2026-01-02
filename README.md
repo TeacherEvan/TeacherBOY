@@ -38,14 +38,15 @@ Legacy docs at repo root are kept for backward compatibility.
 - **🔄 Continuous Mode:** Translates EVERY message until you say "amen"
 - **😴 Sleep Mode:** Bot sleeps for 24 hours - say "Dear Zeus" alone to wake up
 - **🌐 Professional Quality:** Google Translate (primary) + LibreTranslate (fallback)
-- **�️ Hallucination Prevention:** Detects incomplete sentences and prevents unwanted context injection
+- **🛡️ Hallucination Prevention:** Detects incomplete sentences and prevents unwanted context injection
 - **💬 Bi-directional:** Thai 🇹🇭 → English 🇬🇧 and English 🇬🇧 → Thai 🇹🇭
 - **👥 Group Chat Support:** Works in 1-on-1, groups, and multi-person chats
 - **📝 Text-Only Responses:** Clean, simple text translations (no distracting cards)
 - **🤫 Silent Join:** Bot joins groups silently - only speaks when Thai is detected
 - **👋 Welcome Message:** Sends "Welcome friend / ยินดีต้อนรับเพื่อน" when added as friend
 - **🎯 Session Management:** Independent sessions per chat
-- **📋 Parentheses Preservation:** Names and notes in (parentheses) are never translated- **⏱️ Rate Limiting:** 10 requests per minute (admins unlimited)
+- **📋 Parentheses Preservation:** Names and notes in (parentheses) are never translated
+- **⏱️ Rate Limiting:** 10 requests per minute (admins unlimited)
 
 ### News Agent **NEW!**
 
@@ -66,6 +67,19 @@ Legacy docs at repo root are kept for backward compatibility.
 - **Trigger:** Type `news` or `ข่าว` to start
 - **📰 Special News:** `/special news` in DM provides interactive carousel with tourism, sports, international headlines
 
+### Zeus AI (LLM Agent) **NEW!**
+
+- **🤖 Ask Zeus:** `Zeus <question>` or `/zeus <question>`
+- **🌡️ Warmth (Temperature):** Configure via `LLM_TEMPERATURE` (default: `1.0`)
+- **🧊 Stoic Persona (Default):** Controlled by `LLM_SYSTEM_PROMPT` (optional override)
+- **👥 Group Access Policy:**
+  - Admins can use Zeus anywhere
+  - Non-admins follow `ZEUS_GROUP_ACCESS_MODE`:
+    - `all` (default)
+    - `allowlist` with `ZEUS_ALLOWED_GROUP_IDS`
+    - `denylist` with `ZEUS_DENIED_GROUP_IDS`
+- **🧑‍💼 Boss Easter Egg:** If asked “who is boss”, replies with exactly: `Evan...`
+
 ### Multi-Agent Architecture
 
 - **🏗️ Modular Design:** Easy to add agents with different capabilities
@@ -73,8 +87,10 @@ Legacy docs at repo root are kept for backward compatibility.
 - **🔌 Extensible:** Add math solver, code review, quiz agents, and more!
 - **🎨 Clean API:** Simple `BaseAgent` class to inherit from
 - **📊 Priority System:** Control which agent handles messages first
-- **🔧 Admin Commands:** In-chat control commands for authorized admins **NEW!**
+- **🔧 Admin Commands:** In-chat control commands for authorized admins
 - **📊 Admin Stats:** Enhanced dashboard with current tourism news headlines
+- **💭 Conversation Memory:** Multi-turn context for Zeus LLM agent with optional HF Hub persistence **NEW!**
+- **📜 History Logging:** Comprehensive audit trail with encryption and cloud backup **NEW!**
 
 ### Performance & Scalability
 
@@ -114,6 +130,15 @@ LIBRETRANSLATE_API_URL=https://libretranslate.de/translate
 
 # Optional: Additional agents
 ADDITIONAL_AGENTS=
+
+# Zeus AI (LLM) (optional)
+LLM_TEMPERATURE=1.0
+# Group/room policy for non-admin Zeus usage: all|allowlist|denylist
+ZEUS_GROUP_ACCESS_MODE=all
+ZEUS_ALLOWED_GROUP_IDS=
+ZEUS_DENIED_GROUP_IDS=
+# Optional: override Zeus persona
+# LLM_SYSTEM_PROMPT=
 
 # Admin Control (for bot management)
 ADMIN_USER_IDS=
@@ -315,6 +340,6 @@ pytest --cov=src --cov-report=html
 
 See **[Deployment Guide](docs/guides/deployment.md)** for complete instructions for each option.
 
-## �� License
+## 📄 License
 
 MIT

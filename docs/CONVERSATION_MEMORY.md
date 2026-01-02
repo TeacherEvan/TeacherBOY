@@ -26,7 +26,7 @@ CONVERSATION_MEMORY_ENABLED=true
 
 For persistence across restarts:
 
-1. **Create a Hugging Face token** at https://huggingface.co/settings/tokens
+1. **Create a Hugging Face token** at <https://huggingface.co/settings/tokens>
    - Select "write" permissions
 
 2. **Add to environment**:
@@ -54,7 +54,7 @@ For persistence across restarts:
 
 Simply chat with Zeus - context is automatically maintained:
 
-```
+```text
 User: Zeus who was the first president of the United States?
 Zeus: The first President of the United States was George Washington...
 
@@ -67,7 +67,7 @@ Zeus: George Washington was born on February 22, 1732...
 
 To start fresh:
 
-```
+```text
 User: Zeus clear
 Zeus: 🧹 Conversation memory cleared. I've forgotten our previous chat. Start fresh!
 ```
@@ -81,7 +81,7 @@ Alternative commands:
 
 ### Storage Architecture
 
-```
+```text
                     ┌─────────────────┐
                     │   LINE Message  │
                     └────────┬────────┘
