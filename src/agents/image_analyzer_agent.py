@@ -114,7 +114,16 @@ class ImageAnalyzerAgent(BaseAgent):
         text_lower = text.lower().strip()
         
         # Don't trigger on profiler-specific phrases
-        if "profile" in text_lower:
+        # These go to ProfilerAgent for facial/psychological analysis
+        profiler_keywords = [
+            "profile",
+            "read face",
+            "face analysis",
+            "facial analysis",
+            "read expression",
+            "read emotions",
+        ]
+        if any(keyword in text_lower for keyword in profiler_keywords):
             return False
         
         return any(trigger in text_lower for trigger in self.TRIGGERS)

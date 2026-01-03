@@ -123,16 +123,26 @@ class ProfilerAgent(BaseAgent):
         if message_type == 'text' and text:
             text_lower = text.lower().strip()
             
-            # Profiling trigger phrases
+            # Profiling trigger phrases - FACE-SPECIFIC ONLY
+            # Note: "analyze" triggers go to ImageAnalyzerAgent for general Q&A
+            # Profiling is specifically for facial/psychological analysis
             triggers = [
+                # Profile keywords
                 "zeus profile",
                 "profile this",
-                "analyze this image",
-                "analyze this photo",
-                "analyze image",
-                "analyze photo",
                 "profile image",
                 "profile photo",
+                "profile face",
+                "profile person",
+                # Face-specific keywords (FaceLLaVA-style)
+                "zeus read face",
+                "read this face",
+                "read face",
+                "zeus face",
+                "face analysis",
+                "facial analysis",
+                "read expression",
+                "read emotions",
             ]
             
             return any(trigger in text_lower for trigger in triggers)
@@ -169,10 +179,11 @@ class ProfilerAgent(BaseAgent):
             profiler_session_manager.request_profiling(chat_id, user_id)
             
             confirmation_msg = TextMessage(
-                text="🔬 Ready to analyze!\n\n"
-                     "Please send the image you want me to profile.\n"
+                text="🔬 Face Profiler Ready!\n\n"
+                     "Send me a photo with a face to profile.\n"
+                     "I'll analyze facial expressions, emotions, and body language.\n"
                      "(You have 60 seconds)\n\n"
-                     "พร้อมวิเคราะห์! กรุณาส่งรูปภาพ",
+                     "พร้อมวิเคราะห์ใบหน้า! กรุณาส่งรูปภาพ",
                 quickReply=None,
                 quoteToken=None,
             )

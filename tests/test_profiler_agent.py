@@ -64,7 +64,11 @@ class TestProfilerAgentShouldHandle:
 
     @pytest.mark.asyncio
     async def test_should_handle_text_trigger(self, mock_text_event, mock_settings):
-        """Test that profiler handles text messages with trigger phrases."""
+        """Test that profiler handles text messages with trigger phrases.
+        
+        Note: Profiler uses FACE-SPECIFIC triggers only.
+        "analyze" keywords go to ImageAnalyzerAgent for general image Q&A.
+        """
         with patch("src.agents.profiler_agent.settings", mock_settings), \
              patch("src.agents.profiler_agent.github_models_service") as mock_gms:
             mock_gms.is_configured.return_value = True
@@ -72,22 +76,53 @@ class TestProfilerAgentShouldHandle:
             from src.agents.profiler_agent import ProfilerAgent
             agent = ProfilerAgent()
             
-            # Test various trigger phrases
+            # Test face-specific trigger phrases (no "analyze" - that goes to ImageAnalyzer)
             triggers = [
                 "zeus profile",
                 "profile this",
-                "analyze this image",
-                "analyze this photo",
-                "analyze image",
-                "analyze photo",
                 "profile image",
-                "profile photo"
+                "profile photo",
+                "profile face",
+                "profile person",
+                "zeus read face",
+                "read this face",
+                "read face",
+                "zeus face",
+                "face analysis",
+                "facial analysis",
+                "read expression",
+                "read emotions",
             ]
             
             for trigger in triggers:
                 mock_text_event.message.text = trigger
                 result = await agent.should_handle(mock_text_event, trigger)
                 assert result is True, f"Trigger '{trigger}' should be handled"
+    
+    @pytest.mark.asyncio
+    async def test_should_not_handle_analyze_triggers(self, mock_text_event, mock_settings):
+        """Test that profiler does NOT handle 'analyze' triggers (those go to ImageAnalyzer)."""
+        with patch("src.agents.profiler_agent.settings", mock_settings), \
+             patch("src.agents.profiler_agent.github_models_service") as mock_gms:
+            mock_gms.is_configured.return_value = True
+            
+            from src.agents.profiler_agent import ProfilerAgent
+            agent = ProfilerAgent()
+            
+            # These should NOT trigger Profiler - they go to ImageAnalyzer
+            analyze_triggers = [
+                "analyze this image",
+                "analyze this photo",
+                "analyze image",
+                "analyze photo",
+                "zeus analyze",
+                "zeus analyze this",
+            ]
+            
+            for trigger in analyze_triggers:
+                mock_text_event.message.text = trigger
+                result = await agent.should_handle(mock_text_event, trigger)
+                assert result is False, f"Trigger '{trigger}' should NOT be handled by Profiler"
 
     @pytest.mark.asyncio
     async def test_should_handle_image_with_active_session(self, mock_event, mock_settings):

@@ -1,9 +1,15 @@
-"""LLM Agent - Handles general questions using GitHub Models or OpenRouter."""
+"""LLM Agent - Handles general questions using GitHub Models or OpenRouter.
+
+LIVE DATA INTEGRATION:
+Zeus automatically detects queries that need real-time information (businesses,
+locations, events, prices, etc.) and performs a web search BEFORE calling the LLM.
+Search results are injected into the context so Zeus can reason about live data.
+"""
 
 import asyncio
 import logging
 import re
-from typing import Optional
+from typing import Optional, List, Dict
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
     MessagingApi,
@@ -15,6 +21,7 @@ from linebot.v3.messaging import (
 from .base_agent import BaseAgent
 from src.services.openrouter_service import openrouter_service
 from src.services.github_models_service import github_models_service
+from src.services.brave_search_service import brave_search_service
 from src.services.conversation_memory_service import get_conversation_memory
 from src.utils.tracing import get_tracer
 from src.config import settings
@@ -22,6 +29,73 @@ from src.services.privilege_service import privilege_service
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
+
+# ============================================================================
+# LIVE DATA DETECTION PATTERNS
+# ============================================================================
+# These patterns trigger automatic web search before LLM response
+# to provide Zeus with current, real-world information.
+
+LIVE_DATA_PATTERNS = [
+    # Location/proximity queries
+    r"\bnear(?:by)?\s*(?:me|here|us)?\b",
+    r"\bin\s+(?:bangkok|pattaya|thailand|chiang\s*mai|phuket|krabi|sukhumvit|silom|siam|asok)\b",
+    r"\b(?:where|what)\s+(?:is|are)\s+(?:the\s+)?(?:best|nearest|closest|a\s+good)\b",
+    r"\bwhere\s+can\s+i\s+(?:find|get|buy)\b",
+    r"\bdirections?\s+to\b",
+    r"\bhow\s+(?:to\s+)?get\s+to\b",
+    r"\blocation\s+of\b",
+    r"\baddress\s+(?:of|for)\b",
+    
+    # Business/place types
+    r"\b(?:restaurant|cafe|coffee\s*shop|bar|pub|club|hotel|hostel|resort)\b",
+    r"\b(?:store|shop|mall|market|supermarket|7[-\s]?eleven|convenience)\b",
+    r"\b(?:hospital|clinic|pharmacy|doctor|dentist|medical)\b",
+    r"\b(?:bank|atm|exchange|money\s*changer)\b",
+    r"\b(?:gym|fitness|spa|massage|salon|barbershop)\b",
+    r"\b(?:temple|wat|church|mosque|shrine)\b",
+    r"\b(?:museum|gallery|park|beach|attraction|landmark)\b",
+    r"\b(?:airport|bus\s*station|train\s*station|bts|mrt|taxi|grab)\b",
+    
+    # Time-sensitive queries
+    r"\b(?:open|close[ds]?|hours|schedule|timing)\s*(?:now|today|tonight)?\b",
+    r"\b(?:today|tonight|tomorrow|this\s+week|this\s+weekend)\b",
+    r"\b(?:current|latest|recent|live|real[-\s]?time|up[-\s]?to[-\s]?date)\b",
+    r"\b(?:happening|event|festival|concert|show|movie)\b",
+    
+    # Recommendations/reviews
+    r"\b(?:best|top|recommend|suggestion|popular|famous|good)\s+(?:place|spot|restaurant|hotel|bar|cafe)?\b",
+    r"\b(?:review|rating|rated)\b",
+    r"\b(?:cheap|affordable|budget|expensive|luxury|fancy)\b",
+    
+    # Price/availability queries
+    r"\b(?:price|cost|fee|rate|how\s+much)\b",
+    r"\b(?:available|availability|book|reserve|reservation)\b",
+    r"\b(?:menu|dish|food|cuisine)\b",
+    
+    # Contact/practical info
+    r"\b(?:phone|number|contact|email|website|link)\b",
+    r"\b(?:wifi|internet|parking|delivery)\b",
+    
+    # Comparison/alternatives
+    r"\b(?:vs|versus|compare|alternative|similar\s+to|like)\b",
+    r"\b(?:difference|between)\b",
+    
+    # News/current events
+    r"\b(?:news|headline|breaking|update|announcement)\b",
+    r"\b(?:weather|forecast|temperature|rain)\b",
+    r"\b(?:traffic|congestion|accident|road)\b",
+    
+    # Sports/entertainment
+    r"\b(?:score|match|game|play|playing|live\s+stream)\b",
+    r"\b(?:ticket|seat|showtime)\b",
+]
+
+# Compile patterns for efficiency
+_LIVE_DATA_REGEX = re.compile(
+    "|".join(f"({p})" for p in LIVE_DATA_PATTERNS),
+    re.IGNORECASE
+)
 
 
 class LLMAgent(BaseAgent):
@@ -64,6 +138,100 @@ class LLMAgent(BaseAgent):
     def _is_any_llm_configured(self) -> bool:
         """Check if any LLM provider is configured."""
         return self.github_service.is_configured() or self.openrouter_service.is_configured()
+
+    # ========================================================================
+    # LIVE DATA DETECTION & AUTO-SEARCH
+    # ========================================================================
+
+    def _needs_live_data(self, query: str) -> bool:
+        """
+        Detect if query needs real-time/live data from the web.
+        
+        Uses compiled regex patterns to identify queries about:
+        - Locations, businesses, places
+        - Current events, prices, availability
+        - Time-sensitive information
+        - Reviews, recommendations
+        
+        Args:
+            query: User's question/query text
+            
+        Returns:
+            True if the query would benefit from web search data
+        """
+        if not query:
+            return False
+        return bool(_LIVE_DATA_REGEX.search(query))
+
+    async def _auto_search(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
+        """
+        Perform automatic web search for live data.
+        
+        Args:
+            query: Search query (user's question)
+            max_results: Maximum search results to return
+            
+        Returns:
+            List of search result dicts with 'title', 'url', 'description'
+        """
+        if not brave_search_service.is_configured():
+            logger.warning("🔍 Auto-search skipped: Brave Search not configured")
+            return []
+        
+        try:
+            results = await brave_search_service.search(query, count=max_results)
+            if results:
+                logger.info(f"🔍 Auto-search found {len(results)} results for: {query[:50]}...")
+            return results
+        except Exception as e:
+            logger.error(f"🔍 Auto-search error: {e}")
+            return []
+
+    def _format_search_context(self, results: List[Dict[str, str]], query: str) -> str:
+        """
+        Format search results as context for LLM injection.
+        
+        This creates a clear, structured context that helps the LLM
+        understand and reason about the live data.
+        
+        Args:
+            results: Search results from Brave Search
+            query: Original user query
+            
+        Returns:
+            Formatted context string to inject into LLM prompt
+        """
+        if not results:
+            return ""
+        
+        context_lines = [
+            "═══ LIVE WEB SEARCH RESULTS ═══",
+            f"Query: {query}",
+            f"Retrieved: {len(results)} results from the web",
+            "",
+        ]
+        
+        for i, result in enumerate(results, 1):
+            title = (result.get("title") or "").strip()
+            url = (result.get("url") or "").strip()
+            desc = (result.get("description") or "").strip()
+            
+            context_lines.append(f"[{i}] {title}")
+            if desc:
+                # Truncate long descriptions
+                if len(desc) > 300:
+                    desc = desc[:297] + "..."
+                context_lines.append(f"    {desc}")
+            if url:
+                context_lines.append(f"    🔗 {url}")
+            context_lines.append("")
+        
+        context_lines.append("═══ END SEARCH RESULTS ═══")
+        context_lines.append("")
+        context_lines.append("Use this live information to answer the user's question accurately.")
+        context_lines.append("Include relevant URLs when helpful. Cite sources when appropriate.")
+        
+        return "\n".join(context_lines)
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         """Extract chat ID from event for conversation memory."""
@@ -400,6 +568,28 @@ class LLMAgent(BaseAgent):
 
                 span.set_attribute("llm.provider", provider_name)
 
+                # ============================================================
+                # LIVE DATA AUTO-SEARCH
+                # ============================================================
+                # Detect if query needs real-time information and auto-search
+                search_context = ""
+                used_live_search = False
+                
+                if self._needs_live_data(query):
+                    logger.info(f"🔍 Query needs live data, auto-searching: {query[:50]}...")
+                    span.set_attribute("llm.needs_live_data", True)
+                    
+                    search_results = await self._auto_search(query)
+                    if search_results:
+                        search_context = self._format_search_context(search_results, query)
+                        used_live_search = True
+                        span.set_attribute("llm.search_results_count", len(search_results))
+                        logger.info(f"🔍 Injecting {len(search_results)} search results into LLM context")
+                    else:
+                        logger.warning("🔍 No search results found, proceeding with LLM only")
+                else:
+                    span.set_attribute("llm.needs_live_data", False)
+
                 # Get conversation context from memory service
                 chat_id = self._get_chat_id(event)
                 memory = get_conversation_memory()
@@ -412,14 +602,34 @@ class LLMAgent(BaseAgent):
                     context_messages = await memory.get_context_messages(chat_id)
                     logger.debug(f"💭 Retrieved {len(context_messages)} context messages for {chat_id}")
 
+                # Build system prompt - enhanced with live search capability note
+                system_prompt = settings.llm_system_prompt
+                if used_live_search:
+                    system_prompt += (
+                        "\n\n⚡ LIVE DATA MODE ACTIVE: You have access to real-time web search results. "
+                        "Use this current information to provide accurate, up-to-date answers. "
+                        "Include specific details, prices, hours, and URLs from the search results when relevant."
+                    )
+
                 # Build messages with conversation context
-                messages = [{"role": "system", "content": settings.llm_system_prompt}]
+                messages = [{"role": "system", "content": system_prompt}]
                 
                 if context_messages:
                     # Add context messages (excluding current query, already added to memory)
                     # Context includes previous exchanges for multi-turn conversation
                     for ctx_msg in context_messages[:-1]:  # Exclude last (current query)
                         messages.append(ctx_msg)
+                
+                # Inject search context before user query if available
+                if search_context:
+                    messages.append({
+                        "role": "user",
+                        "content": f"Here is current information from the web:\n\n{search_context}"
+                    })
+                    messages.append({
+                        "role": "assistant", 
+                        "content": "Thank you for the live search data. I'll use this current information to answer your question accurately."
+                    })
                 
                 # Add current query
                 messages.append({"role": "user", "content": query})
