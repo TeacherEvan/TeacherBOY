@@ -619,6 +619,10 @@ class HistoryLogService:
             # Daily log files
             date_str = entry.timestamp.strftime("%Y-%m-%d")
             log_file = self.storage_path / f"zeus_log_{date_str}.jsonl"
+            hf_log_file = None
+            if self._hf_enabled:
+                # Keep HF sync append-only by writing to the scheduler folder.
+                hf_log_file = self.storage_path / "hf_sync" / f"zeus_log_{date_str}.jsonl"
             
             # Serialize entry
             entry_data = entry.to_dict(include_sensitive=True)
@@ -632,6 +636,9 @@ class HistoryLogService:
             async with asyncio.Lock():
                 with open(log_file, "a", encoding="utf-8") as f:
                     f.write(entry_json + "\n")
+                if hf_log_file is not None:
+                    with open(hf_log_file, "a", encoding="utf-8") as f:
+                        f.write(entry_json + "\n")
             
             # Check for rotation
             await self._maybe_rotate_logs()
