@@ -43,9 +43,6 @@ class NewsAgent(BaseAgent):
             description="Weather, air quality, and news headlines for Bangkok",
         )
         self.news_service = news_data_service
-        # Cache env-based privileges (tests patch module-local `settings`).
-        self._admin_user_ids = settings.get_admin_user_ids()
-        self._moderator_user_ids = settings.get_moderator_user_ids()
 
         # Cache friendship checks to avoid repeated LINE API calls.
         # {user_id: (is_friend, cached_at_utc)}
@@ -58,20 +55,6 @@ class NewsAgent(BaseAgent):
 
         self.google_translate = google_translation_service
         self.libre_translate = libre_translation
-
-    def _is_admin(self, user_id: Optional[str]) -> bool:
-        """Check if user is an admin (admins bypass rate limits)."""
-        if privilege_service.is_claimed_admin(user_id):
-            return True
-        return user_id in self._admin_user_ids if user_id else False
-
-    def _is_moderator(self, user_id: Optional[str]) -> bool:
-        """Check if user is a moderator (moderators get direct news access like admins)."""
-        return user_id in self._moderator_user_ids if user_id else False
-
-    def _is_privileged_user(self, user_id: Optional[str]) -> bool:
-        """Check if user is admin or moderator (both get same privileges)."""
-        return self._is_admin(user_id) or self._is_moderator(user_id)
 
     def get_priority(self) -> int:
         """News agent priority - runs after Translation (10)."""
@@ -226,7 +209,7 @@ class NewsAgent(BaseAgent):
             if not self._is_group_chat(event):
                 if self._is_news_trigger(text):
                     # Check if user is privileged (admin or moderator)
-                    if self._is_privileged_user(user_id):
+                    if privilege_service.is_privileged(user_id):
                         # Admins/moderators get full news menu even in private chat
                         logger.info(
                             f"📰 Privileged user {user_id} accessing news in private chat"
@@ -254,7 +237,7 @@ class NewsAgent(BaseAgent):
                 )
 
                 # Check if user is privileged (admin or moderator)
-                is_privileged = self._is_privileged_user(user_id)
+                is_privileged = privilege_service.is_privileged(user_id)
                 
                 # Log privilege check result for group chats
                 if self._is_group_chat(event):

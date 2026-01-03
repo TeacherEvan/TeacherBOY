@@ -1,5 +1,6 @@
 """Rate limiting service to prevent API quota exhaustion."""
 
+import asyncio
 import logging
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
@@ -43,6 +44,10 @@ class RateLimiter:
         self.daily_window = timedelta(days=1)
         self.burst_limit = 1  # 1 interaction per 60 seconds
         self.burst_window = timedelta(seconds=60)
+        
+        # Cleanup task
+        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_interval_seconds = 300  # Run cleanup every 5 minutes
 
         logger.info(
             f"✅ Rate limiter initialized: {max_requests} requests per {time_window_seconds}s (chat-based), "
@@ -259,6 +264,31 @@ class RateLimiter:
         total_cleaned = len(chats_to_remove) + len(users_to_remove)
         if total_cleaned > 0:
             logger.debug(f"🧹 Cleaned up {len(chats_to_remove)} inactive chat(s) and {len(users_to_remove)} inactive user(s)")
+
+    async def _cleanup_loop(self) -> None:
+        """Background task to periodically clean up stale rate limit entries."""
+        logger.info(f"⏱️ Starting rate limiter cleanup loop (every {self._cleanup_interval_seconds}s)")
+        try:
+            while True:
+                await asyncio.sleep(self._cleanup_interval_seconds)
+                self.cleanup_stale_entries()
+        except asyncio.CancelledError:
+            logger.info("⏱️ Rate limiter cleanup loop cancelled")
+            raise
+
+    def start_cleanup(self) -> None:
+        """Start background cleanup task."""
+        if self._cleanup_task is None or self._cleanup_task.done():
+            self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+            logger.info("✅ Rate limiter cleanup task started")
+        else:
+            logger.warning("⚠️  Rate limiter cleanup task already running")
+
+    def stop_cleanup(self) -> None:
+        """Stop background cleanup task."""
+        if self._cleanup_task and not self._cleanup_task.done():
+            self._cleanup_task.cancel()
+            logger.info("✅ Rate limiter cleanup task stopped")
 
 
 # Singleton instance

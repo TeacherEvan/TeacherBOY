@@ -37,18 +37,10 @@ class TranslationAgent(BaseAgent):
             name="TranslationAgent",
             description="Thai/English translation with continuous session mode",
         )
-        # Cache env admins (tests patch module-local `settings`).
-        self._admin_user_ids = settings.get_admin_user_ids()
 
     def get_priority(self) -> int:
         """Translation has high priority."""
         return 10
-
-    def _is_admin(self, user_id: Optional[str]) -> bool:
-        """Check if user is an admin (admins bypass rate limits)."""
-        if privilege_service.is_claimed_admin(user_id):
-            return True
-        return user_id in self._admin_user_ids if user_id else False
 
     def contains_thai(self, text: str) -> bool:
         """Check if text contains Thai characters."""
@@ -180,7 +172,7 @@ class TranslationAgent(BaseAgent):
 
                 # Minimal help path (HelpAgent handles this in production).
                 if self.is_help_command(text):
-                    is_admin = self._is_admin(user_id)
+                    is_admin = privilege_service.is_admin(user_id)
                     msg = (
                         "User commands\n"
                         "- Send Thai to translate to English\n"
@@ -265,7 +257,7 @@ class TranslationAgent(BaseAgent):
                     return True
 
                 # Check for rate limiting (skip for admins)
-                if not self._is_admin(user_id) and not rate_limiter.is_allowed(chat_id, user_id):
+                if not privilege_service.is_admin(user_id) and not rate_limiter.is_allowed(chat_id, user_id):
                     span.set_attribute("translation.rate_limited", True)
                     metrics_service.record_rate_limited()
                     reset_seconds = rate_limiter.get_reset_time(chat_id, user_id)
@@ -281,7 +273,7 @@ class TranslationAgent(BaseAgent):
                         )
                     logger.warning(f"⚠️  Rate limited chat {chat_id}, user {user_id}")
                     return True
-                elif self._is_admin(user_id):
+                elif privilege_service.is_admin(user_id):
                     logger.debug(f"🔓 Admin {user_id} bypassed rate limit")
 
                 # Check for duplicate message

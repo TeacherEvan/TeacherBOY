@@ -5,6 +5,7 @@ from unittest.mock import Mock, AsyncMock, patch
 from src.agents.admin_agent import AdminAgent
 from src.services.session_manager import SessionManager
 from src.services.admin_confirmation_service import AdminConfirmationService
+from src.services.privilege_service import privilege_service
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.messaging import MessagingApi
 
@@ -14,15 +15,23 @@ def admin_agent():
     """Create admin agent with test configuration."""
     from unittest.mock import Mock
 
-    with patch("src.agents.admin_agent.settings") as mock_settings:
+    # Reset privilege_service cache before each test
+    privilege_service._reset_for_testing()
+
+    with patch("src.config.settings") as mock_settings:
         mock_settings.get_admin_user_ids.return_value = [
             "U1234567890abcdef",
             "U9876543210fedcba",
         ]
+        mock_settings.get_moderator_user_ids.return_value = []
+        
         # Create mock http_client for admin agent
         mock_http_client = Mock()
         agent = AdminAgent(http_client=mock_http_client, news_api_key="test_key")
-        return agent
+        yield agent
+        
+    # Reset after test
+    privilege_service._reset_for_testing()
 
 
 @pytest.fixture
@@ -59,13 +68,13 @@ class TestAdminAgent:
 
     def test_is_admin_authorized_user(self, admin_agent):
         """Test that authorized users are recognized as admin."""
-        assert admin_agent._is_admin("U1234567890abcdef") is True
-        assert admin_agent._is_admin("U9876543210fedcba") is True
+        assert privilege_service.is_admin("U1234567890abcdef") is True
+        assert privilege_service.is_admin("U9876543210fedcba") is True
 
     def test_is_admin_unauthorized_user(self, admin_agent):
         """Test that unauthorized users are not recognized as admin."""
-        assert admin_agent._is_admin("U0000000000000000") is False
-        assert admin_agent._is_admin("random_user") is False
+        assert privilege_service.is_admin("U0000000000000000") is False
+        assert privilege_service.is_admin("random_user") is False
 
     def test_is_admin_command_valid(self, admin_agent):
         """Test admin command detection with valid commands."""
@@ -484,5 +493,5 @@ class TestAdminBootstrap:
         )
         assert ok is True
 
-        # After claim, user should be treated as admin
-        assert bootstrap_admin_agent._is_admin("UCLAIMME123") is True
+        # After claim, user should be treated as admin (via privilege_service)
+        assert privilege_service.is_claimed_admin("UCLAIMME123") is True

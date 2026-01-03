@@ -24,6 +24,24 @@ class PrivilegeService:
 
     def __init__(self) -> None:
         self._claimed_admin_user_ids: set[str] = set()
+        # Cache admin/moderator lists from settings for performance
+        self._env_admin_user_ids: list[str] = []
+        self._env_moderator_user_ids: list[str] = []
+        self._settings_loaded = False
+
+    def _ensure_settings_loaded(self) -> None:
+        """Lazy-load admin/moderator lists from settings."""
+        if self._settings_loaded:
+            return
+        try:
+            from src.config import settings
+            self._env_admin_user_ids = settings.get_admin_user_ids()
+            self._env_moderator_user_ids = settings.get_moderator_user_ids()
+            self._settings_loaded = True
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to load privilege settings: {e}")
+            self._env_admin_user_ids = []
+            self._env_moderator_user_ids = []
 
     def claim_admin(self, user_id: str) -> None:
         """Grant in-memory admin rights for this running process."""
@@ -35,6 +53,35 @@ class PrivilegeService:
     def is_claimed_admin(self, user_id: Optional[str]) -> bool:
         """Return True if user was granted admin via `/admin claim` in this process."""
         return bool(user_id and user_id in self._claimed_admin_user_ids)
+
+    def is_admin(self, user_id: Optional[str]) -> bool:
+        """Check if user is an admin (claimed or environment-based)."""
+        if not user_id:
+            return False
+        # Check claimed admins first (no settings access needed)
+        if user_id in self._claimed_admin_user_ids:
+            return True
+        # Check environment-based admins
+        self._ensure_settings_loaded()
+        return user_id in self._env_admin_user_ids
+
+    def is_moderator(self, user_id: Optional[str]) -> bool:
+        """Check if user is a moderator (environment-based only)."""
+        if not user_id:
+            return False
+        self._ensure_settings_loaded()
+        return user_id in self._env_moderator_user_ids
+
+    def is_privileged(self, user_id: Optional[str]) -> bool:
+        """Check if user is admin or moderator (both get same privileges)."""
+        return self.is_admin(user_id) or self.is_moderator(user_id)
+
+    def _reset_for_testing(self) -> None:
+        """Reset cached settings for testing. NOT FOR PRODUCTION USE."""
+        self._claimed_admin_user_ids.clear()
+        self._env_admin_user_ids = []
+        self._env_moderator_user_ids = []
+        self._settings_loaded = False
 
 
 # Singleton instance

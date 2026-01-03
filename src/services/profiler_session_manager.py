@@ -1,5 +1,6 @@
 """Profiler session manager - tracks profiling requests."""
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional
@@ -15,6 +16,8 @@ class ProfilerSessionManager:
         # {chat_id: (user_id, timestamp)}
         self._waiting_for_image: Dict[str, tuple[str, datetime]] = {}
         self._session_ttl_seconds = 60  # Expire after 60 seconds
+        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_interval_seconds = 60  # Run cleanup every 60 seconds
 
     def request_profiling(self, chat_id: str, user_id: Optional[str] = None) -> None:
         """
@@ -85,6 +88,31 @@ class ProfilerSessionManager:
 
         if expired:
             logger.info(f"🔬 Cleaned up {len(expired)} expired profiling sessions")
+
+    async def _cleanup_loop(self) -> None:
+        """Background task to periodically clean up expired sessions."""
+        logger.info(f"🔬 Starting profiler session cleanup loop (every {self._cleanup_interval_seconds}s)")
+        try:
+            while True:
+                await asyncio.sleep(self._cleanup_interval_seconds)
+                self.cleanup_expired()
+        except asyncio.CancelledError:
+            logger.info("🔬 Profiler session cleanup loop cancelled")
+            raise
+
+    def start_cleanup(self) -> None:
+        """Start background cleanup task."""
+        if self._cleanup_task is None or self._cleanup_task.done():
+            self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+            logger.info("✅ Profiler session cleanup task started")
+        else:
+            logger.warning("⚠️  Profiler cleanup task already running")
+
+    def stop_cleanup(self) -> None:
+        """Stop background cleanup task."""
+        if self._cleanup_task and not self._cleanup_task.done():
+            self._cleanup_task.cancel()
+            logger.info("✅ Profiler session cleanup task stopped")
 
 
 # Singleton instance

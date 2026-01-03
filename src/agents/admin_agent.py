@@ -65,14 +65,6 @@ class AdminAgent(BaseAgent):
         """Admin commands have highest priority (lower number = higher priority)."""
         return 5
 
-    def _is_admin(self, user_id: str) -> bool:
-        """Check if user is authorized as admin."""
-        if privilege_service.is_claimed_admin(user_id):
-            return True
-        if not self._admin_user_ids:
-            return False
-        return user_id in self._admin_user_ids
-
     def _is_admin_command(self, text: str) -> bool:
         """Check if text is an admin command."""
         text_lower = text.lower().strip()
@@ -139,7 +131,7 @@ class AdminAgent(BaseAgent):
         if cmd == "claim" and self._admin_setup_key:
             return True
 
-        return self._is_admin(user_id)
+        return privilege_service.is_admin(user_id)
 
     async def handle(
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi

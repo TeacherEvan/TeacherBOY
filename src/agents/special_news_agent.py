@@ -45,21 +45,6 @@ class SpecialNewsAgent(BaseAgent):
         self._sports_feed = "https://www.bangkokpost.com/rss/data/sports.xml"
         self._international_feed = "https://www.bangkokpost.com/rss/data/world.xml"
 
-        # Cache env-based privileges (tests patch module-local `settings`).
-        self._admin_user_ids = settings.get_admin_user_ids()
-        self._moderator_user_ids = settings.get_moderator_user_ids()
-
-    def _is_admin(self, user_id: Optional[str]) -> bool:
-        if privilege_service.is_claimed_admin(user_id):
-            return True
-        return user_id in self._admin_user_ids if user_id else False
-
-    def _is_moderator(self, user_id: Optional[str]) -> bool:
-        return user_id in self._moderator_user_ids if user_id else False
-
-    def _is_privileged_user(self, user_id: Optional[str]) -> bool:
-        return self._is_admin(user_id) or self._is_moderator(user_id)
-
     def get_priority(self) -> int:
         # Runs after Admin (5) and Translation (10), before NewsAgent (15)
         return 12
@@ -108,7 +93,7 @@ class SpecialNewsAgent(BaseAgent):
         user_id = getattr(event.source, "user_id", None) if event.source else None
 
         # Privileged users can run it anywhere.
-        if self._is_privileged_user(user_id):
+        if privilege_service.is_privileged(user_id):
             return True
 
         # Regular users must use DM.
@@ -119,7 +104,7 @@ class SpecialNewsAgent(BaseAgent):
             return False
 
         user_id = getattr(event.source, "user_id", None) if event.source else None
-        is_privileged = self._is_privileged_user(user_id)
+        is_privileged = privilege_service.is_privileged(user_id)
 
         # Regular users: DM-only
         if not is_privileged and not self._is_private_chat(event):

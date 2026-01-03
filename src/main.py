@@ -45,6 +45,9 @@ from src.services.translation_service import translation_service
 from src.services.google_translation import google_translation_service
 from src.services.scheduler_service import scheduler_service
 from src.services.news_data_service import NewsDataService
+from src.services.profiler_session_manager import profiler_session_manager
+from src.services.news_session_manager import news_session_manager
+from src.services.rate_limiter import rate_limiter
 from src.agents.agent_router import AgentRouter
 from src.agents.translation_agent import TranslationAgent
 from src.agents.admin_agent import AdminAgent
@@ -344,6 +347,15 @@ async def lifespan(app: FastAPI):
             f"(priority: {agent_info['priority']})"
         )
 
+    # ========================================================================
+    # PHASE 6: Start Background Cleanup Tasks
+    # ========================================================================
+    logger.info("🧹 Starting background cleanup tasks...")
+    profiler_session_manager.start_cleanup()
+    news_session_manager.start_cleanup()
+    rate_limiter.start_cleanup()
+    logger.info("✅ All cleanup tasks started")
+
     logger.info("=" * 80)
     logger.info("✅ Zeus is READY to serve! 🎉")
     logger.info("=" * 80)
@@ -356,6 +368,13 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 80)
     logger.info("🛑 Zeus - Shutting down gracefully...")
     logger.info("=" * 80)
+
+    # Stop background cleanup tasks
+    logger.info("🧹 Stopping background cleanup tasks...")
+    profiler_session_manager.stop_cleanup()
+    news_session_manager.stop_cleanup()
+    rate_limiter.stop_cleanup()
+    logger.info("✅ All cleanup tasks stopped")
 
     # Log shutdown event
     history_svc = get_history_log()

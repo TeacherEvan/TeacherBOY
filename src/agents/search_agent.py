@@ -31,8 +31,6 @@ class SearchAgent(BaseAgent):
             description="Web search using Brave Search API",
         )
         self.search_service = brave_search_service
-        # Keep a cached list for performance and for tests that monkeypatch this field.
-        self._admin_user_ids = settings.get_admin_user_ids()
 
     def get_priority(self) -> int:
         """
@@ -40,12 +38,6 @@ class SearchAgent(BaseAgent):
         Ensures 'Zeus search' is handled here, not by LLMAgent.
         """
         return 8
-
-    def _is_admin(self, user_id: Optional[str]) -> bool:
-        """Check if user is an admin."""
-        if privilege_service.is_claimed_admin(user_id):
-            return True
-        return user_id in self._admin_user_ids if user_id else False
 
     def _is_private_chat(self, event: MessageEvent) -> bool:
         """Check if chat is private (1-on-1)."""
@@ -84,7 +76,7 @@ class SearchAgent(BaseAgent):
         # - Private chats always allowed
         # - Group/room obeys Zeus group rules (allowlist/denylist)
         user_id = getattr(event.source, "user_id", None)
-        if self._is_admin(user_id):
+        if privilege_service.is_admin(user_id):
             return True
 
         if self._is_private_chat(event):
@@ -106,7 +98,7 @@ class SearchAgent(BaseAgent):
         logger.info(f"🔍 Zeus search from {user_id} ({'DM' if is_private else 'group'}): {query[:50]}...")
 
         # Access control: admins anywhere; private chats always; group/room per Zeus rules.
-        if not self._is_admin(user_id) and not is_private:
+        if not privilege_service.is_admin(user_id) and not is_private:
             group_id, room_id = self._get_group_room_ids(event)
             if not settings.is_zeus_allowed_in_group(
                 group_id, room_id, user_is_admin=False

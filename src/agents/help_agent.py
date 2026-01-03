@@ -30,18 +30,10 @@ class HelpAgent(BaseAgent):
             name="HelpAgent",
             description="Comprehensive help system with command directories and contextual guidance",
         )
-        # Cache admin user IDs for performance
-        self._admin_user_ids = settings.get_admin_user_ids()
 
     def get_priority(self) -> int:
         """Highest priority to ensure help commands are handled first."""
         return 5
-
-    def _is_admin(self, user_id: Optional[str]) -> bool:
-        """Check if user is an admin."""
-        if privilege_service.is_claimed_admin(user_id):
-            return True
-        return user_id in self._admin_user_ids if user_id else False
 
     def _is_private_chat(self, event: MessageEvent) -> bool:
         """Check if chat is private (1-on-1)."""
@@ -393,7 +385,7 @@ class HelpAgent(BaseAgent):
     async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """Provide comprehensive help with contextual information."""
         user_id = getattr(event.source, "user_id", None) if event.source else None
-        is_admin = self._is_admin(user_id)
+        is_admin = privilege_service.is_admin(user_id)
         chat_type = self._get_chat_type(event)
 
         # Availability is contextual.

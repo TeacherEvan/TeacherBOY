@@ -27,6 +27,7 @@ First, send one of these trigger phrases to activate profiling mode:
 - `profile photo`
 
 **Example:**
+
 ```
 User: zeus profile
 Zeus: 🔬 Ready to analyze!
@@ -42,6 +43,7 @@ Please send the image you want me to profile.
 Within 60 seconds, send the image you want analyzed.
 
 Zeus will:
+
 1. Send "🔬 Analyzing image... Please wait." message
 2. Download the image from LINE
 3. Send it to GPT-4o vision API for comprehensive analysis
@@ -77,10 +79,12 @@ Zeus will:
 ## Rate Limits
 
 **Regular Users:**
+
 - 3 analyses per hour per chat
 - Prevents excessive API costs
 
 **Admins:**
+
 - Unlimited analyses (bypass rate limit)
 
 ## Configuration
@@ -116,6 +120,7 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 ### Frameworks Used
 
 #### 1. Paul Ekman's 7 Universal Emotions
+
 - Happiness
 - Sadness
 - Fear
@@ -125,12 +130,14 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 - Contempt
 
 #### 2. FBI BAU Methodology
+
 - Victimology/subject assessment
 - Behavioral indicators
 - Cognitive load indicators
 - Social dynamics
 
 #### 3. Joe Navarro's Body Language
+
 - Limbic system responses (freeze/flight/fight)
 - Feet and legs (most honest body part)
 - Torso displays
@@ -139,6 +146,7 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 - Facial tells
 
 #### 4. Color Psychology
+
 - Clothing color significance
 - Environmental color analysis
 - Color combination patterns
@@ -146,37 +154,45 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 ### API Requirements
 
 **GitHub Models (Required):**
+
 - Free tier: https://github.com/marketplace/models
 - Create GitHub PAT with `models:read` scope
 - Set `GITHUB_MODELS_PAT` in `.env`
 
 **Model:**
+
 - Default: `openai/gpt-4o` (supports vision)
 - Alternative: `openai/gpt-4o-mini` (faster, less detailed)
 
 ## Troubleshooting
 
 ### "ProfilerAgent: GitHub Models not configured"
+
 → Set `GITHUB_MODELS_PAT` in `.env` with valid GitHub PAT
 
 ### "Profiler not responding to images"
+
 → Make sure you sent a trigger phrase first (within last 60 seconds)
 
 ### "Rate limit exceeded"
+
 → Wait 1 hour or contact admin for unlimited access
 
 ### "Image too large"
+
 → Compress image to under 10 MB (configurable via `PROFILER_MAX_IMAGE_SIZE_MB`)
 
 ## Privacy & Ethics
 
 **Data Handling:**
+
 - Images are NOT stored locally
 - Images are sent to GitHub Models API for analysis
 - Analysis text is returned but not permanently logged
 - No facial recognition database is created
 
 **Ethical Use:**
+
 - Do NOT use for making hiring/firing decisions
 - Do NOT use for legal judgments
 - Do NOT use for medical/clinical diagnoses
@@ -184,21 +200,25 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 - Use ONLY for entertainment and educational purposes
 
 **Consent:**
+
 - Always obtain consent before analyzing someone's photo
 - Respect privacy and personal boundaries
 
 ## Developer Notes
 
 **Session Manager:**
+
 - Located in `src/services/profiler_session_manager.py`
 - Tracks `{chat_id: (user_id, timestamp)}` state
 - Cleanup happens on analysis completion or error
 
 **Agent Priority:**
+
 - Priority 7 (after admin/help, before search/LLM)
 - Handles both text triggers and images with active sessions
 
 **Testing:**
+
 - Run `pytest tests/test_profiler_agent.py` (23 tests)
 - Mock session manager for unit tests
 - Integration tests cover full trigger → image workflow

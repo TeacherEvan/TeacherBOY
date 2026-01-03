@@ -1,5 +1,6 @@
 """Session state management for multi-step news conversations."""
 
+import asyncio
 import logging
 from typing import Dict, Optional
 from datetime import datetime, timedelta
@@ -21,6 +22,8 @@ class NewsSessionManager:
         # Format: {chat_id: {...}}
         self._news_sessions: Dict[str, dict] = {}
         self._session_timeout_minutes = session_timeout_minutes
+        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_interval_seconds = 300  # Run cleanup every 5 minutes
 
     def is_in_news_flow(self, chat_id: str) -> bool:
         """
@@ -159,6 +162,31 @@ class NewsSessionManager:
         for chat_id in expired_chats:
             del self._news_sessions[chat_id]
             logger.info(f"📰 Session expired for chat {chat_id} (timeout)")
+
+    async def _cleanup_loop(self) -> None:
+        """Background task to periodically clean up expired sessions."""
+        logger.info(f"📰 Starting news session cleanup loop (every {self._cleanup_interval_seconds}s)")
+        try:
+            while True:
+                await asyncio.sleep(self._cleanup_interval_seconds)
+                self._cleanup_expired_sessions()
+        except asyncio.CancelledError:
+            logger.info("📰 News session cleanup loop cancelled")
+            raise
+
+    def start_cleanup(self) -> None:
+        """Start background cleanup task."""
+        if self._cleanup_task is None or self._cleanup_task.done():
+            self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+            logger.info("✅ News session cleanup task started")
+        else:
+            logger.warning("⚠️  News cleanup task already running")
+
+    def stop_cleanup(self) -> None:
+        """Stop background cleanup task."""
+        if self._cleanup_task and not self._cleanup_task.done():
+            self._cleanup_task.cancel()
+            logger.info("✅ News session cleanup task stopped")
 
 
 # Global singleton instance

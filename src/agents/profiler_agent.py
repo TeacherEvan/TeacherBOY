@@ -69,7 +69,6 @@ class ProfilerAgent(BaseAgent):
         )
         self.http_client = http_client
         self.blob_api = messaging_api_blob
-        self._admin_user_ids = settings.get_admin_user_ids()
         
     def get_priority(self) -> int:
         """
@@ -78,12 +77,6 @@ class ProfilerAgent(BaseAgent):
         Priority 7: After admin/help (5), before search (8) and LLM (9).
         """
         return 7
-
-    def _is_admin(self, user_id: Optional[str]) -> bool:
-        """Check if user is an admin (admins bypass rate limits)."""
-        if privilege_service.is_claimed_admin(user_id):
-            return True
-        return user_id in self._admin_user_ids if user_id else False
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         """Extract chat ID from event."""
@@ -206,7 +199,7 @@ class ProfilerAgent(BaseAgent):
 
             try:
                 # Check rate limiting (skip for admins)
-                if not self._is_admin(user_id):
+                if not privilege_service.is_admin(user_id):
                     if not profiler_rate_limiter.is_allowed(chat_id, user_id):
                         span.set_attribute("profiler.rate_limited", True)
                         metrics_service.record_rate_limited()

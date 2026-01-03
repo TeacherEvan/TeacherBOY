@@ -5,6 +5,7 @@ from linebot.v3.messaging import MessagingApi
 
 from src.agents.search_agent import SearchAgent
 from src.services.brave_search_service import BraveSearchService
+from src.services.privilege_service import privilege_service
 
 @pytest.fixture
 def mock_brave_service():
@@ -71,11 +72,20 @@ async def test_should_not_handle_search_in_group_for_non_admin(
 
 @pytest.mark.asyncio
 async def test_should_handle_search_in_group_for_admin(search_agent, group_message_event):
-    search_agent._admin_user_ids = ["user123"]
-    assert (
-        await search_agent.should_handle(group_message_event, "Zeus search python")
-        is True
-    )
+    # Reset and configure privilege_service to treat user123 as admin
+    privilege_service._reset_for_testing()
+    
+    with patch("src.config.settings") as mock_settings:
+        mock_settings.get_admin_user_ids.return_value = ["user123"]
+        mock_settings.get_moderator_user_ids.return_value = []
+        
+        assert (
+            await search_agent.should_handle(group_message_event, "Zeus search python")
+            is True
+        )
+    
+    # Reset after test
+    privilege_service._reset_for_testing()
 
 
 @pytest.mark.asyncio

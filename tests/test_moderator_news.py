@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from src.agents.news_agent import NewsAgent
 from src.services.news_data_service import NewsDataService
 from src.services.news_session_manager import news_session_manager
+from src.services.privilege_service import privilege_service
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import MessagingApi
 from linebot.v3.messaging.exceptions import ApiException
@@ -25,10 +26,16 @@ def news_data_service(mock_http_client):
 @pytest.fixture
 def mock_settings_with_moderators():
     """Mock settings with moderator configuration."""
-    with patch("src.agents.news_agent.settings") as mock_settings:
+    # Reset privilege_service cache before each test
+    privilege_service._reset_for_testing()
+    
+    with patch("src.config.settings") as mock_settings:
         mock_settings.get_admin_user_ids.return_value = ["U_admin_123"]
         mock_settings.get_moderator_user_ids.return_value = ["U_mod_456", "U_mod_789"]
         yield mock_settings
+    
+    # Reset after test
+    privilege_service._reset_for_testing()
 
 
 @pytest.fixture
@@ -92,26 +99,26 @@ class TestModeratorAuthentication:
 
     def test_is_moderator_authorized(self, news_agent_with_moderators):
         """Test that authorized moderators are recognized."""
-        assert news_agent_with_moderators._is_moderator("U_mod_456") is True
-        assert news_agent_with_moderators._is_moderator("U_mod_789") is True
+        assert privilege_service.is_moderator("U_mod_456") is True
+        assert privilege_service.is_moderator("U_mod_789") is True
 
     def test_is_moderator_unauthorized(self, news_agent_with_moderators):
         """Test that non-moderators are not recognized."""
-        assert news_agent_with_moderators._is_moderator("U_regular_user") is False
-        assert news_agent_with_moderators._is_moderator("U_unknown") is False
+        assert privilege_service.is_moderator("U_regular_user") is False
+        assert privilege_service.is_moderator("U_unknown") is False
 
     def test_is_privileged_user_admin(self, news_agent_with_moderators):
         """Test that admins are recognized as privileged users."""
-        assert news_agent_with_moderators._is_privileged_user("U_admin_123") is True
+        assert privilege_service.is_privileged("U_admin_123") is True
 
     def test_is_privileged_user_moderator(self, news_agent_with_moderators):
         """Test that moderators are recognized as privileged users."""
-        assert news_agent_with_moderators._is_privileged_user("U_mod_456") is True
-        assert news_agent_with_moderators._is_privileged_user("U_mod_789") is True
+        assert privilege_service.is_privileged("U_mod_456") is True
+        assert privilege_service.is_privileged("U_mod_789") is True
 
     def test_is_privileged_user_regular(self, news_agent_with_moderators):
         """Test that regular users are not recognized as privileged."""
-        assert news_agent_with_moderators._is_privileged_user("U_regular_user") is False
+        assert privilege_service.is_privileged("U_regular_user") is False
 
 
 class TestModeratorPrivateChat:

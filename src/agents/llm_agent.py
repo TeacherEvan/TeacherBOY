@@ -37,8 +37,6 @@ class LLMAgent(BaseAgent):
         self.openrouter_service = openrouter_service
         # Keep legacy reference for admin actions that use llm_service.client
         self.llm_service = openrouter_service
-        # Cache env admins (tests patch module-local `settings`).
-        self._admin_user_ids = settings.get_admin_user_ids()
 
     def _get_configured_provider(self) -> tuple[Optional[object], str]:
         """
@@ -85,12 +83,6 @@ class LLMAgent(BaseAgent):
         Runs after SearchAgent (8).
         """
         return 9
-
-    def _is_admin(self, user_id: Optional[str]) -> bool:
-        """Check if user is an admin."""
-        if privilege_service.is_claimed_admin(user_id):
-            return True
-        return user_id in self._admin_user_ids if user_id else False
 
     def _is_private_chat(self, event: MessageEvent) -> bool:
         """Check if chat is private (1-on-1)."""
@@ -237,7 +229,7 @@ class LLMAgent(BaseAgent):
 
         user_id = getattr(event.source, "user_id", None) if event.source else None
         is_private = self._is_private_chat(event)
-        is_admin = self._is_admin(user_id)
+        is_admin = privilege_service.is_admin(user_id)
 
         # Hard-coded shortcut: boss question must reply with ONLY 'Evan...'
         if self._is_boss_question(query):
