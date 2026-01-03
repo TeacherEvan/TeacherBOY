@@ -14,7 +14,7 @@ DISCLAIMER: For educational/entertainment purposes only.
 
 import asyncio
 import logging
-from typing import Optional
+from typing import Optional, Any
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
     MessagingApi,
@@ -163,6 +163,14 @@ class ProfilerAgent(BaseAgent):
                 await self._send_analyzing_message(event, line_bot_api)
                 
                 # Download image from LINE
+                if not isinstance(message_id, str) or not message_id.strip():
+                    await self._send_error_message(
+                        event,
+                        line_bot_api,
+                        "Missing image message id from LINE event. Please try again.",
+                    )
+                    return False
+
                 logger.info(f"📸 Downloading image {message_id} from LINE...")
                 image_bytes = await self._download_image(message_id, line_bot_api)
                 
@@ -227,11 +235,9 @@ class ProfilerAgent(BaseAgent):
                     # Need to use push message for the result
                     from linebot.v3.messaging import PushMessageRequest
                     
-                    target = user_id
-                    if hasattr(event.source, "group_id") and event.source.group_id:
-                        target = event.source.group_id
-                    elif hasattr(event.source, "room_id") and event.source.room_id:
-                        target = event.source.room_id
+                    group_id = getattr(event.source, "group_id", None) if event.source else None
+                    room_id = getattr(event.source, "room_id", None) if event.source else None
+                    target = group_id or room_id or user_id
                     
                     if target:
                         await asyncio.to_thread(
@@ -239,6 +245,8 @@ class ProfilerAgent(BaseAgent):
                             PushMessageRequest(
                                 to=target,
                                 messages=[text_msg],
+                                notificationDisabled=False,
+                                customAggregationUnits=None,
                             ),
                         )
 
@@ -256,7 +264,7 @@ class ProfilerAgent(BaseAgent):
 
     async def _download_image(
         self, 
-        message_id: str, 
+        message_id: str,
         line_bot_api: MessagingApi
     ) -> Optional[bytes]:
         """
@@ -281,7 +289,7 @@ class ProfilerAgent(BaseAgent):
                 blob_api = MessagingApiBlob(api_client)
                 
                 # Get message content (returns binary stream)
-                response = await asyncio.to_thread(
+                response: Any = await asyncio.to_thread(
                     blob_api.get_message_content,
                     message_id
                 )
@@ -376,12 +384,9 @@ class ProfilerAgent(BaseAgent):
 
         # Try push message if reply token already used
         user_id = getattr(event.source, "user_id", None) if event.source else None
-        target = user_id
-        
-        if hasattr(event.source, "group_id") and event.source.group_id:
-            target = event.source.group_id
-        elif hasattr(event.source, "room_id") and event.source.room_id:
-            target = event.source.room_id
+        group_id = getattr(event.source, "group_id", None) if event.source else None
+        room_id = getattr(event.source, "room_id", None) if event.source else None
+        target = group_id or room_id or user_id
 
         if target:
             try:
@@ -391,6 +396,8 @@ class ProfilerAgent(BaseAgent):
                     PushMessageRequest(
                         to=target,
                         messages=[msg],
+                        notificationDisabled=False,
+                        customAggregationUnits=None,
                     ),
                 )
             except Exception as e:
