@@ -134,6 +134,22 @@ class HelpAgent(BaseAgent):
                     "examples": ["/special news"],
                     "available": True
                 }
+            ],
+            "Image Analysis": [
+                {
+                    "command": "Zeus profile",
+                    "description": "Psychological profiling from photos using FBI/Ekman/Navarro frameworks",
+                    "examples": ["Zeus profile", "Zeus analyze this photo"],
+                    "rate_limit": "3 analyses/hour (admins unlimited)" if not is_admin else "Unlimited",
+                    "available": settings.is_profiler_configured()
+                },
+                {
+                    "command": "Zeus analyze this",
+                    "description": "General image Q&A with GPT-4o vision",
+                    "examples": ["Zeus analyze this", "analyze image", "examine this photo"],
+                    "rate_limit": "5 analyses/hour (admins unlimited)" if not is_admin else "Unlimited",
+                    "available": settings.is_github_models_configured()
+                }
             ]
         }
 
@@ -262,35 +278,49 @@ class HelpAgent(BaseAgent):
 
             command_contents = []
             for cmd in available_commands:
+                cmd_box_contents = [
+                    {
+                        "type": "text",
+                        "text": f"• {cmd['command']}",
+                        "weight": "bold",
+                        "size": "sm",
+                        "color": "#1F2937",
+                        "wrap": True
+                    },
+                    {
+                        "type": "text",
+                        "text": cmd['description'],
+                        "size": "xs",
+                        "color": "#6B7280",
+                        "wrap": True,
+                        "margin": "xs"
+                    }
+                ]
+                
+                # Add rate limit info if available
+                if 'rate_limit' in cmd and cmd['rate_limit']:
+                    cmd_box_contents.append({
+                        "type": "text",
+                        "text": f"⏱️ {cmd['rate_limit']}",
+                        "size": "xxs",
+                        "color": "#DC2626",
+                        "wrap": True,
+                        "margin": "xs"
+                    })
+                
+                cmd_box_contents.append({
+                    "type": "text",
+                    "text": f"Example: {cmd['examples'][0]}",
+                    "size": "xxs",
+                    "color": "#9CA3AF",
+                    "wrap": True,
+                    "margin": "xs"
+                })
+                
                 command_contents.append({
                     "type": "box",
                     "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": f"• {cmd['command']}",
-                            "weight": "bold",
-                            "size": "sm",
-                            "color": "#1F2937",
-                            "wrap": True
-                        },
-                        {
-                            "type": "text",
-                            "text": cmd['description'],
-                            "size": "xs",
-                            "color": "#6B7280",
-                            "wrap": True,
-                            "margin": "xs"
-                        },
-                        {
-                            "type": "text",
-                            "text": f"Example: {cmd['examples'][0]}",
-                            "size": "xxs",
-                            "color": "#9CA3AF",
-                            "wrap": True,
-                            "margin": "xs"
-                        }
-                    ],
+                    "contents": cmd_box_contents,
                     "margin": "sm"
                 })
 

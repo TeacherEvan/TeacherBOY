@@ -5,6 +5,27 @@ All notable changes to TeacherBOY will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.2] - 2026-01-03
+
+### ✨ Enhanced
+
+#### Help System - Comprehensive Feature Documentation
+
+- **New "Image Analysis" Category:** Added dedicated section for vision-based features
+  - Psychological Profiler (Zeus profile) - 3 analyses/hour
+  - Image Analyzer (Zeus analyze this) - 5 analyses/hour
+  - Rate limits clearly displayed for each feature
+  - Admins get unlimited usage notification
+- **Improved Help Command:**
+  - "/zeus help" trigger now works (was already in patterns but not documented)
+  - All features properly categorized and explained
+  - Rate limiting information included in command descriptions
+  - Visual indicators for rate-limited features
+- **Better User Experience:**
+  - Clear examples for each command
+  - Contextual availability based on configuration
+  - Rate limit info shown in red for visibility
+
 ## [3.4.1] - 2026-01-03
 
 ### 🐛 Fixed
