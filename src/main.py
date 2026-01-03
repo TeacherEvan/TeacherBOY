@@ -47,6 +47,7 @@ from src.services.scheduler_service import scheduler_service
 from src.services.news_data_service import NewsDataService
 from src.services.profiler_session_manager import profiler_session_manager
 from src.services.news_session_manager import news_session_manager
+from src.services.image_analyzer_session_manager import image_analyzer_session_manager
 from src.services.rate_limiter import rate_limiter
 from src.agents.agent_router import AgentRouter
 from src.agents.translation_agent import TranslationAgent
@@ -57,6 +58,7 @@ from src.agents.llm_agent import LLMAgent
 from src.agents.search_agent import SearchAgent
 from src.agents.help_agent import HelpAgent
 from src.agents.profiler_agent import ProfilerAgent
+from src.agents.image_analyzer_agent import ImageAnalyzerAgent
 from src.services.openrouter_service import openrouter_service
 from src.services.brave_search_service import brave_search_service
 from src.services.github_models_service import github_models_service
@@ -276,13 +278,21 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("🔧 Admin Agent not registered (no ADMIN_USER_IDS configured)")
 
-    # Register Profiler Agent (Priority: 7 - Handles image messages)
+    # Register Profiler Agent (Priority: 7 - Handles image messages for psychological profiling)
     if settings.is_profiler_configured():
         profiler_agent = ProfilerAgent(http_client=http_client_pool)
         agent_router.register_agent(profiler_agent)
         logger.info(f"🔬 Profiler Agent registered (Model: {settings.profiler_model})")
     else:
         logger.info("🔬 Profiler Agent not registered (GitHub Models not configured)")
+
+    # Register Image Analyzer Agent (Priority: 7 - Handles image Q&A)
+    if settings.is_github_models_configured():
+        image_analyzer_agent = ImageAnalyzerAgent(http_client=http_client_pool)
+        agent_router.register_agent(image_analyzer_agent)
+        logger.info("🖼️ Image Analyzer Agent registered (general image Q&A)")
+    else:
+        logger.info("🖼️ Image Analyzer Agent not registered (GitHub Models not configured)")
 
     # Register Translation Agent (Priority: 10)
     translation_agent = TranslationAgent()
@@ -353,6 +363,7 @@ async def lifespan(app: FastAPI):
     logger.info("🧹 Starting background cleanup tasks...")
     profiler_session_manager.start_cleanup()
     news_session_manager.start_cleanup()
+    image_analyzer_session_manager.start_cleanup()
     rate_limiter.start_cleanup()
     logger.info("✅ All cleanup tasks started")
 
@@ -373,6 +384,7 @@ async def lifespan(app: FastAPI):
     logger.info("🧹 Stopping background cleanup tasks...")
     profiler_session_manager.stop_cleanup()
     news_session_manager.stop_cleanup()
+    image_analyzer_session_manager.stop_cleanup()
     rate_limiter.stop_cleanup()
     logger.info("✅ All cleanup tasks stopped")
 

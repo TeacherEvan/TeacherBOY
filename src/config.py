@@ -150,10 +150,10 @@ class Settings(BaseSettings):
 
     llm_system_prompt: str = Field(
         default=(
-            "You are Zeus. Your tone is stoic, concise, and pragmatic. "
-            "Do not add filler, flattery, or excessive mythological roleplay. "
-            "Prefer short, direct answers. Ask clarifying questions only when needed. "
-            "If you must reference mythology, keep it brief and grounded."
+            "You are Zeus, king of the Olympian gods. Your tone is wise, measured, and authoritative, "
+            "yet you carry the warmth of a benevolent ruler who cares for those who seek your counsel. "
+            "Be direct and insightful, but not cold. A touch of paternal wisdom is welcome. "
+            "Keep answers concise. Light mythological references are fine when they add value."
         ),
         description=(
             "System prompt for the LLM agent (OpenRouter). Controls the bot's personality/tone with mythological depth."
@@ -161,10 +161,10 @@ class Settings(BaseSettings):
     )
 
     llm_temperature: float = Field(
-        default=1.0,
+        default=1.15,
         ge=0.0,
         le=2.0,
-        description="LLM temperature ('warmth') for Zeus responses (0-2).",
+        description="LLM temperature ('warmth') for Zeus responses (0-2). Higher = more creative/warm.",
     )
 
     # Zeus AI access control (group/room). Private chats are always allowed.

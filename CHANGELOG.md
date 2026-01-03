@@ -5,6 +5,39 @@ All notable changes to TeacherBOY will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-01-03
+
+### 🚀 Added
+
+#### Image Analyzer Agent - General Purpose Image Q&A
+
+- **New Multi-Step Flow:** Users can now ask Zeus questions about any image
+  - Trigger: "Zeus analyze this" / "analyze image" / "Zeus examine this"
+  - Zeus asks for image (60 seconds timeout)
+  - Zeus asks for question about the image
+  - Zeus analyzes and answers using GPT-4o vision
+- **Use Cases:**
+  - Menu translation: "What would be most enjoyable on this menu to a westerner?"
+  - Sign reading: "What does this sign say?"
+  - Product identification: "What products are shown here?"
+  - General visual questions
+- **Session Management:** Dedicated `ImageAnalyzerSessionManager` with:
+  - Two-phase state machine (WAITING_FOR_IMAGE → WAITING_FOR_QUESTION)
+  - 60-second timeout per phase
+  - Background cleanup task
+- **Rate Limiting:** 5 analyses per hour per chat (admins unlimited)
+
+### 🎨 Enhanced
+
+#### Zeus Persona - Warmer Responses
+
+- **Increased Temperature:** LLM temperature raised from 1.0 to 1.15 for slightly warmer responses
+- **Updated System Prompt:** Zeus now speaks with "warmth of a benevolent ruler"
+  - Previous: "stoic, concise, and pragmatic"
+  - New: "wise, measured, and authoritative, yet with warmth"
+  - "A touch of paternal wisdom is welcome"
+  - "Light mythological references are fine when they add value"
+
 ## [3.3.1] - 2026-01-03
 
 ### 🎨 Enhanced
