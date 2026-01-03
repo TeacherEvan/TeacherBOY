@@ -91,6 +91,23 @@ Legacy docs at repo root are kept for backward compatibility.
 - **🤖 Vision AI:** GPT-4o multimodal analysis
 - **Full Documentation:** [Profiler Usage Guide](docs/PROFILER_USAGE.md)
 
+### Image Analyzer **NEW!**
+
+- **🖼️ General Image Q&A:** Ask Zeus questions about any image
+- **🔄 Multi-Step Flow:**
+  1. Trigger: "Zeus analyze this" / "analyze image" / "examine this"
+  2. Zeus asks for the image (60 seconds timeout)
+  3. Send your image
+  4. Zeus asks what you want to know
+  5. Get your answer from GPT-4o vision
+- **💡 Use Cases:**
+  - Menu translation: "What would be most enjoyable on this menu to a westerner?"
+  - Sign reading: "What does this sign say?"
+  - Product identification: "What products are shown here?"
+  - Any visual question about the image
+- **⏱️ Rate Limiting:** 5 analyses/hour (admins unlimited)
+- **🧠 Powered by:** GPT-4o vision via GitHub Models
+
 ### Multi-Agent Architecture
 
 - **🏗️ Modular Design:** Easy to add agents with different capabilities
