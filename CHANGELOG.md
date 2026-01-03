@@ -5,6 +5,40 @@ All notable changes to TeacherBOY will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2025-01-09
+
+### 🔒 Security
+
+#### Image Privacy & Memory Management
+
+- **Explicit Memory Cleanup:** Added immediate deletion of image data after processing
+  - ProfilerAgent: Deletes `image_bytes`, `image_data_url`, and `messages` after GPT-4o vision call
+  - ImageAnalyzerAgent: Deletes intermediate data after encoding and after vision API call
+  - Prevents sensitive image data from lingering in memory or logs
+- **Privacy Documentation:** Created comprehensive IMAGE_PRIVACY.md
+  - Image lifecycle documentation (download → encode → process → delete)
+  - Storage guarantees (no persistent storage, only transient memory)
+  - Session TTLs (60 seconds max for ImageAnalyzer, no storage for Profiler)
+  - GDPR/CCPA compliance details (data minimization, user control)
+  - Developer guidelines for handling sensitive data
+- **Verification:** Confirmed no image storage in:
+  - ConversationMemoryService (text only)
+  - HistoryLogService (metadata only)
+  - Session managers (cleared on retrieval/expiration)
+
+### 📚 Documentation
+
+- **IMAGE_PRIVACY.md:** Complete privacy & memory management guide
+  - Image lifecycle and deletion points
+  - Privacy guarantees (no disk, database, or persistent storage)
+  - Compliance notes (GDPR, CCPA)
+  - Developer best practices
+- **IMAGE_MEMORY_CLEANUP.md:** Implementation details
+  - Technical changes and cleanup points
+  - Before/after memory management strategy
+  - Test results and verification
+  - Privacy guarantees and compliance status
+
 ## [3.4.3] - 2026-01-03
 
 ### ✨ Enhanced

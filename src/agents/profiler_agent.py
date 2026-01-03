@@ -267,6 +267,12 @@ class ProfilerAgent(BaseAgent):
                     temperature=0.3,  # Lower temperature for analytical tasks
                     max_tokens=4000,
                 )
+                
+                # CRITICAL: Clear image data from memory after vision API call
+                # This prevents sensitive image data from lingering in memory/logs
+                del image_bytes  # Clear original binary data
+                del image_data_url  # Clear base64 data URL
+                del messages  # Clear vision API messages containing image
 
                 if not analysis:
                     status_code, error, model_used = github_models_service.get_last_error()

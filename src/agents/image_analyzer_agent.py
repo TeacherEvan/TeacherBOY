@@ -274,13 +274,21 @@ class ImageAnalyzerAgent(BaseAgent):
         
         span.set_attribute("image.size_bytes", len(image_bytes))
         
-        # Convert to base64 and store
+        # Convert to base64 and store in session manager
         image_base64 = base64.b64encode(image_bytes).decode('utf-8')
         image_data_url = f"data:image/jpeg;base64,{image_base64}"
         
+        # CRITICAL: Clear original binary data after encoding
+        del image_bytes  # Remove binary data from memory
+        del image_base64  # Remove base64 string (data URL is kept in session)
+        
         if not image_analyzer_session_manager.store_image(chat_id, image_data_url):
             await self._send_error_message(event, line_bot_api, "Session expired. Please start again with 'Zeus analyze this'.")
+            del image_data_url  # Clean up on error
             return False
+        
+        # Clear data URL reference now that it's stored in session manager
+        del image_data_url
         
         # Ask for question
         question_msg = TextMessage(
@@ -340,6 +348,11 @@ class ImageAnalyzerAgent(BaseAgent):
             temperature=settings.llm_temperature,  # Use configured temperature
             max_tokens=2000,
         )
+        
+        # CRITICAL: Clear image data from memory after vision API call
+        # This prevents sensitive image data from lingering in memory/logs
+        del image_data  # Clear base64 data URL
+        del messages  # Clear vision API messages containing image
         
         if not analysis:
             status_code, error, model_used = github_models_service.get_last_error()
