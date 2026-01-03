@@ -5,6 +5,38 @@ All notable changes to TeacherBOY will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.3] - 2026-01-03
+
+### ✨ Enhanced
+
+#### Admin Stats Dashboard - Visual Excellence
+
+- **Flex Message Conversion:** Transformed text-based stats into visually stunning dashboard
+  - Color-coded status indicators (🔴/🟡/✅) for LINE quota and cache performance
+  - Clean, organized sections with visual hierarchy
+  - Responsive layout optimized for mobile viewing
+  - Professional card-based design with consistent spacing
+- **New Metrics Added:**
+  - Profiler session tracking (psychological profiling usage)
+  - Image Analyzer session tracking (general image Q&A usage)
+  - Enhanced session overview with all active flows
+- **Improved Data Visualization:**
+  - Provider breakdown with percentages (Google/Libre translation split)
+  - Cache hit rate with quality emoji (🟢 ≥80%, 🟡 ≥60%, 🔴 <60%)
+  - Error metrics only shown when errors exist (cleaner display)
+  - Friend engagement with time formatting (minutes/hours/days ago)
+- **Smart Status Indicators:**
+  - LINE quota warnings (🔴 ≥90%, 🟡 ≥75%, ✅ otherwise)
+  - Cache quality indicators (green/yellow/red based on hit rate)
+  - Color-coded error section (red background when issues detected)
+- **Better Organization:**
+  - System Status: Uptime, LINE quota with visual warnings
+  - Usage Metrics: Translations, news, admin commands with provider split
+  - User Engagement: Users, groups, friends with last activity
+  - Active Sessions: Translation, news, profiler, analyzer, sleeping
+  - Cache Performance: Hit rate with visual quality indicator
+  - Error Metrics: Conditional display, only shown when needed
+
 ## [3.4.2] - 2026-01-03
 
 ### ✨ Enhanced

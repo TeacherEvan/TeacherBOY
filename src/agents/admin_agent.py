@@ -12,6 +12,8 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     PushMessageRequest,
     TextMessage,
+    FlexMessage,
+    FlexContainer,
 )
 
 if TYPE_CHECKING:
@@ -160,7 +162,22 @@ class AdminAgent(BaseAgent):
                 elif command == "help":
                     response = self._get_help_message()
                 elif command == "stats":
-                    response = await self._get_stats_message(line_bot_api)
+                    # Stats returns FlexMessage (v3.4.3 enhancement)
+                    flex_stats = await self._get_stats_message(line_bot_api)
+                    
+                    # Send FlexMessage immediately
+                    if event.reply_token:
+                        await asyncio.to_thread(
+                            line_bot_api.reply_message,
+                            ReplyMessageRequest(
+                                replyToken=event.reply_token,
+                                messages=[flex_stats],
+                                notificationDisabled=False,
+                            ),
+                        )
+                    metrics_service.record_admin_command()
+                    logger.info(f"🔧 Admin stats executed by {user_id} in chat {chat_id}")
+                    return True
                 elif command == "send":
                     alias, rest = self._parse_alias_and_rest(arg)
                     response = await self._admin_send_named(line_bot_api, alias, rest)
@@ -723,16 +740,17 @@ class AdminAgent(BaseAgent):
         ok, msg = admin_confirmation_service.cancel(token, user_id)
         return msg
 
-    async def _get_stats_message(self, line_bot_api: MessagingApi) -> str:
+    async def _get_stats_message(self, line_bot_api: MessagingApi) -> FlexMessage:
         """
-        Generate comprehensive admin statistics dashboard.
+        Generate comprehensive admin statistics dashboard using Flex Message.
         
         Features:
-        - System health indicators
-        - Usage metrics with trends
+        - System health indicators with visual status
+        - Usage metrics with trends and percentages
         - User engagement analytics
-        - Cache performance metrics
+        - Cache performance with quality indicators
         - Session state overview
+        - Image analysis usage tracking
         """
         snap = metrics_service.snapshot()
 
@@ -743,6 +761,7 @@ class AdminAgent(BaseAgent):
         monthly_used = None
         monthly_left = None
         quota_status_emoji = "✅"
+        quota_color = "#10B981"  # Green
         
         try:
             quota = None
@@ -764,13 +783,15 @@ class AdminAgent(BaseAgent):
             monthly_used = _get(consumption, "totalUsage")
             if isinstance(monthly_limit, int) and isinstance(monthly_used, int):
                 monthly_left = max(0, monthly_limit - monthly_used)
-                # Set warning emoji if quota is running low
+                # Set warning colors if quota is running low
                 if monthly_limit > 0:
                     usage_pct = (monthly_used / monthly_limit) * 100
                     if usage_pct >= 90:
                         quota_status_emoji = "🔴"
+                        quota_color = "#EF4444"  # Red
                     elif usage_pct >= 75:
                         quota_status_emoji = "🟡"
+                        quota_color = "#F59E0B"  # Amber
         except Exception as e:
             logger.debug(f"Could not fetch LINE quota: {e}")
             monthly_limit = None
@@ -802,7 +823,23 @@ class AdminAgent(BaseAgent):
             news_sessions = 0
 
         # ====================================================================
-        # SECTION 4: Friend Engagement
+        # SECTION 4: Image Analysis Sessions
+        # ====================================================================
+        profiler_sessions = 0
+        image_analyzer_sessions = 0
+        try:
+            from src.services.profiler_session_manager import profiler_session_manager
+            from src.services.image_analyzer_session_manager import image_analyzer_session_manager
+            
+            if hasattr(profiler_session_manager, "_sessions"):
+                profiler_sessions = len(profiler_session_manager._sessions)
+            if hasattr(image_analyzer_session_manager, "_sessions"):
+                image_analyzer_sessions = len(image_analyzer_session_manager._sessions)
+        except Exception:
+            pass
+
+        # ====================================================================
+        # SECTION 5: Friend Engagement
         # ====================================================================
         last_friend = "N/A"
         if snap.last_friend_added_at:
@@ -817,87 +854,434 @@ class AdminAgent(BaseAgent):
                 days_ago = int(time_ago.total_seconds() // 86400)
                 time_ago_str = f"{days_ago}d ago"
 
-            last_friend = f"{time_ago_str} ({self._mask_user_id(snap.last_friend_added_user_id)})"
+            last_friend = f"{time_ago_str}"
 
         # ====================================================================
-        # SECTION 5: Current Tourism News Headlines
+        # SECTION 6: Cache Performance
         # ====================================================================
-        tourism_headlines = []
-        # Reuse news_data_service if available (avoids creating new instance)
-        if self._news_data_service:
-            try:
-                tourism_news = await self._news_data_service.get_news_headlines(language="en")
-                tourism_headlines = [item.get("title", "")[:50] + "..." if len(item.get("title", "")) > 50 else item.get("title", "") for item in tourism_news[:3] if item.get("title")]
-            except Exception as e:
-                logger.debug(f"Could not fetch tourism news for stats: {e}")
-                tourism_headlines = []
-
-        # ====================================================================
-        # BUILD DASHBOARD MESSAGE
-        # ====================================================================
-        msg = "📊 **Admin Stats Dashboard**\n" + "═" * 32 + "\n\n"
-
-        # System Status Section
-        msg += "🖥️  **SYSTEM STATUS**\n" + "─" * 32 + "\n"
+        total_cache_ops = snap.cache_hits_total + snap.cache_misses_total
+        hit_rate = 0
+        cache_quality_emoji = "⚪"
+        cache_quality_color = "#9CA3AF"
         
-        # Uptime with days breakdown
+        if total_cache_ops > 0:
+            hit_rate = (snap.cache_hits_total / total_cache_ops * 100)
+            
+            # Cache quality indicator
+            if hit_rate >= 80:
+                cache_quality_emoji = "🟢"
+                cache_quality_color = "#10B981"
+            elif hit_rate >= 60:
+                cache_quality_emoji = "🟡"
+                cache_quality_color = "#F59E0B"
+            else:
+                cache_quality_emoji = "🔴"
+                cache_quality_color = "#EF4444"
+
+        # ====================================================================
+        # BUILD FLEX MESSAGE DASHBOARD
+        # ====================================================================
+        
+        # Uptime display
         if uptime_days > 0:
-            msg += f"⏱️  Uptime: {uptime_days}d {uptime_hours_remaining}h {uptime_minutes}m\n"
+            uptime_str = f"{uptime_days}d {uptime_hours_remaining}h {uptime_minutes}m"
         else:
-            msg += f"⏱️  Uptime: {uptime_hours}h {uptime_minutes}m\n"
-        
-        # LINE quota with visual indicator
-        if monthly_left is not None and monthly_limit is not None:
-            percentage = (
-                (monthly_left / monthly_limit * 100) if monthly_limit > 0 else 0
-            )
-            msg += f"{quota_status_emoji} LINE quota: {monthly_left:,}/{monthly_limit:,} ({percentage:.1f}% remaining)\n"
-        else:
-            msg += "ℹ️  LINE quota: Not available\n"
-        msg += "\n"
+            uptime_str = f"{uptime_hours}h {uptime_minutes}m"
 
-        # Usage Metrics Section (Enhanced)
-        msg += "📈 **USAGE METRICS**\n" + "─" * 32 + "\n"
-        msg += f"🔤 Translations: {snap.translation_requests_total:,} total\n"
-        
-        # Provider breakdown with percentages
+        # LINE quota display
+        if monthly_left is not None and monthly_limit is not None:
+            quota_pct = (monthly_left / monthly_limit * 100) if monthly_limit > 0 else 0
+            quota_str = f"{monthly_left:,}/{monthly_limit:,} ({quota_pct:.0f}%)"
+        else:
+            quota_str = "N/A"
+
+        # Translation provider breakdown
         total_translations = snap.translation_requests_total
         if total_translations > 0:
             google_pct = (snap.translation_google_total / total_translations) * 100
             libre_pct = (snap.translation_libre_total / total_translations) * 100
-            msg += f"   └─ Google: {snap.translation_google_total:,}, Libre: {snap.translation_libre_total:,} ({google_pct:.0f}% / {libre_pct:.0f}%)\n"
+            provider_str = f"G:{google_pct:.0f}% / L:{libre_pct:.0f}%"
         else:
-            msg += f"   └─ Google: {snap.translation_google_total:,}, Libre: {snap.translation_libre_total:,}\n"
-        
-        msg += f"📰 News requests: {snap.news_requests_total:,}\n"
-        msg += f"🔧 Admin commands: {snap.admin_commands_total:,}\n"
+            provider_str = "No data"
 
-        # Error metrics (only show if non-zero)
-        if snap.failed_translations > 0 or snap.rate_limited_requests > 0:
-            msg += f"\n⚠️  **ERROR METRICS**\n"
-            if snap.failed_translations > 0:
-                msg += f"❌ Failed translations: {snap.failed_translations:,}\n"
-            if snap.rate_limited_requests > 0:
-                msg += f"⏳ Rate limited: {snap.rate_limited_requests:,}\n"
-        msg += "\n"
+        # Build Flex Message structure
+        flex_dict = {
+            "type": "bubble",
+            "size": "giga",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "📊 ADMIN DASHBOARD",
+                        "weight": "bold",
+                        "size": "xl",
+                        "color": "#FFFFFF"
+                    },
+                    {
+                        "type": "text",
+                        "text": datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
+                        "size": "xs",
+                        "color": "#FFFFFF",
+                        "margin": "sm",
+                        "opacity": "0.8"
+                    }
+                ],
+                "backgroundColor": "#667EEA",
+                "paddingAll": "20px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    # System Status Section
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "🖥️ SYSTEM STATUS",
+                                "weight": "bold",
+                                "size": "md",
+                                "color": "#1F2937"
+                            },
+                            {"type": "separator", "margin": "md", "color": "#E5E7EB"},
+                            # Uptime
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "⏱️", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "Uptime", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": uptime_str, "flex": 3, "size": "sm", "align": "end", "weight": "bold"}
+                                ],
+                                "margin": "md"
+                            },
+                            # LINE Quota
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": quota_status_emoji, "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "LINE Quota", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": quota_str, "flex": 3, "size": "sm", "align": "end", "weight": "bold", "color": quota_color}
+                                ],
+                                "margin": "md"
+                            }
+                        ],
+                        "backgroundColor": "#F9FAFB",
+                        "cornerRadius": "8px",
+                        "paddingAll": "16px",
+                        "margin": "none"
+                    },
+                    
+                    # Usage Metrics Section
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "📈 USAGE METRICS",
+                                "weight": "bold",
+                                "size": "md",
+                                "color": "#1F2937"
+                            },
+                            {"type": "separator", "margin": "md", "color": "#E5E7EB"},
+                            # Translations
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "🔤", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "Translations", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"{snap.translation_requests_total:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                ],
+                                "margin": "md"
+                            },
+                            {
+                                "type": "text",
+                                "text": f"   └─ {provider_str}",
+                                "size": "xs",
+                                "color": "#9CA3AF",
+                                "margin": "xs"
+                            },
+                            # News
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "📰", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "News", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"{snap.news_requests_total:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                ],
+                                "margin": "md"
+                            },
+                            # Admin
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "🔧", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "Admin", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"{snap.admin_commands_total:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                ],
+                                "margin": "md"
+                            }
+                        ],
+                        "backgroundColor": "#F9FAFB",
+                        "cornerRadius": "8px",
+                        "paddingAll": "16px",
+                        "margin": "md"
+                    },
+                    
+                    # User Engagement Section
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "👥 USER ENGAGEMENT",
+                                "weight": "bold",
+                                "size": "md",
+                                "color": "#1F2937"
+                            },
+                            {"type": "separator", "margin": "md", "color": "#E5E7EB"},
+                            # Users
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "👤", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "Users", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"{snap.unique_users_count:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                ],
+                                "margin": "md"
+                            },
+                            # Groups
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "👥", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "Groups", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"{snap.unique_groups_count:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                ],
+                                "margin": "md"
+                            },
+                            # Friends
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "🤝", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "Friends", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"+{snap.friends_follow_events_total} / -{snap.friends_unfollow_events_total}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                ],
+                                "margin": "md"
+                            },
+                            {
+                                "type": "text",
+                                "text": f"   └─ Last: {last_friend}",
+                                "size": "xs",
+                                "color": "#9CA3AF",
+                                "margin": "xs"
+                            }
+                        ],
+                        "backgroundColor": "#F9FAFB",
+                        "cornerRadius": "8px",
+                        "paddingAll": "16px",
+                        "margin": "md"
+                    },
+                    
+                    # Active Sessions Section
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "💬 ACTIVE SESSIONS",
+                                "weight": "bold",
+                                "size": "md",
+                                "color": "#1F2937"
+                            },
+                            {"type": "separator", "margin": "md", "color": "#E5E7EB"},
+                            # Translation
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "✅", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "Translation", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"{active_sessions:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                ],
+                                "margin": "md"
+                            },
+                            # News
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "📰", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "News", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"{news_sessions:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                ],
+                                "margin": "md"
+                            },
+                            # Profiler
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "🔬", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "Profiler", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"{profiler_sessions:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                ],
+                                "margin": "md"
+                            },
+                            # Image Analyzer
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "🖼️", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "Analyzer", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"{image_analyzer_sessions:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                ],
+                                "margin": "md"
+                            },
+                            # Sleeping
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "😴", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "Sleeping", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"{sleeping_chats:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                ],
+                                "margin": "md"
+                            }
+                        ],
+                        "backgroundColor": "#F9FAFB",
+                        "cornerRadius": "8px",
+                        "paddingAll": "16px",
+                        "margin": "md"
+                    },
+                    
+                    # Cache Performance Section (only if cache is used)
+                    *([{
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "💾 CACHE PERFORMANCE",
+                                "weight": "bold",
+                                "size": "md",
+                                "color": "#1F2937"
+                            },
+                            {"type": "separator", "margin": "md", "color": "#E5E7EB"},
+                            # Hit Rate
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": cache_quality_emoji, "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "Hit Rate", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"{hit_rate:.1f}%", "flex": 2, "size": "sm", "align": "end", "weight": "bold", "color": cache_quality_color}
+                                ],
+                                "margin": "md"
+                            },
+                            # Details
+                            {
+                                "type": "text",
+                                "text": f"   └─ Hits: {snap.cache_hits_total:,} / Misses: {snap.cache_misses_total:,}",
+                                "size": "xs",
+                                "color": "#9CA3AF",
+                                "margin": "xs"
+                            }
+                        ],
+                        "backgroundColor": "#F9FAFB",
+                        "cornerRadius": "8px",
+                        "paddingAll": "16px",
+                        "margin": "md"
+                    }] if total_cache_ops > 0 else []),
+                    
+                    # Error Metrics (only if errors exist)
+                    *([{
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "⚠️ ERROR METRICS",
+                                "weight": "bold",
+                                "size": "md",
+                                "color": "#DC2626"
+                            },
+                            {"type": "separator", "margin": "md", "color": "#FEE2E2"},
+                            # Failed translations
+                            *([{
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "❌", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "Failed Trans.", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"{snap.failed_translations:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold", "color": "#DC2626"}
+                                ],
+                                "margin": "md"
+                            }] if snap.failed_translations > 0 else []),
+                            # Rate limited
+                            *([{
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    {"type": "text", "text": "⏳", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "Rate Limited", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
+                                    {"type": "text", "text": f"{snap.rate_limited_requests:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold", "color": "#DC2626"}
+                                ],
+                                "margin": "md"
+                            }] if snap.rate_limited_requests > 0 else [])
+                        ],
+                        "backgroundColor": "#FEF2F2",
+                        "cornerRadius": "8px",
+                        "paddingAll": "16px",
+                        "margin": "md",
+                        "borderColor": "#FCA5A5",
+                        "borderWidth": "1px"
+                    }] if snap.failed_translations > 0 or snap.rate_limited_requests > 0 else [])
+                ],
+                "paddingAll": "20px",
+                "spacing": "none"
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {"type": "separator", "color": "#E5E7EB"},
+                    {
+                        "type": "text",
+                        "text": "⚡ Zeus Multi-Agent System",
+                        "size": "xs",
+                        "color": "#9CA3AF",
+                        "align": "center",
+                        "margin": "md"
+                    }
+                ],
+                "paddingAll": "12px",
+                "backgroundColor": "#F9FAFB"
+            }
+        }
 
-        # User Engagement Section (Enhanced)
-        msg += "👥 **USER ENGAGEMENT**\n" + "─" * 32 + "\n"
-        msg += f"👤 Unique users: {snap.unique_users_count:,}\n"
-        msg += f"👥 Unique groups: {snap.unique_groups_count:,}\n"
-        
-        total_unique = snap.unique_users_count + snap.unique_groups_count
-        msg += f"📊 Total reach: {total_unique:,} chats\n"
-        net_friends = snap.friends_follow_events_total - snap.friends_unfollow_events_total
-        msg += (
-            f"🤝 Friends (since boot): +{snap.friends_follow_events_total:,} / -{snap.friends_unfollow_events_total:,} / net {net_friends:,}\n"
+        return FlexMessage(
+            altText=f"📊 Admin Stats: {active_sessions + news_sessions + profiler_sessions + image_analyzer_sessions} active sessions, {snap.translation_requests_total:,} translations",
+            contents=FlexContainer.from_dict(flex_dict),
+            quickReply=None,
         )
-        msg += f"👋 Last friend added: {last_friend}\n"
-
-        # Peak usage analytics
-        if snap.peak_hour is not None:
-            msg += f"📈 Peak hour: {snap.peak_hour}:00 UTC ({snap.peak_hour_requests:,} req)\n"
-        msg += "\n"
 
         # Tourism News Section (New)
         if tourism_headlines:
