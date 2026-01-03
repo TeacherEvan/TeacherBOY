@@ -271,7 +271,7 @@ class RateLimiter:
         try:
             while True:
                 await asyncio.sleep(self._cleanup_interval_seconds)
-                self.cleanup_stale_entries()
+                self.cleanup_old_entries()
         except asyncio.CancelledError:
             logger.info("⏱️ Rate limiter cleanup loop cancelled")
             raise

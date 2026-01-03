@@ -425,15 +425,28 @@ class ImageAnalyzerAgent(BaseAgent):
                     message_id
                 )
                 
-                if hasattr(response, 'read'):
-                    return response.read()
-                elif isinstance(response, bytes):
+                # Handle None response explicitly
+                if response is None:
+                    logger.warning("❌ Response is None from LINE API")
+                    return None
+                
+                if isinstance(response, bytes):
                     return response
+                elif isinstance(response, bytearray):
+                    return bytes(response)
+                elif hasattr(response, 'read') and callable(getattr(response, 'read', None)):
+                    return response.read()
                 else:
+                    # Try to iterate as generator/stream
+                    # Type checker: response could be an iterator/generator we haven't explicitly typed
                     chunks = []
-                    for chunk in response:
-                        chunks.append(chunk)
-                    return b''.join(chunks)
+                    try:
+                        for chunk in response:  # type: ignore[union-attr]
+                            chunks.append(chunk)
+                        return b''.join(chunks)
+                    except TypeError:
+                        logger.error(f"❌ Unexpected response type: {type(response)}")
+                        return None
                     
         except Exception as e:
             logger.error(f"❌ Failed to download image {message_id}: {e}", exc_info=True)

@@ -192,9 +192,10 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 ### "Safety features obscuring content"
 
 → The profiler now includes context for fictional artwork analysis. If faces are still blurred:
-  - Ensure the image is clearly artistic (anime/manga style, pencil drawing, etc.)
-  - The model will analyze visible artistic elements even if some features are obscured
-  - For creative projects, mention "character design for [project name]" in your analysis request
+
+- Ensure the image is clearly artistic (anime/manga style, pencil drawing, etc.)
+- The model will analyze visible artistic elements even if some features are obscured
+- For creative projects, mention "character design for [project name]" in your analysis request
 
 ## Privacy & Ethics
 
@@ -251,6 +252,7 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 ### Creative Projects
 
 **Music Video Character Design:**
+
 ```
 User: zeus profile
 Zeus: 🔬 Ready to analyze!
@@ -260,11 +262,13 @@ Zeus: [Analyzes facial expression, posture, armor design, color psychology]
 ```
 
 **Accessibility Support:**
+
 - Users with autism can get detailed breakdowns of character emotions
 - Helps understand subtle facial expressions in artwork
 - Assists with art direction decisions for storytelling
 
 **Art Direction:**
+
 - Validate character design choices
 - Ensure emotions read correctly in illustrations
 - Compare different character poses/expressions
