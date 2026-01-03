@@ -5,6 +5,27 @@ All notable changes to TeacherBOY will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.1] - 2026-01-03
+
+### 🎨 Enhanced
+
+#### Psychological Profiler - Fictional Artwork Analysis
+
+- **Artistic Content Support:** Enhanced prompt to properly handle fictional characters in artwork
+  - Explicit context for anime, manga, pencil drawings, concept art analysis
+  - Clear distinction between fictional art and real person photography
+- **Accessibility Improvements:** Added support context for neurodivergent users (autism)
+  - Helps users understand character expressions in art for creative projects
+  - Art direction assistance for music videos and visual storytelling
+- **Safety Feature Handling:** Model instructed to analyze visible artistic elements even if safety features activate
+  - Reduces unnecessary content filtering on fictional characters
+  - Maintains appropriate safety for real person analysis
+- **Documentation Updates:**
+  - Added "Supported Content Types" section to profiler usage guide
+  - Expanded ethics section with fictional vs real person clarification
+  - Added troubleshooting for safety feature issues
+  - New use cases section with creative project examples
+
 ## [3.3.0] - 2026-01-02
 
 ### 🚀 Added

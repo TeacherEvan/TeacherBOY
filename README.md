@@ -80,6 +80,17 @@ Legacy docs at repo root are kept for backward compatibility.
     - `denylist` with `ZEUS_DENIED_GROUP_IDS`
 - **🧑‍💼 Boss Easter Egg:** If asked “who is boss”, replies with exactly: `Evan...`
 
+### Psychological Profiler **NEW!**
+
+- **🔬 FBI/Ekman/Navarro Frameworks:** Professional behavioral analysis
+- **📸 Trigger-Based:** Send "zeus profile" then your image
+- **🎨 Fictional Artwork Support:** Analyze anime, manga, pencil drawings, concept art
+- **♿ Accessibility:** Helps neurodivergent users (autism) understand character expressions
+- **🎬 Creative Projects:** Art direction for music videos, storytelling, visual narratives
+- **⏱️ Rate Limiting:** 3 analyses/hour (admins unlimited)
+- **🤖 Vision AI:** GPT-4o multimodal analysis
+- **Full Documentation:** [Profiler Usage Guide](docs/PROFILER_USAGE.md)
+
 ### Multi-Agent Architecture
 
 - **🏗️ Modular Design:** Easy to add agents with different capabilities

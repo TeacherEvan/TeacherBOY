@@ -2,14 +2,21 @@
 
 ## Overview
 
-The Zeus Psychological Profiler analyzes photos using advanced vision AI (GPT-4o) to provide comprehensive behavioral and psychological assessments based on established frameworks:
+The Zeus Psychological Profiler analyzes photos and artwork using advanced vision AI (GPT-4o) to provide comprehensive behavioral and psychological assessments based on established frameworks:
 
 - **FBI Behavioral Analysis Unit (BAU)** methodology
 - **Paul Ekman's FACS** (Facial Action Coding System) and 7 universal emotions
 - **Joe Navarro's body language** principles (FBI-trained)
 - **Color psychology** and environmental analysis
 
-⚠️ **DISCLAIMER**: For educational and entertainment purposes only. NOT for professional psychological assessments, hiring decisions, or legal judgments.
+### Supported Content Types
+
+- **Real Photographs**: Standard psychological profiling for actual persons
+- **Fictional Artwork**: Character design analysis for anime, manga, illustrations, pencil drawings, concept art
+- **Creative Projects**: Art direction support for music videos, storytelling, and visual narratives
+- **Accessibility**: Assists neurodivergent users (autism) with understanding character expressions in art
+
+⚠️ **DISCLAIMER**: For educational, entertainment, and creative purposes only. NOT for professional psychological assessments, hiring decisions, or legal judgments.
 
 ## How to Use (Trigger-Based Workflow)
 
@@ -182,6 +189,13 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 
 → Compress image to under 10 MB (configurable via `PROFILER_MAX_IMAGE_SIZE_MB`)
 
+### "Safety features obscuring content"
+
+→ The profiler now includes context for fictional artwork analysis. If faces are still blurred:
+  - Ensure the image is clearly artistic (anime/manga style, pencil drawing, etc.)
+  - The model will analyze visible artistic elements even if some features are obscured
+  - For creative projects, mention "character design for [project name]" in your analysis request
+
 ## Privacy & Ethics
 
 **Data Handling:**
@@ -193,16 +207,25 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 
 **Ethical Use:**
 
-- Do NOT use for making hiring/firing decisions
-- Do NOT use for legal judgments
-- Do NOT use for medical/clinical diagnoses
-- Do NOT use for surveillance without consent
-- Use ONLY for entertainment and educational purposes
+- ✅ **Recommended Uses**:
+  - Fictional character analysis for creative projects
+  - Art direction for music videos and visual storytelling
+  - Accessibility support for neurodivergent creators
+  - Educational study of behavioral psychology frameworks
+  - Personal entertainment and learning
+
+- ❌ **Prohibited Uses**:
+  - Making hiring/firing decisions
+  - Legal judgments or court evidence
+  - Medical/clinical diagnoses
+  - Surveillance without consent
+  - Real person profiling without explicit permission
 
 **Consent:**
 
-- Always obtain consent before analyzing someone's photo
-- Respect privacy and personal boundaries
+- **Real Persons**: Always obtain explicit consent before analyzing someone's photo
+- **Fictional Art**: No consent needed for artwork analysis (characters are not real persons)
+- Respect privacy and personal boundaries in all contexts
 
 ## Developer Notes
 
@@ -223,7 +246,30 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 - Mock session manager for unit tests
 - Integration tests cover full trigger → image workflow
 
+## Use Cases
+
+### Creative Projects
+
+**Music Video Character Design:**
+```
+User: zeus profile
+Zeus: 🔬 Ready to analyze!
+
+User: [sends Viking character sketch]
+Zeus: [Analyzes facial expression, posture, armor design, color psychology]
+```
+
+**Accessibility Support:**
+- Users with autism can get detailed breakdowns of character emotions
+- Helps understand subtle facial expressions in artwork
+- Assists with art direction decisions for storytelling
+
+**Art Direction:**
+- Validate character design choices
+- Ensure emotions read correctly in illustrations
+- Compare different character poses/expressions
+
 ---
 
-**Last Updated**: January 2025  
-**Version**: 1.0.0 (Trigger-based profiling)
+**Last Updated**: January 2026  
+**Version**: 1.1.0 (Fictional artwork analysis + accessibility support)
