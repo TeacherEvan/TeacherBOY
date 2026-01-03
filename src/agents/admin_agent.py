@@ -464,7 +464,9 @@ class AdminAgent(BaseAgent):
             {"role": "user", "content": prompt},
         ]
 
-        drafted = await openrouter_service.chat_completion(messages, temperature=0.4)
+        drafted = await openrouter_service.chat_completion(
+            messages, temperature=settings.llm_temperature
+        )
         if not drafted:
             status_code, err_text, model_used = openrouter_service.get_last_error()
             if status_code:

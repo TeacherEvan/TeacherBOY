@@ -2,7 +2,7 @@
 
 import logging
 from typing import List, Optional
-from linebot.v3.webhooks import MessageEvent, TextMessageContent
+from linebot.v3.webhooks import MessageEvent, TextMessageContent, ImageMessageContent
 from linebot.v3.messaging import MessagingApi
 
 from .base_agent import BaseAgent
@@ -39,6 +39,9 @@ class AgentRouter:
         """
         Route message to first matching agent.
 
+        Supports both text and image messages. Text is extracted for text messages,
+        empty string passed for non-text messages (agents check message type directly).
+
         Args:
             event: LINE message event
             line_bot_api: LINE Messaging API client
@@ -47,23 +50,35 @@ class AgentRouter:
             True if message was handled by any agent
         """
         with tracer.start_as_current_span("agent_router.route_message") as span:
-            if not isinstance(event.message, TextMessageContent):
-                logger.debug("Skipping non-text message")
-                span.set_attribute("line.message.type", "non_text")
+            # Extract text for text messages, empty string for images/other
+            if isinstance(event.message, TextMessageContent):
+                text = event.message.text.strip()
+                message_type = "text"
+                span.set_attribute("line.message.type", "text")
+                span.set_attribute("message.length", len(text))
+            elif isinstance(event.message, ImageMessageContent):
+                text = ""  # No text for image messages
+                message_type = "image"
+                span.set_attribute("line.message.type", "image")
+            else:
+                logger.debug(f"Skipping unsupported message type: {type(event.message)}")
+                span.set_attribute("line.message.type", "unsupported")
                 return False
 
-            text = event.message.text.strip()
             source = getattr(event, "source", None)
             source_type = getattr(source, "type", None) if source else None
             user_id = getattr(source, "user_id", None) if source else None
             group_id = getattr(source, "group_id", None) if source else None
             room_id = getattr(source, "room_id", None) if source else None
 
-            logger.info(
-                f"🔍 Routing message ({source_type}) user_id={user_id} group_id={group_id} room_id={room_id}: '{text[:50]}...'"
-            )
-            span.set_attribute("line.message.type", "text")
-            span.set_attribute("message.length", len(text))
+            if message_type == "text":
+                logger.info(
+                    f"🔍 Routing message ({source_type}) user_id={user_id} group_id={group_id} room_id={room_id}: '{text[:50]}...'"
+                )
+            else:
+                logger.info(
+                    f"📷 Routing {message_type} message ({source_type}) user_id={user_id} group_id={group_id} room_id={room_id}"
+                )
 
             # Try each agent in priority order
             for agent in self.agents:

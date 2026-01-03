@@ -135,7 +135,11 @@ class SearchAgent(BaseAgent):
             
             try:
                 if not self.search_service.is_configured():
-                    await self._send_error(event, line_bot_api, "Search is not configured (missing API key).")
+                    await self._send_error(
+                        event,
+                        line_bot_api,
+                        "🔒 Zeus search is not configured. Set BRAVE_SEARCH_API_KEY to enable web search.",
+                    )
                     return True
 
                 # Perform search
@@ -145,13 +149,24 @@ class SearchAgent(BaseAgent):
                     await self._send_error(event, line_bot_api, f"❌ No results: {query}")
                     return True
 
-                # Format results
-                # Terse, robotic output: one emoji per line.
-                message_text = f"🔍 {query}\n"
+                # Format results (compact but informative for LINE).
+                message_lines = [f"🔍 {query}"]
                 for i, result in enumerate(results, 1):
-                    title = result.get('title', 'No title')
-                    url = result.get('url', '#')
-                    message_text += f"🔗 {i}. {title} {url}\n"
+                    title = (result.get("title") or "No title").strip()
+                    url = (result.get("url") or "").strip()
+                    snippet = (
+                        (result.get("description") or result.get("snippet") or "")
+                        .strip()
+                        .replace("\n", " ")
+                    )
+                    line = f"{i}. {title}"
+                    if snippet:
+                        line += f"\n   {snippet}"
+                    if url:
+                        line += f"\n   {url}"
+                    message_lines.append(line)
+
+                message_text = "\n".join(message_lines) + "\n"
 
                 # Send response
                 reply_message = TextMessage(text=message_text, quickReply=None, quoteToken=None)

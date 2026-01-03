@@ -294,6 +294,40 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ============================================================================
+    # Psychological Profiler Configuration (Vision AI)
+    # ============================================================================
+    profiler_enabled: bool = Field(
+        default=True,
+        description="Enable psychological profiling of photos using vision AI.",
+    )
+    profiler_model: str = Field(
+        default="openai/gpt-4o",
+        description=(
+            "Model for vision-based psychological profiling. "
+            "Must support multimodal/vision input. Options: openai/gpt-4o, openai/gpt-4o-mini"
+        ),
+    )
+    profiler_analysis_type: str = Field(
+        default="full",
+        description=(
+            "Analysis depth: 'full' (FBI+Ekman+Navarro), 'quick' (basic emotions only), "
+            "'body' (body language focus), 'facial' (micro-expressions focus)."
+        ),
+    )
+    profiler_rate_limit_per_hour: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="Maximum photo analyses per hour per chat (1-20, default: 3).",
+    )
+    profiler_max_image_size_mb: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=20.0,
+        description="Maximum image file size in MB for analysis (1-20, default: 10).",
+    )
+
     # Cache TTLs for new menu items
     color_cache_ttl_seconds: int = Field(
         default=86400,
@@ -465,6 +499,13 @@ class Settings(BaseSettings):
     def is_github_models_configured(self) -> bool:
         """Check if GitHub Models API is properly configured with a PAT."""
         return bool(self.github_models_pat and len(self.github_models_pat) > 10)
+
+    def is_profiler_configured(self) -> bool:
+        """Check if Psychological Profiler feature is enabled and vision AI is available."""
+        return bool(
+            self.profiler_enabled
+            and self.is_github_models_configured()  # Vision requires GitHub Models
+        )
 
     def is_conversation_memory_configured(self) -> bool:
         """Check if Hugging Face conversation memory storage is configured."""

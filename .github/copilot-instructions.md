@@ -70,6 +70,7 @@ First agent with should_handle()=True wins → calls handle()
 | -------------------- | -------- | --------------------- | ------------------------------------------------------------------ |
 | **HelpAgent**        | 5        | `help`, `/help`       | Contextual help; shows different commands per chat type/privileges |
 | **AdminAgent**       | 5        | `/admin ...`          | Registered if `ADMIN_USER_IDS` or `ADMIN_SETUP_KEY` is set         |
+| **ProfilerAgent**    | 7        | Image message         | Psychological profiling using FBI/Ekman/Navarro frameworks         |
 | **SearchAgent**      | 8        | `Zeus search <query>` | Conditional: requires `BRAVE_SEARCH_API_KEY`                       |
 | **LLMAgent**         | 9        | `Zeus <prompt>`       | GitHub Models → OpenRouter fallback; conversation memory           |
 | **TranslationAgent** | 10       | Default/fallback      | Thai ↔ English; Google Translate → LibreTranslate fallback         |
@@ -89,7 +90,36 @@ First agent with should_handle()=True wins → calls handle()
 
 - **TranslationAgent:** 10 requests/60s per chat (admins: unlimited)
 - **NewsAgent:** 1 request/hour for friends in groups (admins: unlimited)
+- **ProfilerAgent:** 3 requests/hour per chat (admins: unlimited, vision API is expensive)
 - **Admin check:** `_is_admin(user_id)` + `privilege_service.is_claimed_admin(user_id)`
+
+## 🔬 Psychological Profiler
+
+The ProfilerAgent analyzes photos using GPT-4o vision with established behavioral science frameworks:
+
+**Frameworks Used:**
+
+- **FBI BAU Methodology** — Behavioral Analysis Unit patterns (victimology, cognitive load, social dynamics)
+- **Paul Ekman's FACS** — Facial Action Coding System, 7 universal emotions (Happiness, Sadness, Fear, Anger, Surprise, Disgust, Contempt)
+- **Joe Navarro's Body Language** — FBI-trained nonverbal communication (limbic responses, honest body parts, comfort/discomfort indicators)
+- **Color Psychology** — Environmental and clothing color analysis
+
+**Configuration:**
+
+```env
+PROFILER_ENABLED=true                    # Enable/disable feature
+PROFILER_MODEL=openai/gpt-4o            # Vision-capable model
+PROFILER_ANALYSIS_TYPE=full             # full|quick|body|facial
+PROFILER_RATE_LIMIT_PER_HOUR=3          # API cost protection
+```
+
+**Key Files:**
+
+- [src/agents/profiler_agent.py](../src/agents/profiler_agent.py) — Agent handling image messages
+- [src/services/profiler_service.py](../src/services/profiler_service.py) — Profiling logic and prompts
+- [src/services/github_models_service.py](../src/services/github_models_service.py) — `chat_completion_with_vision()` method
+
+**Disclaimer:** Educational/entertainment purposes only.
 
 ## 🛠️ Developer Workflows
 

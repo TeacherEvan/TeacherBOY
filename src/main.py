@@ -20,6 +20,7 @@ import linebot.v3
 from linebot.v3.webhooks import (
     MessageEvent,
     TextMessageContent,
+    ImageMessageContent,
     FollowEvent,
     UnfollowEvent,
     JoinEvent,
@@ -52,6 +53,7 @@ from src.agents.news_agent import NewsAgent
 from src.agents.llm_agent import LLMAgent
 from src.agents.search_agent import SearchAgent
 from src.agents.help_agent import HelpAgent
+from src.agents.profiler_agent import ProfilerAgent
 from src.services.openrouter_service import openrouter_service
 from src.services.brave_search_service import brave_search_service
 from src.services.github_models_service import github_models_service
@@ -271,6 +273,14 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("🔧 Admin Agent not registered (no ADMIN_USER_IDS configured)")
 
+    # Register Profiler Agent (Priority: 7 - Handles image messages)
+    if settings.is_profiler_configured():
+        profiler_agent = ProfilerAgent(http_client=http_client_pool)
+        agent_router.register_agent(profiler_agent)
+        logger.info(f"🔬 Profiler Agent registered (Model: {settings.profiler_model})")
+    else:
+        logger.info("🔬 Profiler Agent not registered (GitHub Models not configured)")
+
     # Register Translation Agent (Priority: 10)
     translation_agent = TranslationAgent()
     agent_router.register_agent(translation_agent)
@@ -284,12 +294,16 @@ async def lifespan(app: FastAPI):
         logger.info("🤖 LLM Agent registered (API key missing - will return errors)")
 
     # Register Search Agent (Priority: 8 - Mutually exclusive with LLM via triggers)
+    # Always register so the trigger can respond with a clear configuration message
+    # instead of being ignored when Brave Search is not configured.
+    search_agent = SearchAgent()
+    agent_router.register_agent(search_agent)
     if settings.is_brave_search_configured():
-        search_agent = SearchAgent()
-        agent_router.register_agent(search_agent)
         logger.info("🔍 [Startup] Search Agent registered (Brave Search enabled)")
     else:
-        logger.info("🔍 [Startup] Search Agent not registered (BRAVE_SEARCH_API_KEY missing)")
+        logger.info(
+            "🔍 [Startup] Search Agent registered but DISABLED until BRAVE_SEARCH_API_KEY is set"
+        )
 
     # Register Special News Agent (Priority: 12)
     from src.services.special_news_service import SpecialNewsService
@@ -561,6 +575,11 @@ async def webhook(request: Request) -> JSONResponse:
 
                         if isinstance(event.message, TextMessageContent):
                             # Route text message to appropriate agent
+                            await agent_router.route_message(event, line_bot_api)
+
+                        elif isinstance(event.message, ImageMessageContent):
+                            # Route image message to ProfilerAgent via agent router
+                            logger.info(f"📷 Received image message from {user_id}")
                             await agent_router.route_message(event, line_bot_api)
 
                     elif isinstance(event, JoinEvent):
