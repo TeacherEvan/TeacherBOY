@@ -26,6 +26,7 @@ from linebot.v3.messaging import (
 from .base_agent import BaseAgent
 from src.services.profiler_service import profiler_service
 from src.services.github_models_service import github_models_service
+from src.services.profiler_session_manager import profiler_session_manager
 from src.services.rate_limiter import RateLimiter
 from src.services.metrics_service import metrics_service
 from src.services.privilege_service import privilege_service
@@ -101,10 +102,12 @@ class ProfilerAgent(BaseAgent):
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
-        Handle if this is an image message.
+        Handle if:
+        1. Text message with profiling trigger (to set session state)
+        2. Image message when profiling session is active
         
-        Note: The `text` parameter will be empty for image messages.
-        We check the message type instead.
+        This implements trigger-based profiling to avoid automatic analysis
+        of every image (which would be expensive and intrusive).
         """
         # Check if profiler is enabled
         if not getattr(settings, 'profiler_enabled', True):
@@ -115,23 +118,49 @@ class ProfilerAgent(BaseAgent):
             logger.debug("ProfilerAgent: GitHub Models not configured")
             return False
         
-        # Check message type - we handle ImageMessageContent
         message = getattr(event, 'message', None)
         if message is None:
             return False
             
         message_type = getattr(message, 'type', None)
-        return message_type == 'image'
+        chat_id = self._get_chat_id(event)
+        user_id = getattr(event.source, "user_id", None) if event.source else None
+        
+        # Case 1: Text message with profiling trigger
+        if message_type == 'text' and text:
+            text_lower = text.lower().strip()
+            
+            # Profiling trigger phrases
+            triggers = [
+                "zeus profile",
+                "profile this",
+                "analyze this image",
+                "analyze this photo",
+                "analyze image",
+                "analyze photo",
+                "profile image",
+                "profile photo",
+            ]
+            
+            return any(trigger in text_lower for trigger in triggers)
+        
+        # Case 2: Image message with active profiling session
+        if message_type == 'image':
+            return profiler_session_manager.is_waiting_for_image(chat_id, user_id)
+        
+        return False
 
     async def handle(
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi
     ) -> bool:
         """
-        Process image message and return psychological profile.
+        Process profiling request:
+        1. Text message with trigger -> set session and wait for image
+        2. Image message with active session -> analyze image
         
         Args:
-            event: LINE message event with image
-            text: Empty for image messages
+            event: LINE message event (text or image)
+            text: Message text (empty for images)
             line_bot_api: LINE Messaging API client
             
         Returns:
@@ -139,6 +168,36 @@ class ProfilerAgent(BaseAgent):
         """
         chat_id = self._get_chat_id(event)
         user_id = getattr(event.source, "user_id", None) if event.source else None
+        message = getattr(event, 'message', None)
+        message_type = getattr(message, 'type', None) if message else None
+
+        # Handle text trigger - set session and wait for image
+        if message_type == 'text' and text:
+            profiler_session_manager.request_profiling(chat_id, user_id)
+            
+            confirmation_msg = TextMessage(
+                text="🔬 Ready to analyze!\n\n"
+                     "Please send the image you want me to profile.\n"
+                     "(You have 60 seconds)\n\n"
+                     "พร้อมวิเคราะห์! กรุณาส่งรูปภาพ",
+                quickReply=None,
+                quoteToken=None,
+            )
+            
+            if event.reply_token:
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[confirmation_msg],
+                        notificationDisabled=False,
+                    ),
+                )
+            
+            logger.info(f"🔬 Profiling session started for chat {chat_id}")
+            return True
+
+        # Handle image analysis
         message_id = getattr(event.message, "id", None)
 
         with tracer.start_as_current_span("profiler_agent.handle") as span:
@@ -218,9 +277,16 @@ class ProfilerAgent(BaseAgent):
                 # Format and send response
                 formatted_response = profiler_service.format_response_for_line(analysis)
                 
+                # Clear profiling session after successful analysis
+                profiler_session_manager.clear_session(chat_id)
+                
                 # Track metrics
                 profiler_service.increment_analysis_count()
                 span.set_attribute("profiler.success", True)
+                
+                # Clear session on error
+                profiler_session_manager.clear_session(chat_id)
+                
                 span.set_attribute("analysis.length", len(analysis))
 
                 # Send analysis result

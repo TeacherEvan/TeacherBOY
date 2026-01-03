@@ -63,11 +63,40 @@ class TestProfilerAgentShouldHandle:
     """Tests for ProfilerAgent.should_handle()."""
 
     @pytest.mark.asyncio
-    async def test_should_handle_image_message(self, mock_event, mock_settings):
-        """Test that profiler handles image messages."""
+    async def test_should_handle_text_trigger(self, mock_text_event, mock_settings):
+        """Test that profiler handles text messages with trigger phrases."""
         with patch("src.agents.profiler_agent.settings", mock_settings), \
              patch("src.agents.profiler_agent.github_models_service") as mock_gms:
             mock_gms.is_configured.return_value = True
+            
+            from src.agents.profiler_agent import ProfilerAgent
+            agent = ProfilerAgent()
+            
+            # Test various trigger phrases
+            triggers = [
+                "zeus profile",
+                "profile this",
+                "analyze this image",
+                "analyze this photo",
+                "analyze image",
+                "analyze photo",
+                "profile image",
+                "profile photo"
+            ]
+            
+            for trigger in triggers:
+                mock_text_event.message.text = trigger
+                result = await agent.should_handle(mock_text_event, trigger)
+                assert result is True, f"Trigger '{trigger}' should be handled"
+
+    @pytest.mark.asyncio
+    async def test_should_handle_image_with_active_session(self, mock_event, mock_settings):
+        """Test that profiler handles image when session is active."""
+        with patch("src.agents.profiler_agent.settings", mock_settings), \
+             patch("src.agents.profiler_agent.github_models_service") as mock_gms, \
+             patch("src.agents.profiler_agent.profiler_session_manager") as mock_session:
+            mock_gms.is_configured.return_value = True
+            mock_session.is_waiting_for_image.return_value = True  # Active session
             
             from src.agents.profiler_agent import ProfilerAgent
             agent = ProfilerAgent()
@@ -76,8 +105,23 @@ class TestProfilerAgentShouldHandle:
             assert result is True
 
     @pytest.mark.asyncio
-    async def test_should_not_handle_text_message(self, mock_text_event, mock_settings):
-        """Test that profiler does NOT handle text messages."""
+    async def test_should_not_handle_image_without_session(self, mock_event, mock_settings):
+        """Test that profiler rejects image without active session (no trigger sent)."""
+        with patch("src.agents.profiler_agent.settings", mock_settings), \
+             patch("src.agents.profiler_agent.github_models_service") as mock_gms, \
+             patch("src.agents.profiler_agent.profiler_session_manager") as mock_session:
+            mock_gms.is_configured.return_value = True
+            mock_session.is_waiting_for_image.return_value = False  # No session
+            
+            from src.agents.profiler_agent import ProfilerAgent
+            agent = ProfilerAgent()
+            
+            result = await agent.should_handle(mock_event, "")
+            assert result is False  # Should reject images without trigger
+
+    @pytest.mark.asyncio
+    async def test_should_not_handle_text_without_trigger(self, mock_text_event, mock_settings):
+        """Test that profiler does NOT handle text messages without triggers."""
         with patch("src.agents.profiler_agent.settings", mock_settings), \
              patch("src.agents.profiler_agent.github_models_service") as mock_gms:
             mock_gms.is_configured.return_value = True
@@ -144,16 +188,41 @@ class TestProfilerAgentHandle:
     """Tests for ProfilerAgent.handle()."""
 
     @pytest.mark.asyncio
-    async def test_handle_rate_limited(self, mock_event, mock_line_api, mock_settings):
-        """Test rate limiting for non-admin users."""
+    async def test_handle_trigger_sets_session(self, mock_text_event, mock_line_api, mock_settings):
+        """Test that trigger phrase sets profiling session."""
+        mock_text_event.message.text = "zeus profile"
+        
+        with patch("src.agents.profiler_agent.settings", mock_settings), \
+             patch("src.agents.profiler_agent.github_models_service") as mock_gms, \
+             patch("src.agents.profiler_agent.profiler_session_manager") as mock_session, \
+             patch("src.agents.profiler_agent.asyncio.to_thread") as mock_thread:
+            
+            mock_gms.is_configured.return_value = True
+            
+            from src.agents.profiler_agent import ProfilerAgent
+            agent = ProfilerAgent()
+            
+            result = await agent.handle(mock_text_event, "zeus profile", mock_line_api)
+            
+            assert result is True
+            # Verify session was created
+            mock_session.request_profiling.assert_called_once()
+            # Verify confirmation message sent
+            mock_thread.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_handle_image_rate_limited(self, mock_event, mock_line_api, mock_settings):
+        """Test rate limiting for non-admin users when analyzing image."""
         with patch("src.agents.profiler_agent.settings", mock_settings), \
              patch("src.agents.profiler_agent.github_models_service") as mock_gms, \
              patch("src.agents.profiler_agent.profiler_rate_limiter") as mock_limiter, \
-             patch("src.agents.profiler_agent.metrics_service"):
+             patch("src.agents.profiler_agent.metrics_service"), \
+             patch("src.agents.profiler_agent.profiler_session_manager") as mock_session:
             
             mock_gms.is_configured.return_value = True
             mock_limiter.is_allowed.return_value = False
             mock_limiter.get_reset_time.return_value = 3600
+            mock_session.is_waiting_for_image.return_value = True  # Active session
             
             from src.agents.profiler_agent import ProfilerAgent
             agent = ProfilerAgent()
@@ -164,18 +233,20 @@ class TestProfilerAgentHandle:
             mock_limiter.is_allowed.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_handle_admin_bypasses_rate_limit(self, mock_event, mock_line_api, mock_settings):
-        """Test that admin users bypass rate limiting."""
+    async def test_handle_image_admin_bypasses_rate_limit(self, mock_event, mock_line_api, mock_settings):
+        """Test that admin users bypass rate limiting when analyzing image."""
         mock_event.source.user_id = "admin123"  # Admin user
         
         with patch("src.agents.profiler_agent.settings", mock_settings), \
              patch("src.agents.profiler_agent.github_models_service") as mock_gms, \
              patch("src.agents.profiler_agent.profiler_rate_limiter") as mock_limiter, \
              patch("src.agents.profiler_agent.profiler_service") as mock_profiler, \
-             patch("src.agents.profiler_agent.privilege_service") as mock_priv:
+             patch("src.agents.profiler_agent.privilege_service") as mock_priv, \
+             patch("src.agents.profiler_agent.profiler_session_manager") as mock_session:
             
             mock_gms.is_configured.return_value = True
             mock_priv.is_claimed_admin.return_value = False  # Not runtime admin
+            mock_session.is_waiting_for_image.return_value = True  # Active session
             
             # Simulate failed image download to exit early after admin check
             from src.agents.profiler_agent import ProfilerAgent
