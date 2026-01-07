@@ -39,8 +39,8 @@ class ReminderService:
 
     def configure(
         self,
-        line_bot_api: Any,
-        calendar_service: Any,
+        line_bot_api: Optional[Any] = None,
+        calendar_service: Optional[Any] = None,
         reminder_hour: int = 8,
         enabled: bool = True
     ) -> None:
@@ -48,13 +48,15 @@ class ReminderService:
         Configure the reminder service with dependencies.
 
         Args:
-            line_bot_api: LINE MessagingApi instance
-            calendar_service: CalendarService instance
+            line_bot_api: LINE MessagingApi instance (optional, can set later via start())
+            calendar_service: CalendarService instance (optional, can set later via start())
             reminder_hour: Hour of day (0-23) in Bangkok timezone
             enabled: Whether reminders are enabled
         """
-        self._line_bot_api = line_bot_api
-        self._calendar_service = calendar_service
+        if line_bot_api is not None:
+            self._line_bot_api = line_bot_api
+        if calendar_service is not None:
+            self._calendar_service = calendar_service
         self._reminder_hour = reminder_hour
         self._enabled = enabled
         
