@@ -545,6 +545,42 @@ class CalendarService:
             pass
         logger.info("📅 Calendar service stopped")
 
+    def configure(
+        self,
+        storage_path: Optional[str] = None,
+        hf_token: Optional[str] = None,
+        hf_repo_id: Optional[str] = None,
+        sync_interval_seconds: int = 300,
+    ) -> None:
+        """
+        Configure the calendar service after instantiation.
+        
+        This allows the singleton to be reconfigured during app startup.
+        
+        Args:
+            storage_path: Local directory for event storage
+            hf_token: Hugging Face API token for persistent storage
+            hf_repo_id: HF dataset repo ID (e.g., "username/zeus-calendar")
+            sync_interval_seconds: Interval for HF Hub sync (default: 5 minutes)
+        """
+        # Update storage path if provided
+        if storage_path:
+            self.local_storage_path = Path(storage_path)
+            self.local_storage_path.mkdir(parents=True, exist_ok=True)
+            # Reload events from new location
+            self._load_from_local_storage()
+        
+        # Update HF Hub configuration
+        if hf_token and hf_repo_id:
+            self.hf_token = hf_token
+            self.hf_repo_id = hf_repo_id
+            self._hf_enabled = True
+            self._setup_hf_storage()
+            logger.info(f"📅 Calendar service configured with HF Hub: {hf_repo_id}")
+        else:
+            self._hf_enabled = False
+            logger.info("📅 Calendar service configured (local storage only)")
+
 
 # Tuple import for type hint
 from typing import Tuple
