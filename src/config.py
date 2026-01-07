@@ -367,6 +367,37 @@ class Settings(BaseSettings):
     )
 
     # ============================================================================
+    # Calendar and Reminders Configuration
+    # ============================================================================
+    calendar_enabled: bool = Field(
+        default=True,
+        description="Enable calendar and reminder features.",
+    )
+    calendar_reminder_hour: int = Field(
+        default=8,
+        ge=0,
+        le=23,
+        description="Hour of day (0-23) to send reminder notifications (default: 8 AM).",
+    )
+    calendar_data_path: str = Field(
+        default="./data/calendar",
+        description="Local directory for storing calendar data.",
+    )
+    calendar_hf_repo_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Hugging Face dataset repo ID for calendar data backup. "
+            "Example: 'username/zeus-calendar'. Uses hf_memory_token for auth."
+        ),
+    )
+    calendar_sync_interval_seconds: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        description="Interval in seconds for syncing calendar to HF Hub (default: 5 minutes).",
+    )
+
+    # ============================================================================
     # HTTP Client Configuration
     # ============================================================================
     http_client_timeout_seconds: int = Field(
@@ -636,6 +667,18 @@ class Settings(BaseSettings):
             result[alias.lower()] = user_id
 
         return result
+
+    def is_calendar_configured(self) -> bool:
+        """Check if calendar feature is enabled."""
+        return bool(self.calendar_enabled)
+
+    def is_calendar_hf_configured(self) -> bool:
+        """Check if HF Hub backup for calendar is configured."""
+        return bool(
+            self.calendar_enabled
+            and self.hf_memory_token  # Reuse memory token
+            and self.calendar_hf_repo_id
+        )
 
     def get_http_client_config(self) -> Dict[str, Any]:
         """

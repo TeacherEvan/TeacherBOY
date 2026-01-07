@@ -15,12 +15,18 @@ Flow:
 4. Zeus: "What is thy question about this image?"
 5. User: "What would be most enjoyable on this menu to a westerner?"
 6. Zeus: [analyzes image and answers question]
+
+Calendar Integration:
+When dates are detected in an image (schedules, announcements, etc.),
+the agent can offer to add them to the user's calendar with reminders.
 """
 
 import asyncio
 import logging
 import base64
-from typing import Optional
+import re
+import json
+from typing import Optional, List, Dict, Any
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, ImageMessageContent
 from linebot.v3.messaging import (
     MessagingApi,
@@ -28,6 +34,9 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     PushMessageRequest,
     TextMessage,
+    QuickReply,
+    QuickReplyItem,
+    MessageAction,
     ApiClient,
     Configuration,
 )
@@ -134,6 +143,7 @@ class ImageAnalyzerAgent(BaseAgent):
         1. Text message with analyze trigger (start session)
         2. Image message when waiting for image
         3. Text message when waiting for question
+        4. Calendar confirmation response (yes/no add to calendar)
         """
         # Check if GitHub Models is configured (required for vision)
         if not github_models_service.is_configured():
@@ -157,7 +167,14 @@ class ImageAnalyzerAgent(BaseAgent):
         
         # Case 3: Text message when waiting for question
         if message_type == 'text' and text:
-            return image_analyzer_session_manager.is_waiting_for_question(chat_id, user_id)
+            if image_analyzer_session_manager.is_waiting_for_question(chat_id, user_id):
+                return True
+            
+            # Case 4: Calendar confirmation response
+            text_lower = text.lower().strip()
+            if image_analyzer_session_manager.is_waiting_for_calendar_confirmation(chat_id, user_id):
+                if any(kw in text_lower for kw in ["yes add", "no skip", "yes", "no", "ใช่", "ไม่"]):
+                    return True
         
         return False
 
@@ -195,6 +212,10 @@ class ImageAnalyzerAgent(BaseAgent):
                 # Step 3: Question received - analyze and respond
                 if message_type == 'text' and image_analyzer_session_manager.is_waiting_for_question(chat_id, user_id):
                     return await self._handle_question(event, text, chat_id, user_id, line_bot_api, span)
+                
+                # Step 4: Calendar confirmation response
+                if message_type == 'text' and image_analyzer_session_manager.is_waiting_for_calendar_confirmation(chat_id, user_id):
+                    return await self._handle_calendar_confirmation(event, text, chat_id, user_id, line_bot_api)
                 
                 return False
 
@@ -363,7 +384,13 @@ class ImageAnalyzerAgent(BaseAgent):
         span.set_attribute("analyzer.success", True)
         span.set_attribute("analysis.length", len(analysis))
         
-        # Format and send response
+        # Extract detected dates before formatting (which strips them)
+        detected_dates = self._extract_dates_from_analysis(analysis)
+        if detected_dates:
+            logger.info(f"📅 Detected {len(detected_dates)} dates in image analysis")
+            span.set_attribute("dates.detected", len(detected_dates))
+        
+        # Format and send response (strips date section)
         response = self._format_response(analysis)
         
         # Send via push (reply token already used for "analyzing" message)
@@ -384,6 +411,13 @@ class ImageAnalyzerAgent(BaseAgent):
             )
         
         logger.info(f"✅ Image analysis sent for chat {chat_id}")
+        
+        # Offer calendar integration if dates were detected
+        if detected_dates:
+            await self._offer_calendar_integration(
+                event, line_bot_api, detected_dates, user_id, chat_id
+            )
+        
         return True
 
     def _build_vision_message(self, image_data_url: str, question: str) -> list:
@@ -395,7 +429,14 @@ class ImageAnalyzerAgent(BaseAgent):
             "When analyzing images, provide helpful, practical answers to mortal questions. "
             "Be direct and insightful. Keep responses concise but complete. "
             "For menus, signs, or text: translate and explain if in another language. "
-            "For products or items: describe what you see and provide recommendations if asked."
+            "For products or items: describe what you see and provide recommendations if asked.\n\n"
+            "IMPORTANT: If you detect any dates, deadlines, events, or schedules in the image, "
+            "always include a section at the end of your response with the following format:\n"
+            "---DATES_DETECTED---\n"
+            "[{\"date\": \"YYYY-MM-DD\", \"title\": \"Event title\", \"description\": \"Brief description\"}]\n"
+            "---END_DATES---\n"
+            "Use ISO format (YYYY-MM-DD) for dates. If the year is not specified, assume the current or next occurrence. "
+            "Only include this section if you actually find date-related information in the image."
         )
         
         return [
@@ -421,16 +462,287 @@ class ImageAnalyzerAgent(BaseAgent):
         ]
 
     def _format_response(self, analysis: str) -> str:
-        """Format the analysis response for LINE."""
+        """Format the analysis response for LINE (strip date detection section)."""
         header = "⚡ ZEUS OBSERVES ⚡\n"
         header += "━" * 20 + "\n\n"
         
+        # Strip date detection section from user-visible response
+        clean_analysis = self._strip_dates_section(analysis)
+        
         # Truncate if too long (LINE limit is 5000 chars)
         max_content = 4800 - len(header)
-        if len(analysis) > max_content:
-            analysis = analysis[:max_content] + "\n\n[Response truncated]"
+        if len(clean_analysis) > max_content:
+            clean_analysis = clean_analysis[:max_content] + "\n\n[Response truncated]"
         
-        return header + analysis
+        return header + clean_analysis
+
+    def _strip_dates_section(self, analysis: str) -> str:
+        """Remove the dates detection section from analysis text."""
+        # Remove the dates section that's meant for internal processing
+        pattern = r'---DATES_DETECTED---.*?---END_DATES---'
+        return re.sub(pattern, '', analysis, flags=re.DOTALL).strip()
+
+    def _extract_dates_from_analysis(self, analysis: str) -> List[Dict[str, str]]:
+        """
+        Extract detected dates from the analysis response.
+        
+        Returns:
+            List of dicts with 'date', 'title', 'description' keys
+        """
+        try:
+            # Look for the dates section
+            match = re.search(r'---DATES_DETECTED---\s*(.+?)\s*---END_DATES---', analysis, re.DOTALL)
+            if not match:
+                return []
+            
+            dates_json = match.group(1).strip()
+            
+            # Parse JSON
+            dates = json.loads(dates_json)
+            
+            if isinstance(dates, list):
+                # Validate each date entry
+                valid_dates = []
+                for entry in dates:
+                    if isinstance(entry, dict) and 'date' in entry and 'title' in entry:
+                        valid_dates.append({
+                            'date': str(entry.get('date', '')),
+                            'title': str(entry.get('title', 'Untitled Event')),
+                            'description': str(entry.get('description', '')),
+                        })
+                return valid_dates
+            
+            return []
+            
+        except (json.JSONDecodeError, AttributeError) as e:
+            logger.warning(f"⚠️ Failed to parse dates from analysis: {e}")
+            return []
+
+    async def _offer_calendar_integration(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        detected_dates: List[Dict[str, str]],
+        user_id: Optional[str],
+        chat_id: str,
+    ) -> bool:
+        """
+        Offer to add detected dates to the calendar.
+        
+        Returns:
+            True if offer was sent successfully
+        """
+        if not detected_dates:
+            return False
+        
+        # Check if calendar is enabled
+        if not settings.is_calendar_configured():
+            logger.debug("Calendar not configured, skipping date integration offer")
+            return False
+        
+        # Format the dates for display
+        dates_summary = []
+        for i, d in enumerate(detected_dates[:5], 1):  # Limit to 5 dates
+            dates_summary.append(f"{i}. {d['date']}: {d['title']}")
+        
+        dates_text = "\n".join(dates_summary)
+        
+        # Store dates in session for later retrieval
+        image_analyzer_session_manager.store_detected_dates(chat_id, detected_dates)
+        
+        # Create message with quick reply
+        msg_text = (
+            f"📅 I detected {len(detected_dates)} date(s) in this image:\n\n"
+            f"{dates_text}\n\n"
+            f"Would you like to add these to your calendar with reminders?\n\n"
+            f"ฉันพบวันที่ {len(detected_dates)} รายการในภาพนี้\n"
+            f"ต้องการเพิ่มลงในปฏิทินพร้อมการแจ้งเตือนไหม?"
+        )
+        
+        quick_reply = QuickReply(
+            items=[
+                QuickReplyItem(
+                    type="action",
+                    action=MessageAction(label="📅 Yes / ใช่", text="yes add to calendar"),
+                ),
+                QuickReplyItem(
+                    type="action",
+                    action=MessageAction(label="❌ No / ไม่", text="no skip calendar"),
+                ),
+            ]
+        )
+        
+        msg = TextMessage(text=msg_text, quickReply=quick_reply, quoteToken=None)
+        
+        # Get target for push message
+        group_id = getattr(event.source, "group_id", None) if event.source else None
+        room_id = getattr(event.source, "room_id", None) if event.source else None
+        target = group_id or room_id or user_id
+        
+        if target:
+            try:
+                await asyncio.to_thread(
+                    line_bot_api.push_message,
+                    PushMessageRequest(
+                        to=target,
+                        messages=[msg],
+                        notificationDisabled=False,
+                        customAggregationUnits=None,
+                    ),
+                )
+                logger.info(f"📅 Offered calendar integration for {len(detected_dates)} dates in chat {chat_id}")
+                return True
+            except Exception as e:
+                logger.error(f"❌ Failed to offer calendar integration: {e}")
+                return False
+        
+        return False
+
+    async def _handle_calendar_confirmation(
+        self,
+        event: MessageEvent,
+        text: str,
+        chat_id: str,
+        user_id: Optional[str],
+        line_bot_api: MessagingApi,
+    ) -> bool:
+        """
+        Handle user's response to calendar integration offer.
+        
+        Args:
+            event: LINE message event
+            text: User's response text
+            chat_id: Chat ID
+            user_id: User ID
+            line_bot_api: LINE API client
+            
+        Returns:
+            True if handled successfully
+        """
+        text_lower = text.lower().strip()
+        
+        # Check for "yes" response
+        if "yes" in text_lower or "add to calendar" in text_lower:
+            # Get detected dates from session
+            detected_dates = image_analyzer_session_manager.get_detected_dates(chat_id)
+            
+            if not detected_dates:
+                # Session expired or no dates found
+                msg = TextMessage(
+                    text="⏳ Session expired. Please analyze the image again.\n\n"
+                         "เซสชันหมดอายุ กรุณาวิเคราะห์ภาพใหม่อีกครั้ง",
+                    quickReply=None,
+                    quoteToken=None,
+                )
+                if event.reply_token:
+                    await asyncio.to_thread(
+                        line_bot_api.reply_message,
+                        ReplyMessageRequest(
+                            replyToken=event.reply_token,
+                            messages=[msg],
+                            notificationDisabled=False,
+                        ),
+                    )
+                image_analyzer_session_manager.clear_session(chat_id)
+                return True
+            
+            # Clear the image analyzer session first
+            image_analyzer_session_manager.clear_session(chat_id)
+            
+            # Import and call calendar agent to start extraction flow
+            try:
+                from src.agents.calendar_agent import CalendarAgent
+                
+                # Find calendar agent from the router or create one
+                # For now, we'll create a new instance since it's stateless
+                calendar_agent = CalendarAgent()
+                
+                # Start the extraction flow with detected dates
+                await calendar_agent.start_extraction_flow_from_image(
+                    event=event,
+                    detected_dates=detected_dates,
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    line_bot_api=line_bot_api,
+                )
+                
+                logger.info(f"📅 Started calendar extraction flow for {len(detected_dates)} dates in chat {chat_id}")
+                return True
+                
+            except Exception as e:
+                logger.error(f"❌ Failed to start calendar extraction flow: {e}", exc_info=True)
+                msg = TextMessage(
+                    text="❌ Failed to start calendar flow. Please try 'Zeus add event' manually.\n\n"
+                         "เกิดข้อผิดพลาด กรุณาลอง 'Zeus add event' ด้วยตนเอง",
+                    quickReply=None,
+                    quoteToken=None,
+                )
+                if event.reply_token:
+                    await asyncio.to_thread(
+                        line_bot_api.reply_message,
+                        ReplyMessageRequest(
+                            replyToken=event.reply_token,
+                            messages=[msg],
+                            notificationDisabled=False,
+                        ),
+                    )
+                return True
+        
+        # Check for "no" response
+        elif "no" in text_lower or "skip" in text_lower:
+            # Clear session and acknowledge
+            image_analyzer_session_manager.clear_session(chat_id)
+            
+            msg = TextMessage(
+                text="👍 Understood. Calendar skipped.\n\n"
+                     "เข้าใจแล้ว ไม่เพิ่มลงปฏิทิน",
+                quickReply=None,
+                quoteToken=None,
+            )
+            if event.reply_token:
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[msg],
+                        notificationDisabled=False,
+                    ),
+                )
+            
+            logger.info(f"📅 User skipped calendar integration in chat {chat_id}")
+            return True
+        
+        else:
+            # Unclear response, ask again
+            quick_reply = QuickReply(
+                items=[
+                    QuickReplyItem(
+                        type="action",
+                        action=MessageAction(label="📅 Yes / ใช่", text="yes add to calendar"),
+                    ),
+                    QuickReplyItem(
+                        type="action",
+                        action=MessageAction(label="❌ No / ไม่", text="no skip calendar"),
+                    ),
+                ]
+            )
+            
+            msg = TextMessage(
+                text="❓ Would you like to add the detected dates to your calendar?\n\n"
+                     "ต้องการเพิ่มวันที่ที่ตรวจพบลงในปฏิทินไหม?",
+                quickReply=quick_reply,
+                quoteToken=None,
+            )
+            if event.reply_token:
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[msg],
+                        notificationDisabled=False,
+                    ),
+                )
+            return True
 
     async def _download_image(self, message_id: str) -> Optional[bytes]:
         """Download image content from LINE servers."""

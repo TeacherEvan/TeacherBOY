@@ -7,13 +7,17 @@ Flow:
 4. Zeus: "What is thy question about this image?"
 5. User: "What would be most enjoyable on this menu to a westerner?"
 6. Zeus: [analyzes image and answers question]
+
+Calendar Integration:
+When dates are detected in images, the session manager stores them
+for potential calendar integration.
 """
 
 import asyncio
 import base64
 import logging
 from datetime import datetime
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List, Any
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -23,6 +27,7 @@ class AnalyzerState(Enum):
     """States for the image analyzer session."""
     WAITING_FOR_IMAGE = "waiting_for_image"
     WAITING_FOR_QUESTION = "waiting_for_question"
+    WAITING_FOR_CALENDAR_CONFIRMATION = "waiting_for_calendar_confirmation"
 
 
 class ImageAnalyzerSession:
@@ -33,6 +38,7 @@ class ImageAnalyzerSession:
         self.state = AnalyzerState.WAITING_FOR_IMAGE
         self.image_data: Optional[str] = None  # Base64 encoded image
         self.question: Optional[str] = None
+        self.detected_dates: List[Dict[str, str]] = []  # Dates found in image
         self.created_at = datetime.now()
         self.updated_at = datetime.now()
     
@@ -45,6 +51,12 @@ class ImageAnalyzerSession:
     def set_question(self, question: str) -> None:
         """Store the user's question."""
         self.question = question
+        self.updated_at = datetime.now()
+    
+    def set_detected_dates(self, dates: List[Dict[str, str]]) -> None:
+        """Store detected dates and set state to waiting for calendar confirmation."""
+        self.detected_dates = dates
+        self.state = AnalyzerState.WAITING_FOR_CALENDAR_CONFIRMATION
         self.updated_at = datetime.now()
     
     def is_expired(self, ttl_seconds: int = 60) -> bool:
@@ -194,6 +206,66 @@ class ImageAnalyzerSessionManager:
         if chat_id in self._sessions:
             del self._sessions[chat_id]
             logger.info(f"🖼️ Cleared image analysis session for chat {chat_id}")
+
+    def store_detected_dates(self, chat_id: str, dates: List[Dict[str, str]]) -> bool:
+        """
+        Store detected dates from image analysis.
+        
+        Creates a new minimal session if one doesn't exist (for calendar integration).
+
+        Args:
+            chat_id: Chat identifier
+            dates: List of date dicts with 'date', 'title', 'description'
+
+        Returns:
+            True if stored successfully
+        """
+        # Get existing session or create a temporary one for dates
+        session = self._sessions.get(chat_id)
+        if not session:
+            # Create a temporary session just for date storage
+            session = ImageAnalyzerSession("unknown")
+            self._sessions[chat_id] = session
+        
+        session.set_detected_dates(dates)
+        logger.info(f"📅 Stored {len(dates)} detected dates for chat {chat_id}")
+        return True
+
+    def get_detected_dates(self, chat_id: str) -> List[Dict[str, str]]:
+        """
+        Get stored detected dates for a chat.
+
+        Args:
+            chat_id: Chat identifier
+
+        Returns:
+            List of date dicts, or empty list if none
+        """
+        session = self._sessions.get(chat_id)
+        if not session:
+            return []
+        return session.detected_dates
+
+    def is_waiting_for_calendar_confirmation(self, chat_id: str, user_id: Optional[str] = None) -> bool:
+        """
+        Check if session is waiting for calendar confirmation.
+
+        Args:
+            chat_id: Chat identifier
+            user_id: Optional user identifier (must match)
+
+        Returns:
+            True if waiting for calendar confirmation
+        """
+        session = self.get_session(chat_id)
+        if not session:
+            return False
+        
+        # Check user match
+        if user_id and session.user_id != "unknown" and user_id != session.user_id:
+            return False
+        
+        return session.state == AnalyzerState.WAITING_FOR_CALENDAR_CONFIRMATION
 
     def cleanup_expired(self) -> None:
         """Remove expired sessions."""

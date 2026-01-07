@@ -5,6 +5,7 @@
 ### 1. ProfilerAgent Memory Cleanup (`src/agents/profiler_agent.py`)
 
 **Added explicit memory cleanup after GPT-4o vision API call:**
+
 ```python
 # CRITICAL: Clear image data from memory after vision API call
 # This prevents sensitive image data from lingering in memory/logs
@@ -20,6 +21,7 @@ del messages  # Clear vision API messages containing image
 ### 2. ImageAnalyzerAgent Memory Cleanup (`src/agents/image_analyzer_agent.py`)
 
 **Added cleanup after image encoding:**
+
 ```python
 # CRITICAL: Clear original binary data after encoding
 del image_bytes  # Remove binary data from memory
@@ -27,12 +29,14 @@ del image_base64  # Remove base64 string (data URL is kept in session)
 ```
 
 **Added cleanup after storing in session:**
+
 ```python
 # Clear data URL reference now that it's stored in session manager
 del image_data_url
 ```
 
 **Added cleanup after vision API call:**
+
 ```python
 # CRITICAL: Clear image data from memory after vision API call
 # This prevents sensitive image data from lingering in memory/logs
@@ -40,7 +44,8 @@ del image_data  # Clear base64 data URL
 del messages  # Clear vision API messages containing image
 ```
 
-**Locations**: 
+**Locations**:
+
 - Lines 281-282 (after encoding)
 - Line 291 (after session storage)
 - Lines 345-348 (after vision API call)
@@ -59,12 +64,14 @@ Created comprehensive privacy & memory management documentation covering:
 ## Memory Management Strategy
 
 ### Before Changes
+
 - Image data stored in Python variables throughout processing
 - Relied on Python garbage collector for cleanup
 - No explicit deletion of sensitive image data
 - Potential for image data to linger in memory
 
 ### After Changes
+
 - **Explicit deletion** with `del` statements after each processing step
 - **Immediate cleanup** after vision API calls
 - **Minimal retention**: Images exist only during active processing
@@ -73,16 +80,19 @@ Created comprehensive privacy & memory management documentation covering:
 ## Verification
 
 ### What Stores Images
+
 1. ✅ **ImageAnalyzerSessionManager**: Temporary (60s TTL), deleted on retrieval
 2. ❌ **ConversationMemoryService**: Text only, no image data
 3. ❌ **HistoryLogService**: Metadata only, no image content
 
 ### Cleanup Points
+
 1. **ProfilerAgent**: After vision API response
 2. **ImageAnalyzerAgent**: After encoding, after session storage, after vision API response
 3. **Session Managers**: On retrieval, on expiration, on manual clear
 
 ### Test Results
+
 - ✅ 24/24 profiler_agent tests passing
 - ✅ 8/8 image-related tests passing
 - ✅ No breaking changes introduced
@@ -100,12 +110,14 @@ Created comprehensive privacy & memory management documentation covering:
 ## Compliance Status
 
 ### GDPR
+
 - ✅ Data minimization (transient storage only)
 - ✅ Purpose limitation (image analysis only)
 - ✅ Storage limitation (seconds to minutes max)
 - ✅ User control (opt-in, shutdown phrase)
 
 ### CCPA
+
 - ✅ Right to deletion (automatic after processing)
 - ✅ No sale of personal information
 - ✅ Transparency (documented in IMAGE_PRIVACY.md)
@@ -113,6 +125,7 @@ Created comprehensive privacy & memory management documentation covering:
 ## Developer Notes
 
 ### Best Practices Implemented
+
 ```python
 # 1. Download image (temporary)
 image_bytes = await download_image()
@@ -132,6 +145,7 @@ send_text_response(analysis)
 ```
 
 ### Memory Cleanup Checklist
+
 - [x] Delete `image_bytes` after encoding
 - [x] Delete `image_data_url` after API call
 - [x] Delete `messages` containing image
@@ -142,16 +156,19 @@ send_text_response(analysis)
 ## Impact Assessment
 
 ### Performance
+
 - **No impact**: `del` is instant (just removes reference)
 - **Improved memory efficiency**: Earlier garbage collection
 - **Reduced memory footprint**: Large base64 strings freed sooner
 
 ### Security
+
 - **Enhanced privacy**: Image data can't leak to logs/storage
 - **Reduced attack surface**: Less data in memory = less to steal
 - **Compliance-ready**: Meets data minimization requirements
 
 ### User Experience
+
 - **No changes**: Users see no difference
 - **Faster cleanup**: Memory freed sooner
 - **Same functionality**: All features work as before

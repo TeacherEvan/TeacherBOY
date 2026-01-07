@@ -59,7 +59,11 @@ from src.agents.search_agent import SearchAgent
 from src.agents.help_agent import HelpAgent
 from src.agents.profiler_agent import ProfilerAgent
 from src.agents.image_analyzer_agent import ImageAnalyzerAgent
+from src.agents.calendar_agent import CalendarAgent
 from src.services.openrouter_service import openrouter_service
+from src.services.calendar_service import calendar_service
+from src.services.calendar_session_manager import calendar_session_manager
+from src.services.reminder_service import reminder_service
 from src.services.brave_search_service import brave_search_service
 from src.services.github_models_service import github_models_service
 from src.handlers.message_handler import (
@@ -226,6 +230,29 @@ async def lifespan(app: FastAPI):
         logger.info("📜 History logging disabled")
 
     # ========================================================================
+    # PHASE 2a3: Calendar Service Initialization
+    # ========================================================================
+    if settings.is_calendar_configured():
+        calendar_service.configure(
+            storage_path=settings.calendar_data_path,
+            hf_token=settings.hf_memory_token if settings.is_calendar_hf_configured() else None,
+            hf_repo_id=settings.calendar_hf_repo_id,
+            sync_interval_seconds=settings.calendar_sync_interval_seconds,
+        )
+        logger.info(f"📅 Calendar service enabled (path: {settings.calendar_data_path})")
+        
+        if settings.is_calendar_hf_configured():
+            logger.info(f"☁️ Calendar HF sync enabled: {settings.calendar_hf_repo_id}")
+        
+        # Configure reminder service (will be started later after LINE API is ready)
+        reminder_service.configure(
+            reminder_hour=settings.calendar_reminder_hour,
+        )
+        logger.info(f"⏰ Reminder service configured (daily at {settings.calendar_reminder_hour}:00 Bangkok)")
+    else:
+        logger.info("📅 Calendar service disabled")
+
+    # ========================================================================
     # PHASE 2b: Translation Services Configuration
     # ========================================================================
     if settings.is_google_translate_configured():
@@ -293,6 +320,14 @@ async def lifespan(app: FastAPI):
         logger.info("🖼️ Image Analyzer Agent registered (general image Q&A)")
     else:
         logger.info("🖼️ Image Analyzer Agent not registered (GitHub Models not configured)")
+
+    # Register Calendar Agent (Priority: 6 - Handles calendar/reminder commands)
+    if settings.is_calendar_configured():
+        calendar_agent = CalendarAgent()
+        agent_router.register_agent(calendar_agent)
+        logger.info("📅 Calendar Agent registered (events and reminders)")
+    else:
+        logger.info("📅 Calendar Agent not registered (calendar disabled)")
 
     # Register Translation Agent (Priority: 10)
     translation_agent = TranslationAgent()
@@ -364,6 +399,7 @@ async def lifespan(app: FastAPI):
     profiler_session_manager.start_cleanup()
     news_session_manager.start_cleanup()
     image_analyzer_session_manager.start_cleanup()
+    calendar_session_manager.start_cleanup()
     rate_limiter.start_cleanup()
     logger.info("✅ All cleanup tasks started")
 
@@ -385,8 +421,17 @@ async def lifespan(app: FastAPI):
     profiler_session_manager.stop_cleanup()
     news_session_manager.stop_cleanup()
     image_analyzer_session_manager.stop_cleanup()
+    calendar_session_manager.stop_cleanup()
     rate_limiter.stop_cleanup()
     logger.info("✅ All cleanup tasks stopped")
+
+    # Stop reminder service scheduler
+    reminder_service.stop()
+    logger.info("✅ Reminder service stopped")
+
+    # Stop calendar service HF Hub sync
+    calendar_service.stop()
+    logger.info("✅ Calendar service stopped")
 
     # Log shutdown event
     history_svc = get_history_log()
