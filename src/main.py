@@ -64,6 +64,7 @@ from src.services.openrouter_service import openrouter_service
 from src.services.calendar_service import calendar_service
 from src.services.calendar_session_manager import calendar_session_manager
 from src.services.reminder_service import reminder_service
+from src.services.message_buffer_service import message_buffer_service
 from src.services.brave_search_service import brave_search_service
 from src.services.github_models_service import github_models_service
 from src.handlers.message_handler import (
@@ -400,6 +401,7 @@ async def lifespan(app: FastAPI):
     news_session_manager.start_cleanup()
     image_analyzer_session_manager.start_cleanup()
     calendar_session_manager.start_cleanup()
+    message_buffer_service.start_cleanup_task()
     rate_limiter.start_cleanup()
     logger.info("✅ All cleanup tasks started")
 
@@ -422,6 +424,7 @@ async def lifespan(app: FastAPI):
     news_session_manager.stop_cleanup()
     image_analyzer_session_manager.stop_cleanup()
     calendar_session_manager.stop_cleanup()
+    message_buffer_service.stop_cleanup_task()
     rate_limiter.stop_cleanup()
     logger.info("✅ All cleanup tasks stopped")
 
@@ -650,6 +653,24 @@ async def webhook(request: Request) -> JSONResponse:
                             continue
 
                         if isinstance(event.message, TextMessageContent):
+                            # Store message in buffer for "zeus scrape" feature
+                            chat_id = None
+                            if event.source:
+                                if getattr(event.source, "group_id", None):
+                                    chat_id = f"group_{event.source.group_id}"
+                                elif getattr(event.source, "room_id", None):
+                                    chat_id = f"room_{event.source.room_id}"
+                                elif getattr(event.source, "user_id", None):
+                                    chat_id = f"user_{event.source.user_id}"
+                            
+                            if chat_id and user_id:
+                                message_buffer_service.store_message(
+                                    chat_id=chat_id,
+                                    text=event.message.text,
+                                    user_id=user_id,
+                                    message_id=event.message.id if hasattr(event.message, 'id') else None
+                                )
+                            
                             # Route text message to appropriate agent
                             await agent_router.route_message(event, line_bot_api)
 

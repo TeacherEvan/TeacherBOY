@@ -70,6 +70,7 @@ First agent with should_handle()=True wins → calls handle()
 | -------------------- | -------- | --------------------- | ------------------------------------------------------------------ |
 | **HelpAgent**        | 5        | `help`, `/help`       | Contextual help; shows different commands per chat type/privileges |
 | **AdminAgent**       | 5        | `/admin ...`          | Registered if `ADMIN_USER_IDS` or `ADMIN_SETUP_KEY` is set         |
+| **CalendarAgent**    | 6        | `zeus calendar`, etc. | Events/reminders with scrape & inline add (see Calendar section)   |
 | **ProfilerAgent**    | 7        | Image message         | Psychological profiling using FBI/Ekman/Navarro frameworks         |
 | **SearchAgent**      | 8        | `Zeus search <query>` | Conditional: requires `BRAVE_SEARCH_API_KEY`                       |
 | **LLMAgent**         | 9        | `Zeus <prompt>`       | GitHub Models → OpenRouter fallback; conversation memory           |
@@ -121,7 +122,72 @@ PROFILER_RATE_LIMIT_PER_HOUR=3          # API cost protection
 
 **Disclaimer:** Educational/entertainment purposes only.
 
-## 🛠️ Developer Workflows
+## � Calendar Agent
+
+The CalendarAgent manages events and reminders with multi-step flows, AI-powered date extraction, and inline add capability.
+
+**Triggers:**
+
+| Command                     | Description                              |
+| --------------------------- | ---------------------------------------- |
+| `zeus calendar`             | Show calendar menu                       |
+| `zeus events`               | List upcoming events                     |
+| `zeus add event`            | Start interactive add flow               |
+| `zeus scrape` / `zeus scan` | AI-scan last 10 messages for dates       |
+| `zeus add [date] [title]`   | Inline add with date (see formats below) |
+
+**Supported Date Formats (Inline Add):**
+
+- `tomorrow` — next calendar day
+- `today` — current day
+- `in X days` — relative days (e.g., `in 3 days`, `in 7 days`)
+- `Jan 15` / `January 15` — named month + day (current/next year)
+- `15/01/2025` — DD/MM/YYYY format
+- `2025-06-15` — ISO format (YYYY-MM-DD)
+
+**Not supported:** "next week" (too ambiguous)
+
+**Zeus Scrape Flow:**
+
+1. User sends `zeus scrape`
+2. Bot retrieves last 10 messages from local buffer (LINE API doesn't provide history)
+3. GPT-4o-mini extracts dates/events with confidence scores
+4. User reviews each event: [Yes ✓] [No ✗] [Skip →]
+5. If accepted, user selects reminder days: [7 days] [3 days] [1 day] [All]
+6. Event saved to calendar
+
+**Zeus Add Inline Flow:**
+
+1. User sends `zeus add tomorrow Team standup`
+2. Bot parses date and title, shows confirmation
+3. User selects reminder days via Quick Reply
+4. Event saved to calendar
+
+**Key Files:**
+
+- [src/agents/calendar_agent.py](../src/agents/calendar_agent.py) — Agent with triggers and handlers
+- [src/services/calendar_service.py](../src/services/calendar_service.py) — Event storage and retrieval
+- [src/services/calendar_session_manager.py](../src/services/calendar_session_manager.py) — Multi-step flow state machine
+- [src/services/message_buffer_service.py](../src/services/message_buffer_service.py) — Local message storage for scrape
+- [src/services/date_extraction_service.py](../src/services/date_extraction_service.py) — AI-powered date extraction
+
+**Configuration:**
+
+```env
+CALENDAR_ENABLED=true                    # Enable/disable feature
+CALENDAR_DATA_PATH=./data/calendar       # Local storage path
+CALENDAR_HF_REPO_ID=user/repo            # Optional HF Hub sync
+CALENDAR_REMINDER_HOUR=8                 # Daily reminder hour (Bangkok time)
+```
+
+**Architecture Notes:**
+
+- LINE Messaging API does NOT provide message history retrieval (webhook-only)
+- MessageBufferService stores last 20 messages per chat with 2-hour TTL
+- DateExtractionService uses GPT-4o-mini with regex fallback
+- CalendarSessionManager has 14+ states for complex flows
+
+## �🛠️ Developer Workflows
 
 ```bash
 # Local development

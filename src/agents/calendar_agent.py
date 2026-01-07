@@ -37,6 +37,8 @@ from src.services.calendar_session_manager import (
     CalendarState,
 )
 from src.services.privilege_service import privilege_service
+from src.services.message_buffer_service import message_buffer_service
+from src.services.date_extraction_service import date_extraction_service
 from src.config import settings
 from src.utils.tracing import get_tracer
 
@@ -72,6 +74,13 @@ TRIGGERS_REMOVE = [
     "zeus delete reminder",
     "remove event",
     "delete event",
+]
+
+# New triggers for scrape and inline add
+TRIGGERS_SCRAPE = [
+    "zeus scrape",
+    "zeus scan",
+    "zeus scan messages",
 ]
 
 # Cancel keywords
@@ -173,7 +182,8 @@ class CalendarAgent(BaseAgent):
         """
         Handle if:
         1. Text matches a calendar trigger
-        2. Chat is in an active calendar flow
+        2. Text is "zeus add [date] [title]" inline format
+        3. Chat is in an active calendar flow
         """
         # Check for triggers
         if self._is_trigger(text, TRIGGERS_VIEW):
@@ -182,10 +192,161 @@ class CalendarAgent(BaseAgent):
             return True
         if self._is_trigger(text, TRIGGERS_REMOVE):
             return True
+        if self._is_trigger(text, TRIGGERS_SCRAPE):
+            return True
+        
+        # Check for inline add format: "zeus add [date] [title]"
+        if self._parse_inline_add(text):
+            return True
 
         # Check if in active calendar flow
         chat_id = self._get_chat_id(event)
         return calendar_session_manager.is_in_calendar_flow(chat_id)
+
+    def _parse_inline_add(self, text: str) -> Optional[Dict[str, Any]]:
+        """
+        Parse inline add format: "zeus add [date] [title]"
+        
+        Examples:
+        - "zeus add Jan 15 Birthday party"
+        - "zeus add tomorrow Meeting with team"
+        - "zeus add 2025-03-20 Conference"
+        
+        Returns:
+            Dict with 'date' and 'title' if parsed successfully, None otherwise
+        """
+        text_lower = text.lower().strip()
+        
+        # Check prefix
+        if not text_lower.startswith("zeus add "):
+            return None
+        
+        # Don't match the existing triggers
+        if self._is_trigger(text, TRIGGERS_ADD):
+            return None
+        
+        # Remove "zeus add " prefix
+        remainder = text[9:].strip()  # len("zeus add ") = 9
+        
+        if not remainder:
+            return None
+        
+        # Try to parse date from the beginning
+        # Common date patterns to try
+        parsed_date = None
+        title_start = 0
+        
+        # Try relative dates first
+        relative_dates = {
+            "today": 0,
+            "tomorrow": 1,
+            "วันนี้": 0,
+            "พรุ่งนี้": 1,
+        }
+        
+        remainder_lower = remainder.lower()
+        for rel_word, days in relative_dates.items():
+            if remainder_lower.startswith(rel_word + " "):
+                today = datetime.now(BANGKOK_TZ).date()
+                parsed_date = today + timedelta(days=days)
+                title_start = len(rel_word) + 1
+                break
+        
+        if not parsed_date:
+            # Try "in X days" pattern
+            match = re.match(r"in\s+(\d+)\s+days?\s+(.+)", remainder_lower)
+            if match:
+                days = int(match.group(1))
+                today = datetime.now(BANGKOK_TZ).date()
+                parsed_date = today + timedelta(days=days)
+                title_start = match.start(2)
+        
+        if not parsed_date:
+            # Try common date formats at the start
+            date_patterns = [
+                # "Jan 15" or "January 15" (assume current/next year)
+                (r"(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:,?\s+(\d{4}))?\s+(.+)", "named"),
+                # "15/01" or "15/01/2025"
+                (r"(\d{1,2})[/\-](\d{1,2})(?:[/\-](\d{4}))?\s+(.+)", "slash"),
+                # "2025-01-15"
+                (r"(\d{4})-(\d{2})-(\d{2})\s+(.+)", "iso"),
+            ]
+            
+            for pattern, fmt in date_patterns:
+                match = re.match(pattern, remainder_lower)
+                if match:
+                    try:
+                        if fmt == "named":
+                            month_str = match.group(1)[:3]
+                            day = int(match.group(2))
+                            year = int(match.group(3)) if match.group(3) else datetime.now().year
+                            
+                            # Map month name to number
+                            month_map = {
+                                "jan": 1, "feb": 2, "mar": 3, "apr": 4,
+                                "may": 5, "jun": 6, "jul": 7, "aug": 8,
+                                "sep": 9, "oct": 10, "nov": 11, "dec": 12
+                            }
+                            month = month_map.get(month_str, 1)
+                            
+                            # If date would be in past, use next year
+                            try:
+                                parsed_date = date(year, month, day)
+                                if parsed_date < datetime.now(BANGKOK_TZ).date() and not match.group(3):
+                                    parsed_date = date(year + 1, month, day)
+                            except ValueError:
+                                continue
+                            
+                            # Title is in group 4
+                            title = match.group(4).strip()
+                            if title:
+                                return {
+                                    "date": parsed_date,
+                                    "title": remainder[match.start(4):].strip()[:100]  # Use original case
+                                }
+                        
+                        elif fmt == "slash":
+                            day = int(match.group(1))
+                            month = int(match.group(2))
+                            year = int(match.group(3)) if match.group(3) else datetime.now().year
+                            
+                            parsed_date = date(year, month, day)
+                            if parsed_date < datetime.now(BANGKOK_TZ).date() and not match.group(3):
+                                parsed_date = date(year + 1, month, day)
+                            
+                            title = match.group(4).strip()
+                            if title:
+                                return {
+                                    "date": parsed_date,
+                                    "title": remainder[match.start(4):].strip()[:100]
+                                }
+                        
+                        elif fmt == "iso":
+                            year = int(match.group(1))
+                            month = int(match.group(2))
+                            day = int(match.group(3))
+                            parsed_date = date(year, month, day)
+                            
+                            title = match.group(4).strip()
+                            if title:
+                                return {
+                                    "date": parsed_date,
+                                    "title": remainder[match.start(4):].strip()[:100]
+                                }
+                    except (ValueError, IndexError):
+                        continue
+                    break
+        
+        # If we parsed a date with relative word
+        if parsed_date and title_start > 0:
+            title = remainder[title_start:].strip()
+            if title:
+                return {
+                    "date": parsed_date,
+                    "title": title[:100]
+                }
+        
+        return None
 
     async def handle(
         self, 
@@ -226,6 +387,19 @@ class CalendarAgent(BaseAgent):
                 if self._is_trigger(text, TRIGGERS_REMOVE):
                     return await self._start_remove_flow(
                         event, line_bot_api, chat_id, user_id
+                    )
+
+                # Check for scrape trigger
+                if self._is_trigger(text, TRIGGERS_SCRAPE):
+                    return await self._handle_scrape_trigger(
+                        event, line_bot_api, chat_id, user_id
+                    )
+
+                # Check for inline add format: "zeus add [date] [title]"
+                inline_data = self._parse_inline_add(text)
+                if inline_data:
+                    return await self._handle_inline_add_trigger(
+                        event, line_bot_api, chat_id, user_id, inline_data
                     )
 
                 # Handle ongoing session
@@ -399,6 +573,28 @@ class CalendarAgent(BaseAgent):
 
         elif state == CalendarState.PROCESSING_EXTRACTED_DATES:
             return await self._handle_extracted_date_response(
+                event, text, line_bot_api, chat_id, user_id
+            )
+
+        # New states for scrape flow
+        elif state == CalendarState.SCRAPE_REVIEWING:
+            return await self._handle_scrape_review_response(
+                event, text, line_bot_api, chat_id, user_id
+            )
+
+        elif state == CalendarState.SCRAPE_REMINDER_DAYS:
+            return await self._handle_scrape_reminder_response(
+                event, text, line_bot_api, chat_id, user_id
+            )
+
+        # New states for inline add flow
+        elif state == CalendarState.INLINE_ADD_REMINDER_DAYS:
+            return await self._handle_inline_add_reminder_response(
+                event, text, line_bot_api, chat_id, user_id
+            )
+
+        elif state == CalendarState.INLINE_ADD_CONFIRMING:
+            return await self._handle_inline_add_confirmation(
                 event, text, line_bot_api, chat_id, user_id
             )
 
@@ -996,6 +1192,487 @@ class CalendarAgent(BaseAgent):
         await self._send_message_with_quick_reply(
             event, line_bot_api, msg, quick_reply
         )
+
+    # =========================================================================
+    # Zeus Scrape Flow - Extract dates from recent chat messages
+    # =========================================================================
+
+    async def _handle_scrape_trigger(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str]
+    ) -> bool:
+        """
+        Handle "zeus scrape" trigger.
+        
+        Retrieves recent messages from buffer, extracts dates using AI,
+        and guides user through adding events.
+        """
+        if not user_id:
+            await self._send_message(
+                event, line_bot_api,
+                "❌ Cannot identify user."
+            )
+            return True
+
+        # Get recent messages from buffer
+        messages = message_buffer_service.get_message_texts(chat_id, limit=10)
+        
+        if not messages:
+            await self._send_message(
+                event, line_bot_api,
+                "📭 No recent messages found to scan.\n\n"
+                "I can only scan messages that arrived while I was active.\n\n"
+                "ไม่พบข้อความล่าสุดที่จะสแกน\n"
+                "ฉันสามารถสแกนเฉพาะข้อความที่มาถึงขณะที่ฉันทำงานอยู่"
+            )
+            return True
+
+        # Send processing message
+        await self._send_message(
+            event, line_bot_api,
+            f"🔍 Scanning {len(messages)} recent messages...\n\n"
+            f"กำลังสแกน {len(messages)} ข้อความล่าสุด..."
+        )
+
+        # Check friendship status
+        is_friend = await self._is_friend(event, line_bot_api)
+
+        # Start scrape flow
+        calendar_session_manager.start_scrape_flow(
+            chat_id, user_id, messages, is_friend
+        )
+
+        # Extract dates using AI
+        try:
+            events = await date_extraction_service.extract_events_from_messages(messages)
+        except Exception as e:
+            logger.error(f"❌ Date extraction failed: {e}", exc_info=True)
+            calendar_session_manager.end_session(chat_id)
+            await self._send_message(
+                event, line_bot_api,
+                "❌ Failed to scan messages. Please try again.\n\n"
+                "สแกนข้อความไม่สำเร็จ กรุณาลองใหม่"
+            )
+            return True
+
+        if not events:
+            calendar_session_manager.end_session(chat_id)
+            await self._send_message(
+                event, line_bot_api,
+                "📭 No dates or events found in recent messages.\n\n"
+                "ไม่พบวันที่หรือกิจกรรมในข้อความล่าสุด\n\n"
+                "💡 Try 'zeus add [date] [title]' to add directly."
+            )
+            return True
+
+        # Convert ExtractedEvent objects to dicts
+        events_data = [
+            {
+                "date": evt.event_date,
+                "title": evt.title,
+                "description": evt.description or "",
+                "source_text": evt.source_text,
+                "confidence": evt.confidence,
+            }
+            for evt in events
+        ]
+
+        # Store extracted events and move to review state
+        calendar_session_manager.set_scraped_events(chat_id, events_data)
+
+        # Send summary and prompt for first event
+        await self._send_message(
+            event, line_bot_api,
+            f"✅ Found {len(events_data)} event(s) in messages!\n\n"
+            f"พบ {len(events_data)} กิจกรรมในข้อความ!"
+        )
+
+        # Prompt for first event
+        first_event = calendar_session_manager.get_current_scraped_event(chat_id)
+        if first_event:
+            await self._prompt_scraped_event(event, line_bot_api, first_event, 1, len(events_data))
+
+        return True
+
+    async def _prompt_scraped_event(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        event_data: Dict[str, Any],
+        current: int,
+        total: int
+    ) -> None:
+        """Prompt user about a scraped event."""
+        date_obj = event_data.get("date")
+        title = event_data.get("title", "Event")
+        source = event_data.get("source_text", "")
+        confidence = event_data.get("confidence", "medium")
+        
+        date_str = date_obj.strftime("%B %d, %Y") if date_obj else "Unknown"
+        
+        msg = (
+            f"📅 Event {current}/{total}:\n\n"
+            f"📌 {title}\n"
+            f"📆 {date_str}\n"
+        )
+        
+        if source:
+            # Truncate source text
+            source_preview = source[:50] + "..." if len(source) > 50 else source
+            msg += f"📝 From: \"{source_preview}\"\n"
+        
+        msg += f"🎯 Confidence: {confidence}\n\n"
+        msg += "Add this to calendar? (yes/no/skip all)"
+        
+        quick_reply = QuickReply(items=[
+            QuickReplyItem(type="action", action=MessageAction(label="✅ Yes", text="yes")),
+            QuickReplyItem(type="action", action=MessageAction(label="⏭️ Skip", text="no")),
+            QuickReplyItem(type="action", action=MessageAction(label="🚫 Skip All", text="done")),
+        ])
+        
+        await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
+
+    async def _handle_scrape_review_response(
+        self,
+        event: MessageEvent,
+        text: str,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str]
+    ) -> bool:
+        """Handle user response during scrape review."""
+        text_lower = text.lower().strip()
+        
+        if text_lower in ["yes", "y", "ใช่", "ok"]:
+            # Accept this event, ask for reminder days
+            calendar_session_manager.accept_scraped_event(chat_id)
+            
+            current_event = calendar_session_manager.get_current_scraped_event(chat_id)
+            if current_event:
+                msg = (
+                    f"✅ Adding: {current_event.get('title', 'Event')}\n\n"
+                    "When should I remind you?\n\n"
+                    "• 7 - 7 days before\n"
+                    "• 3 - 3 days before\n"
+                    "• 1 - 1 day before\n"
+                    "• all - All of the above\n\n"
+                    "(Day-of reminder is always included)"
+                )
+                
+                quick_reply = QuickReply(items=[
+                    QuickReplyItem(type="action", action=MessageAction(label="7 days", text="7")),
+                    QuickReplyItem(type="action", action=MessageAction(label="3 days", text="3")),
+                    QuickReplyItem(type="action", action=MessageAction(label="1 day", text="1")),
+                    QuickReplyItem(type="action", action=MessageAction(label="All", text="all")),
+                ])
+                
+                await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
+            return True
+            
+        elif text_lower in ["no", "n", "ไม่", "skip"]:
+            # Skip this event, move to next
+            has_more = calendar_session_manager.skip_scraped_event(chat_id)
+            if has_more:
+                next_event = calendar_session_manager.get_current_scraped_event(chat_id)
+                if next_event:
+                    current, total = calendar_session_manager.get_scrape_progress(chat_id)
+                    await self._prompt_scraped_event(
+                        event, line_bot_api, next_event, current, total
+                    )
+            else:
+                calendar_session_manager.end_session(chat_id)
+                await self._send_message(
+                    event, line_bot_api,
+                    "✅ Finished processing scraped events.\n\n"
+                    "เสร็จสิ้นการประมวลผลกิจกรรมที่สแกน"
+                )
+            return True
+            
+        elif text_lower in ["done", "skip all", "finish", "เสร็จ"]:
+            # End scrape flow
+            calendar_session_manager.end_session(chat_id)
+            await self._send_message(
+                event, line_bot_api,
+                "✅ Scrape session ended.\n\nเสร็จสิ้นการสแกน"
+            )
+            return True
+
+        return False
+
+    async def _handle_scrape_reminder_response(
+        self,
+        event: MessageEvent,
+        text: str,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str]
+    ) -> bool:
+        """Handle reminder days selection for scraped event."""
+        text_lower = text.lower().strip()
+        
+        # Parse reminder days
+        if text_lower == "all":
+            reminder_days = [7, 3, 1, 0]
+        elif text_lower in ["7", "7 days"]:
+            reminder_days = [7, 0]
+        elif text_lower in ["3", "3 days"]:
+            reminder_days = [3, 0]
+        elif text_lower in ["1", "1 day"]:
+            reminder_days = [1, 0]
+        else:
+            await self._send_message(
+                event, line_bot_api,
+                "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\n"
+                "กรุณาเลือก 7, 3, 1 หรือ all"
+            )
+            return True
+        
+        # Get event data with reminder days
+        event_data = calendar_session_manager.set_scrape_reminder_days(chat_id, reminder_days)
+        
+        if event_data and self._calendar_service and user_id:
+            # Create the event
+            await self._calendar_service.add_event(
+                user_id=user_id,
+                chat_id=chat_id,
+                title=event_data["title"],
+                event_date=event_data["date"],
+                description=event_data["description"],
+                reminder_days=event_data["reminder_days"],
+                is_friend=event_data["is_friend"]
+            )
+            
+            await self._send_message(
+                event, line_bot_api,
+                f"✅ Added: {event_data['title']}\n\n"
+                f"เพิ่มแล้ว: {event_data['title']}"
+            )
+        
+        # Move to next event
+        has_more = calendar_session_manager.advance_scrape_index(chat_id)
+        if has_more:
+            next_event = calendar_session_manager.get_current_scraped_event(chat_id)
+            if next_event:
+                current, total = calendar_session_manager.get_scrape_progress(chat_id)
+                await self._prompt_scraped_event(
+                    event, line_bot_api, next_event, current, total
+                )
+        else:
+            calendar_session_manager.end_session(chat_id)
+            await self._send_message(
+                event, line_bot_api,
+                "✅ Finished adding all scraped events!\n\n"
+                "เพิ่มกิจกรรมทั้งหมดเรียบร้อยแล้ว"
+            )
+        
+        return True
+
+    # =========================================================================
+    # Zeus Add [date] [title] - Inline Add Flow
+    # =========================================================================
+
+    async def _handle_inline_add_trigger(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str],
+        parsed_data: Dict[str, Any]
+    ) -> bool:
+        """
+        Handle "zeus add [date] [title]" inline trigger.
+        
+        Starts directly at reminder selection since date and title are already provided.
+        """
+        if not user_id:
+            await self._send_message(
+                event, line_bot_api,
+                "❌ Cannot identify user."
+            )
+            return True
+
+        event_date = parsed_data["date"]
+        title = parsed_data["title"]
+        
+        # Validate date is in the future
+        today = datetime.now(BANGKOK_TZ).date()
+        if event_date < today:
+            await self._send_message(
+                event, line_bot_api,
+                "❌ That date is in the past!\n\n"
+                "Please use a future date.\n\n"
+                "วันที่ที่ระบุผ่านไปแล้ว กรุณาใส่วันที่ในอนาคต"
+            )
+            return True
+
+        # Check friendship status
+        is_friend = await self._is_friend(event, line_bot_api)
+
+        # Start inline add flow (skips date/title input)
+        calendar_session_manager.start_inline_add_flow(
+            chat_id=chat_id,
+            user_id=user_id,
+            event_date=event_date,
+            title=title,
+            description="",
+            is_friend=is_friend
+        )
+
+        date_str = event_date.strftime("%B %d, %Y")
+        
+        msg = (
+            f"📅 Adding event:\n\n"
+            f"📌 {title}\n"
+            f"📆 {date_str}\n\n"
+            "When should I remind you?\n\n"
+            "• 7 - 7 days before\n"
+            "• 3 - 3 days before\n"
+            "• 1 - 1 day before\n"
+            "• all - All of the above\n\n"
+            "(Day-of reminder is always included)"
+        )
+        
+        quick_reply = QuickReply(items=[
+            QuickReplyItem(type="action", action=MessageAction(label="7 days", text="7")),
+            QuickReplyItem(type="action", action=MessageAction(label="3 days", text="3")),
+            QuickReplyItem(type="action", action=MessageAction(label="1 day", text="1")),
+            QuickReplyItem(type="action", action=MessageAction(label="All", text="all")),
+        ])
+        
+        await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
+        return True
+
+    async def _handle_inline_add_reminder_response(
+        self,
+        event: MessageEvent,
+        text: str,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str]
+    ) -> bool:
+        """Handle reminder days selection for inline add."""
+        text_lower = text.lower().strip()
+        
+        # Parse reminder days
+        if text_lower == "all":
+            reminder_days = [7, 3, 1, 0]
+        elif text_lower in ["7", "7 days"]:
+            reminder_days = [7, 0]
+        elif text_lower in ["3", "3 days"]:
+            reminder_days = [3, 0]
+        elif text_lower in ["1", "1 day"]:
+            reminder_days = [1, 0]
+        else:
+            await self._send_message(
+                event, line_bot_api,
+                "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\n"
+                "กรุณาเลือก 7, 3, 1 หรือ all"
+            )
+            return True
+        
+        # Get event data with reminder days (moves to CONFIRMING state)
+        event_data = calendar_session_manager.set_inline_reminder_days(chat_id, reminder_days)
+        
+        if not event_data:
+            calendar_session_manager.end_session(chat_id)
+            await self._send_message(
+                event, line_bot_api,
+                "❌ Something went wrong. Please try again."
+            )
+            return True
+
+        # Show confirmation
+        date_str = event_data["date"].strftime("%B %d, %Y")
+        reminder_str = ", ".join([
+            f"{d} days" if d > 0 else "day-of" 
+            for d in sorted(event_data["reminder_days"], reverse=True)
+        ])
+        
+        msg = (
+            "📝 Confirm event:\n\n"
+            f"📆 Date: {date_str}\n"
+            f"📌 Title: {event_data['title']}\n"
+            f"⏰ Reminders: {reminder_str}\n\n"
+            "Is this correct? (yes/no)"
+        )
+        
+        quick_reply = QuickReply(items=[
+            QuickReplyItem(type="action", action=MessageAction(label="✅ Yes", text="yes")),
+            QuickReplyItem(type="action", action=MessageAction(label="❌ No", text="no")),
+        ])
+        
+        await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
+        return True
+
+    async def _handle_inline_add_confirmation(
+        self,
+        event: MessageEvent,
+        text: str,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str]
+    ) -> bool:
+        """Handle confirmation for inline add."""
+        text_lower = text.lower().strip()
+        
+        if text_lower in ["yes", "y", "ใช่", "ok", "confirm"]:
+            # Get session to retrieve event data
+            session = calendar_session_manager.get_session(chat_id)
+            
+            if not session or not session.inline_event_data or not self._calendar_service or not user_id:
+                await self._send_message(
+                    event, line_bot_api,
+                    "❌ Something went wrong. Please try again."
+                )
+                calendar_session_manager.end_session(chat_id)
+                return True
+
+            # Create the event
+            new_event = await self._calendar_service.add_event(
+                user_id=user_id,
+                chat_id=chat_id,
+                title=session.inline_event_data["title"],
+                event_date=session.inline_event_data["date"],
+                description=session.inline_event_data.get("description", ""),
+                reminder_days=session.pending_reminder_days,
+                is_friend=session.pending_is_friend
+            )
+            
+            calendar_session_manager.end_session(chat_id)
+            
+            date_str = new_event.event_date.strftime("%B %d, %Y")
+            reminder_str = ", ".join([f"{d}d" for d in sorted(new_event.reminder_days, reverse=True)])
+            
+            msg = (
+                "✅ Event created!\n\n"
+                f"📆 {new_event.title}\n"
+                f"📅 {date_str}\n"
+                f"⏰ Reminders: {reminder_str}\n\n"
+                "I'll remind you at 8 AM Bangkok time.\n\n"
+                "เพิ่มกิจกรรมเรียบร้อยแล้ว! จะเตือนตอน 8 โมงเช้าค่ะ"
+            )
+            
+            await self._send_message(event, line_bot_api, msg)
+            return True
+            
+        elif text_lower in ["no", "n", "ไม่"]:
+            calendar_session_manager.end_session(chat_id)
+            await self._send_message(
+                event, line_bot_api,
+                "❌ Event creation cancelled.\n\n"
+                "Say 'zeus add [date] [title]' to try again.\n\n"
+                "ยกเลิกแล้ว"
+            )
+            return True
+        else:
+            await self._send_message(
+                event, line_bot_api,
+                "Please answer yes or no.\n\nกรุณาตอบ yes หรือ no"
+            )
+            return True
 
     # =========================================================================
     # Date Parsing
