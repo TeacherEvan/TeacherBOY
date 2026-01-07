@@ -26,6 +26,7 @@ import logging
 import base64
 import re
 import json
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, ImageMessageContent
 from linebot.v3.messaging import (
@@ -40,6 +41,7 @@ from linebot.v3.messaging import (
     ApiClient,
     Configuration,
 )
+from linebot.v3.messaging.exceptions import ApiException
 
 from .base_agent import BaseAgent
 from src.services.image_analyzer_session_manager import (
@@ -94,6 +96,8 @@ class ImageAnalyzerAgent(BaseAgent):
             description="General purpose image Q&A using vision AI",
         )
         self.http_client = http_client
+        # Cache for friend status checks
+        self._friend_cache: Dict[str, tuple[bool, datetime]] = {}
         
     def get_priority(self) -> int:
         """
@@ -117,6 +121,72 @@ class ImageAnalyzerAgent(BaseAgent):
             user_id = getattr(event.source, "user_id", "unknown")
             return f"user_{user_id}"
         return "user_unknown"
+
+    async def _is_friend(
+        self, 
+        event: MessageEvent, 
+        line_bot_api: MessagingApi
+    ) -> bool:
+        """
+        Check if user is a LINE friend of Zeus.
+        
+        Uses LINE API get_profile() which returns error for non-friends.
+        Results are cached for 5 minutes.
+        
+        Args:
+            event: LINE message event
+            line_bot_api: LINE Messaging API client
+            
+        Returns:
+            True if user is a friend, False otherwise
+        """
+        user_id = getattr(event.source, "user_id", None) if event.source else None
+        if not user_id:
+            logger.warning(f"🖼️ No user_id found for friendship check")
+            return False
+
+        # Check cache (5 minute TTL)
+        cached = self._friend_cache.get(user_id)
+        if cached:
+            is_friend, cached_at = cached
+            age = (datetime.now(timezone.utc) - cached_at).total_seconds()
+            if age < 300:  # 5 minute cache
+                return is_friend
+
+        try:
+            await asyncio.to_thread(line_bot_api.get_profile, user_id)
+            self._friend_cache[user_id] = (True, datetime.now(timezone.utc))
+            logger.info(f"🖼️ User {user_id} is a friend (verified via LINE API)")
+            return True
+        except ApiException as e:
+            status = getattr(e, "status_code", "unknown")
+            logger.info(
+                f"🖼️ User {user_id} is NOT a friend (ApiException: {status})",
+                exc_info=False,
+            )
+            self._friend_cache[user_id] = (False, datetime.now(timezone.utc))
+            return False
+        except Exception as e:
+            logger.warning(
+                f"🖼️ Friendship check failed for {user_id}: {e}", exc_info=False
+            )
+            return False
+
+    async def _get_user_display_name(
+        self,
+        user_id: str,
+        line_bot_api: MessagingApi
+    ) -> str:
+        """
+        Get user's display name from LINE API.
+        
+        Returns 'mortal' if unable to get the name.
+        """
+        try:
+            profile = await asyncio.to_thread(line_bot_api.get_profile, user_id)
+            return profile.display_name or "mortal"
+        except Exception:
+            return "mortal"
 
     def _is_trigger(self, text: str) -> bool:
         """Check if text contains a trigger phrase."""
@@ -623,6 +693,54 @@ class ImageAnalyzerAgent(BaseAgent):
         
         # Check for "yes" response
         if "yes" in text_lower or "add to calendar" in text_lower:
+            # Check if user is a friend (calendar features require friendship)
+            # Skip friend check for admins
+            is_admin = privilege_service.is_admin(user_id)
+            is_friend = is_admin or await self._is_friend(event, line_bot_api)
+            
+            if not is_friend:
+                # Get user's display name for personalized quirky response
+                display_name = await self._get_user_display_name(user_id or "", line_bot_api) if user_id else "mortal"
+                
+                # Quirky Zeus-style rejection message
+                quirky_responses = [
+                    f"⚡ Alas, {display_name}... are we friends?\n\n"
+                    f"Calendar powers are reserved for those who have befriended Zeus!\n"
+                    f"Add me as a LINE friend to unlock this divine feature.\n\n"
+                    f"📱 เพิ่มเพื่อนกับ Zeus ก่อนนะ!",
+                    
+                    f"🤔 Hmm, {display_name}... I sense we are not yet friends.\n\n"
+                    f"Only friends of the Olympian king may access the sacred calendar!\n"
+                    f"Become my friend to wield this power.\n\n"
+                    f"📱 กรุณาเพิ่มเพื่อนก่อนใช้ปฏิทิน!",
+                    
+                    f"⚡ Hold, {display_name}!\n\n"
+                    f"The calendar is a gift I bestow only upon my mortal friends.\n"
+                    f"Add Zeus as a friend to receive this blessing!\n\n"
+                    f"📱 เป็นเพื่อนกับ Zeus สิ!",
+                ]
+                
+                import random
+                quirky_msg = random.choice(quirky_responses)
+                
+                msg = TextMessage(
+                    text=quirky_msg,
+                    quickReply=None,
+                    quoteToken=None,
+                )
+                if event.reply_token:
+                    await asyncio.to_thread(
+                        line_bot_api.reply_message,
+                        ReplyMessageRequest(
+                            replyToken=event.reply_token,
+                            messages=[msg],
+                            notificationDisabled=False,
+                        ),
+                    )
+                image_analyzer_session_manager.clear_session(chat_id)
+                logger.info(f"🖼️ Non-friend {user_id} ({display_name}) denied calendar access")
+                return True
+            
             # Get detected dates from session
             detected_dates = image_analyzer_session_manager.get_detected_dates(chat_id)
             
