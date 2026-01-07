@@ -320,6 +320,11 @@ class MessageBufferService:
         self._running = True
         self._cleanup_task = asyncio.create_task(self._cleanup_loop())
         logger.info("📝 Message buffer cleanup task started")
+
+    # Backwards-compatible aliases (older codepaths call these)
+    def start_cleanup_task(self) -> None:
+        """Backward-compatible alias for start_cleanup()."""
+        self.start_cleanup()
     
     def stop_cleanup(self) -> None:
         """Stop background cleanup task."""
@@ -328,6 +333,10 @@ class MessageBufferService:
             self._cleanup_task.cancel()
             self._cleanup_task = None
         logger.info("📝 Message buffer cleanup task stopped")
+
+    def stop_cleanup_task(self) -> None:
+        """Backward-compatible alias for stop_cleanup()."""
+        self.stop_cleanup()
     
     async def _cleanup_loop(self) -> None:
         """Background task to clean up expired messages."""
