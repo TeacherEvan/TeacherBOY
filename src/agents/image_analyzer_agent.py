@@ -476,7 +476,6 @@ class ImageAnalyzerAgent(BaseAgent):
                     to=target,
                     messages=[text_msg],
                     notificationDisabled=False,
-                    customAggregationUnits=None,
                 ),
             )
         
@@ -657,7 +656,6 @@ class ImageAnalyzerAgent(BaseAgent):
                         to=target,
                         messages=[msg],
                         notificationDisabled=False,
-                        customAggregationUnits=None,
                     ),
                 )
                 logger.info(f"📅 Offered calendar integration for {len(detected_dates)} dates in chat {chat_id}")
@@ -770,21 +768,68 @@ class ImageAnalyzerAgent(BaseAgent):
             # Import and call calendar agent to start extraction flow
             try:
                 from src.agents.calendar_agent import CalendarAgent
+                from datetime import datetime
                 
                 # Find calendar agent from the router or create one
                 # For now, we'll create a new instance since it's stateless
                 calendar_agent = CalendarAgent()
+
+                # Convert detected date strings into CalendarAgent-compatible extracted_dates
+                extracted_dates = []
+                for d in detected_dates:
+                    raw_date = (d.get("date") or "").strip()
+                    title = str(d.get("title") or "Event")
+                    description = str(d.get("description") or "")
+
+                    try:
+                        parsed_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
+                    except Exception:
+                        continue
+
+                    extracted_dates.append(
+                        {
+                            "date": parsed_date,
+                            "title": title,
+                            "description": description,
+                        }
+                    )
+
+                if not extracted_dates:
+                    msg = TextMessage(
+                        text=(
+                            "❌ I couldn't parse any dates to add to calendar.\n\n"
+                            "Please try again or use 'zeus add [date] [title]'."
+                        ),
+                        quickReply=None,
+                        quoteToken=None,
+                    )
+                    if event.reply_token:
+                        await asyncio.to_thread(
+                            line_bot_api.reply_message,
+                            ReplyMessageRequest(
+                                replyToken=event.reply_token,
+                                messages=[msg],
+                                notificationDisabled=False,
+                            ),
+                        )
+                    return True
                 
                 # Start the extraction flow with detected dates
                 await calendar_agent.start_extraction_flow_from_image(
-                    event=event,
-                    detected_dates=detected_dates,
-                    user_id=user_id,
                     chat_id=chat_id,
-                    line_bot_api=line_bot_api,
+                    user_id=user_id,
+                    extracted_dates=extracted_dates,
+                    is_friend=bool(is_friend),
+                )
+
+                # Prompt for the first extracted date immediately.
+                await calendar_agent._prompt_extracted_date(
+                    event, line_bot_api, extracted_dates[0]
                 )
                 
-                logger.info(f"📅 Started calendar extraction flow for {len(detected_dates)} dates in chat {chat_id}")
+                logger.info(
+                    f"📅 Started calendar extraction flow for {len(extracted_dates)} dates in chat {chat_id}"
+                )
                 return True
                 
             except Exception as e:
@@ -981,7 +1026,6 @@ class ImageAnalyzerAgent(BaseAgent):
                         to=target,
                         messages=[msg],
                         notificationDisabled=False,
-                        customAggregationUnits=None,
                     ),
                 )
             except Exception as e:

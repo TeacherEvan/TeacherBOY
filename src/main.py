@@ -324,7 +324,7 @@ async def lifespan(app: FastAPI):
 
     # Register Calendar Agent (Priority: 6 - Handles calendar/reminder commands)
     if settings.is_calendar_configured():
-        calendar_agent = CalendarAgent()
+        calendar_agent = CalendarAgent(calendar_service=calendar_service)
         agent_router.register_agent(calendar_agent)
         logger.info("📅 Calendar Agent registered (events and reminders)")
     else:

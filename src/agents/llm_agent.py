@@ -326,7 +326,6 @@ class LLMAgent(BaseAgent):
                     to=to_user_id,
                     messages=[TextMessage(text=text, quickReply=None, quoteToken=None)],
                     notificationDisabled=False,
-                    customAggregationUnits=[],
                 )
             )
             return True
@@ -771,7 +770,6 @@ class LLMAgent(BaseAgent):
                         to=target_id,
                         messages=[TextMessage(text=message, quickReply=None, quoteToken=None)],
                         notificationDisabled=False,
-                        customAggregationUnits=[],
                     ),
                 )
                 logger.info(f"✅ Push message sent successfully to {target_id}")

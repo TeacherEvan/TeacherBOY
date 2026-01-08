@@ -322,7 +322,6 @@ class ProfilerAgent(BaseAgent):
                                 to=target,
                                 messages=[text_msg],
                                 notificationDisabled=False,
-                                customAggregationUnits=None,
                             ),
                         )
 
@@ -473,7 +472,6 @@ class ProfilerAgent(BaseAgent):
                         to=target,
                         messages=[msg],
                         notificationDisabled=False,
-                        customAggregationUnits=None,
                     ),
                 )
             except Exception as e:
