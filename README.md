@@ -9,6 +9,8 @@ app_port: 8000
 
 ## Zeus 👨‍🏫
 
+> **Project Name:** This project is officially called **Zeus** and was formerly known as **TeacherBOY**. You may see both names in various documentation files during this transition period.
+
 **SMOOTH automatic Thai - English translator with Multi-Agent Architecture for LINE.**
 
 Zeus is a high-performance, asynchronous LINE Bot featuring a modular multi-agent system. The Translation Agent provides intelligent Thai/English translation with smart session management. Easily extensible with additional specialized agents.

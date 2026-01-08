@@ -51,7 +51,7 @@
 ### Project Management
 
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history and notable changes
-- **[JOBCARD.md](JOBCARD.md)** - Current development tasks and tracking
+- **Job Card** - See project management tools for active tracking
 - **[CODE_REVIEW.md](CODE_REVIEW.md)** - Comprehensive code review and improvement recommendations
 
 ## 🗂️ Documentation by Category
@@ -62,6 +62,12 @@
 2. **[docs/guides/quickstart.md](docs/guides/quickstart.md)** - Get bot running in 5 steps
 3. **[docs/guides/line-setup.md](docs/guides/line-setup.md)** - Get LINE tokens and configure webhook
 4. **[docs/guides/deployment.md](docs/guides/deployment.md)** - Deploy to production
+
+### 🔒 Security & Compliance
+
+- **[SECURITY.md](SECURITY.md)** - Security policy, vulnerability reporting, best practices
+- **[docs/IMAGE_PRIVACY.md](docs/IMAGE_PRIVACY.md)** - Image handling privacy and security
+- **[docs/REPLY_TOKEN_FIX.md](docs/REPLY_TOKEN_FIX.md)** - Reply token security fix documentation
 
 ### 👨‍💻 For Developers
 
@@ -75,6 +81,12 @@
 1. **[docs/ADMIN_QUICK_START.md](docs/ADMIN_QUICK_START.md)** - Set up admin access
 2. **[docs/ADMIN_COMMANDS.md](docs/ADMIN_COMMANDS.md)** - All admin commands explained
 3. **[docs/guides/admin.md](docs/guides/admin.md)** - Admin operations
+
+### 📋 Documentation Governance
+
+- **[DOCUMENTATION_MAINTENANCE_PROTOCOLS.md](DOCUMENTATION_MAINTENANCE_PROTOCOLS.md)** - Documentation maintenance guidelines and standards
+- **[DOCUMENTATION_DEBT_BACKLOG.md](DOCUMENTATION_DEBT_BACKLOG.md)** - Prioritized backlog of documentation improvements
+- **[DOCUMENTATION_AUDIT_PHASE4_STANDARDIZATION.md](DOCUMENTATION_AUDIT_PHASE4_STANDARDIZATION.md)** - Phase 4 standardization audit report
 
 ### 📰 For News Feature Users
 
@@ -108,4 +120,4 @@ These files remain in the root for backward compatibility but have been supersed
 - Tracing/monitoring: [docs/TRACING.md](docs/TRACING.md)
 - Translation troubleshooting: [docs/INCOMPLETE_SENTENCE_FIX.md](docs/INCOMPLETE_SENTENCE_FIX.md)
 
-Last updated: 2025-12-29
+Last updated: 2026-01-08

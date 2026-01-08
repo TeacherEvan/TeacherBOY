@@ -9,7 +9,7 @@ Search results are injected into the context so Zeus can reason about live data.
 import asyncio
 import logging
 import re
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
     MessagingApi,
@@ -112,7 +112,7 @@ class LLMAgent(BaseAgent):
         # Keep legacy reference for admin actions that use llm_service.client
         self.llm_service = openrouter_service
 
-    def _get_configured_provider(self) -> tuple[Optional[object], str]:
+    def _get_configured_provider(self) -> tuple[Optional[Any], str]:
         """
         Get the first configured LLM provider based on priority settings.
         
@@ -237,12 +237,12 @@ class LLMAgent(BaseAgent):
         """Extract chat ID from event for conversation memory."""
         source = event.source
         if source:
-            if hasattr(source, "group_id") and source.group_id:
-                return f"group_{source.group_id}"
-            if hasattr(source, "room_id") and source.room_id:
-                return f"room_{source.room_id}"
-            if hasattr(source, "user_id") and source.user_id:
-                return f"user_{source.user_id}"
+            if hasattr(source, "group_id") and source.group_id:  # type: ignore[attr-defined]
+                return f"group_{source.group_id}"  # type: ignore[attr-defined]
+            if hasattr(source, "room_id") and source.room_id:  # type: ignore[attr-defined]
+                return f"room_{source.room_id}"  # type: ignore[attr-defined]
+            if hasattr(source, "user_id") and source.user_id:  # type: ignore[attr-defined]
+                return f"user_{source.user_id}"  # type: ignore[attr-defined]
         return "unknown"
 
     def get_priority(self) -> int:
@@ -733,12 +733,13 @@ class LLMAgent(BaseAgent):
                             "The gods are working to restore order."
                         )
                     )
-                except Exception:
+                except Exception as reply_error:
                     # If replying fails (e.g., invalid reply token), still treat as handled
-                    pass
+                    # The _send_reply method already tries push message as fallback
+                    logger.warning(f"⚠️ Could not send error message: {reply_error}")
                 return True
 
-    def _get_fallback_provider(self, primary_name: str) -> tuple[Optional[object], str]:
+    def _get_fallback_provider(self, primary_name: str) -> tuple[Optional[Any], str]:
         """Get fallback provider if primary fails."""
         if primary_name == "GitHub Models" and self.openrouter_service.is_configured():
             return self.openrouter_service, "OpenRouter"
@@ -747,13 +748,35 @@ class LLMAgent(BaseAgent):
         return None, ""
 
     async def _send_reply(self, event: MessageEvent, line_bot_api: MessagingApi, message: str):
-        """Send text reply."""
-        if event.reply_token:
-            await asyncio.to_thread(
-                line_bot_api.reply_message,
-                ReplyMessageRequest(
-                    replyToken=event.reply_token,
-                    messages=[TextMessage(text=message, quickReply=None, quoteToken=None)],
-                    notificationDisabled=False,
-                ),
+        """Send text message using push_message (robust for async processing)."""
+        import datetime
+
+        current_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        logger.info(f"📤 Attempting to send message at {current_time}, message length: {len(message)}")
+
+        # Extract target ID from event source
+        target_id = None
+        if event.source:
+            target_id = (
+                getattr(event.source, "group_id", None) or
+                getattr(event.source, "room_id", None) or
+                getattr(event.source, "user_id", None)
             )
+
+        if target_id:
+            try:
+                await asyncio.to_thread(
+                    line_bot_api.push_message,
+                    PushMessageRequest(
+                        to=target_id,
+                        messages=[TextMessage(text=message, quickReply=None, quoteToken=None)],
+                        notificationDisabled=False,
+                        customAggregationUnits=[],
+                    ),
+                )
+                logger.info(f"✅ Push message sent successfully to {target_id}")
+            except Exception as e:
+                logger.error(f"❌ Push message failed: {e}", exc_info=True)
+                raise
+        else:
+            logger.error("❌ Cannot send message: no target ID available")

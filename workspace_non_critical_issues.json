@@ -1,0 +1,48 @@
+{
+  "metadata": {
+    "description": "Non-critical workspace issues for tracking and future resolution",
+    "created": "2026-01-08T06:29:00.000Z",
+    "version": "1.0"
+  },
+  "issues": [
+    {
+      "file": ".github/copilot-instructions.md",
+      "type": "warning",
+      "description": "File reference warnings - multiple files not found by Copilot/VSCode",
+      "details": [
+        "File '../src/main.py' not found",
+        "File '../src/agents/agent_router.py' not found",
+        "File '../src/agents/base_agent.py' not found",
+        "File '../src/agents/translation_agent.py' not found",
+        "File '../src/services/privilege_service.py' not found",
+        "File '../src/main.py' not found",
+        "File '../src/handlers/message_handler.py' not found",
+        "File '../src/agents/news_agent.py' not found",
+        "File '../src/utils/text_preprocessing.py' not found",
+        "File '../pytest.ini' not found",
+        "File '../docs/TRACING.md' not found",
+        "File '../src/utils/tracing.py' not found",
+        "File '../src/main.py' not found",
+        "File '../src/agents/agent_router.py' not found",
+        "File '../src/agents/base_agent.py' not found",
+        "File '../src/config.py' not found",
+        "File '../src/agents/profiler_agent.py' not found",
+        "File '../src/services/profiler_service.py' not found",
+        "File '../src/services/github_models_service.py' not found",
+        "File '../src/agents/calendar_agent.py' not found",
+        "File '../src/services/calendar_service.py' not found",
+        "File '../src/services/calendar_session_manager.py' not found",
+        "File '../src/services/message_buffer_service.py' not found",
+        "File '../src/services/date_extraction_service.py' not found",
+        "File '../src/handlers/message_handler.py' not found",
+        "File '../src/services/google_translation.py' not found",
+        "File '../src/services/translation_service.py' not found",
+        "File '../src/utils/text_preprocessing.py' not found",
+        "File '../src/services/news_data_service.py' not found",
+        "File '../src/config.py' not found"
+      ],
+      "impact": "low",
+      "resolution": "Verify file paths are correct (they appear to be); may be VSCode/Copilot configuration issue"
+    }
+  ]
+}

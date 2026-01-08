@@ -135,6 +135,38 @@ class HelpAgent(BaseAgent):
                     "available": True
                 }
             ],
+            "Calendar & Reminders": [
+                {
+                    "command": "Zeus calendar",
+                    "description": "View your upcoming events and reminders",
+                    "examples": ["Zeus calendar", "my events", "my reminders"],
+                    "available": settings.is_calendar_configured()
+                },
+                {
+                    "command": "Zeus add event",
+                    "description": "Create event with customizable reminders (7/3/1 days)",
+                    "examples": ["Zeus add event", "Zeus remind me"],
+                    "available": settings.is_calendar_configured()
+                },
+                {
+                    "command": "Zeus add [date] [title]",
+                    "description": "Quick add: Zeus add Jan 15 Birthday party",
+                    "examples": ["Zeus add tomorrow Meeting", "Zeus add 15/01 Conference"],
+                    "available": settings.is_calendar_configured()
+                },
+                {
+                    "command": "Zeus scrape",
+                    "description": "AI-powered date extraction from recent messages",
+                    "examples": ["Zeus scrape", "Zeus scan messages"],
+                    "available": settings.is_calendar_configured()
+                },
+                {
+                    "command": "Zeus remove event",
+                    "description": "Delete events with multi-select support",
+                    "examples": ["Zeus remove event", "Zeus delete event"],
+                    "available": settings.is_calendar_configured()
+                }
+            ],
             "Image Analysis": [
                 {
                     "command": "Zeus profile",
@@ -194,6 +226,10 @@ class HelpAgent(BaseAgent):
         """Get contextual tips based on user status and chat type."""
         tips = []
 
+        # Interactive tutorial prompts
+        tips.append("📚 Try 'Zeus calendar' to explore the events feature")
+        tips.append("🎓 Use 'Zeus scrape' to see AI date extraction in action")
+        
         if chat_type == "private chat":
             tips.append("💡 In private chats, you can use simple 'help' command")
             if is_admin:
@@ -204,13 +240,24 @@ class HelpAgent(BaseAgent):
         if not is_admin:
             tips.append("🔒 Some features require admin privileges")
             tips.append("📞 Contact admin to request premium access")
+            tips.append("⭐ Premium: Unlimited rate limits + priority features")
+        else:
+            tips.append("👑 Admin perks: No rate limits, all features unlocked")
 
+        # Customization options
+        if settings.is_calendar_configured():
+            tips.append("⚙️ Customize reminder timing: 7/3/1 days or all")
+        
         if settings.is_google_translate_configured():
             tips.append("⚡ Professional Google Translate is active")
         else:
             tips.append("🔄 Using LibreTranslate (free tier)")
 
         tips.append("😴 Bot sleeps after 24h of inactivity - wake with 'Dear Zeus'")
+        
+        # Advanced search tip
+        if settings.is_brave_search_configured():
+            tips.append("🔍 Advanced: 'Zeus search' for web results with AI summary")
 
         return tips
 

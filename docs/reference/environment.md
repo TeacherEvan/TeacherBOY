@@ -83,3 +83,40 @@ Notes:
 - `COLOR_CACHE_TTL_SECONDS`
 - `SUNSET_CACHE_TTL_SECONDS`
 - `FRIEND_CACHE_TTL_SECONDS`
+
+## Calendar & Reminder Configuration
+
+### `CALENDAR_ENABLED`
+
+- **Type:** Boolean
+- **Default:** `true`
+- **Description:** Enable/disable calendar and reminder functionality
+- **Example:** `CALENDAR_ENABLED=true`
+
+### `CALENDAR_REMINDER_HOUR`
+
+- **Type:** Integer
+- **Default:** `8`
+- **Description:** Hour (0-23) for daily calendar reminders in server timezone
+- **Example:** `CALENDAR_REMINDER_HOUR=9`
+
+### `CALENDAR_DATA_PATH`
+
+- **Type:** String
+- **Default:** `./data/calendar`
+- **Description:** Local directory path for calendar event storage
+- **Example:** `CALENDAR_DATA_PATH=./data/calendar`
+
+### `CALENDAR_HF_REPO_ID`
+
+- **Type:** String (Optional)
+- **Default:** `None`
+- **Description:** Hugging Face repository ID for calendar data synchronization (requires HF_TOKEN)
+- **Example:** `CALENDAR_HF_REPO_ID=username/calendar-data`
+
+### `CALENDAR_SYNC_INTERVAL_SECONDS`
+
+- **Type:** Integer
+- **Default:** `300`
+- **Description:** Interval in seconds between Hugging Face sync operations
+- **Example:** `CALENDAR_SYNC_INTERVAL_SECONDS=600`

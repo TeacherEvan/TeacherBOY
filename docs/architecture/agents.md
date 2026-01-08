@@ -8,14 +8,18 @@ The router evaluates agents in ascending priority (lower runs first):
 
 <!-- markdownlint-disable MD060 -->
 
-| Agent            | Priority | Trigger / Notes                                                  |
-| :--------------- | -------: | :--------------------------------------------------------------- |
-| AdminAgent       |        5 | Admin commands (`/admin ...`)                                    |
-| SearchAgent      |        8 | `Zeus search <query>` (DM-only for non-admins)                   |
-| LLMAgent         |        9 | `Zeus <prompt>` (DM-only for non-admins; excludes `Zeus search`) |
-| TranslationAgent |       10 | Default translation behavior                                     |
-| SpecialNewsAgent |       12 | `/special news` (DM-only)                                        |
-| NewsAgent        |       15 | `news` / `ข่าว` (friend-gated in groups)                         |
+| Priority | Agent Class | Trigger Pattern | Description |
+|----------|------------|-----------------|-------------|
+| 1 | `AdminAgent` | `/admin`, `/mod` | Administrative commands, system control |
+| 2 | `TranslationAgent` | `แปล`, `translate`, `แปลว่า` | Thai-English bidirectional translation |
+| 3 | `SpecialNewsAgent` | `ข่าว`, `news`, `🗞️` | Curated news summaries in Thai/English |
+| 4 | `SearchAgent` | `ค้นหา`, `search`, `🔍` | Web search via Brave Search API |
+| 5 | `NewsAgent` | Broader news patterns | Additional news functionality |
+| 6 | `CalendarAgent` | `calendar`, `remind`, `📅` | Event scheduling and reminders |
+| 7 | `ProfilerAgent` | `profile`, `analyze` | Psychological profiling and insights |
+| 8 | `HelpAgent` | `/help`, `Zeus help` | Interactive help and feature discovery |
+| 9 | `ImageAnalyzerAgent` | Image messages | Image analysis and description |
+| 10 | `LLMAgent` | All other patterns | General conversation and fallback |
 
 <!-- markdownlint-enable MD060 -->
 

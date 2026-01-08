@@ -9,12 +9,14 @@ The Admin Agent provides powerful in-chat control commands for authorized admini
 TeacherBOY supports **two levels of privileged access**:
 
 ### 🔐 Admin Users (Full Control)
+
 - **Access:** All `/admin` commands for bot management
 - **News:** Direct news access (bypass translation, unlimited requests)
 - **Rate Limits:** Bypass all rate limits
 - **Use Cases:** Bot owners, system administrators
 
 ### 👥 Moderator Users (News Access Only)
+
 - **Access:** No admin commands (cannot use `/admin`)
 - **News:** Direct news access in all contexts (private chats + groups)
 - **Rate Limits:** Bypass news rate limits
@@ -28,23 +30,24 @@ TeacherBOY supports **two levels of privileged access**:
 ✅ **Highest Priority**: Admin commands are processed before all other agents (Priority 5)  
 ✅ **In-Chat Management**: Control the bot directly from LINE chats  
 ✅ **Session Monitoring**: View active sessions and sleeping chats  
-✅ **Remote Control**: Wake/sleep chats and reset sessions remotely  
+✅ **Remote Control**: Wake/sleep chats and reset sessions remotely
 
 ## Configuration
 
 ### Step 1: Get Your LINE User ID
 
-Your LINE user ID is automatically logged when you send a message to the bot. To find it:
-2. Check the server logs for a line like:
-   ```
-   User ID: U1234567890abcdef
-   ```
+Your LINE user ID is automatically logged when you send a message to the bot. To find it: 2. Check the server logs for a line like:
+
+```
+User ID: U1234567890abcdef
+```
 
 ### Step 2: Configure Access Levels
 
 Edit your `.env` file and add user IDs:
 
 #### Admin Users (Full Control)
+
 ```bash
 # Single admin
 ADMIN_USER_IDS=U1234567890abcdef
@@ -54,6 +57,7 @@ ADMIN_USER_IDS=U1234567890abcdef,U9876543210fedcba
 ```
 
 #### Moderator Users (News Access Only)
+
 ```bash
 # Single moderator
 MODERATOR_USER_IDS=U9876543210fedcba
@@ -77,6 +81,10 @@ uvicorn src.main:app --reload
 ```
 
 You should see in the logs:
+
+```
+✅ AdminAgent initialized with 2 authorized admin(s)
+🔧 Admin Agent registered with 2 authorized admin(s)
 ```
 
 ### Zeus-trigger equivalents (admins)
@@ -87,9 +95,6 @@ If you prefer using the Zeus trigger instead of `/admin ...`, these are supporte
 - `Zeus llm_send <alias> <prompt>`
 - `Zeus send_weather <alias>`
 - `Zeus send the weather to my <alias>`
-✅ AdminAgent initialized with 2 authorized admin(s)
-🔧 Admin Agent registered with 2 authorized admin(s)
-```
 
 ## Available Commands
 
@@ -98,9 +103,11 @@ All admin commands start with `/admin` or `!admin`. Commands are case-insensitiv
 ### 📊 Status & Monitoring
 
 #### `/admin status [chat_id]`
+
 Get current status of a chat.
 
 **Examples:**
+
 ```
 /admin status
 /admin status user_U123456
@@ -108,6 +115,7 @@ Get current status of a chat.
 ```
 
 **Output:**
+
 ```
 📊 Chat Status
 ━━━━━━━━━━━━━━━━
@@ -121,14 +129,17 @@ Chat ID: user_U1234567890abcdef
 ```
 
 #### `/admin sessions`
+
 List all active translation sessions and sleeping chats.
 
 **Example:**
+
 ```
 /admin sessions
 ```
 
 **Output:**
+
 ```
 📊 Active Sessions
 ━━━━━━━━━━━━━━━━
@@ -152,13 +163,16 @@ List all active translation sessions and sleeping chats.
 ### 😴 Sleep Management
 
 #### `/admin sleep [chat_id] [hours]`
+
 Put a chat to sleep (bot ignores all messages).
 
 **Parameters:**
+
 - `chat_id` (optional): Target chat ID. Defaults to current chat.
 - `hours` (optional): Sleep duration in hours (1-168). Default: 24.
 
 **Examples:**
+
 ```
 /admin sleep                    # Sleep current chat for 24h
 /admin sleep 12                # Sleep current chat for 12h
@@ -166,6 +180,7 @@ Put a chat to sleep (bot ignores all messages).
 ```
 
 **Output:**
+
 ```
 😴 Chat user_U1234567890abcdef is now sleeping for 12 hour(s).
 
@@ -173,18 +188,22 @@ Use '/admin wake' to wake early.
 ```
 
 #### `/admin wake [chat_id]`
+
 Wake a sleeping chat (bot starts responding again).
 
 **Parameters:**
+
 - `chat_id` (optional): Target chat ID. Defaults to current chat.
 
 **Examples:**
+
 ```
 /admin wake
 /admin wake user_U123456
 ```
 
 **Output:**
+
 ```
 ☀️ Chat user_U1234567890abcdef has been woken up!
 
@@ -194,18 +213,22 @@ The bot is now ready to translate.
 ### 🔄 Session Control
 
 #### `/admin reset [chat_id]`
+
 Reset a chat to fresh state (ends session, clears history, wakes if sleeping).
 
 **Parameters:**
+
 - `chat_id` (optional): Target chat ID. Defaults to current chat.
 
 **Examples:**
+
 ```
 /admin reset
 /admin reset group_C789012
 ```
 
 **Output:**
+
 ```
 🔄 Chat Reset Complete
 ━━━━━━━━━━━━━━━━
@@ -222,13 +245,14 @@ The chat is now in fresh state!
 ### 💡 Help
 
 #### `/admin` or `/admin help`
+
 Show help message with all available commands.
 
 ---
 
 ## 📨 Outbound Messaging (Admin)
 
-TeacherBOY can **push** messages to specific people (1-on-1 users) *only* if you whitelist them via environment variables.
+TeacherBOY can **push** messages to specific people (1-on-1 users) _only_ if you whitelist them via environment variables.
 
 ### Step 1: Add named recipients
 
@@ -244,6 +268,7 @@ Aliases are case-insensitive.
 ### Step 2: Use admin commands
 
 #### `/admin send <alias> <text>`
+
 Push plain text to a named recipient.
 
 Example:
@@ -253,6 +278,7 @@ Example:
 ```
 
 #### `/admin llm_send <alias> <prompt>`
+
 Uses the OpenRouter LLM to draft a short message, then pushes it.
 
 Example:
@@ -267,6 +293,7 @@ Requirements:
 - (optional) `OPENROUTER_DEFAULT_MODEL`
 
 #### `/admin send_weather <alias>`
+
 Push current Bangkok weather (temperature, PM2.5, rain in next 5h).
 
 Example:
@@ -276,12 +303,14 @@ Example:
 ```
 
 **Example:**
+
 ```
 /admin
 /admin help
 ```
 
 **Output:**
+
 ```
 🔧 Admin Commands
 ━━━━━━━━━━━━━━━━
@@ -319,6 +348,7 @@ TeacherBOY uses the following chat ID formats:
 - **Room chats**: `room_R1234567890abcdef`
 
 You can see chat IDs in:
+
 1. Server logs when messages are received
 2. Output of `/admin status` (shows current chat ID)
 3. Output of `/admin sessions` (shows all active chat IDs)
@@ -419,6 +449,7 @@ A comprehensive test suite (`tests/test_admin_agent.py`) covers:
 - ✅ Priority system validation
 
 Run tests:
+
 ```bash
 pytest tests/test_admin_agent.py -v
 ```
@@ -428,6 +459,7 @@ pytest tests/test_admin_agent.py -v
 ### Admin commands not working?
 
 1. **Check ADMIN_USER_IDS is set**:
+
    ```bash
    echo $ADMIN_USER_IDS
    ```
@@ -438,6 +470,7 @@ pytest tests/test_admin_agent.py -v
    - Compare with ADMIN_USER_IDS
 
 3. **Check bot logs for errors**:
+
    ```bash
    docker logs teacherboy-app-1 | grep -i admin
    ```
