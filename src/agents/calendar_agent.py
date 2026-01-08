@@ -436,7 +436,7 @@ class CalendarAgent(BaseAgent):
             )
             return True
 
-        events = await self._calendar_service.get_user_events(user_id)
+        events = self._calendar_service.get_user_events(user_id)
 
         if not events:
             await self._send_message(
@@ -816,7 +816,7 @@ class CalendarAgent(BaseAgent):
                 return True
 
             # Create the event
-            new_event = await self._calendar_service.add_event(
+            new_event = self._calendar_service.add_event(
                 user_id=user_id,
                 chat_id=chat_id,
                 title=event_data["title"],
@@ -878,7 +878,7 @@ class CalendarAgent(BaseAgent):
             )
             return True
 
-        events = await self._calendar_service.get_user_events(user_id)
+        events = self._calendar_service.get_user_events(user_id)
 
         if not events:
             await self._send_message(
@@ -1004,7 +1004,7 @@ class CalendarAgent(BaseAgent):
                 return True
 
             # Remove events
-            removed_count = await self._calendar_service.remove_events_by_ids(event_ids)
+            removed_count = self._calendar_service.remove_events_by_ids(event_ids)
             
             calendar_session_manager.end_session(chat_id)
             
@@ -1143,7 +1143,7 @@ class CalendarAgent(BaseAgent):
             
             if event_data and self._calendar_service and user_id:
                 # Create the event
-                await self._calendar_service.add_event(
+                self._calendar_service.add_event(
                     user_id=user_id,
                     chat_id=chat_id,
                     title=event_data["title"],
@@ -1451,7 +1451,7 @@ class CalendarAgent(BaseAgent):
         
         if event_data and self._calendar_service and user_id:
             # Create the event
-            await self._calendar_service.add_event(
+            self._calendar_service.add_event(
                 user_id=user_id,
                 chat_id=chat_id,
                 title=event_data["title"],
@@ -1647,7 +1647,7 @@ class CalendarAgent(BaseAgent):
                 return True
 
             # Create the event
-            new_event = await self._calendar_service.add_event(
+            new_event = self._calendar_service.add_event(
                 user_id=user_id,
                 chat_id=chat_id,
                 title=session.inline_event_data["title"],
@@ -1727,7 +1727,11 @@ class CalendarAgent(BaseAgent):
             from dateutil.parser import ParserError
             
             try:
-                parsed = date_parser.parse(text, dayfirst=True, fuzzy=True)
+                # IMPORTANT: Pass default=today to ensure missing year/month/day
+                # components use the CURRENT date, not a stale cached value.
+                # Without this, dateutil may use the year from when it was imported.
+                default_dt = datetime.now(BANGKOK_TZ)
+                parsed = date_parser.parse(text, dayfirst=True, fuzzy=True, default=default_dt)
                 return parsed.date()
             except (ParserError, ValueError):
                 pass
