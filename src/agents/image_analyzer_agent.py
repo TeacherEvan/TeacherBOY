@@ -476,6 +476,7 @@ class ImageAnalyzerAgent(BaseAgent):
                     to=target,
                     messages=[text_msg],
                     notificationDisabled=False,
+                    customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
                 ),
             )
         
@@ -656,6 +657,7 @@ class ImageAnalyzerAgent(BaseAgent):
                         to=target,
                         messages=[msg],
                         notificationDisabled=False,
+                        customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
                     ),
                 )
                 logger.info(f"📅 Offered calendar integration for {len(detected_dates)} dates in chat {chat_id}")
@@ -820,11 +822,8 @@ class ImageAnalyzerAgent(BaseAgent):
                     user_id=user_id,
                     extracted_dates=extracted_dates,
                     is_friend=bool(is_friend),
-                )
-
-                # Prompt for the first extracted date immediately.
-                await calendar_agent._prompt_extracted_date(
-                    event, line_bot_api, extracted_dates[0]
+                    event=event,
+                    line_bot_api=line_bot_api,
                 )
                 
                 logger.info(
@@ -1026,6 +1025,7 @@ class ImageAnalyzerAgent(BaseAgent):
                         to=target,
                         messages=[msg],
                         notificationDisabled=False,
+                        customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
                     ),
                 )
             except Exception as e:

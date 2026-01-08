@@ -222,6 +222,7 @@ class ReminderService:
                 to=target,
                 messages=[text_msg],
                 notificationDisabled=False,
+                customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
             )
             
             await asyncio.to_thread(
@@ -334,6 +335,7 @@ class ReminderService:
                 to=target_id,
                 messages=[text_msg],
                 notificationDisabled=False,
+                customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
             )
             
             await asyncio.to_thread(

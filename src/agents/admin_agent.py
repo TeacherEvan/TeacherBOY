@@ -416,6 +416,7 @@ class AdminAgent(BaseAgent):
                     to=to_user_id,
                     messages=[TextMessage(text=text, quickReply=None, quoteToken=None)],
                     notificationDisabled=False,
+                    customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
                 )
             )
             return True
@@ -546,6 +547,7 @@ class AdminAgent(BaseAgent):
                     to=user_id,
                     messages=[TextMessage(text=text, quickReply=None, quoteToken=None)],
                     notificationDisabled=False,
+                    customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
                 )
             )
             return True

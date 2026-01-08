@@ -322,6 +322,7 @@ class ProfilerAgent(BaseAgent):
                                 to=target,
                                 messages=[text_msg],
                                 notificationDisabled=False,
+                                customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
                             ),
                         )
 
@@ -472,6 +473,7 @@ class ProfilerAgent(BaseAgent):
                         to=target,
                         messages=[msg],
                         notificationDisabled=False,
+                        customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
                     ),
                 )
             except Exception as e:

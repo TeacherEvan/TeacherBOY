@@ -1039,16 +1039,32 @@ class CalendarAgent(BaseAgent):
         chat_id: str,
         user_id: str,
         extracted_dates: List[Dict[str, Any]],
-        is_friend: bool
+        is_friend: bool,
+        event: Optional[MessageEvent] = None,
+        line_bot_api: Optional[MessagingApi] = None,
     ) -> None:
         """
         Start processing dates extracted from an image.
         
         Called by ImageAnalyzerAgent when dates are detected.
+        
+        Args:
+            chat_id: Chat ID where the image was sent
+            user_id: User ID who sent the image
+            extracted_dates: List of detected dates from image analysis
+            is_friend: Whether the user is a friend of the bot
+            event: Optional LINE message event (for sending prompts)
+            line_bot_api: Optional LINE API client (for sending prompts)
         """
         calendar_session_manager.start_extraction_flow(
             chat_id, user_id, extracted_dates, is_friend
         )
+        
+        # If event and line_bot_api provided, prompt for first date
+        if event and line_bot_api and extracted_dates:
+            await self._prompt_extracted_date(
+                event, line_bot_api, extracted_dates[0]
+            )
 
     async def _handle_extracted_date_response(
         self,

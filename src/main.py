@@ -700,7 +700,9 @@ async def webhook(request: Request) -> JSONResponse:
                                 await asyncio.to_thread(
                                     line_bot_api.push_message,
                                     PushMessageRequest(  # type: ignore[call-arg]
-                                        to=user_id, messages=[welcome_msg]
+                                        to=user_id, 
+                                        messages=[welcome_msg],
+                                        customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
                                     ),
                                 )
                                 logger.info(f"✅ Sent welcome message to new friend {user_id}")
