@@ -42,6 +42,7 @@ MESSAGES TO ANALYZE:
 {messages}
 
 TODAY'S DATE: {today}
+CURRENT YEAR: {year}
 
 INSTRUCTIONS:
 1. Look for explicit dates (e.g., "January 15", "15/01/2025", "next Friday")
@@ -51,11 +52,13 @@ INSTRUCTIONS:
 5. Only extract dates that are clearly mentioned - don't invent events
 6. Ignore past dates (before today)
 7. Parse Thai dates and Thai language events if present
+8. ALWAYS use the actual year number (e.g., {year}), NEVER use "YYYY" as a placeholder
+9. If the year is not specified, use {year} for future dates or {next_year} for dates that have passed this year
 
 OUTPUT FORMAT (JSON array):
 [
   {{
-    "date": "YYYY-MM-DD",
+    "date": "{year}-01-15",
     "title": "Short event title (max 50 chars)",
     "description": "Optional longer description",
     "source_text": "Original message text this was extracted from",
@@ -127,9 +130,12 @@ class DateExtractionService:
         )
         
         today = datetime.now(BANGKOK_TZ).date()
+        current_year = today.year
         prompt = EXTRACTION_PROMPT.format(
             messages=numbered_messages,
             today=today.isoformat(),
+            year=current_year,
+            next_year=current_year + 1,
         )
         
         try:

@@ -27,6 +27,7 @@ import base64
 import re
 import json
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Optional, List, Dict, Any
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, ImageMessageContent
 from linebot.v3.messaging import (
@@ -493,6 +494,12 @@ class ImageAnalyzerAgent(BaseAgent):
     def _build_vision_message(self, image_data_url: str, question: str) -> list:
         """Build the vision API message structure."""
         
+        # Get today's date in Bangkok timezone for accurate year inference
+        bangkok_tz = ZoneInfo("Asia/Bangkok")
+        today = datetime.now(bangkok_tz)
+        today_str = today.strftime("%B %d, %Y")  # e.g., "January 8, 2026"
+        current_year = today.year
+        
         system_prompt = (
             "You are Zeus, the king of the Olympian gods. "
             "You speak with measured wisdom and authority, but with warmth befitting a benevolent ruler. "
@@ -500,12 +507,14 @@ class ImageAnalyzerAgent(BaseAgent):
             "Be direct and insightful. Keep responses concise but complete. "
             "For menus, signs, or text: translate and explain if in another language. "
             "For products or items: describe what you see and provide recommendations if asked.\n\n"
+            f"TODAY'S DATE: {today_str} (Year: {current_year})\n\n"
             "IMPORTANT: If you detect any dates, deadlines, events, or schedules in the image, "
             "always include a section at the end of your response with the following format:\n"
             "---DATES_DETECTED---\n"
-            "[{\"date\": \"YYYY-MM-DD\", \"title\": \"Event title\", \"description\": \"Brief description\"}]\n"
+            '[{"date": "2026-01-15", "title": "Event title", "description": "Brief description"}]\n'
             "---END_DATES---\n"
-            "Use ISO format (YYYY-MM-DD) for dates. If the year is not specified, assume the current or next occurrence. "
+            f"Use ISO format (YYYY-MM-DD) for dates. ALWAYS use the actual year number (e.g., {current_year}), never 'YYYY' as a placeholder. "
+            f"If the year is not specified in the image, use {current_year} for dates that haven't passed yet, or {current_year + 1} for dates earlier in the year that have already passed. "
             "Only include this section if you actually find date-related information in the image."
         )
         
