@@ -24,17 +24,20 @@ Zeus agents are inefficiently processing large, monolithic files and frequently 
 ### 1. Modular Prompt Framework System ✅ IMPLEMENTED
 
 **Created:**
+
 - `src/prompts/frameworks/` - Reusable knowledge modules (Ekman FACS, FBI BAU)
 - `src/prompts/builders/vision_builder.py` - Dynamic prompt composition
 - Token-aware framework loading (short/standard/full versions)
 
 **Benefits:**
+
 - 47-82% token reduction depending on analysis depth
 - Quick analysis: 800 tokens (82% ↓ from 4,500)
 - Standard analysis: 1,800 tokens (60% ↓)
 - Full analysis: 2,400 tokens (47% ↓)
 
 **Usage:**
+
 ```python
 from src.prompts.builders import VisionPromptBuilder
 
@@ -51,17 +54,20 @@ quick_prompt = (
 ### 2. Automatic Conversation Summarization ✅ IMPLEMENTED
 
 **Created:**
+
 - `src/services/conversation_summary_service.py` - Rolling summarization
 - Incremental summary updates (append new info to existing summary)
 - Configurable retention of recent messages
 
 **Benefits:**
+
 - 60-70% reduction in conversation memory overhead
 - Maintains semantic context via summaries
 - Scales to unlimited conversation length
 - Uses cheap model (gpt-4o-mini) for cost efficiency
 
 **Usage:**
+
 ```python
 from src.services.conversation_summary_service import conversation_summarizer
 
@@ -78,6 +84,7 @@ summary, recent = await conversation_summarizer.maybe_summarize(
 ### 3. Implementation Files Created
 
 **Core Modules:**
+
 1. `src/prompts/__init__.py` - Package exports
 2. `src/prompts/frameworks/ekman_facs.py` - Facial expression framework (3 versions)
 3. `src/prompts/frameworks/fbi_bau.py` - Behavioral profiling framework (3 versions)
@@ -85,6 +92,7 @@ summary, recent = await conversation_summarizer.maybe_summarize(
 5. `src/services/conversation_summary_service.py` - Automatic summarization
 
 **Documentation:**
+
 1. `PRODUCTIVITY_OPTIMIZATION_PLAN.md` - Comprehensive 47-page implementation guide
 2. `OPTIMIZATION_QUICK_START.md` - Developer quick reference with examples
 
@@ -94,13 +102,13 @@ summary, recent = await conversation_summarizer.maybe_summarize(
 
 ### Token Savings
 
-| Use Case | Before | After | Savings |
-|----------|--------|-------|---------|
-| Vision (quick) | 8,500 | 1,200 | **86%** |
-| Vision (standard) | 8,500 | 3,000 | **65%** |
-| Vision (full) | 8,500 | 4,500 | **47%** |
-| LLM (short conv) | 2,000 | 1,000 | **50%** |
-| LLM (long conv) | 5,000 | 1,500 | **70%** |
+| Use Case          | Before | After | Savings |
+| ----------------- | ------ | ----- | ------- |
+| Vision (quick)    | 8,500  | 1,200 | **86%** |
+| Vision (standard) | 8,500  | 3,000 | **65%** |
+| Vision (full)     | 8,500  | 4,500 | **47%** |
+| LLM (short conv)  | 2,000  | 1,000 | **50%** |
+| LLM (long conv)   | 5,000  | 1,500 | **70%** |
 
 **Average token reduction: 76% across all use cases**
 
@@ -109,6 +117,7 @@ summary, recent = await conversation_summarizer.maybe_summarize(
 ### Cost Savings (Monthly Estimates)
 
 **Assumptions:**
+
 - 1,000 vision API calls/month
 - 5,000 LLM calls/month
 - Current: $105/month
@@ -132,6 +141,7 @@ summary, recent = await conversation_summarizer.maybe_summarize(
 ## Implementation Roadmap
 
 ### ✅ Phase 1: Foundation (COMPLETE)
+
 - [x] Create modular prompt framework system
 - [x] Extract Ekman FACS framework with 3 granularities
 - [x] Extract FBI BAU framework with 3 granularities
@@ -140,6 +150,7 @@ summary, recent = await conversation_summarizer.maybe_summarize(
 - [x] Write comprehensive documentation
 
 ### 🔄 Phase 2: Integration (Next Steps - Week 1)
+
 - [ ] Update ProfilerAgent to use VisionPromptBuilder
 - [ ] Integrate conversation_summary_service into conversation_memory_service
 - [ ] Add configuration options to settings.py
@@ -148,6 +159,7 @@ summary, recent = await conversation_summarizer.maybe_summarize(
 - [ ] Write integration tests for summarization
 
 ### 📋 Phase 3: Testing (Week 2)
+
 - [ ] Test with real images/conversations
 - [ ] Verify output quality matches legacy
 - [ ] Validate token estimates vs. actual usage
@@ -155,6 +167,7 @@ summary, recent = await conversation_summarizer.maybe_summarize(
 - [ ] Monitor metrics (tokens, response time, errors)
 
 ### 🚀 Phase 4: Rollout (Week 3-4)
+
 - [ ] Increase A/B to 25% → 50% → 100%
 - [ ] Update all agents to use new system
 - [ ] Remove legacy monolithic prompts
@@ -166,6 +179,7 @@ summary, recent = await conversation_summarizer.maybe_summarize(
 ## Integration Example
 
 ### Before: Monolithic Approach
+
 ```python
 # profiler_service.py
 MASTER_PROFILING_PROMPT = """...[4,500 tokens of hardcoded frameworks]..."""
@@ -175,6 +189,7 @@ prompt = MASTER_PROFILING_PROMPT  # Always full 4,500 tokens
 ```
 
 ### After: Modular Approach
+
 ```python
 # ProfilerAgent with optimization
 from src.prompts.builders import VisionPromptBuilder
@@ -195,6 +210,7 @@ else:
 ```
 
 **Configuration:**
+
 ```env
 # .env
 USE_OPTIMIZED_PROMPTS=true
@@ -207,12 +223,14 @@ ENABLE_CONVERSATION_SUMMARIZATION=true
 ## Risk Assessment
 
 ### Low Risk ✅
+
 - **Backward compatibility:** Legacy prompts still available
 - **Gradual rollout:** A/B test before full deployment
 - **Reversible:** Feature flags allow instant rollback
 - **Well-tested:** Unit + integration tests validate behavior
 
 ### Mitigations in Place
+
 1. **Quality concern:** Start with "standard" depth, increase if needed
 2. **Summary accuracy:** Keep last 6 messages in full (not summarized)
 3. **Breaking changes:** Maintain legacy code paths during migration
@@ -249,6 +267,7 @@ ENABLE_CONVERSATION_SUMMARIZATION=true
 ## Maintenance Plan
 
 ### Ongoing Tasks
+
 1. **Monitor token estimates** - Validate accuracy monthly
 2. **Update frameworks** - Add new research (e.g., new FACS AUs)
 3. **A/B test variations** - Try different prompt structures
@@ -256,6 +275,7 @@ ENABLE_CONVERSATION_SUMMARIZATION=true
 5. **Optimize thresholds** - Tune summarization triggers based on usage
 
 ### Quarterly Reviews
+
 - Analyze cost savings vs. projections
 - Review token usage patterns
 - Identify further optimization opportunities
@@ -274,11 +294,12 @@ ENABLE_CONVERSATION_SUMMARIZATION=true
    - `src/services/conversation_summary_service.py` - Summarization
 
 3. **Test locally:**
+
    ```bash
    # Enable optimizations
    echo "USE_OPTIMIZED_PROMPTS=true" >> .env.test
    echo "PROFILER_ANALYSIS_DEPTH=quick" >> .env.test
-   
+
    # Run tests
    pytest tests/test_profiler_agent.py -v
    ```
@@ -321,6 +342,7 @@ This optimization provides **immediate, measurable value**:
 ---
 
 **Files Created:**
+
 1. `PRODUCTIVITY_OPTIMIZATION_PLAN.md` - Comprehensive plan (47 pages)
 2. `OPTIMIZATION_QUICK_START.md` - Developer guide
 3. `src/prompts/` - Complete modular framework system

@@ -7,10 +7,12 @@ This guide provides quick reference for Zeus's productivity optimization feature
 ## 📊 Key Features
 
 ### 1. Intelligent Prompt Building
+
 **Service**: `PromptBuilderService`
 **Purpose**: Token-aware prompt construction with priority-based context inclusion
 
 **Quick Start**:
+
 ```python
 from src.services.prompt_builder_service import (
     prompt_builder_service,
@@ -50,6 +52,7 @@ print(f"Estimated cost: ${result.estimated_cost_usd:.4f}")
 ```
 
 **Priority Levels**:
+
 - `0`: Critical (always included)
 - `1`: High priority (system state)
 - `2`: Medium priority (conversation history)
@@ -57,10 +60,12 @@ print(f"Estimated cost: ${result.estimated_cost_usd:.4f}")
 - `4-5`: Optional context (truncated first)
 
 ### 2. Conversation Summarization
+
 **Service**: `ConversationSummarizationService`
 **Purpose**: Automatic compression of long conversations to reduce token costs
 
 **Quick Start**:
+
 ```python
 from src.services.conversation_summarization_service import (
     conversation_summarization_service,
@@ -80,22 +85,23 @@ if await conversation_summarization_service.should_summarize(
         preserve_recent=5,
         model="openai/gpt-4o-mini",
     )
-    
+
     if summary:
         # Create compressed history
         compressed = conversation_summarization_service.create_compressed_history(
             summary=summary,
             recent_messages=messages[-5:],
         )
-        
+
         # Save compressed history
         save_conversation_history(chat_id, compressed)
-        
+
         print(f"Compression: {summary.compression_ratio*100:.1f}%")
         print(f"Saved {summary.original_token_count - summary.compressed_token_count} tokens")
 ```
 
 **When to Summarize**:
+
 - Message count > 50
 - Estimated tokens > 50,000
 - Conversation feels repetitive
@@ -104,6 +110,7 @@ if await conversation_summarization_service.should_summarize(
 ### 3. Token Estimation
 
 **Quick Estimation**:
+
 ```python
 # Rough approximation
 text = "Your content here"
@@ -111,6 +118,7 @@ estimated_tokens = len(text) // 4
 ```
 
 **Model Context Windows**:
+
 - GPT-4o: 128,000 tokens
 - GPT-4o-mini: 128,000 tokens
 - Gemma 2 9B: 8,192 tokens
@@ -118,6 +126,7 @@ estimated_tokens = len(text) // 4
 ### 4. Cost Optimization
 
 **Pricing Reference** (as of Jan 2025):
+
 ```
 GPT-4o:       $2.50 per 1M input tokens
 GPT-4o-mini:  $0.15 per 1M input tokens
@@ -125,6 +134,7 @@ Gemma 2 9B:   Free (GitHub Models)
 ```
 
 **Cost Reduction Strategies**:
+
 1. Use priority-based context inclusion (drop low-priority context)
 2. Summarize long conversations
 3. Use GPT-4o-mini for simple tasks
@@ -141,10 +151,10 @@ from src.services.github_models_service import github_models_service
 
 async def handle_llm_query(user_message: str, chat_id: str):
     """Handle LLM query with optimized prompt building."""
-    
+
     # Get conversation history
     conversation = get_conversation_memory().get_conversation(chat_id)
-    
+
     # Create context blocks
     context_blocks = [
         # System state (high priority)
@@ -153,14 +163,14 @@ async def handle_llm_query(user_message: str, chat_id: str):
             session_data={"chat_id": chat_id},
             priority=1
         ),
-        
+
         # Conversation history (medium priority)
         prompt_builder_service.create_conversation_context(
             messages=conversation.messages,
             max_messages=10,
             priority=2
         ),
-        
+
         # User profile (lower priority - can be dropped)
         prompt_builder_service.create_user_profile_context(
             user_id=get_user_id(chat_id),
@@ -168,7 +178,7 @@ async def handle_llm_query(user_message: str, chat_id: str):
             priority=3
         ),
     ]
-    
+
     # Build optimized prompt
     result = prompt_builder_service.build_prompt(
         system_prompt=settings.llm_system_prompt,
@@ -177,13 +187,13 @@ async def handle_llm_query(user_message: str, chat_id: str):
         max_tokens=128000,
         reserve_tokens=2000,
     )
-    
+
     # Log optimization results
     logger.info(
         f"Prompt optimized: {result.total_tokens} tokens, "
         f"${result.estimated_cost_usd:.4f} estimated cost"
     )
-    
+
     # Send to LLM
     response = await github_models_service.chat_completion(
         messages=[
@@ -193,7 +203,7 @@ async def handle_llm_query(user_message: str, chat_id: str):
         model="openai/gpt-4o-mini",
         temperature=1.15,
     )
-    
+
     return response
 ```
 
@@ -206,10 +216,10 @@ from src.services.conversation_summarization_service import (
 
 async def manage_conversation_memory(chat_id: str):
     """Automatically manage conversation memory with summarization."""
-    
+
     memory_service = get_conversation_memory()
     conversation = memory_service.get_conversation(chat_id)
-    
+
     # Check if summarization needed
     if await conversation_summarization_service.should_summarize(
         messages=conversation.messages,
@@ -217,24 +227,24 @@ async def manage_conversation_memory(chat_id: str):
         message_threshold=50,
     ):
         logger.info(f"Summarizing conversation for {chat_id}")
-        
+
         # Summarize
         summary = await conversation_summarization_service.summarize_conversation(
             messages=conversation.messages,
             preserve_recent=5,
             model="openai/gpt-4o-mini",
         )
-        
+
         if summary:
             # Create compressed history
             compressed = conversation_summarization_service.create_compressed_history(
                 summary=summary,
                 recent_messages=conversation.messages[-5:],
             )
-            
+
             # Update memory service
             memory_service.replace_conversation(chat_id, compressed)
-            
+
             logger.info(
                 f"Conversation compressed: "
                 f"{summary.original_message_count} → {len(compressed)} messages, "
@@ -247,11 +257,13 @@ async def manage_conversation_memory(chat_id: str):
 ### Token Reduction
 
 **Before Optimization**:
+
 - Average prompt: 8,000 tokens
 - Long conversation: 50,000 tokens
 - Cost per query: $0.40
 
 **After Optimization**:
+
 - Average prompt: 3,000 tokens (62% reduction)
 - Long conversation: 5,000 tokens (90% reduction)
 - Cost per query: $0.08 (80% cost reduction)
@@ -259,11 +271,13 @@ async def manage_conversation_memory(chat_id: str):
 ### Latency Impact
 
 **Priority-based Context**:
+
 - Reduces unnecessary context → faster LLM processing
 - Smaller prompts → lower network latency
 - **Typical improvement**: 20-30% faster responses
 
 **Conversation Summarization**:
+
 - Prevents context window overflow
 - Maintains conversation continuity
 - **Typical improvement**: 70-90% token reduction in long conversations
@@ -273,6 +287,7 @@ async def manage_conversation_memory(chat_id: str):
 ### Environment Variables
 
 Add to `.env`:
+
 ```env
 # Prompt optimization
 PROMPT_MAX_TOKENS=128000
@@ -303,6 +318,7 @@ conversation_summarization_service.set_llm_service(github_models_service)
 ### Issue: Prompts Still Too Large
 
 **Solution**: Adjust context priorities
+
 ```python
 # Increase priority numbers to make content more droppable
 context_blocks = [
@@ -313,6 +329,7 @@ context_blocks = [
 ### Issue: Important Context Being Dropped
 
 **Solution**: Lower priority numbers
+
 ```python
 # Use priority 0 or 1 for critical context
 context_blocks = [
@@ -323,6 +340,7 @@ context_blocks = [
 ### Issue: Summaries Losing Important Details
 
 **Solution**: Increase preserve_recent count
+
 ```python
 summary = await conversation_summarization_service.summarize_conversation(
     messages=messages,
@@ -348,6 +366,7 @@ summary = await conversation_summarization_service.summarize_conversation(
 ## 📊 Success Metrics
 
 Track these KPIs to measure optimization impact:
+
 - Average tokens per query
 - Cost per query
 - Response latency (p50, p95)
