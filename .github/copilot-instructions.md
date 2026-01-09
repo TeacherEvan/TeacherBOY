@@ -107,49 +107,53 @@ Note to Agent: Do NOT automatically fetch these files. This is a map for situati
 
 ## Architecture & Flow
 
-- **Entry Point:** [`src/main.py`](../src/main.py) - FastAPI app with `lifespan` startup, `/webhook` endpoint, and shared `httpx.AsyncClient`.
-- **Webhook Flow:** Validate LINE signature → Skip self-messages (`bot_user_id`) → Route text via [`src/agents/agent_router.py`](../src/agents/agent_router.py).
+- **Entry Point:** `src/main.py`(../src/main.py) - FastAPI app with `lifespan` startup, `/webhook` endpoint, and shared `httpx.AsyncClient`.
+- **Webhook Flow:** Validate LINE signature → Skip self-messages (`bot_user_id`) → Route text via `src/agents/agent_router.py`(../src/agents/agent_router.py).
 - **Agent Routing:** First-match wins in ascending `get_priority()` order; only one agent handles a message.
 
 ## Agent Conventions
 
-- Implement agents by subclassing [`src/agents/base_agent.py`](../src/agents/base_agent.py) with async `should_handle()` and `handle()`.
-- Choose priorities carefully: <10 preempts translation; default translation is [`src/agents/translation_agent.py`](../src/agents/translation_agent.py) at 10.
-- Runtime admin tracking via [`src/services/privilege_service.py`](../src/services/privilege_service.py) (used by `/admin claim …`).
+- Implement agents by subclassing `src/agents/base_agent.py`(../src/agents/base_agent.py) with async `should_handle()` and `handle()`.
+- Choose priorities carefully: <10 preempts translation; default translation is `src/agents/translation_agent.py`(../src/agents/translation_agent.py) at 10.
+- Runtime admin tracking via 'src/services/privilege_service.py`(../src/services/privilege_service.py) (used by `/admin claim …`).
 
 ## LINE + Async I/O Rules
 
-- LINE SDK v3 calls are synchronous; wrap in `await asyncio.to_thread(...)` in async code (see [`src/main.py`](../src/main.py)).
+- LINE SDK v3 calls are synchronous; wrap in `await asyncio.to_thread(...)` in async code (see [`src/main.py`(../src/main.py)).
 - Reuse the singleton `httpx.AsyncClient` from `lifespan`; do not create new instances.
 
 ## Feature-Specific Gotchas
 
-- Do not modify [`src/handlers/message_handler.py`](../src/handlers/message_handler.py) for production; it's legacy (use agent router).
-- News is stateful and friend-gated: Groups/rooms require friend check via LINE `get_profile`; non-friends get translation trigger only (see [`src/agents/news_agent.py`](../src/agents/news_agent.py)).
-- Translation uses preprocessing: Preserve parentheses and mark incomplete sentences (see [`src/utils/text_preprocessing.py`](../src/utils/text_preprocessing.py)).
+- Do not modify `src/handlers/message_handler.py`(../src/handlers/message_handler.py) for production; it's legacy (use agent router).
+- News is stateful and friend-gated: Groups/rooms require friend check via LINE `get_profile`; non-friends get translation trigger only (see `src/agents/news_agent.py`(../src/agents/news_agent.py)).
+- Translation uses preprocessing: Preserve parentheses and mark incomplete sentences (see `src/utils/text_preprocessing.py`(../src/utils/text_preprocessing.py)).
 
 ## Testing & Debugging
 
-- Run tests with `pytest` (asyncio enabled in [`pytest.ini`](../pytest.ini)). Prefer single files, e.g., `pytest tests/test_news_agent.py`.
+- Run tests with `pytest` (asyncio enabled in `pytest.ini`(../pytest.ini)). Prefer single files, e.g., `pytest tests/test_news_agent.py`.
 - For env-driven behavior in tests: Agents cache admin IDs in `__init__`; patch module-local `settings` before instantiation.
 
 ## Observability
 
-- Tracing is optional; enable with `ENABLE_TRACING=true` and see [`docs/TRACING.md`](../docs/TRACING.md). Setup in [`src/utils/tracing.py`](../src/utils/tracing.py).
+- Tracing is optional; enable with `ENABLE_TRACING=true` and see `docs/TRACING.md`(../docs/TRACING.md). Setup in `src/utils/tracing.py`(../src/utils/tracing.py).
 
 ## Key Environment Variables
 
 **Required:**
+
 - `LINE_CHANNEL_SECRET`
 - `LINE_CHANNEL_ACCESS_TOKEN`
 
 **Translation:**
+
 - `GOOGLE_TRANSLATE_API_KEY` (primary; fallback to LibreTranslate)
 
 **Search:**
+
 - `BRAVE_SEARCH_API_KEY`
 
 **LLM:**
+
 - `GITHUB_MODELS_PAT` and/or `OPENROUTER_API_KEY`
 - `LLM_PROVIDER_PRIORITY`
 
@@ -160,10 +164,11 @@ Note to Agent: Do NOT automatically fetch these files. This is a map for situati
 **Purpose:** Production LINE bot with async multi-agent architecture. Primary feature: Thai ↔ English translation, with admin commands, news/weather, and LLM Q&A.
 
 **Key Files:**
-- Entry point: [`src/main.py`](../src/main.py) — FastAPI app with `lifespan`, `/webhook`, HTTP client pool
-- Agent dispatch: [`src/agents/agent_router.py`](../src/agents/agent_router.py) — Priority-based routing
-- Base contract: [`src/agents/base_agent.py`](../src/agents/base_agent.py) — Abstract `should_handle()` + async `handle()`
-- Settings: [`src/config.py`](../src/config.py) — Pydantic settings with validation
+
+- Entry point: `src/main.py`](../src/main.py) — FastAPI app with `lifespan`, `/webhook`, HTTP client pool
+- Agent dispatch: 'src/agents/agent_router.py`(../src/agents/agent_router.py) — Priority-based routing
+- Base contract: `src/agents/base_agent.py`(../src/agents/base_agent.py) — Abstract `should_handle()` + async `handle()`
+- Settings: `src/config.py`(../src/config.py) — Pydantic settings with validation
 
 ## 🔄 Webhook Flow
 
@@ -180,6 +185,7 @@ First agent with should_handle()=True wins → Call handle()
 ```
 
 **Critical Notes:**
+
 - Agents run in **ascending** `get_priority()` order; first match wins.
 - All agent methods must be `async def`.
 
@@ -235,9 +241,9 @@ PROFILER_RATE_LIMIT_PER_HOUR=3          # API cost protection
 
 **Key Files:**
 
-- [src/agents/profiler_agent.py](../src/agents/profiler_agent.py) — Agent handling image messages
-- [src/services/profiler_service.py](../src/services/profiler_service.py) — Profiling logic and prompts
-- [src/services/github_models_service.py](../src/services/github_models_service.py) — `chat_completion_with_vision()` method
+- src/agents/profiler_agent.py(../src/agents/profiler_agent.py) — Agent handling image messages
+- src/services/profiler_service.py(../src/services/profiler_service.py) — Profiling logic and prompts
+- src/services/github_models_service.py(../src/services/github_models_service.py) — `chat_completion_with_vision()` method
 
 **Disclaimer:** Educational/entertainment purposes only.
 
@@ -284,13 +290,12 @@ The CalendarAgent manages events and reminders with multi-step flows, AI-powered
 
 **Key Files:**
 
-- [src/agents/calendar_agent.py](../src/agents/calendar_agent.py) — Agent with triggers and handlers
-- [src/services/calendar_service.py](../src/services/calendar_service.py) — Event storage and retrieval
-- [src/services/calendar_session_manager.py](../src/services/calendar_session_manager.py) — Multi-step flow state machine
-- [src/services/message_buffer_service.py](../src/services/message_buffer_service.py) — Local message storage for scrape
-- [src/services/date_extraction_service.py](../src/services/date_extraction_service.py) — AI-powered date extraction
-
-**Configuration:**
+- src/agents/calendar_agent.py(../src/agents/calendar_agent.py) — Agent with triggers and handlers
+- src/services/calendar_service.py(../src/services/calendar_service.py) — Event storage and retrieval
+- src/services/calendar_session_manager.py(../src/services/calendar_session_manager.py) — Multi-step flow state machine
+- src/services/message_buffer_service.py(../src/services/message_buffer_service.py) — Local message storage for scrape
+- src/services/date_extraction_service.py(../src/services/date_extraction_service.py) — AI-powered date extraction
+  **Configuration:**
 
 ```env
 CALENDAR_ENABLED=true                    # Enable/disable feature
@@ -375,19 +380,19 @@ def _is_admin(self, user_id: Optional[str]) -> bool:
 
 ## 🌐 Translation Provider Stack
 
-1. **Primary:** Google Translate ([src/services/google_translation.py](../src/services/google_translation.py)) — auto-retry via `@with_retry()`
-2. **Fallback:** LibreTranslate ([src/services/translation_service.py](../src/services/translation_service.py))
-3. **Text preprocessing:** Parentheses preserved, incomplete sentence detection in [src/utils/text_preprocessing.py](../src/utils/text_preprocessing.py)
+1. **Primary:** Google Translate (src/services/google_translation.py) — auto-retry via `@with_retry()`
+2. **Fallback:** LibreTranslate (src/services/translation_service.py)
+3. **Text preprocessing:** Parentheses preserved, incomplete sentence detection in src/utils/text_preprocessing.py
 
 ## 📊 Data Services
 
-| Service                                                                      | API              | Cache TTL |
-| ---------------------------------------------------------------------------- | ---------------- | --------- |
-| Weather/PM2.5 ([news_data_service.py](../src/services/news_data_service.py)) | Open-Meteo       | 30 min    |
-| Holidays                                                                     | `holidays` lib   | 7 days    |
-| Crypto (BTC/ETH/USDT)                                                        | CoinGecko        | 5 min     |
-| Exchange rates                                                               | ExchangeRate-API | 1 hour    |
-| News headlines                                                               | Bangkok Post RSS | 1 hour    |
+| Service                                                                    | API              | Cache TTL |
+| -------------------------------------------------------------------------- | ---------------- | --------- |
+| Weather/PM2.5 (news_data_service.py(../src/services/news_data_service.py)) | Open-Meteo       | 30 min    |
+| Holidays                                                                   | `holidays` lib   | 7 days    |
+| Crypto (BTC/ETH/USDT)                                                      | CoinGecko        | 5 min     |
+| Exchange rates                                                             | ExchangeRate-API | 1 hour    |
+| News headlines                                                             | Bangkok Post RSS | 1 hour    |
 
 ## 🔧 Environment Variables (Key)
 
@@ -402,7 +407,7 @@ BRAVE_SEARCH_API_KEY                            # Zeus search feature
 LLM_PROVIDER_PRIORITY=github,openrouter         # LLM provider order
 ```
 
-See [src/config.py](../src/config.py) for full list with validation ranges.
+See src/config.py(../src/config.py) for full list with validation ranges.
 
 ## Change Documentation
 
