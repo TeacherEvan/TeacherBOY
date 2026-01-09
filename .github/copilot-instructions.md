@@ -55,6 +55,20 @@ Note to Agent: Do NOT automatically fetch these files. This is a map for situati
 
     Error Handling: All new scraping or API logic must include try-except blocks as per the history_log_service.py pattern.
 
+    **File Access Optimization Guidelines:**
+
+    - **Prevent Token Overuse:** Do not immediately incorporate all files referenced in the context. Only load files when directly relevant to the current task to reduce token consumption and response latency.
+
+    - **Prioritization:** Focus on highly relevant files first (e.g., core agents for agent-related tasks, services for service modifications). Supporting files should be accessed only if needed for dependencies.
+
+    - **Lazy Loading:** Implement lazy loading for optional references—read configuration files or documentation only when explicitly required, not preemptively.
+
+    - **Explicit Criteria for File Selection:** Select files based on task scope: primary files for direct implementation, supporting for integration, optional for edge cases. Avoid reading entire directories unless necessary.
+
+    - **Context Streamlining:** Minimize context usage by providing clear, unambiguous instructions. Eliminate interpretation ambiguities through precise task descriptions and examples.
+
+    - **Performance Optimizations:** Prioritize actions that minimize response latency, such as reading small, targeted files over large ones, and using search tools for specific content rather than full file reads.
+
 **Tests** — Only read if debugging test failures:
 
 - `tests/test_*.py` — Test files (50+ files)
@@ -91,69 +105,83 @@ Note to Agent: Do NOT automatically fetch these files. This is a map for situati
 
 ---
 
-## Architecture & flow
+## Architecture & Flow
 
-- Entry point is [src/main.py](../src/main.py): FastAPI app + `lifespan` startup, `/webhook`, shared `httpx.AsyncClient`.
-- Webhook flow: validate LINE signature → skip self-messages (`bot_user_id`) → route text via [src/agents/agent_router.py](../src/agents/agent_router.py).
-- Agent routing is **first-match wins** in **ascending** `get_priority()`; only one agent should handle a message.
+- **Entry Point:** [`src/main.py`](../src/main.py) - FastAPI app with `lifespan` startup, `/webhook` endpoint, and shared `httpx.AsyncClient`.
+- **Webhook Flow:** Validate LINE signature → Skip self-messages (`bot_user_id`) → Route text via [`src/agents/agent_router.py`](../src/agents/agent_router.py).
+- **Agent Routing:** First-match wins in ascending `get_priority()` order; only one agent handles a message.
 
-## Agent conventions
+## Agent Conventions
 
-- Implement agents by subclassing [src/agents/base_agent.py](../src/agents/base_agent.py) with async `should_handle()` + async `handle()`.
-- Choose priorities carefully: `<10` preempts translation; default translation is [src/agents/translation_agent.py](../src/agents/translation_agent.py) at `10`.
-- Runtime (in-memory) admin is tracked by [src/services/privilege_service.py](../src/services/privilege_service.py) (used by `/admin claim …`).
+- Implement agents by subclassing [`src/agents/base_agent.py`](../src/agents/base_agent.py) with async `should_handle()` and `handle()`.
+- Choose priorities carefully: <10 preempts translation; default translation is [`src/agents/translation_agent.py`](../src/agents/translation_agent.py) at 10.
+- Runtime admin tracking via [`src/services/privilege_service.py`](../src/services/privilege_service.py) (used by `/admin claim …`).
 
-## LINE + async I/O rules
+## LINE + Async I/O Rules
 
-- LINE SDK v3 calls are sync; in async code wrap them with `await asyncio.to_thread(...)` (see patterns in [src/main.py](../src/main.py)).
-- Do not create new `httpx.AsyncClient` instances; reuse the singleton created in `lifespan` and injected into services.
+- LINE SDK v3 calls are synchronous; wrap in `await asyncio.to_thread(...)` in async code (see [`src/main.py`](../src/main.py)).
+- Reuse the singleton `httpx.AsyncClient` from `lifespan`; do not create new instances.
 
-## Feature-specific gotchas
+## Feature-Specific Gotchas
 
-- Do not modify [src/handlers/message_handler.py](../src/handlers/message_handler.py) for production behavior; it’s legacy (agent router is the real path).
-- News is stateful and friend-gated: groups/rooms require friend check via LINE `get_profile`; non-friends (and most private chats) get “trigger translation” only (see [src/agents/news_agent.py](../src/agents/news_agent.py)).
-- Translation uses preprocessing: preserve parentheses + mark incomplete sentences (see [src/utils/text_preprocessing.py](../src/utils/text_preprocessing.py)).
+- Do not modify [`src/handlers/message_handler.py`](../src/handlers/message_handler.py) for production; it's legacy (use agent router).
+- News is stateful and friend-gated: Groups/rooms require friend check via LINE `get_profile`; non-friends get translation trigger only (see [`src/agents/news_agent.py`](../src/agents/news_agent.py)).
+- Translation uses preprocessing: Preserve parentheses and mark incomplete sentences (see [`src/utils/text_preprocessing.py`](../src/utils/text_preprocessing.py)).
 
-## Testing & debugging
+## Testing & Debugging
 
-- Run tests with `pytest` (asyncio mode is enabled in [pytest.ini](../pytest.ini)). Prefer targeting a single file first (e.g. `pytest tests/test_news_agent.py`).
-- When changing env-driven behavior in tests: agents cache admin IDs in `__init__`, and tests often patch **module-local** `settings` before instantiation.
+- Run tests with `pytest` (asyncio enabled in [`pytest.ini`](../pytest.ini)). Prefer single files, e.g., `pytest tests/test_news_agent.py`.
+- For env-driven behavior in tests: Agents cache admin IDs in `__init__`; patch module-local `settings` before instantiation.
 
 ## Observability
 
-- Tracing is optional; enable via `ENABLE_TRACING=true` and see [docs/TRACING.md](../docs/TRACING.md). Tracing setup lives in [src/utils/tracing.py](../src/utils/tracing.py).
+- Tracing is optional; enable with `ENABLE_TRACING=true` and see [`docs/TRACING.md`](../docs/TRACING.md). Setup in [`src/utils/tracing.py`](../src/utils/tracing.py).
 
-## Key env vars (feature gates)
+## Key Environment Variables
 
-- Required: `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`.
-- Translation: `GOOGLE_TRANSLATE_API_KEY` (primary; otherwise LibreTranslate fallback).
-- Search: `BRAVE_SEARCH_API_KEY`.
-- LLM: `GITHUB_MODELS_PAT` and/or `OPENROUTER_API_KEY`, plus `LLM_PROVIDER_PRIORITY`.
+**Required:**
+- `LINE_CHANNEL_SECRET`
+- `LINE_CHANNEL_ACCESS_TOKEN`
+
+**Translation:**
+- `GOOGLE_TRANSLATE_API_KEY` (primary; fallback to LibreTranslate)
+
+**Search:**
+- `BRAVE_SEARCH_API_KEY`
+
+**LLM:**
+- `GITHUB_MODELS_PAT` and/or `OPENROUTER_API_KEY`
+- `LLM_PROVIDER_PRIORITY`
 
 # TeacherBOY — AI Coding Agent Instructions
 
 ## 🎯 Quick Context
 
-**What:** Production LINE bot with async multi-agent architecture. Thai ↔ English translation is the primary feature, with optional admin commands, news/weather data, and LLM Q&A.
+**Purpose:** Production LINE bot with async multi-agent architecture. Primary feature: Thai ↔ English translation, with admin commands, news/weather, and LLM Q&A.
 
-**Key files:**
-
-- Entry point: [src/main.py](../src/main.py) — FastAPI app with `lifespan` context, `/webhook` endpoint, HTTP client pool
-- Agent dispatch: [src/agents/agent_router.py](../src/agents/agent_router.py) — priority-based routing
-- Base contract: [src/agents/base_agent.py](../src/agents/base_agent.py) — abstract `should_handle()` + async `handle()`
-- Settings: [src/config.py](../src/config.py) — Pydantic settings with environment validation
+**Key Files:**
+- Entry point: [`src/main.py`](../src/main.py) — FastAPI app with `lifespan`, `/webhook`, HTTP client pool
+- Agent dispatch: [`src/agents/agent_router.py`](../src/agents/agent_router.py) — Priority-based routing
+- Base contract: [`src/agents/base_agent.py`](../src/agents/base_agent.py) — Abstract `should_handle()` + async `handle()`
+- Settings: [`src/config.py`](../src/config.py) — Pydantic settings with validation
 
 ## 🔄 Webhook Flow
 
 ```
-LINE POST /webhook → Validate signature → Skip bot's own messages (bot_user_id check)
-  ↓
-AgentRouter.route_message() → try agents in priority order (ascending)
-  ↓
-First agent with should_handle()=True wins → calls handle()
+LINE POST /webhook
+    ↓
+Validate signature
+    ↓
+Skip bot's own messages (bot_user_id check)
+    ↓
+AgentRouter.route_message() → Try agents in ascending priority order
+    ↓
+First agent with should_handle()=True wins → Call handle()
 ```
 
-**Critical:** Agents run in **ascending** `get_priority()` order; first match wins. **Async-only** — all agent methods must be `async def`.
+**Critical Notes:**
+- Agents run in **ascending** `get_priority()` order; first match wins.
+- All agent methods must be `async def`.
 
 ## 🤖 Agent Hierarchy
 
@@ -375,3 +403,25 @@ LLM_PROVIDER_PRIORITY=github,openrouter         # LLM provider order
 ```
 
 See [src/config.py](../src/config.py) for full list with validation ranges.
+
+## Change Documentation
+
+### Revision: File Access Guidelines Update
+
+**Date:** 2026-01-09
+
+**Justification:** To optimize AI interactions for efficiency and productivity by reducing token overuse, improving response times, and ensuring targeted file access.
+
+**Changes Made:**
+
+- Added "File Access Optimization Guidelines" subsection under Implementation Guidelines.
+
+- Included guidelines for preventing token overuse, prioritization, lazy loading, explicit criteria, context streamlining, and performance optimizations.
+
+**Examples:**
+
+- For a task to add a new agent: Read only `base_agent.py`, `main.py`, `agent_router.py` initially; load `config.py` only if configuration changes are needed.
+
+- For debugging: Use search tools to find specific error patterns instead of reading entire test files.
+
+**Maintainability Notes:** These guidelines help maintain focused, efficient development sessions by encouraging selective file access, reducing cognitive load and improving overall productivity.
