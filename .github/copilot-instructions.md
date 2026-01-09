@@ -1,122 +1,93 @@
-# TeacherBOY (Zeus) — Copilot Instructions
+🧠 Architectural Overview (Index Only)
 
-## 📑 File Index (Context Optimization)
+Note to Agent: Do NOT automatically fetch these files. This is a map for situational awareness. Only reference specific files when the user explicitly requests them or a specific feature implementation requires it.
+🏗️ Core System
 
-**⚠️ READ THIS FIRST to avoid unnecessary token usage!**
+    Entry Point: src/main.py (FastAPI app & lifecycle)
 
-### 🔍 Quick File Lookup by Feature
+    Routing: src/agents/agent_router.py (Priority-based logic)
 
-<details>
-<summary><b>Core System Files (Start Here)</b></summary>
+    Config: src/config.py (Environment & validation)
 
-- **Entry Point**: [src/main.py](../src/main.py) — FastAPI app, webhook, lifespan
-- **Routing**: [src/agents/agent_router.py](../src/agents/agent_router.py) — Priority-based message routing
-- **Config**: [src/config.py](../src/config.py) — All environment settings with validation
-- **Base Agent**: [src/agents/base_agent.py](../src/agents/base_agent.py) — Abstract class for all agents
+    Base Class: src/agents/base_agent.py
 
-</details>
+🤖 Agent Registry (Priority Order)
 
-<details>
-<summary><b>Agents (by Priority)</b></summary>
+    Help: src/agents/help_agent.py (P5)
 
-1. **Priority 5**: [src/agents/help_agent.py](../src/agents/help_agent.py) — Contextual help
-2. **Priority 5**: [src/agents/admin_agent.py](../src/agents/admin_agent.py) — Admin commands
-3. **Priority 6**: [src/agents/calendar_agent.py](../src/agents/calendar_agent.py) — Events & reminders
-4. **Priority 7**: [src/agents/profiler_agent.py](../src/agents/profiler_agent.py) — Image psychological profiling
-5. **Priority 7**: [src/agents/image_analyzer_agent.py](../src/agents/image_analyzer_agent.py) — Image Q&A
-6. **Priority 8**: [src/agents/search_agent.py](../src/agents/search_agent.py) — Web search
-7. **Priority 9**: [src/agents/llm_agent.py](../src/agents/llm_agent.py) — Zeus AI chat
-8. **Priority 10**: [src/agents/translation_agent.py](../src/agents/translation_agent.py) — Thai↔English (default)
-9. **Priority 12**: [src/agents/special_news_agent.py](../src/agents/special_news_agent.py) — Interactive news
-10. **Priority 15**: [src/agents/news_agent.py](../src/agents/news_agent.py) — Weather/headlines
+    Admin: src/agents/admin_agent.py (P5)
 
-</details>
+    Calendar: src/agents/calendar_agent.py (P6)
 
-<details>
-<summary><b>Services (Business Logic)</b></summary>
+    Profiler: src/agents/profiler_agent.py (P7)
 
-**Translation**:
-- [src/services/google_translation.py](../src/services/google_translation.py) — Google Translate (primary)
-- [src/services/translation_service.py](../src/services/translation_service.py) — LibreTranslate (fallback)
-- [src/utils/text_preprocessing.py](../src/utils/text_preprocessing.py) — Parenthesis preservation, incomplete detection
+    Vision: src/agents/image_analyzer_agent.py (P7)
 
-**AI/LLM**:
-- [src/services/github_models_service.py](../src/services/github_models_service.py) — GitHub Models API (primary)
-- [src/services/openrouter_service.py](../src/services/openrouter_service.py) — OpenRouter API (fallback)
-- [src/services/conversation_memory_service.py](../src/services/conversation_memory_service.py) — Multi-turn memory
-- [src/services/conversation_summary_service.py](../src/services/conversation_summary_service.py) — Token reduction
+    Search: src/agents/search_agent.py (P8)
 
-**Vision/Profiling**:
-- [src/services/profiler_service.py](../src/services/profiler_service.py) — Profiling prompts & logic
-- [src/prompts/builders/vision_builder.py](../src/prompts/builders/vision_builder.py) — Modular prompt system
-- [src/prompts/frameworks/ekman_facs.py](../src/prompts/frameworks/ekman_facs.py) — Ekman FACS framework
-- [src/prompts/frameworks/fbi_bau.py](../src/prompts/frameworks/fbi_bau.py) — FBI BAU framework
+    Zeus Chat: src/agents/llm_agent.py (P9)
 
-**Calendar**:
-- [src/services/calendar_service.py](../src/services/calendar_service.py) — Event storage/retrieval
-- [src/services/calendar_session_manager.py](../src/services/calendar_session_manager.py) — Multi-step flows
-- [src/services/reminder_service.py](../src/services/reminder_service.py) — Daily reminder scheduler
-- [src/services/date_extraction_service.py](../src/services/date_extraction_service.py) — AI date parsing
-- [src/services/message_buffer_service.py](../src/services/message_buffer_service.py) — Message history for scrape
+    Translation: src/agents/translation_agent.py (P10)
 
-**News/Data**:
-- [src/services/news_data_service.py](../src/services/news_data_service.py) — Weather, headlines, crypto
-- [src/services/special_news_service.py](../src/services/special_news_service.py) — Thailand news/tourism
-- [src/services/news_session_manager.py](../src/services/news_session_manager.py) — News flow state
+    Special News: src/agents/special_news_agent.py (P12)
 
-**Infrastructure**:
-- [src/services/rate_limiter.py](../src/services/rate_limiter.py) — Rate limiting
-- [src/services/privilege_service.py](../src/services/privilege_service.py) — Admin/moderator checks
-- [src/services/metrics_service.py](../src/services/metrics_service.py) — Performance tracking
-- [src/services/prompt_metrics.py](../src/services/prompt_metrics.py) — Token usage tracking
-- [src/services/scheduler_service.py](../src/services/scheduler_service.py) — Background tasks
-- [src/services/history_log_service.py](../src/services/history_log_service.py) — Event logging
+    General News: src/agents/news_agent.py (P15)
 
-</details>
+⚙️ Business Logic (Services)
 
-<details>
-<summary><b>Session Managers (State Machines)</b></summary>
+    Translation: google_translation.py, translation_service.py
 
-- [src/services/session_manager.py](../src/services/session_manager.py) — Translation session state
-- [src/services/news_session_manager.py](../src/services/news_session_manager.py) — News flow (14+ states)
-- [src/services/calendar_session_manager.py](../src/services/calendar_session_manager.py) — Calendar flow
-- [src/services/profiler_session_manager.py](../src/services/profiler_session_manager.py) — Profiler flow
-- [src/services/image_analyzer_session_manager.py](../src/services/image_analyzer_session_manager.py) — Image Q&A flow
+    AI/LLM: github_models_service.py, openrouter_service.py, conversation_memory_service.py, conversation_summary_service.py
 
-</details>
+    Vision/Profiling: profiler_service.py, vision_builder.py, ekman_facs.py, fbi_bau.py
 
-<details>
-<summary><b>❌ DO NOT READ (Unless Specifically Needed)</b></summary>
+    Calendar/Scheduling: calendar_service.py, calendar_session_manager.py, reminder_service.py, date_extraction_service.py
+
+    News/Data: news_data_service.py, special_news_service.py, news_session_manager.py
+
+    Infrastructure: rate_limiter.py, privilege_service.py, metrics_service.py, scheduler_service.py, history_log_service.py
+
+🛠️ Implementation Guidelines
+
+    Strict Context Management: Do not read files outside the immediate scope of the requested feature.
+
+    Dependency Awareness: When modifying a Service, check if the corresponding Session Manager or Agent needs an update.
+
+    Error Handling: All new scraping or API logic must include try-except blocks as per the history_log_service.py pattern.
 
 **Tests** — Only read if debugging test failures:
+
 - `tests/test_*.py` — Test files (50+ files)
 
 **Documentation** — Only for reference:
+
 - `docs/*.md` — User guides and architecture docs
 - `*.md` files in root — Changelogs, reviews, guides
 
 **Generated/Config** — Rarely need to read:
+
 - `requirements.txt`, `Dockerfile`, `docker-compose.yml`
 - `pytest.ini`, `cspell.json`
 - `data/`, `__pycache__/`, `.env` files
 
 **Deprecated** — Do NOT use:
+
 - [src/handlers/message_handler.py](../src/handlers/message_handler.py) — LEGACY, use agent_router instead
 
 </details>
 
 ### 🎯 Common Tasks → Files Needed
 
-| Task | Primary Files | Supporting Files |
-|------|--------------|------------------|
-| Add new agent | `base_agent.py`, `main.py`, `agent_router.py` | `config.py` for settings |
-| Fix translation | `translation_agent.py`, `google_translation.py` | `text_preprocessing.py` |
-| Debug news flow | `news_agent.py`, `news_session_manager.py` | `news_data_service.py` |
-| Calendar issue | `calendar_agent.py`, `calendar_session_manager.py` | `calendar_service.py`, `reminder_service.py` |
-| Add config setting | `config.py`, `.env.example` | Relevant agent/service file |
-| Profiler optimization | `profiler_agent.py`, `vision_builder.py` | Framework files in `prompts/frameworks/` |
-| Rate limit change | `rate_limiter.py` | Relevant agent file |
-| Admin command | `admin_agent.py` | `privilege_service.py` |
+| Task                  | Primary Files                                      | Supporting Files                             |
+| --------------------- | -------------------------------------------------- | -------------------------------------------- |
+| Add new agent         | `base_agent.py`, `main.py`, `agent_router.py`      | `config.py` for settings                     |
+| Fix translation       | `translation_agent.py`, `google_translation.py`    | `text_preprocessing.py`                      |
+| Debug news flow       | `news_agent.py`, `news_session_manager.py`         | `news_data_service.py`                       |
+| Calendar issue        | `calendar_agent.py`, `calendar_session_manager.py` | `calendar_service.py`, `reminder_service.py` |
+| Add config setting    | `config.py`, `.env.example`                        | Relevant agent/service file                  |
+| Profiler optimization | `profiler_agent.py`, `vision_builder.py`           | Framework files in `prompts/frameworks/`     |
+| Rate limit change     | `rate_limiter.py`                                  | Relevant agent file                          |
+| Admin command         | `admin_agent.py`                                   | `privilege_service.py`                       |
 
 ---
 
