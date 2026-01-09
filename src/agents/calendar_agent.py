@@ -658,6 +658,12 @@ class CalendarAgent(BaseAgent):
             return await self._handle_scrape_reminder_response(
                 event, text, line_bot_api, chat_id, user_id
             )
+        
+        # Add mode selection state (NEW)
+        elif state == CalendarState.ADD_MODE_SELECTION:
+            return await self._handle_add_mode_selection(
+                event, text, line_bot_api, chat_id, user_id
+            )
 
         # Live bulk add from incoming messages
         elif state == CalendarState.LIVE_ADD_LISTENING:
@@ -693,6 +699,66 @@ class CalendarAgent(BaseAgent):
     # =========================================================================
 
     async def _start_live_bulk_add_flow(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str],
+    ) -> bool:
+        """
+        Start live bulk-add mode - intelligently scrapes OR listens.
+        
+        Enhanced logic:
+        1. Check if there are recent messages in buffer
+        2. If yes, offer to scrape them first
+        3. Otherwise, start listening mode for new messages
+        """
+        if not user_id:
+            await self._send_message(
+                event, line_bot_api,
+                "❌ Cannot identify user."
+            )
+            return True
+        
+        # Check if we have recent messages that might contain events
+        recent_messages = message_buffer_service.get_message_texts(chat_id, limit=10)
+        
+        # Filter messages that look event-related
+        event_like_messages = [
+            msg for msg in recent_messages
+            if self._looks_like_event_message(msg)
+        ]
+        
+        if len(event_like_messages) >= 2:  # At least 2 event-like messages
+            # Offer to scrape recent messages
+            msg = (
+                f"🔍 I found {len(event_like_messages)} recent messages that might contain events!\n\n"
+                "Would you like me to:\n\n"
+                "1️⃣ Scan recent messages for dates\n"
+                "2️⃣ Listen for new messages with dates\n"
+                "3️⃣ Manually add an event\n\n"
+                "Reply with 1, 2, or 3"
+            )
+            
+            quick_reply = QuickReply(items=[
+                QuickReplyItem(type="action", action=MessageAction(label="🔍 Scan recent", text="1")),
+                QuickReplyItem(type="action", action=MessageAction(label="🎯 Listen for new", text="2")),
+                QuickReplyItem(type="action", action=MessageAction(label="✏️ Manual add", text="3")),
+            ])
+            
+            # Store state to handle response
+            calendar_session_manager.start_add_mode_selection(
+                chat_id, user_id, is_friend=await self._is_friend(event, line_bot_api)
+            )
+            
+            await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
+            return True
+        
+        else:
+            # Start listening mode directly (original behavior)
+            return await self._start_original_live_bulk_add(event, line_bot_api, chat_id, user_id)
+    
+    async def _start_original_live_bulk_add(
         self,
         event: MessageEvent,
         line_bot_api: MessagingApi,
@@ -781,6 +847,42 @@ class CalendarAgent(BaseAgent):
             + (f"📝 From: \"{source_preview}\"\n" if source_preview else "")
             + "\nAdd this event? (yes/no)"
         )
+    
+    async def _handle_add_mode_selection(
+        self,
+        event: MessageEvent,
+        text: str,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str]
+    ) -> bool:
+        """Handle user's choice between scan/listen/manual modes."""
+        choice = text.strip()
+        
+        if choice == "1":
+            # User wants to scan recent messages
+            calendar_session_manager.end_session(chat_id)
+            return await self._handle_scrape_trigger(
+                event, line_bot_api, chat_id, user_id
+            )
+        elif choice == "2":
+            # User wants to listen for new messages
+            calendar_session_manager.end_session(chat_id)
+            return await self._start_original_live_bulk_add(
+                event, line_bot_api, chat_id, user_id
+            )
+        elif choice == "3":
+            # User wants manual add
+            calendar_session_manager.end_session(chat_id)
+            return await self._start_add_flow(
+                event, line_bot_api, chat_id, user_id
+            )
+        else:
+            await self._send_message(
+                event, line_bot_api,
+                "❌ Invalid choice. Please reply with 1, 2, or 3.\n\nกรุณาเลือก 1, 2 หรือ 3"
+            )
+            return True
 
         quick_reply = QuickReply(items=[
             QuickReplyItem(type="action", action=MessageAction(label="✅ Yes", text="yes")),

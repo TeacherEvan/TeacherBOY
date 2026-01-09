@@ -45,30 +45,35 @@ TODAY'S DATE: {today}
 CURRENT YEAR: {year}
 
 INSTRUCTIONS:
-1. Look for explicit dates (e.g., "January 15", "15/01/2025", "next Friday")
+1. Look for explicit dates (e.g., "January 15", "15/01/2025", "next Friday", "meeting on Friday")
 2. Look for relative dates (e.g., "tomorrow", "next week", "in 3 days")
 3. Identify what the event/activity is for each date
 4. Extract a short title and optional description
 5. Only extract dates that are clearly mentioned - don't invent events
 6. Ignore past dates (before today)
 7. Parse Thai dates and Thai language events if present
-8. ALWAYS use the actual year number (e.g., {year}), NEVER use "YYYY" as a placeholder
-9. If the year is not specified, use {year} for future dates or {next_year} for dates that have passed this year
+8. CRITICAL: Use actual numeric years ONLY. The current year is {year}. Next year is {next_year}.
+9. CRITICAL: Format dates as YYYY-MM-DD with numeric values only (e.g., {year}-01-15, {year}-12-25)
+10. If year is not specified, use {year} for dates that haven't passed yet, or {next_year} if the date in current year is already past
 
-OUTPUT FORMAT (JSON array):
+OUTPUT FORMAT - VALID JSON ARRAY ONLY:
 [
   {{
-    "date": "{year}-01-15",
+    "date": "2026-01-15",
     "title": "Short event title (max 50 chars)",
     "description": "Optional longer description",
     "source_text": "Original message text this was extracted from",
-    "confidence": "high" | "medium" | "low"
+    "confidence": "high"
   }}
 ]
 
-If no dates/events are found, return an empty array: []
+IMPORTANT RULES:
+- Return ONLY the JSON array, no other text, no markdown code blocks
+- If no dates/events found, return empty array: []
+- dates must be valid ISO format: YYYY-MM-DD with numeric years
+- confidence must be "high", "medium", or "low"
 
-RESPOND ONLY WITH THE JSON ARRAY, NO OTHER TEXT."""
+RESPOND WITH JSON ONLY:"""
 
 
 @dataclass
@@ -190,12 +195,28 @@ class DateExtractionService:
         events = []
         
         try:
-            # Clean response (remove markdown code blocks if present)
+            # Clean response (remove markdown code blocks and extra whitespace)
             cleaned = response.strip()
-            if cleaned.startswith("```"):
-                # Remove ```json and ``` markers
-                cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
-                cleaned = re.sub(r"\n?```$", "", cleaned)
+            
+            # Remove markdown code blocks if present
+            if "```" in cleaned:
+                # Extract content between code blocks
+                match = re.search(r"```(?:json)?\s*\n?(.+?)```", cleaned, re.DOTALL)
+                if match:
+                    cleaned = match.group(1).strip()
+                else:
+                    # Try removing just the markers
+                    cleaned = re.sub(r"```(?:json)?\s*\n?", "", cleaned)
+                    cleaned = re.sub(r"\s*```\s*$", "", cleaned)
+            
+            # Try to extract JSON array if embedded in text
+            if not cleaned.startswith("["):
+                json_match = re.search(r"\[.+\]", cleaned, re.DOTALL)
+                if json_match:
+                    cleaned = json_match.group(0)
+                else:
+                    logger.warning(f"📅 Response doesn't contain JSON array: {cleaned[:100]}")
+                    return []
             
             data = json.loads(cleaned)
             
@@ -207,10 +228,31 @@ class DateExtractionService:
                 try:
                     # Parse date
                     date_str = item.get("date", "")
+                    
+                    # Validate date string format and check for placeholders
+                    if not date_str or "YYYY" in date_str or "MM" in date_str or "DD" in date_str:
+                        logger.warning(f"📅 Invalid date format with placeholders: {date_str}")
+                        continue
+                    
                     try:
                         event_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                    except ValueError:
-                        logger.debug(f"📅 Could not parse date: {date_str}")
+                    except ValueError as e:
+                        logger.warning(f"📅 Could not parse date '{date_str}': {e}")
+                        # Try alternative parsing with dateparser as fallback
+                        try:
+                            import dateparser
+                            dt = dateparser.parse(date_str)
+                            if dt:
+                                event_date = dt.date()
+                            else:
+                                continue
+                        except:
+                            continue
+                    
+                    # Validate year is reasonable (not 1900 or 9999, etc.)
+                    current_year = today.year
+                    if event_date.year < current_year or event_date.year > current_year + 5:
+                        logger.warning(f"📅 Date year {event_date.year} is out of reasonable range")
                         continue
                     
                     # Skip past dates
@@ -282,6 +324,16 @@ class DateExtractionService:
             "interview",
             "class",
             "exam",
+            "conference",
+            "workshop",
+            "training",
+            "session",
+            "lunch",
+            "dinner",
+            "breakfast",
+            "dear all",  # Common meeting announcement pattern
+            "everyone",
+            "team",
             "ประชุม",
             "นัด",
             "เดดไลน์",
@@ -309,7 +361,14 @@ class DateExtractionService:
         ]
 
         weekday_pattern = re.compile(
-            r"\b(mon(day)?|tue(s(day)?)?|wed(nesday)?|thu(r(sday)?)?|fri(day)?|sat(urday)?|sun(day)?)\b",
+            r"\b(on\s+)?(mon(day)?|tue(s(day)?)?|wed(nesday)?|thu(r(sday)?)?|fri(day)?|sat(urday)?|sun(day)?)",
+            re.IGNORECASE,
+        )
+        
+        # Month names for better detection
+        month_pattern = re.compile(
+            r"\b(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|"
+            r"jul(y)?|aug(ust)?|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?)\s+\d{1,2}\b",
             re.IGNORECASE,
         )
         
@@ -396,6 +455,7 @@ class DateExtractionService:
     def _extract_title_from_context(self, message: str, date_match: str) -> str:
         """
         Try to extract a meaningful title from the message context.
+        Enhanced to handle patterns like "Dear all, meeting on Friday".
         
         Args:
             message: Full message text
@@ -404,11 +464,41 @@ class DateExtractionService:
         Returns:
             Extracted title or generic "Event"
         """
-        # Remove the date portion
+        # Remove the date portion first
         cleaned = message.replace(date_match, "").strip()
         
-        # Remove common filler words
-        cleaned = re.sub(r"\b(is|are|the|a|an|on|at|for|to)\b", "", cleaned, flags=re.I)
+        # Remove greetings and announcement patterns
+        greeting_patterns = [
+            r"^dear\s+all[,:]?\s*",
+            r"^hi\s+everyone[,:]?\s*",
+            r"^hi\s+team[,:]?\s*",
+            r"^hello\s+all[,:]?\s*",
+            r"^hey\s+everyone[,:]?\s*",
+            r"^everyone[,:]?\s*",
+        ]
+        
+        for pattern in greeting_patterns:
+            cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE).strip()
+        
+        # Look for event keywords and extract context around them
+        event_patterns = [
+            (r"([\w\s]+?)\s+(?:on|at|this|next|tomorrow|today)", r"\1"),  # "meeting on Friday" -> "meeting"
+            (r"(?:have|having)\s+(?:a\s+)?([\w\s]+)", r"\1"),  # "having a workshop" -> "workshop"
+            (r"(?:let's|let\s+us)\s+([\w\s]+)", r"\1"),  # "let's review" -> "review"
+        ]
+        
+        for search_pattern, extract_pattern in event_patterns:
+            match = re.search(search_pattern, cleaned, re.IGNORECASE)
+            if match:
+                title = match.group(1).strip()
+                # Clean up extracted title
+                title = re.sub(r"\b(is|are|the|a|an|for|to)\b", "", title, flags=re.IGNORECASE)
+                title = " ".join(title.split())  # Normalize whitespace
+                if len(title) > 3:
+                    return title[:50]
+        
+        # Fallback: Remove common filler words and take what's left
+        cleaned = re.sub(r"\b(is|are|the|a|an|on|at|for|to|we|have|has|there|this)\b", "", cleaned, flags=re.IGNORECASE)
         cleaned = " ".join(cleaned.split())  # Normalize whitespace
         
         if len(cleaned) > 5:

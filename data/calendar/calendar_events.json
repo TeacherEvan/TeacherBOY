@@ -1,0 +1,20 @@
+{
+  "events": [
+    {
+      "event_id": "b6fd1e5f-1e71-47e6-b611-b736f79535c9",
+      "user_id": "test_user_deletion_123",
+      "chat_id": "user_test_user_deletion_123",
+      "title": "User 1 Event",
+      "event_date": "2026-01-10",
+      "description": "",
+      "reminder_days": [
+        1,
+        0
+      ],
+      "is_friend": true,
+      "notified_dates": [],
+      "created_at": "2026-01-09T11:37:03.936093+00:00"
+    }
+  ],
+  "updated_at": "2026-01-09T11:37:03.936093+00:00"
+}

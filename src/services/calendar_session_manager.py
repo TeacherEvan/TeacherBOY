@@ -38,6 +38,8 @@ class CalendarState(Enum):
     SCRAPE_SELECTING = "scrape_selecting"
     SCRAPE_REMINDER_DAYS = "scrape_reminder_days"
 
+    # For "Zeus Add Event" smart mode selection
+    ADD_MODE_SELECTION = "add_mode_selection"  # NEW: Choose between scan/listen/manual
     # For "Zeus Add Event" live bulk-add flow - scrapes dates from incoming messages
     LIVE_ADD_LISTENING = "live_add_listening"
     LIVE_ADD_REVIEWING = "live_add_reviewing"
@@ -541,8 +543,21 @@ class CalendarSessionManager:
         return session
 
     # =========================================================================
-    # Live Bulk Add Flow ("zeus add event")
+    # Live Bulk Add Flow ("zeus add event") - Enhanced with Smart Mode Selection
     # =========================================================================
+    
+    def start_add_mode_selection(
+        self,
+        chat_id: str,
+        user_id: str,
+        is_friend: bool = False
+    ) -> None:
+        """Start the add mode selection flow (scan/listen/manual)."""
+        session = self.get_or_create_session(chat_id, user_id)
+        session.state = CalendarState.ADD_MODE_SELECTION
+        session.pending_is_friend = is_friend
+        session.update()
+        logger.info(f"📅 Started add mode selection for chat {chat_id}")
 
     def start_live_add_flow(
         self,
