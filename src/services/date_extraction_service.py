@@ -254,8 +254,45 @@ class DateExtractionService:
             List of ExtractedEvent objects
         """
         events = []
+
+        # Best-effort: use dateparser when available for richer relative parsing
+        # (e.g., "Friday", "next Friday", Thai relative phrases).
+        dateparser_parse = None
+        try:
+            import importlib
+
+            dateparser = importlib.import_module("dateparser")
+            dateparser_parse = getattr(dateparser, "parse", None)
+        except Exception:
+            dateparser_parse = None
         
-        # Simple patterns to match
+        # Heuristic: only attempt extraction when text looks event-like.
+        # This reduces false positives significantly.
+        event_keywords = [
+            "meeting",
+            "call",
+            "appointment",
+            "deadline",
+            "due",
+            "schedule",
+            "remind",
+            "reminder",
+            "party",
+            "event",
+            "interview",
+            "class",
+            "exam",
+            "ประชุม",
+            "นัด",
+            "เดดไลน์",
+            "กำหนดส่ง",
+            "ส่งงาน",
+            "สัมภาษณ์",
+            "สอบ",
+            "เรียน",
+        ]
+
+        # Simple patterns to match (cheap and reliable)
         patterns = [
             # "tomorrow" or "พรุ่งนี้"
             (r"\b(tomorrow|พรุ่งนี้)\b", timedelta(days=1)),
@@ -270,9 +307,47 @@ class DateExtractionService:
             (r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b", "%d/%m/%Y"),  # DD/MM/YYYY
             (r"\b(\d{4})-(\d{2})-(\d{2})\b", "%Y-%m-%d"),  # YYYY-MM-DD
         ]
+
+        weekday_pattern = re.compile(
+            r"\b(mon(day)?|tue(s(day)?)?|wed(nesday)?|thu(r(sday)?)?|fri(day)?|sat(urday)?|sun(day)?)\b",
+            re.IGNORECASE,
+        )
         
         for msg in messages:
             msg_lower = msg.lower()
+
+            # Skip non-event-ish messages to reduce false positives.
+            if not any(k in msg_lower for k in event_keywords) and not weekday_pattern.search(msg_lower):
+                # Still allow strict date formats (e.g., 2025-01-15) even without keywords.
+                if not any(re.search(pat, msg) for pat, _fmt in date_patterns):
+                    continue
+
+            # If dateparser is available, try a best-effort parse using RELATIVE_BASE.
+            # We only accept results that are today or in the future.
+            if dateparser_parse:
+                try:
+                    dt = dateparser_parse(
+                        msg,
+                        settings={
+                            "RELATIVE_BASE": datetime.now(BANGKOK_TZ),
+                            "PREFER_DATES_FROM": "future",
+                        },
+                    )
+                    if dt and dt.date() >= today:
+                        title = self._extract_title_from_context(msg, dt.strftime("%Y-%m-%d"))
+                        events.append(
+                            ExtractedEvent(
+                                event_date=dt.date(),
+                                title=title,
+                                description="",
+                                source_text=msg[:100],
+                                confidence="low",
+                            )
+                            
+                        )
+                        # Keep going to allow multiple events per message if explicit dates exist.
+                except Exception:
+                    pass
             
             # Check relative date patterns
             for pattern, delta in patterns:

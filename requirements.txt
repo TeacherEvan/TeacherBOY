@@ -24,6 +24,7 @@ pytz==2024.1
 
 # Date parsing for calendar feature
 python-dateutil==2.8.2
+dateparser==1.2.0
 
 # Testing
 pytest==7.4.3

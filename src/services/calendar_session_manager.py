@@ -37,6 +37,11 @@ class CalendarState(Enum):
     SCRAPE_REVIEWING = "scrape_reviewing"
     SCRAPE_SELECTING = "scrape_selecting"
     SCRAPE_REMINDER_DAYS = "scrape_reminder_days"
+
+    # For "Zeus Add Event" live bulk-add flow - scrapes dates from incoming messages
+    LIVE_ADD_LISTENING = "live_add_listening"
+    LIVE_ADD_REVIEWING = "live_add_reviewing"
+    LIVE_ADD_REMINDER_DAYS = "live_add_reminder_days"
     # For "Zeus Add [date] [title]" inline flow
     INLINE_ADD_REMINDER_DAYS = "inline_add_reminder_days"
     INLINE_ADD_CONFIRMING = "inline_add_confirming"
@@ -69,6 +74,10 @@ class CalendarSession:
     scraped_events: List[Dict[str, Any]] = field(default_factory=list)  # Events extracted from messages
     current_scrape_index: int = 0  # Which scraped event is being processed
     scraped_source_messages: List[str] = field(default_factory=list)  # Source messages for context
+
+    # For "Zeus Add Event" live bulk-add flow
+    live_events: List[Dict[str, Any]] = field(default_factory=list)  # Events scraped from incoming messages
+    current_live_index: int = 0
     
     # For "Zeus Add [date] [title]" inline flow
     inline_event_data: Optional[Dict[str, Any]] = None  # Pre-parsed date/title from command
@@ -101,6 +110,10 @@ class CalendarSession:
         self.scraped_events = []
         self.current_scrape_index = 0
         self.scraped_source_messages = []
+
+        # Reset live bulk-add flow data
+        self.live_events = []
+        self.current_live_index = 0
         # Reset inline add data
         self.inline_event_data = None
         self.update()
@@ -526,6 +539,109 @@ class CalendarSessionManager:
             f"with {len(source_messages)} messages"
         )
         return session
+
+    # =========================================================================
+    # Live Bulk Add Flow ("zeus add event")
+    # =========================================================================
+
+    def start_live_add_flow(
+        self,
+        chat_id: str,
+        user_id: str,
+        is_friend: bool = False,
+    ) -> CalendarSession:
+        """Start the live bulk-add flow that scrapes incoming messages."""
+        session = self.get_or_create_session(chat_id, user_id)
+        session.reset()
+        session.state = CalendarState.LIVE_ADD_LISTENING
+        session.pending_is_friend = is_friend
+        session.update()
+        logger.info(f"📅 Started live bulk-add flow for chat {chat_id}")
+        return session
+
+    def add_live_events(
+        self,
+        chat_id: str,
+        events: List[Dict[str, Any]],
+    ) -> Optional[CalendarSession]:
+        """Append newly detected live events and move to review state if needed."""
+        session = self.get_session(chat_id)
+        if not session or session.state not in (
+            CalendarState.LIVE_ADD_LISTENING,
+            CalendarState.LIVE_ADD_REVIEWING,
+        ):
+            return None
+
+        if not events:
+            return session
+
+        session.live_events.extend(events)
+        # If we were just listening, switch to reviewing starting at the first new event.
+        if session.state == CalendarState.LIVE_ADD_LISTENING:
+            session.current_live_index = max(0, len(session.live_events) - len(events))
+            session.state = CalendarState.LIVE_ADD_REVIEWING
+        session.update()
+        return session
+
+    def get_current_live_event(self, chat_id: str) -> Optional[Dict[str, Any]]:
+        """Return the current live-scraped event dict."""
+        session = self.get_session(chat_id)
+        if not session or session.state not in (
+            CalendarState.LIVE_ADD_REVIEWING,
+            CalendarState.LIVE_ADD_REMINDER_DAYS,
+        ):
+            return None
+        if session.current_live_index >= len(session.live_events):
+            return None
+        return session.live_events[session.current_live_index]
+
+    def accept_live_event(self, chat_id: str) -> Optional[CalendarSession]:
+        """Move from reviewing to reminder-days selection for the current live event."""
+        session = self.get_session(chat_id)
+        if not session or session.state != CalendarState.LIVE_ADD_REVIEWING:
+            return None
+        session.state = CalendarState.LIVE_ADD_REMINDER_DAYS
+        session.update()
+        return session
+
+    def skip_live_event(self, chat_id: str) -> bool:
+        """Skip current live event and return True if more remain."""
+        session = self.get_session(chat_id)
+        if not session or session.state not in (
+            CalendarState.LIVE_ADD_REVIEWING,
+            CalendarState.LIVE_ADD_REMINDER_DAYS,
+        ):
+            return False
+        session.current_live_index += 1
+        session.state = CalendarState.LIVE_ADD_REVIEWING
+        session.update()
+        return session.current_live_index < len(session.live_events)
+
+    def set_live_reminder_days(
+        self,
+        chat_id: str,
+        reminder_days: List[int],
+    ) -> Optional[Dict[str, Any]]:
+        """Return full event data for creation based on current live event."""
+        session = self.get_session(chat_id)
+        if not session or session.state != CalendarState.LIVE_ADD_REMINDER_DAYS:
+            return None
+
+        current = self.get_current_live_event(chat_id)
+        if not current:
+            return None
+
+        if 0 not in reminder_days:
+            reminder_days.append(0)
+
+        return {
+            "date": current.get("date"),
+            "title": current.get("title", "Event"),
+            "description": current.get("description", ""),
+            "source_text": current.get("source_text", ""),
+            "reminder_days": reminder_days,
+            "is_friend": session.pending_is_friend,
+        }
 
     def set_scraped_events(
         self,

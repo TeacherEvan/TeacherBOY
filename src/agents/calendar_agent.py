@@ -89,6 +89,9 @@ CANCEL_KEYWORDS = ["cancel", "nevermind", "never mind", "ยกเลิก", "e
 # Skip keywords for description
 SKIP_KEYWORDS = ["skip", "none", "no", "-", "ข้าม"]
 
+# Stop keywords for live bulk-add mode
+LIVE_STOP_KEYWORDS = ["stop", "done", "finish", "end", "หยุด", "พอแล้ว", "เสร็จ"]
+
 
 class CalendarAgent(BaseAgent):
     """Agent for managing calendar events and reminders."""
@@ -144,6 +147,59 @@ class CalendarAgent(BaseAgent):
         """Check if text is a cancel command."""
         text_lower = text.lower().strip()
         return text_lower in CANCEL_KEYWORDS
+
+    def _is_live_stop_command(self, text: str) -> bool:
+        """Check if text should stop the live bulk-add flow."""
+        text_lower = text.lower().strip()
+        return text_lower in LIVE_STOP_KEYWORDS
+
+    def _looks_like_event_message(self, text: str) -> bool:
+        """Heuristic filter to avoid scraping every incoming message."""
+        t = (text or "").lower().strip()
+        if not t:
+            return False
+
+        # Ignore obvious bot commands to avoid self-triggering loops.
+        if t.startswith("zeus ") or t.startswith("/admin") or t.startswith("/special"):
+            return False
+
+        keywords = [
+            "meeting",
+            "call",
+            "appointment",
+            "deadline",
+            "due",
+            "schedule",
+            "remind",
+            "reminder",
+            "party",
+            "event",
+            "workshop",
+            "interview",
+            "class",
+            "exam",
+            "บิน",
+            "ประชุม",
+            "นัด",
+            "เดดไลน์",
+            "กำหนดส่ง",
+            "ส่งงาน",
+            "สัมภาษณ์",
+            "สอบ",
+            "เรียน",
+        ]
+        return any(k in t for k in keywords)
+
+    async def _extract_events_from_single_message(self, text: str) -> list[dict]:
+        """Extract event candidates from a single message via DateExtractionService."""
+        from src.services.date_extraction_service import date_extraction_service
+
+        try:
+            extracted = await date_extraction_service.extract_events_from_messages([text], max_events=3)
+            return [evt.to_dict() for evt in extracted]
+        except Exception as exc:
+            logger.error(f"❌ Live extraction failed: {exc}", exc_info=True)
+            return []
 
     def _is_skip_command(self, text: str) -> bool:
         """Check if text is a skip command."""
@@ -359,6 +415,14 @@ class CalendarAgent(BaseAgent):
         user_id = getattr(event.source, "user_id", None) if event.source else None
         session = calendar_session_manager.get_session(chat_id)
 
+        # In group chats, only the session owner should drive an active flow.
+        # This prevents other users from accidentally consuming the flow steps.
+        if session and not calendar_session_manager.is_session_owner(chat_id, user_id):
+            logger.debug(
+                f"📅 User {user_id} tried to interact with calendar session owned by {session.user_id}"
+            )
+            return True
+
         with tracer.start_as_current_span("calendar_agent.handle") as span:
             span.set_attribute("chat.id", chat_id)
 
@@ -380,6 +444,14 @@ class CalendarAgent(BaseAgent):
                     )
 
                 if self._is_trigger(text, TRIGGERS_ADD):
+                    # Bulk-add mode: "zeus add event" turns on live scraping from incoming
+                    # messages and proposes events for confirmation.
+                    if text.lower().strip() == "zeus add event":
+                        return await self._start_live_bulk_add_flow(
+                            event, line_bot_api, chat_id, user_id
+                        )
+
+                    # Other add triggers keep the manual add flow.
                     return await self._start_add_flow(
                         event, line_bot_api, chat_id, user_id
                     )
@@ -568,7 +640,7 @@ class CalendarAgent(BaseAgent):
 
         elif state == CalendarState.CONFIRMING_REMOVAL:
             return await self._handle_removal_confirmation(
-                event, text, line_bot_api, chat_id
+                event, text, line_bot_api, chat_id, user_id
             )
 
         elif state == CalendarState.PROCESSING_EXTRACTED_DATES:
@@ -587,6 +659,22 @@ class CalendarAgent(BaseAgent):
                 event, text, line_bot_api, chat_id, user_id
             )
 
+        # Live bulk add from incoming messages
+        elif state == CalendarState.LIVE_ADD_LISTENING:
+            return await self._handle_live_listening_message(
+                event, text, line_bot_api, chat_id, user_id
+            )
+
+        elif state == CalendarState.LIVE_ADD_REVIEWING:
+            return await self._handle_live_review_response(
+                event, text, line_bot_api, chat_id, user_id
+            )
+
+        elif state == CalendarState.LIVE_ADD_REMINDER_DAYS:
+            return await self._handle_live_reminder_response(
+                event, text, line_bot_api, chat_id, user_id
+            )
+
         # New states for inline add flow
         elif state == CalendarState.INLINE_ADD_REMINDER_DAYS:
             return await self._handle_inline_add_reminder_response(
@@ -599,6 +687,249 @@ class CalendarAgent(BaseAgent):
             )
 
         return False
+
+    # =========================================================================
+    # Live Bulk Add Flow ("zeus add event")
+    # =========================================================================
+
+    async def _start_live_bulk_add_flow(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str],
+    ) -> bool:
+        """Start listening for incoming event-like messages."""
+        if not user_id:
+            await self._send_message(event, line_bot_api, "❌ Cannot identify user.")
+            return True
+
+        # Check friendship status (affects reminder delivery routing later)
+        is_friend = await self._is_friend(event, line_bot_api)
+        calendar_session_manager.start_live_add_flow(chat_id, user_id, is_friend)
+
+        msg = (
+            "📅 Live Bulk Add: ON\n\n"
+            "Send messages normally. If I detect an event with a date, I'll propose it for adding.\n\n"
+            "Examples:\n"
+            "- Dear all, meeting on Friday\n"
+            "- Deadline is Jan 15\n\n"
+            "Type 'stop' anytime to exit.\n\n"
+            "โหมดเพิ่มกิจกรรมอัตโนมัติ: เปิด\n"
+            "พิมพ์ 'stop' เพื่อหยุด"
+        )
+        await self._send_message(event, line_bot_api, msg)
+        return True
+
+    async def _handle_live_listening_message(
+        self,
+        event: MessageEvent,
+        text: str,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str],
+    ) -> bool:
+        """While listening, analyze incoming text and propose events when detected."""
+        if self._is_live_stop_command(text) or self._is_cancel_command(text):
+            calendar_session_manager.end_session(chat_id)
+            await self._send_message(
+                event,
+                line_bot_api,
+                "✅ Live Bulk Add: OFF\n\nStopped listening for events.\n\nปิดโหมดเพิ่มกิจกรรมอัตโนมัติแล้ว",
+            )
+            return True
+
+        # Heuristic filter to reduce false positives and cost.
+        if not self._looks_like_event_message(text):
+            return True
+
+        events = await self._extract_events_from_single_message(text)
+        if not events:
+            return True
+
+        session = calendar_session_manager.add_live_events(chat_id, events)
+        if not session:
+            return True
+
+        current = calendar_session_manager.get_current_live_event(chat_id)
+        if current:
+            await self._prompt_live_event(event, line_bot_api, current)
+        return True
+
+    async def _prompt_live_event(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        event_data: dict,
+    ) -> None:
+        """Ask user whether to add the detected event."""
+        date_obj = event_data.get("date")
+        title = event_data.get("title", "Event")
+        source = event_data.get("source_text", "")
+
+        try:
+            date_str = date_obj.strftime("%B %d, %Y") if date_obj else "Unknown"
+        except Exception:
+            date_str = "Unknown"
+
+        source_preview = source[:80] + "..." if isinstance(source, str) and len(source) > 80 else (source or "")
+
+        msg = (
+            "🧾 Events scraped (live):\n\n"
+            f"📆 {date_str}\n"
+            f"📌 {title}\n"
+            + (f"📝 From: \"{source_preview}\"\n" if source_preview else "")
+            + "\nAdd this event? (yes/no)"
+        )
+
+        quick_reply = QuickReply(items=[
+            QuickReplyItem(type="action", action=MessageAction(label="✅ Yes", text="yes")),
+            QuickReplyItem(type="action", action=MessageAction(label="⏭️ No", text="no")),
+        ])
+
+        await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
+
+    async def _handle_live_review_response(
+        self,
+        event: MessageEvent,
+        text: str,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str],
+    ) -> bool:
+        """Handle yes/no for the currently proposed live event."""
+        text_lower = text.lower().strip()
+
+        if self._is_live_stop_command(text_lower) or self._is_cancel_command(text_lower):
+            calendar_session_manager.end_session(chat_id)
+            await self._send_message(
+                event,
+                line_bot_api,
+                "✅ Live Bulk Add: OFF\n\nStopped listening for events.",
+            )
+            return True
+
+        if text_lower in ["yes", "y", "ใช่", "ok", "add"]:
+            calendar_session_manager.accept_live_event(chat_id)
+            msg = (
+                "When should I remind you?\n\n"
+                "• 7 - 7 days before\n"
+                "• 3 - 3 days before\n"
+                "• 1 - 1 day before\n"
+                "• all - All of the above\n\n"
+                "(Day-of reminder is always included)"
+            )
+            quick_reply = QuickReply(items=[
+                QuickReplyItem(type="action", action=MessageAction(label="7 days", text="7")),
+                QuickReplyItem(type="action", action=MessageAction(label="3 days", text="3")),
+                QuickReplyItem(type="action", action=MessageAction(label="1 day", text="1")),
+                QuickReplyItem(type="action", action=MessageAction(label="All", text="all")),
+            ])
+            await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
+            return True
+
+        if text_lower in ["no", "n", "ไม่", "skip"]:
+            has_more = calendar_session_manager.skip_live_event(chat_id)
+            if has_more:
+                nxt = calendar_session_manager.get_current_live_event(chat_id)
+                if nxt:
+                    await self._prompt_live_event(event, line_bot_api, nxt)
+            else:
+                # No more queued live events; go back to listening.
+                session = calendar_session_manager.get_session(chat_id)
+                if session:
+                    session.state = CalendarState.LIVE_ADD_LISTENING
+                    session.update()
+                await self._send_message(
+                    event,
+                    line_bot_api,
+                    "✅ Skipped. Keep sending messages; I'll propose new events when found.\n\nType 'stop' to exit.",
+                )
+            return True
+
+        await self._send_message(event, line_bot_api, "Please answer yes or no (or 'stop').")
+        return True
+
+    async def _handle_live_reminder_response(
+        self,
+        event: MessageEvent,
+        text: str,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str],
+    ) -> bool:
+        """Handle reminder day selection and create the event."""
+        text_lower = text.lower().strip()
+
+        if self._is_live_stop_command(text_lower) or self._is_cancel_command(text_lower):
+            calendar_session_manager.end_session(chat_id)
+            await self._send_message(event, line_bot_api, "✅ Live Bulk Add: OFF")
+            return True
+
+        if text_lower == "all":
+            reminder_days = [7, 3, 1, 0]
+        elif text_lower in ["7", "7 days"]:
+            reminder_days = [7, 0]
+        elif text_lower in ["3", "3 days"]:
+            reminder_days = [3, 0]
+        elif text_lower in ["1", "1 day"]:
+            reminder_days = [1, 0]
+        else:
+            await self._send_message(
+                event,
+                line_bot_api,
+                "❌ Invalid selection. Please choose 7, 3, 1, or all.",
+            )
+            return True
+
+        event_data = calendar_session_manager.set_live_reminder_days(chat_id, reminder_days)
+        if not event_data or not self._calendar_service or not user_id:
+            calendar_session_manager.end_session(chat_id)
+            await self._send_message(event, line_bot_api, "❌ Something went wrong. Please try again.")
+            return True
+
+        try:
+            new_event = self._calendar_service.add_event(
+                user_id=user_id,
+                chat_id=chat_id,
+                title=event_data["title"],
+                event_date=event_data["date"],
+                description=event_data.get("description", ""),
+                reminder_days=event_data.get("reminder_days"),
+                is_friend=bool(event_data.get("is_friend", False)),
+            )
+        except Exception as exc:
+            logger.error(f"❌ Failed to add live event: {exc}", exc_info=True)
+            await self._send_message(
+                event,
+                line_bot_api,
+                "❌ Failed to add event. Please try again.",
+            )
+            # Return to listening even on failure.
+            session = calendar_session_manager.get_session(chat_id)
+            if session:
+                session.state = CalendarState.LIVE_ADD_LISTENING
+                session.update()
+            return True
+
+        await self._send_message(
+            event,
+            line_bot_api,
+            f"✅ Added: {new_event.title}\n📅 {new_event.event_date.strftime('%B %d, %Y')}\n\nKeep sending messages; I'll propose more. Type 'stop' to exit.",
+        )
+
+        # Move to next queued live event, or return to listening.
+        has_more = calendar_session_manager.skip_live_event(chat_id)
+        if has_more:
+            nxt = calendar_session_manager.get_current_live_event(chat_id)
+            if nxt:
+                await self._prompt_live_event(event, line_bot_api, nxt)
+        else:
+            session = calendar_session_manager.get_session(chat_id)
+            if session:
+                session.state = CalendarState.LIVE_ADD_LISTENING
+                session.update()
+        return True
 
     async def _handle_date_input(
         self,
@@ -988,14 +1319,15 @@ class CalendarAgent(BaseAgent):
         event: MessageEvent,
         text: str,
         line_bot_api: MessagingApi,
-        chat_id: str
+        chat_id: str,
+        user_id: Optional[str]
     ) -> bool:
         """Handle removal confirmation."""
         text_lower = text.lower().strip()
         
         if text_lower in ["yes", "y", "ใช่", "delete", "confirm"]:
             event_ids = calendar_session_manager.get_removal_event_ids(chat_id)
-            if not event_ids or not self._calendar_service:
+            if not event_ids or not self._calendar_service or not user_id:
                 await self._send_message(
                     event, line_bot_api,
                     "❌ Something went wrong. Please try again."
@@ -1004,12 +1336,16 @@ class CalendarAgent(BaseAgent):
                 return True
 
             # Remove events
-            removed_count = self._calendar_service.remove_events_by_ids(event_ids)
+            removed_count, failed_count = self._calendar_service.remove_events_by_ids(
+                event_ids, user_id
+            )
             
             calendar_session_manager.end_session(chat_id)
             
             msg = (
-                f"✅ Removed {removed_count} event{'s' if removed_count > 1 else ''}!\n\n"
+                f"✅ Removed {removed_count} event{'s' if removed_count != 1 else ''}!"
+                + ("" if failed_count == 0 else f" (Failed: {failed_count})")
+                + "\n\n"
                 f"ลบ {removed_count} กิจกรรมเรียบร้อยแล้ว"
             )
             

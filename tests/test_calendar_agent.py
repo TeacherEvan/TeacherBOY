@@ -334,6 +334,76 @@ class TestCalendarAgent:
         assert calendar_agent.get_priority() == 6
 
 
+class TestCalendarDeleteAndLiveBulkAdd:
+    """Regression tests for delete flow and live bulk-add flow."""
+
+    @pytest.mark.asyncio
+    async def test_remove_confirmation_calls_service_with_user_id(self, monkeypatch):
+        from src.agents.calendar_agent import CalendarAgent
+        from src.services.calendar_session_manager import calendar_session_manager, CalendarState
+
+        agent = CalendarAgent(calendar_service=MagicMock())
+        agent._calendar_service.remove_events_by_ids.return_value = (2, 0)
+
+        event = MagicMock()
+        event.source = MagicMock()
+        event.source.user_id = "U123456"
+        event.source.group_id = None
+        event.source.room_id = None
+        event.reply_token = "reply"
+        event.message = MagicMock()
+        event.message.text = "yes"
+
+        line_api = MagicMock()
+
+        chat_id = "user_U123456"
+        # Seed a removal session
+        session = calendar_session_manager.get_or_create_session(chat_id, "U123456")
+        session.reset()
+        session.state = CalendarState.CONFIRMING_REMOVAL
+        session.selected_event_ids = ["e1", "e2"]
+        session.update()
+
+        await agent.handle(event, "yes", line_api)
+
+        agent._calendar_service.remove_events_by_ids.assert_called_once_with(["e1", "e2"], "U123456")
+
+
+    @pytest.mark.asyncio
+    async def test_live_bulk_add_starts_listening_on_trigger(self, monkeypatch):
+        from src.agents.calendar_agent import CalendarAgent
+        from src.services.calendar_session_manager import calendar_session_manager, CalendarState
+
+        agent = CalendarAgent(calendar_service=MagicMock())
+
+        # Avoid friend check hitting LINE API
+        async def _fake_is_friend(_event, _api):
+            return False
+        monkeypatch.setattr(agent, "_is_friend", _fake_is_friend)
+
+        event = MagicMock()
+        event.source = MagicMock()
+        event.source.user_id = "U123456"
+        event.source.group_id = None
+        event.source.room_id = None
+        event.reply_token = "reply"
+        event.message = MagicMock()
+        event.message.text = "zeus add event"
+
+        line_api = MagicMock()
+        chat_id = "user_U123456"
+
+        # Ensure clean
+        calendar_session_manager.end_session(chat_id)
+
+        handled = await agent.handle(event, "zeus add event", line_api)
+        assert handled is True
+
+        session = calendar_session_manager.get_session(chat_id)
+        assert session is not None
+        assert session.state == CalendarState.LIVE_ADD_LISTENING
+
+
 class TestReminderService:
     """Tests for ReminderService scheduling."""
 
