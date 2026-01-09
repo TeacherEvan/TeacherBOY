@@ -34,6 +34,19 @@ class AgentRouter:
         logger.info(
             f"✅ Registered agent: {agent.name} (priority: {agent.get_priority()})"
         )
+
+    def load_agents_from_factory(self):
+        """
+        Load agents from factory (lazy approach).
+        
+        This triggers lazy instantiation only when needed.
+        Agents are loaded on first message, not at startup.
+        """
+        from .agent_factory import AgentFactory
+
+        self.agents = AgentFactory.get_all_agents()
+        self._map_dirty = True  # Trigger rebuild
+        logger.info(f"✅ Loaded {len(self.agents)} agents from factory (lazy loading)")
     
     def _rebuild_priority_map(self):
         """

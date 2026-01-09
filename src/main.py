@@ -50,16 +50,7 @@ from src.services.news_session_manager import news_session_manager
 from src.services.image_analyzer_session_manager import image_analyzer_session_manager
 from src.services.rate_limiter import rate_limiter
 from src.agents.agent_router import AgentRouter
-from src.agents.translation_agent import TranslationAgent
-from src.agents.admin_agent import AdminAgent
-from src.agents.special_news_agent import SpecialNewsAgent
-from src.agents.news_agent import NewsAgent
-from src.agents.llm_agent import LLMAgent
-from src.agents.search_agent import SearchAgent
-from src.agents.help_agent import HelpAgent
-from src.agents.profiler_agent import ProfilerAgent
-from src.agents.image_analyzer_agent import ImageAnalyzerAgent
-from src.agents.calendar_agent import CalendarAgent
+from src.agents.agent_factory import register_all_agents
 from src.services.openrouter_service import openrouter_service
 from src.services.calendar_service import calendar_service
 from src.services.calendar_session_manager import calendar_session_manager
@@ -268,118 +259,17 @@ async def lifespan(app: FastAPI):
     logger.info("✅ LibreTranslate configured (FALLBACK)")
 
     # ========================================================================
-    # PHASE 3: Agent Registration
+    # PHASE 3: Agent Registration (Lazy Loading via Factory)
     # ========================================================================
-    logger.info("📋 Registering intelligent agents...")
-
-    # Register Help Agent (Priority: 5 - Highest)
-    help_agent = HelpAgent()
-    agent_router.register_agent(help_agent)
-    logger.info("🗡️ Help Agent registered (comprehensive contextual help)")
-
-    # Register Admin Agent if configured (Priority: 5 - Highest)
-    admin_user_ids: list[str] = []
-    try:
-        candidate_admins = settings.get_admin_user_ids()  # type: ignore[call-arg]
-        if isinstance(candidate_admins, list):
-            admin_user_ids = candidate_admins
-    except Exception:
-        admin_user_ids = []
-
-    admin_setup_key = getattr(settings, "admin_setup_key", None)
-    if not isinstance(admin_setup_key, str) or not admin_setup_key.strip():
-        admin_setup_key = None
-
-    if admin_user_ids or admin_setup_key:
-        admin_agent = AdminAgent(
-            http_client=http_client_pool, news_api_key=settings.news_api_key
-        )
-        agent_router.register_agent(admin_agent)
-        if admin_user_ids:
-            logger.info(
-                f"🔧 Admin Agent registered with {len(admin_user_ids)} authorized admin(s)"
-            )
-        else:
-            logger.info(
-                "🔧 Admin Agent registered (bootstrap enabled via ADMIN_SETUP_KEY)"
-            )
-    else:
-        logger.info("🔧 Admin Agent not registered (no ADMIN_USER_IDS configured)")
-
-    # Register Profiler Agent (Priority: 7 - Handles image messages for psychological profiling)
-    if settings.is_profiler_configured():
-        profiler_agent = ProfilerAgent(http_client=http_client_pool)
-        agent_router.register_agent(profiler_agent)
-        logger.info(f"🔬 Profiler Agent registered (Model: {settings.profiler_model})")
-    else:
-        logger.info("🔬 Profiler Agent not registered (GitHub Models not configured)")
-
-    # Register Image Analyzer Agent (Priority: 7 - Handles image Q&A)
-    if settings.is_github_models_configured():
-        image_analyzer_agent = ImageAnalyzerAgent(http_client=http_client_pool)
-        agent_router.register_agent(image_analyzer_agent)
-        logger.info("🖼️ Image Analyzer Agent registered (general image Q&A)")
-    else:
-        logger.info("🖼️ Image Analyzer Agent not registered (GitHub Models not configured)")
-
-    # Register Calendar Agent (Priority: 6 - Handles calendar/reminder commands)
-    if settings.is_calendar_configured():
-        calendar_agent = CalendarAgent(calendar_service=calendar_service)
-        agent_router.register_agent(calendar_agent)
-        logger.info("📅 Calendar Agent registered (events and reminders)")
-    else:
-        logger.info("📅 Calendar Agent not registered (calendar disabled)")
-
-    # Register Translation Agent (Priority: 10)
-    translation_agent = TranslationAgent()
-    agent_router.register_agent(translation_agent)
-
-    # Register LLM Agent (Priority: 9)
-    llm_agent = LLMAgent()
-    agent_router.register_agent(llm_agent)
-    if settings.is_openrouter_configured():
-        logger.info(f"🤖 LLM Agent registered (Model: {settings.openrouter_default_model})")
-    else:
-        logger.info("🤖 LLM Agent registered (API key missing - will return errors)")
-
-    # Register Search Agent (Priority: 8 - Mutually exclusive with LLM via triggers)
-    # Always register so the trigger can respond with a clear configuration message
-    # instead of being ignored when Brave Search is not configured.
-    search_agent = SearchAgent()
-    agent_router.register_agent(search_agent)
-    if settings.is_brave_search_configured():
-        logger.info("🔍 [Startup] Search Agent registered (Brave Search enabled)")
-    else:
-        logger.info(
-            "🔍 [Startup] Search Agent registered but DISABLED until BRAVE_SEARCH_API_KEY is set"
-        )
-
-    # Register Special News Agent (Priority: 12)
-    from src.services.special_news_service import SpecialNewsService
-
-    special_news_service = SpecialNewsService(
-        http_client=http_client_pool,
-        cache_ttl_seconds=300  # 5-minute cache for volatile news data
-    )
-    special_news_agent = SpecialNewsAgent(news_service=special_news_service)
-    agent_router.register_agent(special_news_agent)
-    logger.info("📰 Special News Agent registered (Thailand tourism, sports, international)")
-
-    # Register News Agent (Priority: 15)
-    news_data_service = NewsDataService(
-        http_client=http_client_pool, news_api_key=settings.news_api_key
-    )
-    news_agent = NewsAgent(news_data_service=news_data_service)
-    agent_router.register_agent(news_agent)
-    if settings.is_news_api_configured():
-        logger.info("📰 News Agent registered with NewsAPI.org key")
-    else:
-        logger.info("📰 News Agent registered (using Open-Meteo only, no NewsAPI key)")
-
-    # Update AdminAgent with news_data_service if it was registered
-    if admin_user_ids or admin_setup_key:
-        # Re-inject news_data_service into admin_agent for stats dashboard
-        admin_agent._news_data_service = news_data_service
+    logger.info("📋 Registering agent classes (lazy loading)...")
+    
+    # Register agent classes without instantiating them
+    register_all_agents()
+    
+    # Load agents into router (they will be instantiated on first use)
+    agent_router.load_agents_from_factory()
+    
+    logger.info("✅ Agent factory initialized with lazy loading")
 
     # ========================================================================
     # PHASE 5: Startup Summary

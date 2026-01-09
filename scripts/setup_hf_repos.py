@@ -4,8 +4,12 @@ Creates calendar and memory dataset repos for data persistence.
 """
 
 import os
-from huggingface_hub import HfApi, create_repo
-from huggingface_hub.utils import RepositoryNotFoundError
+
+try:
+    from huggingface_hub import HfApi, create_repo, RepositoryNotFoundError
+except ImportError:
+    print("❌ huggingface_hub is not installed. Install with: pip install huggingface_hub")
+    raise
 
 def main():
     # Get HF token from environment
