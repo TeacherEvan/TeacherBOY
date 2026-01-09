@@ -13,12 +13,7 @@ Design goals:
 """
 
 from .builders.vision_builder import VisionPromptBuilder
-from .builders.text_builder import TextPromptBuilder
-from .registry import PromptRegistry, PromptTemplate
 
 __all__ = [
     "VisionPromptBuilder",
-    "TextPromptBuilder",
-    "PromptRegistry",
-    "PromptTemplate",
 ]

@@ -315,6 +315,14 @@ class Settings(BaseSettings):
             "'body' (body language focus), 'facial' (micro-expressions focus)."
         ),
     )
+    profiler_analysis_depth: str = Field(
+        default="standard",
+        description=(
+            "Token optimization level for profiler: 'quick' (~800 tokens), "
+            "'standard' (~1,800 tokens), 'full' (~2,400 tokens). "
+            "Overrides profiler_analysis_type when use_optimized_prompts=true."
+        ),
+    )
     profiler_rate_limit_per_hour: int = Field(
         default=3,
         ge=1,
@@ -364,6 +372,30 @@ class Settings(BaseSettings):
         ge=60,
         le=3600,
         description="Friend status cache TTL in seconds (default: 5 minutes)",
+    )
+
+    # ============================================================================
+    # Productivity Optimization Configuration
+    # ============================================================================
+    use_optimized_prompts: bool = Field(
+        default=True,
+        description="Enable modular prompt system for 60-70% token reduction in vision tasks.",
+    )
+    enable_conversation_summarization: bool = Field(
+        default=True,
+        description="Enable automatic conversation summarization to reduce memory token usage by 60-80%.",
+    )
+    conversation_summary_interval: int = Field(
+        default=10,
+        ge=5,
+        le=30,
+        description="Number of messages before triggering automatic summarization (5-30, default: 10).",
+    )
+    conversation_messages_to_keep_full: int = Field(
+        default=6,
+        ge=3,
+        le=15,
+        description="Number of recent messages to keep in full after summarization (3-15, default: 6).",
     )
 
     # ============================================================================

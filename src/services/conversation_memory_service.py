@@ -24,6 +24,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from collections import OrderedDict
 
+from src.config import settings
+from src.services.conversation_summary_service import ConversationSummarizer
+
 logger = logging.getLogger(__name__)
 
 # Configuration constants
@@ -64,8 +67,17 @@ class ConversationMemoryService:
         self.session_ttl = timedelta(hours=session_ttl_hours)
         
         # In-memory conversation store
-        # Format: {hashed_chat_id: {"messages": [...], "last_activity": datetime, "metadata": {...}}}
+        # Format: {hashed_chat_id: {"messages": [...], "summary": str, "last_activity": datetime, "metadata": {...}}}
         self._conversations: OrderedDict[str, Dict[str, Any]] = OrderedDict()
+        
+        # Initialize conversation summarizer (if enabled)
+        self._summarizer: Optional[ConversationSummarizer] = None
+        if settings.enable_conversation_summarization:
+            self._summarizer = ConversationSummarizer(
+                max_tokens_before_summary=settings.conversation_summary_interval * 200,  # Estimate 200 tokens/msg
+                messages_to_keep_full=settings.conversation_messages_to_keep_full,
+            )
+            logger.info(f"📝 Conversation summarization enabled (keep_recent={settings.conversation_messages_to_keep_full})")
         
         # Track if HF Hub is configured
         self._hf_enabled = bool(hf_token and hf_repo_id)
@@ -264,7 +276,8 @@ class ConversationMemoryService:
         Get conversation context for LLM prompt.
         
         Returns messages in OpenAI-compatible format, trimmed to fit
-        within the token limit.
+        within the token limit. Automatically summarizes old messages
+        if enabled.
         
         Args:
             chat_id: Chat identifier
@@ -281,6 +294,32 @@ class ConversationMemoryService:
         
         conv = self._conversations[hashed_id]
         messages = conv.get("messages", [])
+        current_summary = conv.get("summary", None)
+        
+        # Apply summarization if enabled
+        if self._summarizer and len(messages) > self._summarizer.keep_recent:
+            try:
+                new_summary, recent_messages = await self._summarizer.maybe_summarize(
+                    messages, current_summary
+                )
+                
+                # Update conversation with new summary and trimmed messages
+                if new_summary:
+                    conv["summary"] = new_summary
+                    conv["messages"] = recent_messages
+                    logger.debug(
+                        f"📝 Updated conversation {hashed_id[:8]}... "
+                        f"(summary + {len(recent_messages)} recent messages)"
+                    )
+                    
+                    # Save updated conversation to HF
+                    if self._hf_enabled:
+                        await self._save_to_local_storage(hashed_id, conv)
+                
+                messages = recent_messages
+                
+            except Exception as e:
+                logger.warning(f"📝 Summarization failed for {hashed_id[:8]}...: {e}")
         
         # Filter to just role and content (OpenAI format)
         formatted = [
@@ -288,6 +327,14 @@ class ConversationMemoryService:
             for msg in messages
             if include_system or msg["role"] != "system"
         ]
+        
+        # If we have a summary, prepend it as a system message
+        if current_summary or conv.get("summary"):
+            summary_text = conv.get("summary") or current_summary
+            formatted.insert(0, {
+                "role": "system",
+                "content": f"Previous conversation summary:\n{summary_text}"
+            })
         
         # Trim to token limit
         return self._trim_to_token_limit(formatted, max_tokens)

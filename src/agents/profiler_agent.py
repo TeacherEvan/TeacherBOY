@@ -32,6 +32,7 @@ from src.services.metrics_service import metrics_service
 from src.services.privilege_service import privilege_service
 from src.config import settings
 from src.utils.tracing import get_tracer
+from src.prompts.builders.vision_builder import VisionPromptBuilder
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -250,12 +251,41 @@ class ProfilerAgent(BaseAgent):
                 # Prepare image for vision API
                 image_data_url = profiler_service.get_image_data_url(image_bytes)
                 
-                # Build vision message with profiling prompt
-                analysis_type = getattr(settings, 'profiler_analysis_type', 'full')
-                messages = profiler_service.build_vision_message(
-                    image_data_url, 
-                    analysis_type=analysis_type
-                )
+                # Build vision message with optimized prompt (if enabled)
+                if settings.use_optimized_prompts:
+                    # Use modular prompt builder (60-70% token reduction)
+                    depth = settings.profiler_analysis_depth  # "quick", "standard", "full"
+                    
+                    builder = VisionPromptBuilder().set_analysis_type(depth)
+                    
+                    # Add frameworks based on depth (only ekman/fbi are registered currently)
+                    if depth == "quick":
+                        builder.add_framework("ekman")
+                    else:  # standard or full
+                        builder.add_framework("ekman").add_framework("fbi")
+                    
+                    optimized_prompt = builder.build()
+                    estimated_tokens = builder.estimate_tokens()
+                    logger.info(f"🔧 Using optimized prompt (~{estimated_tokens} tokens, depth={depth})")
+                    
+                    # Build vision messages manually
+                    messages = [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": optimized_prompt},
+                                {"type": "image_url", "image_url": {"url": image_data_url}},
+                            ],
+                        }
+                    ]
+                else:
+                    # Legacy: use monolithic prompt from profiler_service
+                    analysis_type = getattr(settings, 'profiler_analysis_type', 'full')
+                    messages = profiler_service.build_vision_message(
+                        image_data_url, 
+                        analysis_type=analysis_type
+                    )
+                    logger.info(f"📝 Using legacy monolithic prompt (analysis_type={analysis_type})")
 
                 # Get analysis from GPT-4o vision
                 logger.info(f"🔬 Sending to GPT-4o for psychological analysis...")
