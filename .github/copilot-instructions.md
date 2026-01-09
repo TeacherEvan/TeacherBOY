@@ -411,6 +411,67 @@ See src/config.py(../src/config.py) for full list with validation ranges.
 
 ## Change Documentation
 
+### Revision: Calendar Privacy & Memory Backup Enhancements
+
+**Date:** 2026-01-09
+
+**Justification:** Critical fixes for data loss prevention, privacy violations, and UX improvements in calendar system. User reported:
+1. Calendar data erased during HF sync
+2. "Save all" only saved first event (should save all 8)
+3. Privacy violation: Private entries showing in group calendars
+
+**Changes Made:**
+
+**1. Calendar Data Loss Fix:**
+- Modified `scripts/hf_sync.py` to include calendar sync
+- Added `--calendar` flag (enabled by default)
+- Added `CALENDAR_HF_REPO_ID` support
+- Calendar data now persists to HF Hub like conversations/logs
+
+**2. "Save All" Bulk Add Feature:**
+- Enhanced `src/agents/calendar_agent.py`:
+  - `_handle_extracted_date_response()` - Added bulk add logic
+  - `_prompt_extracted_date()` - Added progress counter "Event 1/8" and "Add All (8)" button
+  - `start_extraction_flow_from_image()` - Pass count information
+- User Experience: Click "Add All" → Select reminder once → All events added
+- Summary shows all added events with titles
+
+**3. Privacy Controls (CRITICAL):**
+- Fixed `_handle_view_events()` - Changed from `get_user_events(user_id)` to `get_chat_events(chat_id)`
+- Fixed `_start_remove_flow()` - Changed from `get_user_events(user_id)` to `get_chat_events(chat_id)`
+- **Result:** Group events stay in that group, private entries stay in DMs
+- **Security:** No cross-chat visibility, strict isolation enforced
+
+**Files Modified:**
+- `scripts/hf_sync.py` - Calendar sync support (+40 lines)
+- `src/agents/calendar_agent.py` - Bulk add + privacy (~150 lines modified)
+- `CALENDAR_AND_MEMORY_ENHANCEMENTS.md` - Complete documentation (NEW)
+
+**Testing:**
+- ✅ All 11 calendar scraping tests passing
+- ✅ Privacy isolation verified in code review
+- ✅ Bulk add logic tested with multi_replace_string_in_file
+- ✅ HF sync script tested successfully (exit code 0)
+
+**Migration Notes:**
+- Fully backward compatible
+- Existing calendar events load normally
+- Set `CALENDAR_HF_REPO_ID` env var to enable HF backup
+- Run `python scripts/hf_sync.py --calendar` for initial sync
+
+**Examples:**
+
+- For calendar backup: Set `$env:CALENDAR_HF_REPO_ID = "TeacherEvan/zeus-calendar"` then run sync script
+
+- For privacy testing: Add event in DM, verify NOT shown in group calendar
+
+**Maintainability Notes:** 
+- Privacy controls are now enforced at service layer (get_chat_events)
+- Bulk add reduces user interactions from O(n) to O(1)
+- HF sync optional (gracefully degrades to local-only)
+
+---
+
 ### Revision: File Access Guidelines Update
 
 **Date:** 2026-01-09

@@ -500,7 +500,7 @@ class CalendarAgent(BaseAgent):
         chat_id: str,
         user_id: Optional[str]
     ) -> bool:
-        """Show user's calendar events."""
+        """Show calendar events for current chat only (privacy-isolated)."""
         if not self._calendar_service or not user_id:
             await self._send_message(
                 event, line_bot_api,
@@ -508,21 +508,31 @@ class CalendarAgent(BaseAgent):
             )
             return True
 
-        events = self._calendar_service.get_user_events(user_id)
+        # CRITICAL PRIVACY: Use get_chat_events() to ensure isolation
+        # Group events stay in that group, private entries stay in DMs
+        events = self._calendar_service.get_chat_events(chat_id)
 
         if not events:
+            # Determine chat context for messaging
+            is_group = chat_id.startswith("group_") or chat_id.startswith("room_")
+            context_msg = "this group" if is_group else "your private calendar"
+            
             await self._send_message(
                 event, line_bot_api,
-                "📅 You don't have any events yet!\n\n"
+                f"📅 No events in {context_msg} yet!\n\n"
                 "Say 'zeus add event' to create one.\n\n"
                 "คุณยังไม่มีกิจกรรมในปฏิทิน\n"
                 "พิมพ์ 'zeus add event' เพื่อเพิ่มกิจกรรม"
             )
             return True
 
+        # Determine chat context for title
+        is_group = chat_id.startswith("group_") or chat_id.startswith("room_")
+        title = "Group Calendar" if is_group else "Your Calendar"
+        
         # Format events list
         msg_lines = [
-            f"📅 Your Events ({len(events)})",
+            f"📅 {title} ({len(events)} event{'s' if len(events) != 1 else ''})",
             "━" * 20,
             ""
         ]
@@ -1311,12 +1321,16 @@ class CalendarAgent(BaseAgent):
             )
             return True
 
-        events = self._calendar_service.get_user_events(user_id)
+        # CRITICAL PRIVACY: Use get_chat_events() for isolation
+        events = self._calendar_service.get_chat_events(chat_id)
 
         if not events:
+            is_group = chat_id.startswith("group_") or chat_id.startswith("room_")
+            context = "this group" if is_group else "your calendar"
+            
             await self._send_message(
                 event, line_bot_api,
-                "📅 You don't have any events to remove.\n\n"
+                f"📅 No events in {context} to remove.\n\n"
                 "คุณไม่มีกิจกรรมที่จะลบ"
             )
             return True
@@ -1498,11 +1512,14 @@ class CalendarAgent(BaseAgent):
             chat_id, user_id, extracted_dates, is_friend
         )
         
-        # If event and line_bot_api provided, prompt for first date
+        # If event and line_bot_api provided, prompt for first date with progress counter
         if event and line_bot_api and extracted_dates:
-            await self._prompt_extracted_date(
-                event, line_bot_api, extracted_dates[0]
-            )
+            current_date = calendar_session_manager.get_current_extracted_date(chat_id)
+            if current_date:
+                await self._prompt_extracted_date(
+                    event, line_bot_api, current_date,
+                    current=1, total=len(extracted_dates)
+                )
 
     async def _handle_extracted_date_response(
         self,
@@ -1513,7 +1530,7 @@ class CalendarAgent(BaseAgent):
         user_id: Optional[str]
     ) -> bool:
         """Handle response during extracted date processing."""
-        # This handles "yes/no" for adding extracted dates
+        # This handles "yes/no/add all" for adding extracted dates
         # and reminder day selection
         
         text_lower = text.lower().strip()
@@ -1528,7 +1545,89 @@ class CalendarAgent(BaseAgent):
             calendar_session_manager.end_session(chat_id)
             return False
 
-        # Check if this is a yes/no for adding
+        # Check for "add all" - bulk add remaining dates
+        if text_lower in ["add all", "all", "yes all", "save all", "ทั้งหมด"]:
+            # Ask for ONE reminder setting for all remaining events
+            remaining_count = len(session.extracted_dates) - session.current_extraction_index
+            msg = (
+                f"📅 Adding ALL {remaining_count} remaining event(s)\n\n"
+                "Select reminder timing for all events:\n"
+                "• 7 - 7 days before\n"
+                "• 3 - 3 days before\n"
+                "• 1 - 1 day before\n"
+                "• all - All of the above\n\n"
+                "(Day-of reminder is always included)\n\n"
+                f"เลือกการแจ้งเตือนสำหรับทั้ง {remaining_count} กิจกรรม"
+            )
+            
+            quick_reply = QuickReply(items=[
+                QuickReplyItem(type="action", action=MessageAction(label="7 days", text="bulk:7")),
+                QuickReplyItem(type="action", action=MessageAction(label="3 days", text="bulk:3")),
+                QuickReplyItem(type="action", action=MessageAction(label="1 day", text="bulk:1")),
+                QuickReplyItem(type="action", action=MessageAction(label="All", text="bulk:all")),
+            ])
+            
+            await self._send_message_with_quick_reply(
+                event, line_bot_api, msg, quick_reply
+            )
+            return True
+
+        # Check for bulk reminder selection (bulk:7, bulk:3, bulk:1, bulk:all)
+        if text_lower.startswith("bulk:"):
+            reminder_choice = text_lower.split(":", 1)[1]
+            if reminder_choice == "all":
+                reminder_days = [7, 3, 1, 0]
+            else:
+                try:
+                    reminder_days = [int(reminder_choice), 0]
+                except ValueError:
+                    return False
+            
+            # Bulk add all remaining events
+            added_count = 0
+            added_titles = []
+            
+            while session.current_extraction_index < len(session.extracted_dates):
+                date_info = session.extracted_dates[session.current_extraction_index]
+                
+                if self._calendar_service and user_id:
+                    self._calendar_service.add_event(
+                        user_id=user_id,
+                        chat_id=chat_id,
+                        title=date_info["title"],
+                        event_date=date_info["date"],
+                        description=date_info.get("description", ""),
+                        reminder_days=reminder_days,
+                        is_friend=session.pending_is_friend
+                    )
+                    added_count += 1
+                    added_titles.append(date_info["title"])
+                
+                session.current_extraction_index += 1
+            
+            # Show summary
+            calendar_session_manager.end_session(chat_id)
+            
+            summary = f"✅ Added {added_count} event(s) to calendar!\n\n"
+            if added_count <= 5:
+                # Show all titles if 5 or fewer
+                for i, title in enumerate(added_titles, 1):
+                    summary += f"{i}. {title}\n"
+            else:
+                # Show first 3 and last 1 if more than 5
+                for i in range(min(3, len(added_titles))):
+                    summary += f"{i+1}. {added_titles[i]}\n"
+                if len(added_titles) > 4:
+                    summary += f"... ({len(added_titles) - 4} more) ...\n"
+                summary += f"{len(added_titles)}. {added_titles[-1]}\n"
+            
+            summary += f"\n🔔 Reminders: {', '.join(str(d) for d in sorted([d for d in reminder_days if d > 0], reverse=True))} days + day-of\n"
+            summary += "\nเพิ่มกิจกรรมทั้งหมดสำเร็จแล้ว!"
+            
+            await self._send_message(event, line_bot_api, summary)
+            return True
+
+        # Check if this is a yes/no for adding (single event)
         if text_lower in ["yes", "y", "ใช่", "add"]:
             # Move to reminder selection
             msg = (
@@ -1557,8 +1656,12 @@ class CalendarAgent(BaseAgent):
             if has_more:
                 next_date = calendar_session_manager.get_current_extracted_date(chat_id)
                 if next_date:
+                    # Calculate progress
+                    current_idx = session.current_extraction_index + 1  # +1 for 1-based display
+                    total = len(session.extracted_dates)
                     await self._prompt_extracted_date(
-                        event, line_bot_api, next_date
+                        event, line_bot_api, next_date,
+                        current=current_idx, total=total
                     )
             else:
                 calendar_session_manager.end_session(chat_id)
@@ -1601,8 +1704,12 @@ class CalendarAgent(BaseAgent):
             if has_more:
                 next_date = calendar_session_manager.get_current_extracted_date(chat_id)
                 if next_date:
+                    # Calculate progress
+                    current_idx = session.current_extraction_index + 1  # +1 for 1-based display
+                    total = len(session.extracted_dates)
                     await self._prompt_extracted_date(
-                        event, line_bot_api, next_date
+                        event, line_bot_api, next_date,
+                        current=current_idx, total=total
                     )
             else:
                 calendar_session_manager.end_session(chat_id)
@@ -1618,7 +1725,9 @@ class CalendarAgent(BaseAgent):
         self,
         event: MessageEvent,
         line_bot_api: MessagingApi,
-        date_info: Dict[str, Any]
+        date_info: Dict[str, Any],
+        current: Optional[int] = None,
+        total: Optional[int] = None
     ) -> None:
         """Prompt user about an extracted date."""
         date_obj = date_info.get("date")
@@ -1627,8 +1736,13 @@ class CalendarAgent(BaseAgent):
         
         date_str = date_obj.strftime("%B %d, %Y") if date_obj else "Unknown"
         
-        msg = (
-            f"📅 Found event in image:\n\n"
+        # Show progress counter if provided
+        if current and total:
+            msg = f"📅 Event {current}/{total}:\n\n"
+        else:
+            msg = "📅 Found event in image:\n\n"
+        
+        msg += (
             f"📌 {title}\n"
             f"📆 {date_str}\n"
         )
@@ -1636,12 +1750,25 @@ class CalendarAgent(BaseAgent):
         if description:
             msg += f"📝 {description}\n"
         
-        msg += "\nAdd to calendar? (yes/no)"
+        msg += "\nAdd to calendar?"
         
-        quick_reply = QuickReply(items=[
+        # Build quick reply options
+        quick_reply_items = [
             QuickReplyItem(type="action", action=MessageAction(label="✅ Yes", text="yes")),
-            QuickReplyItem(type="action", action=MessageAction(label="❌ No", text="no")),
-        ])
+            QuickReplyItem(type="action", action=MessageAction(label="⏭️ Skip", text="no")),
+        ]
+        
+        # Add "Add All" option if there are remaining events
+        if total and current and (total - current) > 0:
+            remaining = total - current + 1  # +1 includes current event
+            quick_reply_items.append(
+                QuickReplyItem(
+                    type="action",
+                    action=MessageAction(label=f"➕ Add All ({remaining})", text="add all")
+                )
+            )
+        
+        quick_reply = QuickReply(items=quick_reply_items)
         
         await self._send_message_with_quick_reply(
             event, line_bot_api, msg, quick_reply

@@ -9,10 +9,12 @@ Env vars (match src.config.Settings field names):
 - HF_MEMORY_TOKEN: Hugging Face token (write scope)
 - HF_MEMORY_REPO_ID: dataset repo for conversation memory (e.g. "user/zeus-memory")
 - HISTORY_LOG_HF_REPO_ID: dataset repo for history logs (e.g. "user/zeus-logs")
+- CALENDAR_HF_REPO_ID: dataset repo for calendar events (e.g. "user/zeus-calendar")
 
 Folders:
 - data/conversations
 - data/logs/hf_sync
+- data/calendar
 """
 
 from __future__ import annotations
@@ -142,13 +144,26 @@ def main() -> None:
         default=None,
         help="HF dataset repo id for logs (e.g. 'username/zeus-logs'). Defaults to HISTORY_LOG_HF_REPO_ID env var.",
     )
+    parser.add_argument(
+        "--calendar",
+        action="store_true",
+        help="Sync calendar events folder (data/calendar).",
+    )
+    parser.add_argument(
+        "--calendar-repo",
+        type=str,
+        default=None,
+        help="HF dataset repo id for calendar (e.g. 'username/zeus-calendar'). Defaults to CALENDAR_HF_REPO_ID env var.",
+    )
     args = parser.parse_args()
 
     do_memory = args.memory
     do_logs = args.logs
-    if not do_memory and not do_logs:
+    do_calendar = args.calendar
+    if not do_memory and not do_logs and not do_calendar:
         do_memory = True
         do_logs = True
+        do_calendar = True  # Include calendar in default sync
 
     token = _get_hf_token(args.token)
 
@@ -187,6 +202,22 @@ def main() -> None:
             commit_message=f"Sync logs ({datetime.now(timezone.utc).date().isoformat()})",
         )
         print(f"✅ Synced logs to hf://datasets/{repo_id}")
+
+    if do_calendar:
+        repo_id = (args.calendar_repo or os.getenv("CALENDAR_HF_REPO_ID") or "").strip()
+        if not repo_id:
+            print("⚠️  Skipping calendar sync: No CALENDAR_HF_REPO_ID provided")
+        else:
+            folder = root / "data" / "calendar"
+            _ensure_folder(folder)
+            _ensure_nonempty(folder, marker_name=".hf_sync_marker.txt")
+            _sync_folder(
+                token=token,
+                repo_id=repo_id,
+                local_folder=folder,
+                commit_message=f"Sync calendar ({datetime.now(timezone.utc).date().isoformat()})",
+            )
+            print(f"✅ Synced calendar to hf://datasets/{repo_id}")
 
 
 if __name__ == "__main__":
