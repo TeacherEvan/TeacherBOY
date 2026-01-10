@@ -189,10 +189,6 @@ Agent Factory Pattern:
       privilege_service._reset_for_testing()
   ```
 
-## Observability
-
-- Tracing is optional; enable with `ENABLE_TRACING=true` and see [docs/TRACING.md](../docs/TRACING.md). Setup in [src/utils/tracing.py](../src/utils/tracing.py).
-
 ## Key Environment Variables
 
 **Required:**
