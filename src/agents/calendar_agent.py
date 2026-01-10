@@ -41,6 +41,7 @@ from src.services.message_buffer_service import message_buffer_service
 from src.services.date_extraction_service import date_extraction_service
 from src.services.calendar_access_control import calendar_access_control
 from src.services.rate_limiter import rate_limiter
+from src.services.history_log_service import EventType, LogLevel, get_history_log
 from src.config import settings
 from src.utils.tracing import get_tracer
 
@@ -514,17 +515,16 @@ class CalendarAgent(BaseAgent):
         can_view = await calendar_access_control.can_view_events(user_id, chat_id, line_bot_api)
         if not can_view:
             logger.warning(f"❌ Access denied: {user_id} cannot view events in {chat_id}")
-            # Log access denied
-            from src.services.history_log_service import get_history_log, EventType, LogLevel
             history_log = get_history_log()
             if history_log:
-                await history_log.log_event(
+                await history_log.log(
                     event_type=EventType.CALENDAR_ACCESS_DENIED,
-                    user_id=user_id,
-                    chat_id=chat_id,
+                    message="Access denied: attempted to view events",
                     level=LogLevel.WARNING,
-                    message=f"Access denied: attempted to view events",
-                    metadata={"operation": "view_events"}
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    agent_name=self.name,
+                    metadata={"operation": "view_events"},
                 )
             await self._send_message(
                 event, line_bot_api,
@@ -533,7 +533,7 @@ class CalendarAgent(BaseAgent):
             return True
 
         # Check rate limiting
-        is_admin = self._is_admin(user_id)
+        is_admin = privilege_service.is_admin(user_id)
         if not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin):
             await self._send_message(
                 event, line_bot_api,
@@ -624,17 +624,16 @@ class CalendarAgent(BaseAgent):
         can_create = await calendar_access_control.can_create_event(user_id, chat_id, line_bot_api)
         if not can_create:
             logger.warning(f"❌ Access denied: {user_id} cannot create events in {chat_id}")
-            # Log access denied
-            from src.services.history_log_service import get_history_log, EventType, LogLevel
             history_log = get_history_log()
             if history_log:
-                await history_log.log_event(
+                await history_log.log(
                     event_type=EventType.CALENDAR_ACCESS_DENIED,
-                    user_id=user_id,
-                    chat_id=chat_id,
+                    message="Access denied: attempted to create event",
                     level=LogLevel.WARNING,
-                    message=f"Access denied: attempted to create event",
-                    metadata={"operation": "create_event"}
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    agent_name=self.name,
+                    metadata={"operation": "create_event"},
                 )
             await self._send_message(
                 event, line_bot_api,
@@ -643,7 +642,7 @@ class CalendarAgent(BaseAgent):
             return True
 
         # Check rate limiting
-        is_admin = self._is_admin(user_id)
+        is_admin = privilege_service.is_admin(user_id)
         if not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin):
             await self._send_message(
                 event, line_bot_api,
@@ -815,9 +814,9 @@ class CalendarAgent(BaseAgent):
             )
             
             quick_reply = QuickReply(items=[
-                QuickReplyItem(type="action", action=MessageAction(label="🔍 Scan recent", text="1")),
-                QuickReplyItem(type="action", action=MessageAction(label="🎯 Listen for new", text="2")),
-                QuickReplyItem(type="action", action=MessageAction(label="✏️ Manual add", text="3")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="🔍 Scan recent", text="1")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="🎯 Listen for new", text="2")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✏️ Manual add", text="3")),
             ])
             
             # Store state to handle response
@@ -959,8 +958,8 @@ class CalendarAgent(BaseAgent):
             return True
 
         quick_reply = QuickReply(items=[
-            QuickReplyItem(type="action", action=MessageAction(label="✅ Yes", text="yes")),
-            QuickReplyItem(type="action", action=MessageAction(label="⏭️ No", text="no")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✅ Yes", text="yes")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="⏭️ No", text="no")),
         ])
 
         await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
@@ -996,10 +995,10 @@ class CalendarAgent(BaseAgent):
                 "(Day-of reminder is always included)"
             )
             quick_reply = QuickReply(items=[
-                QuickReplyItem(type="action", action=MessageAction(label="7 days", text="7")),
-                QuickReplyItem(type="action", action=MessageAction(label="3 days", text="3")),
-                QuickReplyItem(type="action", action=MessageAction(label="1 day", text="1")),
-                QuickReplyItem(type="action", action=MessageAction(label="All", text="all")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="7 days", text="7")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="3 days", text="3")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="1 day", text="1")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="All", text="all")),
             ])
             await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
             return True
@@ -1215,10 +1214,10 @@ class CalendarAgent(BaseAgent):
         )
         
         quick_reply = QuickReply(items=[
-            QuickReplyItem(type="action", action=MessageAction(label="7 days", text="7")),
-            QuickReplyItem(type="action", action=MessageAction(label="3 days", text="3")),
-            QuickReplyItem(type="action", action=MessageAction(label="1 day", text="1")),
-            QuickReplyItem(type="action", action=MessageAction(label="All", text="all")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="7 days", text="7")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="3 days", text="3")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="1 day", text="1")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="All", text="all")),
         ])
         
         await self._send_message_with_quick_reply(
@@ -1291,8 +1290,8 @@ class CalendarAgent(BaseAgent):
         )
         
         quick_reply = QuickReply(items=[
-            QuickReplyItem(type="action", action=MessageAction(label="✅ Yes", text="yes")),
-            QuickReplyItem(type="action", action=MessageAction(label="❌ No", text="no")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✅ Yes", text="yes")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="❌ No", text="no")),
         ])
         
         await self._send_message_with_quick_reply(
@@ -1389,17 +1388,16 @@ class CalendarAgent(BaseAgent):
         can_view = await calendar_access_control.can_view_events(user_id, chat_id, line_bot_api)
         if not can_view:
             logger.warning(f"❌ Access denied: {user_id} cannot view events in {chat_id}")
-            # Log access denied
-            from src.services.history_log_service import get_history_log, EventType, LogLevel
             history_log = get_history_log()
             if history_log:
-                await history_log.log_event(
+                await history_log.log(
                     event_type=EventType.CALENDAR_ACCESS_DENIED,
-                    user_id=user_id,
-                    chat_id=chat_id,
+                    message="Access denied: attempted to remove events",
                     level=LogLevel.WARNING,
-                    message=f"Access denied: attempted to remove events",
-                    metadata={"operation": "remove_events"}
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    agent_name=self.name,
+                    metadata={"operation": "remove_events"},
                 )
             await self._send_message(
                 event, line_bot_api,
@@ -1408,7 +1406,7 @@ class CalendarAgent(BaseAgent):
             return True
 
         # Check rate limiting
-        is_admin = self._is_admin(user_id)
+        is_admin = privilege_service.is_admin(user_id)
         if not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin):
             await self._send_message(
                 event, line_bot_api,
@@ -1516,8 +1514,8 @@ class CalendarAgent(BaseAgent):
         )
         
         quick_reply = QuickReply(items=[
-            QuickReplyItem(type="action", action=MessageAction(label="✅ Yes, delete", text="yes")),
-            QuickReplyItem(type="action", action=MessageAction(label="❌ No, keep", text="no")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✅ Yes, delete", text="yes")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="❌ No, keep", text="no")),
         ])
         
         await self._send_message_with_quick_reply(
@@ -1656,10 +1654,10 @@ class CalendarAgent(BaseAgent):
             )
             
             quick_reply = QuickReply(items=[
-                QuickReplyItem(type="action", action=MessageAction(label="7 days", text="bulk:7")),
-                QuickReplyItem(type="action", action=MessageAction(label="3 days", text="bulk:3")),
-                QuickReplyItem(type="action", action=MessageAction(label="1 day", text="bulk:1")),
-                QuickReplyItem(type="action", action=MessageAction(label="All", text="bulk:all")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="7 days", text="bulk:7")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="3 days", text="bulk:3")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="1 day", text="bulk:1")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="All", text="bulk:all")),
             ])
             
             await self._send_message_with_quick_reply(
@@ -1734,10 +1732,10 @@ class CalendarAgent(BaseAgent):
             )
             
             quick_reply = QuickReply(items=[
-                QuickReplyItem(type="action", action=MessageAction(label="7 days", text="7")),
-                QuickReplyItem(type="action", action=MessageAction(label="3 days", text="3")),
-                QuickReplyItem(type="action", action=MessageAction(label="1 day", text="1")),
-                QuickReplyItem(type="action", action=MessageAction(label="All", text="all")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="7 days", text="7")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="3 days", text="3")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="1 day", text="1")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="All", text="all")),
             ])
             
             await self._send_message_with_quick_reply(
@@ -1849,8 +1847,8 @@ class CalendarAgent(BaseAgent):
         
         # Build quick reply options
         quick_reply_items = [
-            QuickReplyItem(type="action", action=MessageAction(label="✅ Yes", text="yes")),
-            QuickReplyItem(type="action", action=MessageAction(label="⏭️ Skip", text="no")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✅ Yes", text="yes")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="⏭️ Skip", text="no")),
         ]
         
         # Add "Add All" option if there are remaining events
@@ -1859,6 +1857,7 @@ class CalendarAgent(BaseAgent):
             quick_reply_items.append(
                 QuickReplyItem(
                     type="action",
+                    imageUrl=None,
                     action=MessageAction(label=f"➕ Add All ({remaining})", text="add all")
                 )
             )
@@ -1897,17 +1896,16 @@ class CalendarAgent(BaseAgent):
         can_create = await calendar_access_control.can_create_event(user_id, chat_id, line_bot_api)
         if not can_create:
             logger.warning(f"❌ Access denied: {user_id} cannot create events in {chat_id}")
-            # Log access denied
-            from src.services.history_log_service import get_history_log, EventType, LogLevel
             history_log = get_history_log()
             if history_log:
-                await history_log.log_event(
+                await history_log.log(
                     event_type=EventType.CALENDAR_ACCESS_DENIED,
-                    user_id=user_id,
-                    chat_id=chat_id,
+                    message="Access denied: attempted to scrape events",
                     level=LogLevel.WARNING,
-                    message=f"Access denied: attempted to scrape events",
-                    metadata={"operation": "scrape_events"}
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    agent_name=self.name,
+                    metadata={"operation": "scrape_events"},
                 )
             await self._send_message(
                 event, line_bot_api,
@@ -1916,7 +1914,7 @@ class CalendarAgent(BaseAgent):
             return True
 
         # Check rate limiting
-        is_admin = self._is_admin(user_id)
+        is_admin = privilege_service.is_admin(user_id)
         if not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin):
             await self._send_message(
                 event, line_bot_api,
@@ -2035,9 +2033,9 @@ class CalendarAgent(BaseAgent):
         msg += "Add this to calendar? (yes/no/skip all)"
         
         quick_reply = QuickReply(items=[
-            QuickReplyItem(type="action", action=MessageAction(label="✅ Yes", text="yes")),
-            QuickReplyItem(type="action", action=MessageAction(label="⏭️ Skip", text="no")),
-            QuickReplyItem(type="action", action=MessageAction(label="🚫 Skip All", text="done")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✅ Yes", text="yes")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="⏭️ Skip", text="no")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="🚫 Skip All", text="done")),
         ])
         
         await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
@@ -2070,10 +2068,10 @@ class CalendarAgent(BaseAgent):
                 )
                 
                 quick_reply = QuickReply(items=[
-                    QuickReplyItem(type="action", action=MessageAction(label="7 days", text="7")),
-                    QuickReplyItem(type="action", action=MessageAction(label="3 days", text="3")),
-                    QuickReplyItem(type="action", action=MessageAction(label="1 day", text="1")),
-                    QuickReplyItem(type="action", action=MessageAction(label="All", text="all")),
+                    QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="7 days", text="7")),
+                    QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="3 days", text="3")),
+                    QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="1 day", text="1")),
+                    QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="All", text="all")),
                 ])
                 
                 await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
@@ -2205,17 +2203,16 @@ class CalendarAgent(BaseAgent):
         can_create = await calendar_access_control.can_create_event(user_id, chat_id, line_bot_api)
         if not can_create:
             logger.warning(f"❌ Access denied: {user_id} cannot create events in {chat_id}")
-            # Log access denied
-            from src.services.history_log_service import get_history_log, EventType, LogLevel
             history_log = get_history_log()
             if history_log:
-                await history_log.log_event(
+                await history_log.log(
                     event_type=EventType.CALENDAR_ACCESS_DENIED,
-                    user_id=user_id,
-                    chat_id=chat_id,
+                    message="Access denied: attempted to create event inline",
                     level=LogLevel.WARNING,
-                    message=f"Access denied: attempted to create event inline",
-                    metadata={"operation": "create_event_inline"}
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    agent_name=self.name,
+                    metadata={"operation": "create_event_inline"},
                 )
             await self._send_message(
                 event, line_bot_api,
@@ -2224,7 +2221,7 @@ class CalendarAgent(BaseAgent):
             return True
 
         # Check rate limiting
-        is_admin = self._is_admin(user_id)
+        is_admin = privilege_service.is_admin(user_id)
         if not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin):
             await self._send_message(
                 event, line_bot_api,
@@ -2274,10 +2271,10 @@ class CalendarAgent(BaseAgent):
         )
         
         quick_reply = QuickReply(items=[
-            QuickReplyItem(type="action", action=MessageAction(label="7 days", text="7")),
-            QuickReplyItem(type="action", action=MessageAction(label="3 days", text="3")),
-            QuickReplyItem(type="action", action=MessageAction(label="1 day", text="1")),
-            QuickReplyItem(type="action", action=MessageAction(label="All", text="all")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="7 days", text="7")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="3 days", text="3")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="1 day", text="1")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="All", text="all")),
         ])
         
         await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
@@ -2338,8 +2335,8 @@ class CalendarAgent(BaseAgent):
         )
         
         quick_reply = QuickReply(items=[
-            QuickReplyItem(type="action", action=MessageAction(label="✅ Yes", text="yes")),
-            QuickReplyItem(type="action", action=MessageAction(label="❌ No", text="no")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✅ Yes", text="yes")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="❌ No", text="no")),
         ])
         
         await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)

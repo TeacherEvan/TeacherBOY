@@ -132,35 +132,35 @@ First Message → route_message() → Factory.get_agent() → Instantiate on-dem
 
 ## Architecture & Flow
 
-- **Entry Point:** `src/main.py`(../src/main.py) - FastAPI app with `lifespan` startup, `/webhook` endpoint, and shared `httpx.AsyncClient`.
-- **Webhook Flow:** Validate LINE signature → Skip self-messages (`bot_user_id`) → Route text via `src/agents/agent_router.py`(../src/agents/agent_router.py).
+- **Entry Point:** [src/main.py](../src/main.py) - FastAPI app with `lifespan` startup, `/webhook` endpoint, and shared `httpx.AsyncClient`.
+- **Webhook Flow:** Validate LINE signature → Skip self-messages (`bot_user_id`) → Route text via [src/agents/agent_router.py](../src/agents/agent_router.py).
 - **Agent Routing:** First-match wins in ascending `get_priority()` order; only one agent handles a message.
 
 ## Agent Conventions
 
-- Implement agents by subclassing `src/agents/base_agent.py`(../src/agents/base_agent.py) with async `should_handle()` and `handle()`.
-- Choose priorities carefully: <10 preempts translation; default translation is `src/agents/translation_agent.py`(../src/agents/translation_agent.py) at 10.
-- Runtime admin tracking via 'src/services/privilege_service.py`(../src/services/privilege_service.py) (used by `/admin claim …`).
+- Implement agents by subclassing [src/agents/base_agent.py](../src/agents/base_agent.py) with async `should_handle()` and `handle()`.
+- Choose priorities carefully: <10 preempts translation; default translation is [src/agents/translation_agent.py](../src/agents/translation_agent.py) at 10.
+- Runtime admin tracking via [src/services/privilege_service.py](../src/services/privilege_service.py) (used by `/admin claim …`).
 
 ## LINE + Async I/O Rules
 
-- LINE SDK v3 calls are synchronous; wrap in `await asyncio.to_thread(...)` in async code (see [`src/main.py`(../src/main.py)).
+- LINE SDK v3 calls are synchronous; wrap in `await asyncio.to_thread(...)` in async code (see [src/main.py](../src/main.py)).
 - Reuse the singleton `httpx.AsyncClient` from `lifespan`; do not create new instances.
 
 ## Feature-Specific Gotchas
 
-- Do not modify `src/handlers/message_handler.py`(../src/handlers/message_handler.py) for production; it's legacy (use agent router).
-- News is stateful and friend-gated: Groups/rooms require friend check via LINE `get_profile`; non-friends get translation trigger only (see `src/agents/news_agent.py`(../src/agents/news_agent.py)).
-- Translation uses preprocessing: Preserve parentheses and mark incomplete sentences (see `src/utils/text_preprocessing.py`(../src/utils/text_preprocessing.py)).
+- Do not modify [src/handlers/message_handler.py](../src/handlers/message_handler.py) for production; it's legacy (use agent router).
+- News is stateful and friend-gated: Groups/rooms require friend check via LINE `get_profile`; non-friends get translation trigger only (see [src/agents/news_agent.py](../src/agents/news_agent.py)).
+- Translation uses preprocessing: Preserve parentheses and mark incomplete sentences (see [src/utils/text_preprocessing.py](../src/utils/text_preprocessing.py)).
 
 ## Testing & Debugging
 
-- Run tests with `pytest` (asyncio enabled in `pytest.ini`(../pytest.ini)). Prefer single files, e.g., `pytest tests/test_news_agent.py`.
+- Run tests with `pytest` (asyncio enabled in [pytest.ini](../pytest.ini)). Prefer single files, e.g., `pytest tests/test_news_agent.py`.
 - For env-driven behavior in tests: Agents cache admin IDs in `__init__`; patch module-local `settings` before instantiation.
 
 ## Observability
 
-- Tracing is optional; enable with `ENABLE_TRACING=true` and see `docs/TRACING.md`(../docs/TRACING.md). Setup in `src/utils/tracing.py`(../src/utils/tracing.py).
+- Tracing is optional; enable with `ENABLE_TRACING=true` and see [docs/TRACING.md](../docs/TRACING.md). Setup in [src/utils/tracing.py](../src/utils/tracing.py).
 
 ## Key Environment Variables
 
@@ -190,10 +190,10 @@ First Message → route_message() → Factory.get_agent() → Instantiate on-dem
 
 **Key Files:**
 
-- Entry point: `src/main.py`](../src/main.py) — FastAPI app with `lifespan`, `/webhook`, HTTP client pool
-- Agent dispatch: 'src/agents/agent_router.py`(../src/agents/agent_router.py) — Priority-based routing
-- Base contract: `src/agents/base_agent.py`(../src/agents/base_agent.py) — Abstract `should_handle()` + async `handle()`
-- Settings: `src/config.py`(../src/config.py) — Pydantic settings with validation
+- Entry point: [src/main.py](../src/main.py) — FastAPI app with `lifespan`, `/webhook`, HTTP client pool
+- Agent dispatch: [src/agents/agent_router.py](../src/agents/agent_router.py) — Priority-based routing
+- Base contract: [src/agents/base_agent.py](../src/agents/base_agent.py) — Abstract `should_handle()` + async `handle()`
+- Settings: [src/config.py](../src/config.py) — Pydantic settings with validation
 
 ## 🔄 Webhook Flow
 

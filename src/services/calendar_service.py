@@ -441,12 +441,13 @@ class CalendarService:
         history_log = get_history_log()
         if history_log:
             _schedule_audit_log(
-                history_log.log_event(
+                history_log.log(
                     event_type=EventType.CALENDAR_EVENT_CREATED,
-                    user_id=user_id,
-                    chat_id=chat_id,
-                    level=LogLevel.INFO,
                     message=f"Created event '{event.title}' on {event.event_date}",
+                    level=LogLevel.INFO,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    agent_name="CalendarService",
                     metadata={
                         "event_id": event.event_id,
                         "title": event.title,
@@ -511,12 +512,13 @@ class CalendarService:
             history_log = get_history_log()
             if history_log:
                 _schedule_audit_log(
-                    history_log.log_event(
+                    history_log.log(
                         event_type=EventType.CALENDAR_EVENT_VIEWED,
-                        user_id=requesting_user_id,
-                        chat_id=chat_id,
-                        level=LogLevel.DEBUG,
                         message=f"Viewed {len(events)} events in chat",
+                        level=LogLevel.DEBUG,
+                        chat_id=chat_id,
+                        user_id=requesting_user_id,
+                        agent_name="CalendarService",
                         metadata={"event_count": len(events), "include_past": include_past},
                     )
                 )
@@ -587,12 +589,13 @@ class CalendarService:
         history_log = get_history_log()
         if history_log:
             _schedule_audit_log(
-                history_log.log_event(
+                history_log.log(
                     event_type=EventType.CALENDAR_EVENT_DELETED,
-                    user_id=user_id or "system",
-                    chat_id=event.chat_id,
-                    level=LogLevel.INFO,
                     message=f"Deleted event '{event.title}'",
+                    level=LogLevel.INFO,
+                    chat_id=event.chat_id,
+                    user_id=user_id or "system",
+                    agent_name="CalendarService",
                     metadata={
                         "event_id": event_id,
                         "title": event.title,

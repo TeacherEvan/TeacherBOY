@@ -317,6 +317,15 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("📅 Calendar Agent not registered (calendar disabled)")
 
+    # Register Hannibal Profile Agent (Priority: 6 - Psychological profiling from message history)
+    if settings.is_github_models_configured():
+        from src.agents.hannibal_agent import HannibalProfileAgent
+        hannibal_agent = HannibalProfileAgent(http_client=http_client_pool)
+        agent_router.register_agent(hannibal_agent)
+        logger.info("🎭 Hannibal Profile Agent registered (message history analysis)")
+    else:
+        logger.info("🎭 Hannibal Profile Agent not registered (GitHub Models not configured)")
+
     # Register Profiler Agent (Priority: 7 - Handles image messages for psychological profiling)
     if settings.is_profiler_configured():
         profiler_agent = ProfilerAgent(http_client=http_client_pool)

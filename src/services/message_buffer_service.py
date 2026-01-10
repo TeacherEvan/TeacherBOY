@@ -35,8 +35,8 @@ from threading import RLock
 logger = logging.getLogger(__name__)
 
 # Configuration defaults
-DEFAULT_MAX_MESSAGES = 20  # Max messages per chat
-DEFAULT_TTL_SECONDS = 7200  # 2 hours - messages expire after this
+DEFAULT_MAX_MESSAGES = 200  # Max messages per chat (increased for Hannibal Profile feature)
+DEFAULT_TTL_SECONDS = 86400  # 24 hours - messages expire after this (increased from 2h)
 DEFAULT_CLEANUP_INTERVAL = 300  # 5 minutes
 
 
