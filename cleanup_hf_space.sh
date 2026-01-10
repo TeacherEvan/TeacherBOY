@@ -58,6 +58,8 @@ DOCS_TO_REMOVE=(
     "form_translation.txt"
     "test_output.txt"
     "workspace_non_critical_issues.json"
+    "JOBCARD.md"
+    "HF_DEPLOY_WORKFLOW.md"
 )
 
 for file in "${DOCS_TO_REMOVE[@]}"; do
