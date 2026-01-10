@@ -26,6 +26,7 @@ TeacherBOY now supports **Google Calendar** as the backend for calendar events a
 ### 2. Save Credentials
 
 Save the downloaded JSON as:
+
 ```
 data/google_credentials.json
 ```
@@ -37,6 +38,7 @@ python scripts/setup_google_calendar.py
 ```
 
 This opens a browser for Google account authorization. After authorizing:
+
 - A token is saved to `data/google_token.json`
 - You only need to do this once (token auto-refreshes)
 
@@ -60,12 +62,12 @@ uvicorn src.main:app --reload
 
 ## Configuration Options
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GOOGLE_CALENDAR_ENABLED` | `false` | Enable Google Calendar integration |
-| `GOOGLE_CALENDAR_CREDENTIALS_FILE` | `data/google_credentials.json` | Path to OAuth credentials |
-| `GOOGLE_CALENDAR_TOKEN_FILE` | `data/google_token.json` | Path for authorization token |
-| `GOOGLE_CALENDAR_ID` | `primary` | Calendar ID (use 'primary' for main calendar) |
+| Variable                           | Default                        | Description                                   |
+| ---------------------------------- | ------------------------------ | --------------------------------------------- |
+| `GOOGLE_CALENDAR_ENABLED`          | `false`                        | Enable Google Calendar integration            |
+| `GOOGLE_CALENDAR_CREDENTIALS_FILE` | `data/google_credentials.json` | Path to OAuth credentials                     |
+| `GOOGLE_CALENDAR_TOKEN_FILE`       | `data/google_token.json`       | Path for authorization token                  |
+| `GOOGLE_CALENDAR_ID`               | `primary`                      | Calendar ID (use 'primary' for main calendar) |
 
 ## Usage
 
@@ -73,13 +75,13 @@ uvicorn src.main:app --reload
 
 All existing calendar commands work the same:
 
-| Command | Description |
-|---------|-------------|
-| `zeus calendar` | View upcoming events |
-| `zeus add event` | Start add flow |
-| `zeus add tomorrow Team meeting` | Quick inline add |
-| `zeus scrape` | AI-extract dates from chat |
-| `zeus remove event` | Remove events |
+| Command                          | Description                |
+| -------------------------------- | -------------------------- |
+| `zeus calendar`                  | View upcoming events       |
+| `zeus add event`                 | Start add flow             |
+| `zeus add tomorrow Team meeting` | Quick inline add           |
+| `zeus scrape`                    | AI-extract dates from chat |
+| `zeus remove event`              | Remove events              |
 
 ### New: Natural Language Events
 
@@ -94,6 +96,7 @@ zeus add Mom's birthday party on Jan 15 at 6pm
 ### Native Reminders
 
 When you add an event, reminders are set automatically in Google Calendar:
+
 - 1 day before
 - 1 hour before
 
@@ -132,7 +135,9 @@ If Google Calendar fails to initialize (missing credentials, network error), Tea
 ```
 ✅ Calendar adapter initialized with Google Calendar backend
 ```
+
 or
+
 ```
 📁 Calendar adapter initialized with local storage backend
 ```
@@ -181,10 +186,10 @@ If you have existing events in local JSON storage:
 
 ## Files Created
 
-| File | Purpose |
-|------|---------|
-| `src/services/google_calendar_service.py` | Google Calendar API integration |
-| `src/services/calendar_adapter.py` | Unified adapter for both backends |
-| `scripts/setup_google_calendar.py` | OAuth setup script |
-| `data/google_credentials.json` | OAuth client credentials (you provide) |
-| `data/google_token.json` | Authorization token (generated) |
+| File                                      | Purpose                                |
+| ----------------------------------------- | -------------------------------------- |
+| `src/services/google_calendar_service.py` | Google Calendar API integration        |
+| `src/services/calendar_adapter.py`        | Unified adapter for both backends      |
+| `scripts/setup_google_calendar.py`        | OAuth setup script                     |
+| `data/google_credentials.json`            | OAuth client credentials (you provide) |
+| `data/google_token.json`                  | Authorization token (generated)        |
