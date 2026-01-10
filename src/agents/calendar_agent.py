@@ -2060,16 +2060,29 @@ class CalendarAgent(BaseAgent):
             )
             return True
 
+        # Parse optional scan depth parameter (e.g., "zeus scrape 20")
+        # Format: "zeus scrape [N]" where N is 1-50
+        scan_limit = 10  # Default
+        text_lower = text.lower().strip()
+        match = re.match(r"zeus\s+(?:scrape|scan)(?:\s+(\d+))?", text_lower)
+        if match and match.group(1):
+            try:
+                requested_limit = int(match.group(1))
+                scan_limit = max(1, min(requested_limit, 50))  # Clamp to 1-50
+                logger.info(f"📊 User requested scan depth: {scan_limit}")
+            except ValueError:
+                pass
+        
         # Get recent messages from buffer
-        messages = message_buffer_service.get_message_texts(chat_id, limit=10)
+        messages = message_buffer_service.get_message_texts(chat_id, limit=scan_limit)
         
         if not messages:
             await self._send_message(
                 event, line_bot_api,
                 "📭 No recent messages found to scan.\n\n"
-                "I can only scan messages that arrived while I was active.\n\n"
-                "ไม่พบข้อความล่าสุดที่จะสแกน\n"
-                "ฉันสามารถสแกนเฉพาะข้อความที่มาถึงขณะที่ฉันทำงานอยู่"
+                "💡 I can only scan messages from the last 24 hours.\n"
+                "ฉันสามารถสแกนเฉพาะข้อความจาก 24 ชั่วโมงที่ผ่านมา\n\n"
+                "Try 'zeus add [date] [title]' to add events directly."
             )
             return True
 
@@ -2170,7 +2183,9 @@ class CalendarAgent(BaseAgent):
             source_preview = source[:50] + "..." if len(source) > 50 else source
             msg += f"📝 From: \"{source_preview}\"\n"
         
-        msg += f"🎯 Confidence: {confidence}\n\n"
+        # Visual confidence indicator
+        confidence_emoji = "🟢" if confidence == "high" else "🟡" if confidence == "medium" else "🔴"
+        msg += f"{confidence_emoji} Confidence: {confidence.title()}\n\n"
         msg += "Add this to calendar? (yes/no/add all/skip all)"
         
         quick_reply = QuickReply(items=[
