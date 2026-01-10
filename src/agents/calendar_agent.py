@@ -39,6 +39,8 @@ from src.services.calendar_session_manager import (
 from src.services.privilege_service import privilege_service
 from src.services.message_buffer_service import message_buffer_service
 from src.services.date_extraction_service import date_extraction_service
+from src.services.calendar_access_control import calendar_access_control
+from src.services.rate_limiter import rate_limiter
 from src.config import settings
 from src.utils.tracing import get_tracer
 
@@ -508,9 +510,40 @@ class CalendarAgent(BaseAgent):
             )
             return True
 
+        # Check access control
+        can_view = await calendar_access_control.can_view_events(user_id, chat_id, line_bot_api)
+        if not can_view:
+            logger.warning(f"❌ Access denied: {user_id} cannot view events in {chat_id}")
+            # Log access denied
+            from src.services.history_log_service import get_history_log, EventType, LogLevel
+            history_log = get_history_log()
+            if history_log:
+                await history_log.log_event(
+                    event_type=EventType.CALENDAR_ACCESS_DENIED,
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    level=LogLevel.WARNING,
+                    message=f"Access denied: attempted to view events",
+                    metadata={"operation": "view_events"}
+                )
+            await self._send_message(
+                event, line_bot_api,
+                "❌ You don't have permission to view events in this chat."
+            )
+            return True
+
+        # Check rate limiting
+        is_admin = self._is_admin(user_id)
+        if not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin):
+            await self._send_message(
+                event, line_bot_api,
+                "⏳ Calendar rate limit exceeded. Please try again later."
+            )
+            return True
+
         # CRITICAL PRIVACY: Use get_chat_events() to ensure isolation
         # Group events stay in that group, private entries stay in DMs
-        events = self._calendar_service.get_chat_events(chat_id)
+        events = self._calendar_service.get_chat_events(chat_id, requesting_user_id=user_id)
 
         if not events:
             # Determine chat context for messaging
@@ -584,6 +617,37 @@ class CalendarAgent(BaseAgent):
             await self._send_message(
                 event, line_bot_api,
                 "❌ Cannot identify user."
+            )
+            return True
+
+        # Check access control
+        can_create = await calendar_access_control.can_create_event(user_id, chat_id, line_bot_api)
+        if not can_create:
+            logger.warning(f"❌ Access denied: {user_id} cannot create events in {chat_id}")
+            # Log access denied
+            from src.services.history_log_service import get_history_log, EventType, LogLevel
+            history_log = get_history_log()
+            if history_log:
+                await history_log.log_event(
+                    event_type=EventType.CALENDAR_ACCESS_DENIED,
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    level=LogLevel.WARNING,
+                    message=f"Access denied: attempted to create event",
+                    metadata={"operation": "create_event"}
+                )
+            await self._send_message(
+                event, line_bot_api,
+                "❌ You don't have permission to create events in this chat."
+            )
+            return True
+
+        # Check rate limiting
+        is_admin = self._is_admin(user_id)
+        if not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin):
+            await self._send_message(
+                event, line_bot_api,
+                "⏳ Calendar rate limit exceeded. Please try again later."
             )
             return True
 
@@ -1321,8 +1385,39 @@ class CalendarAgent(BaseAgent):
             )
             return True
 
+        # Check access control - need to view events to remove them
+        can_view = await calendar_access_control.can_view_events(user_id, chat_id, line_bot_api)
+        if not can_view:
+            logger.warning(f"❌ Access denied: {user_id} cannot view events in {chat_id}")
+            # Log access denied
+            from src.services.history_log_service import get_history_log, EventType, LogLevel
+            history_log = get_history_log()
+            if history_log:
+                await history_log.log_event(
+                    event_type=EventType.CALENDAR_ACCESS_DENIED,
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    level=LogLevel.WARNING,
+                    message=f"Access denied: attempted to remove events",
+                    metadata={"operation": "remove_events"}
+                )
+            await self._send_message(
+                event, line_bot_api,
+                "❌ You don't have permission to view events in this chat."
+            )
+            return True
+
+        # Check rate limiting
+        is_admin = self._is_admin(user_id)
+        if not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin):
+            await self._send_message(
+                event, line_bot_api,
+                "⏳ Calendar rate limit exceeded. Please try again later."
+            )
+            return True
+
         # CRITICAL PRIVACY: Use get_chat_events() for isolation
-        events = self._calendar_service.get_chat_events(chat_id)
+        events = self._calendar_service.get_chat_events(chat_id, requesting_user_id=user_id)
 
         if not events:
             is_group = chat_id.startswith("group_") or chat_id.startswith("room_")
@@ -1798,6 +1893,37 @@ class CalendarAgent(BaseAgent):
             )
             return True
 
+        # Check access control
+        can_create = await calendar_access_control.can_create_event(user_id, chat_id, line_bot_api)
+        if not can_create:
+            logger.warning(f"❌ Access denied: {user_id} cannot create events in {chat_id}")
+            # Log access denied
+            from src.services.history_log_service import get_history_log, EventType, LogLevel
+            history_log = get_history_log()
+            if history_log:
+                await history_log.log_event(
+                    event_type=EventType.CALENDAR_ACCESS_DENIED,
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    level=LogLevel.WARNING,
+                    message=f"Access denied: attempted to scrape events",
+                    metadata={"operation": "scrape_events"}
+                )
+            await self._send_message(
+                event, line_bot_api,
+                "❌ You don't have permission to create events in this chat."
+            )
+            return True
+
+        # Check rate limiting
+        is_admin = self._is_admin(user_id)
+        if not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin):
+            await self._send_message(
+                event, line_bot_api,
+                "⏳ Calendar rate limit exceeded. Please try again later."
+            )
+            return True
+
         # Get recent messages from buffer
         messages = message_buffer_service.get_message_texts(chat_id, limit=10)
         
@@ -2072,6 +2198,37 @@ class CalendarAgent(BaseAgent):
             await self._send_message(
                 event, line_bot_api,
                 "❌ Cannot identify user."
+            )
+            return True
+
+        # Check access control
+        can_create = await calendar_access_control.can_create_event(user_id, chat_id, line_bot_api)
+        if not can_create:
+            logger.warning(f"❌ Access denied: {user_id} cannot create events in {chat_id}")
+            # Log access denied
+            from src.services.history_log_service import get_history_log, EventType, LogLevel
+            history_log = get_history_log()
+            if history_log:
+                await history_log.log_event(
+                    event_type=EventType.CALENDAR_ACCESS_DENIED,
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    level=LogLevel.WARNING,
+                    message=f"Access denied: attempted to create event inline",
+                    metadata={"operation": "create_event_inline"}
+                )
+            await self._send_message(
+                event, line_bot_api,
+                "❌ You don't have permission to create events in this chat."
+            )
+            return True
+
+        # Check rate limiting
+        is_admin = self._is_admin(user_id)
+        if not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin):
+            await self._send_message(
+                event, line_bot_api,
+                "⏳ Calendar rate limit exceeded. Please try again later."
             )
             return True
 

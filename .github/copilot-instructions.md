@@ -14,7 +14,7 @@ Note to Agent: Do NOT automatically fetch these files. This is a map for situati
 Startup Flow (Lazy):
   FastAPI lifespan → register_all_agents() → AgentRouter.load_agents_from_factory()
                      (lightweight)            (no instantiation yet)
-                     
+
 First Message → route_message() → Factory.get_agent() → Instantiate on-demand
 ```
 
@@ -23,7 +23,7 @@ First Message → route_message() → Factory.get_agent() → Instantiate on-dem
     Entry Point: src/main.py (FastAPI app & lifecycle)
 
     Routing: src/agents/agent_router.py (Priority-based logic)
-    
+
     **Factory:** src/agents/agent_factory.py (Lazy agent instantiation)
 
     Config: src/config.py (Environment & validation)
@@ -37,9 +37,9 @@ First Message → route_message() → Factory.get_agent() → Instantiate on-dem
     Admin: src/agents/admin_agent.py (P5)
 
     Calendar: src/agents/calendar_agent.py (P6)
-    
+
       - **Modular:** src/agents/calendar/states.py (Session state machine)
-      
+
       - **Modular:** src/agents/calendar/parsers.py (Date parsing logic)
 
     Profiler: src/agents/profiler_agent.py (P7)
@@ -63,10 +63,10 @@ First Message → route_message() → Factory.get_agent() → Instantiate on-dem
     AI/LLM: github_models_service.py, openrouter_service.py, conversation_memory_service.py, conversation_summary_service.py
 
     Vision/Profiling: profiler_service.py, vision_builder.py
-    
+
       - **Lazy Loader:** src/services/profiler/framework_loader.py (Load FBI/Ekman/Navarro on-demand)
 
-    Calendar/Scheduling: calendar_service.py, calendar_session_manager.py, reminder_service.py, date_extraction_service.py
+    Calendar/Scheduling: calendar_service.py, calendar_session_manager.py, reminder_service.py, date_extraction_service.py, calendar_access_control.py, calendar_validator.py
 
     News/Data: news_data_service.py, special_news_service.py, news_session_manager.py
 
@@ -336,6 +336,23 @@ CALENDAR_REMINDER_HOUR=8                 # Daily reminder hour (Bangkok time)
 - DateExtractionService uses GPT-4o-mini with regex fallback
 - CalendarSessionManager has 14+ states for complex flows
 
+**Security Features:**
+
+- **Access Control:** RBAC with role-based permissions (admin/member/owner/non-member)
+- **Chat Isolation:** Events are strictly isolated by chat_id; no cross-chat visibility
+- **Membership Verification:** LINE API calls to verify group/room membership
+- **Rate Limiting:** Per-user and per-chat limits for calendar operations (admins bypass)
+- **Input Validation:** XSS prevention, length limits, banned character filtering
+- **Audit Logging:** All calendar operations logged with event types (created/viewed/modified/deleted/access_denied)
+- **Encryption at Rest:** Optional Fernet encryption for local calendar storage
+
+**Security Services:**
+
+- src/services/calendar_access_control.py — RBAC and membership verification
+- src/services/calendar_validator.py — Input sanitization and validation
+- src/services/rate_limiter.py — Calendar-specific rate limiting
+- src/services/history_log_service.py — Audit logging with calendar event types
+
 ## �🛠️ Developer Workflows
 
 ```bash
@@ -441,6 +458,7 @@ See src/config.py(../src/config.py) for full list with validation ranges.
 **Date:** 2026-01-09
 
 **Justification:** Critical fixes for data loss prevention, privacy violations, and UX improvements in calendar system. User reported:
+
 1. Calendar data erased during HF sync
 2. "Save all" only saved first event (should save all 8)
 3. Privacy violation: Private entries showing in group calendars
@@ -448,12 +466,14 @@ See src/config.py(../src/config.py) for full list with validation ranges.
 **Changes Made:**
 
 **1. Calendar Data Loss Fix:**
+
 - Modified `scripts/hf_sync.py` to include calendar sync
 - Added `--calendar` flag (enabled by default)
 - Added `CALENDAR_HF_REPO_ID` support
 - Calendar data now persists to HF Hub like conversations/logs
 
 **2. "Save All" Bulk Add Feature:**
+
 - Enhanced `src/agents/calendar_agent.py`:
   - `_handle_extracted_date_response()` - Added bulk add logic
   - `_prompt_extracted_date()` - Added progress counter "Event 1/8" and "Add All (8)" button
@@ -462,23 +482,27 @@ See src/config.py(../src/config.py) for full list with validation ranges.
 - Summary shows all added events with titles
 
 **3. Privacy Controls (CRITICAL):**
+
 - Fixed `_handle_view_events()` - Changed from `get_user_events(user_id)` to `get_chat_events(chat_id)`
 - Fixed `_start_remove_flow()` - Changed from `get_user_events(user_id)` to `get_chat_events(chat_id)`
 - **Result:** Group events stay in that group, private entries stay in DMs
 - **Security:** No cross-chat visibility, strict isolation enforced
 
 **Files Modified:**
+
 - `scripts/hf_sync.py` - Calendar sync support (+40 lines)
 - `src/agents/calendar_agent.py` - Bulk add + privacy (~150 lines modified)
 - `CALENDAR_AND_MEMORY_ENHANCEMENTS.md` - Complete documentation (NEW)
 
 **Testing:**
+
 - ✅ All 11 calendar scraping tests passing
 - ✅ Privacy isolation verified in code review
 - ✅ Bulk add logic tested with multi_replace_string_in_file
 - ✅ HF sync script tested successfully (exit code 0)
 
 **Migration Notes:**
+
 - Fully backward compatible
 - Existing calendar events load normally
 - Set `CALENDAR_HF_REPO_ID` env var to enable HF backup
@@ -490,7 +514,8 @@ See src/config.py(../src/config.py) for full list with validation ranges.
 
 - For privacy testing: Add event in DM, verify NOT shown in group calendar
 
-**Maintainability Notes:** 
+**Maintainability Notes:**
+
 - Privacy controls are now enforced at service layer (get_chat_events)
 - Bulk add reduces user interactions from O(n) to O(1)
 - HF sync optional (gracefully degrades to local-only)
@@ -506,29 +531,34 @@ See src/config.py(../src/config.py) for full list with validation ranges.
 **Changes Made:**
 
 **1. Agent Factory Pattern (Lazy Instantiation):**
+
 - Created `src/agents/agent_factory.py` with class-based registration
 - Factory stores agent constructors, not instances
 - Agents instantiate only on first message that triggers them
 - Conditional registration based on API keys/configuration
 
 **2. Calendar Agent Modularization:**
+
 - Split state machine into `src/agents/calendar/states.py`
 - Extracted date parsing to `src/agents/calendar/parsers.py`
 - Reduced main agent file from 450+ lines to focused core logic
 - Better separation of concerns for maintainability
 
 **3. Profiler Framework Lazy Loading:**
+
 - Created `src/services/profiler/framework_loader.py`
 - FBI BAU, Ekman FACS, Navarro, Color Psychology frameworks load on-demand
 - Reduces baseline memory by ~30MB (frameworks are large markdown files)
 - Cache framework content after first load
 
 **4. Agent Router Integration:**
+
 - Added `load_agents_from_factory()` method to AgentRouter
 - Compatible with existing `register_agent()` for backward compatibility
 - Updated `src/main.py` to use factory-based registration
 
 **Files Modified:**
+
 - `src/agents/agent_factory.py` — NEW, factory with lazy loading
 - `src/agents/calendar/states.py` — NEW, state machine enum
 - `src/agents/calendar/parsers.py` — NEW, date parsing logic
@@ -539,17 +569,20 @@ See src/config.py(../src/config.py) for full list with validation ranges.
 - `.github/copilot-instructions.md` — Architecture documentation
 
 **Performance Metrics:**
+
 - Startup time: 500ms → 200ms (60% faster)
 - Baseline memory: 200MB → 120MB (40% reduction)
 - Module load time: Deferred until first use
 - No performance impact on message routing
 
 **Testing:**
+
 - Run `python scripts/measure_startup.py` to verify lazy loading
 - Expected: 0 instantiated agents at startup
 - All pytest tests remain passing
 
 **Migration Notes:**
+
 - Fully backward compatible
 - Agents that depend on http_client or services need factory functions updated
 - New agents should register via factory, not manual instantiation
@@ -567,6 +600,7 @@ agent_router.load_agents_from_factory()
 ```
 
 **Maintainability Notes:**
+
 - Factory pattern enables dynamic agent loading/unloading
 - Modular calendar components easier to test in isolation
 - Framework loader reduces memory for non-profiler workloads
