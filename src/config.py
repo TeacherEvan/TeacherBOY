@@ -413,7 +413,7 @@ class Settings(BaseSettings):
     )
     calendar_data_path: str = Field(
         default="./data/calendar",
-        description="Local directory for storing calendar data.",
+        description="Local directory for storing calendar data (legacy).",
     )
     calendar_hf_repo_id: Optional[str] = Field(
         default=None,
@@ -427,6 +427,29 @@ class Settings(BaseSettings):
         ge=60,
         le=3600,
         description="Interval in seconds for syncing calendar to HF Hub (default: 5 minutes).",
+    )
+
+    # ============================================================================
+    # Google Calendar Integration (Recommended)
+    # ============================================================================
+    google_calendar_enabled: bool = Field(
+        default=False,
+        description="Enable Google Calendar integration (overrides local storage).",
+    )
+    google_calendar_credentials_file: str = Field(
+        default="data/google_credentials.json",
+        description=(
+            "Path to Google OAuth client credentials JSON file. "
+            "Download from: https://console.cloud.google.com/apis/credentials"
+        ),
+    )
+    google_calendar_token_file: str = Field(
+        default="data/google_token.json",
+        description="Path to store Google OAuth token after authorization.",
+    )
+    google_calendar_id: str = Field(
+        default="primary",
+        description="Google Calendar ID to use (default: 'primary' for user's main calendar).",
     )
 
     # ============================================================================
@@ -710,6 +733,14 @@ class Settings(BaseSettings):
             self.calendar_enabled
             and self.hf_memory_token  # Reuse memory token
             and self.calendar_hf_repo_id
+        )
+
+    def is_google_calendar_configured(self) -> bool:
+        """Check if Google Calendar integration is enabled and configured."""
+        import os
+        return bool(
+            self.google_calendar_enabled
+            and os.path.exists(self.google_calendar_credentials_file)
         )
 
     def get_http_client_config(self) -> Dict[str, Any]:
