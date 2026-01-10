@@ -2171,11 +2171,12 @@ class CalendarAgent(BaseAgent):
             msg += f"📝 From: \"{source_preview}\"\n"
         
         msg += f"🎯 Confidence: {confidence}\n\n"
-        msg += "Add this to calendar? (yes/no/skip all)"
+        msg += "Add this to calendar? (yes/no/add all/skip all)"
         
         quick_reply = QuickReply(items=[
             QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✅ Yes", text="yes")),
             QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="⏭️ Skip", text="no")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="➕ Add All", text="add all")),
             QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="🚫 Skip All", text="done")),
         ])
         
@@ -2244,6 +2245,11 @@ class CalendarAgent(BaseAgent):
                 event, line_bot_api,
                 "✅ Scrape session ended.\n\nเสร็จสิ้นการสแกน"
             )
+            return True
+            
+        elif text_lower in ["add all", "all", "ทั้งหมด"]:
+            # Add all remaining events with default reminder settings (1 day + day-of)
+            await self._handle_add_all_scraped_events(event, line_bot_api, chat_id, user_id)
             return True
 
         return False
@@ -2322,6 +2328,77 @@ class CalendarAgent(BaseAgent):
             )
         
         return True
+
+    async def _handle_add_all_scraped_events(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str]
+    ) -> None:
+        """
+        Add all remaining scraped events with default reminder settings (1 day + day-of).
+        """
+        if not user_id or not self._calendar_service:
+            await self._send_message(
+                event, line_bot_api,
+                "❌ Cannot add events - service unavailable."
+            )
+            calendar_session_manager.end_session(chat_id)
+            return
+        
+        # Get session and is_friend status
+        session = calendar_session_manager.get_session(chat_id)
+        if not session or not session.scraped_events:
+            await self._send_message(
+                event, line_bot_api,
+                "❌ No events to add."
+            )
+            calendar_session_manager.end_session(chat_id)
+            return
+        
+        is_friend = session.is_friend
+        default_reminder_days = [1, 0]  # 1 day before + day-of
+        
+        # Get all remaining events (from current index onwards)
+        remaining_events = session.scraped_events[session.current_scrape_index:]
+        added_count = 0
+        failed_count = 0
+        
+        for event_data in remaining_events:
+            try:
+                self._calendar_service.add_event(
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    title=event_data.get("title", "Event"),
+                    event_date=event_data.get("date"),
+                    description=event_data.get("description", ""),
+                    reminder_days=default_reminder_days,
+                    is_friend=is_friend
+                )
+                added_count += 1
+                logger.info(f"✅ Batch added: {event_data.get('title')} on {event_data.get('date')}")
+            except Exception as e:
+                logger.error(f"❌ Failed to add event {event_data.get('title')}: {e}")
+                failed_count += 1
+        
+        # End session
+        calendar_session_manager.end_session(chat_id)
+        
+        # Send confirmation
+        if added_count > 0:
+            msg = (
+                f"✅ Added {added_count} event(s) to calendar!\n"
+                f"เพิ่ม {added_count} กิจกรรมแล้ว!\n\n"
+                f"📌 Default reminders: 1 day before + day-of\n"
+                f"📌 การแจ้งเตือน: 1 วันก่อน + วันนั้น"
+            )
+            if failed_count > 0:
+                msg += f"\n\n⚠️ {failed_count} event(s) failed to add."
+        else:
+            msg = "❌ No events were added."
+        
+        await self._send_message(event, line_bot_api, msg)
 
     # =========================================================================
     # Zeus Add [date] [title] - Inline Add Flow
