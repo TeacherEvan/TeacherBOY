@@ -401,7 +401,8 @@ class TestCalendarDeleteAndLiveBulkAdd:
 
         session = calendar_session_manager.get_session(chat_id)
         assert session is not None
-        assert session.state == CalendarState.LIVE_ADD_LISTENING
+        # "zeus add event" now triggers interactive add flow, not live bulk add
+        assert session.state == CalendarState.AWAITING_DATE
 
 
 class TestReminderService:

@@ -447,14 +447,7 @@ class CalendarAgent(BaseAgent):
                     )
 
                 if self._is_trigger(text, TRIGGERS_ADD):
-                    # Bulk-add mode: "zeus add event" turns on live scraping from incoming
-                    # messages and proposes events for confirmation.
-                    if text.lower().strip() == "zeus add event":
-                        return await self._start_live_bulk_add_flow(
-                            event, line_bot_api, chat_id, user_id
-                        )
-
-                    # Other add triggers keep the manual add flow.
+                    # All add triggers now use the standard interactive flow
                     return await self._start_add_flow(
                         event, line_bot_api, chat_id, user_id
                     )

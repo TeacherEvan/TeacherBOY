@@ -16,6 +16,9 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     PushMessageRequest,
     TextMessage,
+    QuickReply,
+    QuickReplyItem,
+    MessageAction,
 )
 
 from .base_agent import BaseAgent
@@ -26,6 +29,7 @@ from src.services.conversation_memory_service import get_conversation_memory
 from src.utils.tracing import get_tracer
 from src.config import settings
 from src.services.privilege_service import privilege_service
+from linebot.v3.messaging import QuickReply, QuickReplyItem, MessageAction
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -273,19 +277,30 @@ class LLMAgent(BaseAgent):
             )
         )
 
+    def _is_menu_command(self, text: str) -> bool:
+        """
+        Check if text is standalone 'Zeus' command (show menu).
+        
+        Returns:
+            True if text is exactly 'Zeus' (case-insensitive)
+        """
+        text_clean = text.lower().strip()
+        return text_clean == "zeus"
+
     def _parse_command(self, text: str) -> Optional[str]:
         """
-        Parse command.
-        Trigger: 'Zeus <query>'
-        Returns query string or None.
+        Parse Zeus command from text.
+        
+        Returns:
+            Command text without 'Zeus' prefix, or None if not a Zeus command
         """
-        # Regex for trigger: "Zeus" followed by query.
-        # Accept optional leading slash and common typo "Zues".
-        match = re.match(r"^/?(?:Zeus|Zues)\s+(.+)$", text.strip(), re.IGNORECASE)
-        if match:
-            query = match.group(1).strip()
-            return query
-        return None
+        text_lower = text.lower().strip()
+        if not text_lower.startswith("zeus"):
+            return None
+        
+        # Remove "zeus" prefix
+        command = text[4:].strip()  # len("zeus") = 4
+        return command if command else None
 
     def _is_search_command(self, text: str) -> bool:
         """Return True if text is a Zeus search command (reserved for SearchAgent)."""
@@ -373,9 +388,14 @@ class LLMAgent(BaseAgent):
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
         Handle if:
-        1. Text starts with 'Zeus'
-        2. This is NOT a Zeus search command (reserved for SearchAgent)
+        1. Text is exactly 'Zeus' (show menu)
+        2. Text starts with 'Zeus' (LLM query)
+        3. This is NOT a Zeus search command (reserved for SearchAgent)
         """
+        # Check for standalone "Zeus" command (menu)
+        if self._is_menu_command(text):
+            return True
+            
         if not self._parse_command(text):
             return False
 
@@ -391,6 +411,10 @@ class LLMAgent(BaseAgent):
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi
     ) -> bool:
         """Process LLM request."""
+        # Handle standalone "Zeus" command - show interactive menu
+        if self._is_menu_command(text):
+            return await self._show_interactive_menu(event, line_bot_api)
+        
         query = self._parse_command(text)
         if not query:
             return False
@@ -780,3 +804,125 @@ class LLMAgent(BaseAgent):
                 raise
         else:
             logger.error("❌ Cannot send message: no target ID available")
+
+    async def _show_interactive_menu(self, event: MessageEvent, line_bot_api: MessagingApi) -> bool:
+        """
+        Show interactive menu when user says just 'Zeus'.
+        
+        Displays all available Zeus features as Quick Reply buttons.
+        """
+        user_id = getattr(event.source, "user_id", None) if event.source else None
+        is_admin = privilege_service.is_admin(user_id)
+        
+        # Build menu message
+        msg = (
+            "⚡ **Zeus Command Center** ⚡\n\n"
+            "Select a feature to begin:\n\n"
+            "🔍 **Scrape** - Extract events from messages\n"
+            "📅 **Add Event** - Create calendar reminders\n"
+            "🗓️ **Calendar** - View your events\n"
+            "🖼️ **Analyze Image** - Extract data from images\n"
+            "🎭 **Profile Image** - FBI-level behavioral analysis\n"
+            "📰 **News** - Latest updates & weather\n"
+            "🔎 **Search** - Web search powered by Brave\n"
+            "💬 **Ask Zeus** - General questions & chat\n"
+            "🌐 **Translate** - Thai ↔ English translation\n"
+        )
+        
+        # Add admin-only features
+        if is_admin:
+            msg += "⚙️ **Admin** - System commands\n"
+        
+        # Add mysterious last option
+        msg += "🧪 **DR. Hanibal** - ...\n\n"
+        msg += "พิมพ์คำสั่งหรือเลือกจากเมนู"
+        
+        # Build Quick Reply buttons
+        quick_reply_items = [
+            QuickReplyItem(
+                type="action",
+                imageUrl=None,
+                action=MessageAction(label="🔍 Scrape", text="zeus scrape")
+            ),
+            QuickReplyItem(
+                type="action",
+                imageUrl=None,
+                action=MessageAction(label="📅 Add Event", text="zeus add event")
+            ),
+            QuickReplyItem(
+                type="action",
+                imageUrl=None,
+                action=MessageAction(label="🗓️ Calendar", text="zeus calendar")
+            ),
+            QuickReplyItem(
+                type="action",
+                imageUrl=None,
+                action=MessageAction(label="🖼️ Image Q&A", text="Send image then ask")
+            ),
+            QuickReplyItem(
+                type="action",
+                imageUrl=None,
+                action=MessageAction(label="🎭 Profile", text="Send image to profile")
+            ),
+            QuickReplyItem(
+                type="action",
+                imageUrl=None,
+                action=MessageAction(label="📰 News", text="news")
+            ),
+            QuickReplyItem(
+                type="action",
+                imageUrl=None,
+                action=MessageAction(label="🔎 Search", text="zeus search ")
+            ),
+            QuickReplyItem(
+                type="action",
+                imageUrl=None,
+                action=MessageAction(label="💬 Chat", text="Zeus ")
+            ),
+            QuickReplyItem(
+                type="action",
+                imageUrl=None,
+                action=MessageAction(label="🌐 Translate", text="Send text to translate")
+            ),
+        ]
+        
+        # Add admin button if admin
+        if is_admin:
+            quick_reply_items.append(
+                QuickReplyItem(
+                    type="action",
+                    imageUrl=None,
+                    action=MessageAction(label="⚙️ Admin", text="/admin help")
+                )
+            )
+        
+        # Add DR. Hanibal (mysterious last option)
+        quick_reply_items.append(
+            QuickReplyItem(
+                type="action",
+                imageUrl=None,
+                action=MessageAction(label="🧪 DR. Hanibal", text="zeus hannibal")
+            )
+        )
+        
+        quick_reply = QuickReply(items=quick_reply_items)
+        
+        # Send menu with Quick Reply buttons
+        text_message = TextMessage(
+            text=msg,
+            quickReply=quick_reply,
+            quoteToken=None
+        )
+        
+        if event.reply_token:
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[text_message],
+                    notificationDisabled=False
+                )
+            )
+            return True
+        
+        return False
