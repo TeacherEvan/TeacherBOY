@@ -156,6 +156,43 @@ class CalendarAgent(BaseAgent):
         text_lower = text.lower().strip()
         return text_lower in LIVE_STOP_KEYWORDS
 
+    def _looks_like_bulk_dates(self, text: str) -> bool:
+        """Detect if text contains bulk date input (multiple events/dates)."""
+        if not text or len(text) < 50:
+            return False
+        
+        text_lower = text.lower()
+        
+        # Check for Zeus OBSERVES pattern (image analysis output)
+        if "zeus observes" in text_lower or "━━━━━" in text:
+            return True
+        
+        # Check for multiple date patterns (numbered lists)
+        numbered_items = len(re.findall(r'^\s*\d+\.', text, re.MULTILINE))
+        if numbered_items >= 3:
+            return True
+        
+        # Check for multiple date formats
+        date_patterns = [
+            r'\d{4}-\d{2}-\d{2}',  # ISO format
+            r'\d{1,2}/\d{1,2}/\d{4}',  # Slash format
+            r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}',  # Named month
+        ]
+        
+        date_matches = sum(len(re.findall(pattern, text, re.IGNORECASE)) for pattern in date_patterns)
+        if date_matches >= 3:
+            return True
+        
+        # Check for multiple lines with dates
+        lines_with_dates = sum(
+            1 for line in text.split('\n')
+            if any(re.search(pattern, line, re.IGNORECASE) for pattern in date_patterns)
+        )
+        if lines_with_dates >= 3:
+            return True
+        
+        return False
+    
     def _looks_like_event_message(self, text: str) -> bool:
         """Heuristic filter to avoid scraping every incoming message."""
         t = (text or "").lower().strip()
@@ -1106,7 +1143,69 @@ class CalendarAgent(BaseAgent):
         line_bot_api: MessagingApi,
         chat_id: str
     ) -> bool:
-        """Handle date input."""
+        """Handle date input with intelligent bulk detection."""
+        # SMART DETECTION: If text looks like bulk date paste (multiple lines, dates, or "ZEUS OBSERVES"),
+        # switch to extraction flow instead of failing
+        if self._looks_like_bulk_dates(text):
+            logger.info(f"🔍 Detected bulk date input, switching to extraction flow")
+            user_id = calendar_session_manager.get_session(chat_id).user_id
+            
+            # End current session
+            calendar_session_manager.end_session(chat_id)
+            
+            # Start extraction flow with the pasted text
+            is_friend = await self._is_friend(event, line_bot_api)
+            calendar_session_manager.start_scrape_flow(
+                chat_id, user_id, [text], is_friend
+            )
+            
+            # Extract dates using AI
+            try:
+                events = await date_extraction_service.extract_events_from_messages([text])
+                
+                if not events:
+                    await self._send_message(
+                        event, line_bot_api,
+                        "🤔 I see you pasted event details, but I couldn't extract any dates.\n\n"
+                        "Please try using 'zeus scrape' or enter a single date.\n\n"
+                        "ฉันเห็นว่าคุณวางรายละเอียดกิจกรรม แต่ไม่สามารถดึงวันที่ได้"
+                    )
+                    calendar_session_manager.end_session(chat_id)
+                    return True
+                
+                # Convert to dicts and store
+                events_data = [
+                    {
+                        "date": evt.event_date,
+                        "title": evt.title,
+                        "description": evt.description or "",
+                        "source_text": evt.source_text,
+                        "confidence": evt.confidence,
+                    }
+                    for evt in events
+                ]
+                
+                calendar_session_manager.set_scraped_events(chat_id, events_data)
+                
+                # Prompt for first event
+                first_event = calendar_session_manager.get_current_scraped_event(chat_id)
+                if first_event:
+                    await self._prompt_scraped_event(
+                        event, line_bot_api, first_event, 1, len(events_data),
+                        header=f"✨ I extracted {len(events_data)} event(s) from your input!\n\n"
+                    )
+                return True
+                
+            except Exception as e:
+                logger.error(f"❌ Bulk date extraction failed: {e}", exc_info=True)
+                await self._send_message(
+                    event, line_bot_api,
+                    "❌ Failed to process bulk dates. Please try 'zeus scrape' or enter one date at a time."
+                )
+                calendar_session_manager.end_session(chat_id)
+                return True
+        
+        # Standard single date parsing
         parsed_date = self._parse_date(text)
         
         if not parsed_date:
@@ -1119,6 +1218,7 @@ class CalendarAgent(BaseAgent):
                 "• 2025-01-15\n"
                 "• tomorrow\n"
                 "• next week\n\n"
+                "💡 TIP: Paste multiple events? I'll extract them automatically!\n\n"
                 "ไม่เข้าใจวันที่ กรุณาลองอีกครั้ง"
             )
             return True

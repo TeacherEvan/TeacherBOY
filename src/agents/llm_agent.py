@@ -857,12 +857,12 @@ class LLMAgent(BaseAgent):
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="🖼️ Image Q&A", text="Send image then ask")
+                action=MessageAction(label="🖼️ Image Q&A", text="zeus To analyze an image, send it first then ask a question")
             ),
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="🎭 Profile", text="Send image to profile")
+                action=MessageAction(label="🎭 Profile", text="zeus To profile someone, send their image")
             ),
             QuickReplyItem(
                 type="action",
@@ -872,17 +872,17 @@ class LLMAgent(BaseAgent):
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="🔎 Search", text="zeus search ")
+                action=MessageAction(label="🔎 Search", text="zeus search what would you like to search for?")
             ),
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="💬 Chat", text="Zeus ")
+                action=MessageAction(label="💬 Chat", text="Zeus what would you like to talk about?")
             ),
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="🌐 Translate", text="Send text to translate")
+                action=MessageAction(label="🌐 Translate", text="zeus Send Thai or English text for instant translation")
             ),
         ]
         
