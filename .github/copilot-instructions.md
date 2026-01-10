@@ -2,6 +2,62 @@
 
 Note to Agent: Do NOT automatically fetch these files. This is a map for situational awareness. Only reference specific files when the user explicitly requests them or a specific feature implementation requires it.
 
+## ⚠️ CRITICAL: Destructive Action Safety Protocol
+
+**BEFORE executing ANY destructive git operation (rm, reset, push -f, branch deletion):**
+
+1. **VERIFY git remote target:**
+   ```bash
+   git remote -v  # Check ALL configured remotes
+   ```
+   
+2. **VERIFY current branch:**
+   ```bash
+   git branch --show-current
+   ```
+
+3. **VERIFY push destination:**
+   - `origin` = GitHub (FULL REPO - docs/tests required)
+   - `hf` = HuggingFace Spaces (minimal runtime only)
+   - **NEVER push cleanup/deletions to `origin`**
+
+4. **ASK BEFORE ACTING:**
+   - "Which remote should I push to: origin (GitHub) or hf (HF Spaces)?"
+   - "This will delete X files. Confirm target: [remote/branch]?"
+   - **WAIT for explicit confirmation before `git push`**
+
+5. **Multi-Remote Deployments:**
+   - **GitHub (`origin`)**: Keep ALL documentation, tests, implementation logs
+   - **HF Spaces (`hf`)**: Minimal production build only (use `hf-deploy` branch)
+   - **NEVER assume** - always verify which environment user is targeting
+
+**Example of CORRECT reasoning:**
+```
+User: "Remove unnecessary files from HF repo"
+Agent thought process:
+  1. Check `git remote -v` → Only see `origin` (GitHub)
+  2. Realize: No `hf` remote configured
+  3. ASK: "I don't see an HF remote configured. What's your HF Space URL?"
+  4. Create `hf-deploy` branch for cleanup
+  5. Add HF remote, push ONLY to `hf`
+  6. NEVER touch `main` or `origin`
+```
+
+**Example of CATASTROPHIC FAILURE (what NOT to do):**
+```
+User: "Remove unnecessary files from HF repo"
+Agent fuckup:
+  1. Assume "HF repo" = "current repo"
+  2. Run cleanup script on `main` branch
+  3. Push to `origin` (GitHub) ← DESTROYS DOCUMENTATION
+  4. Force-revert causing git history mess
+  5. Waste hours of user's time and money
+```
+
+**Cost of not thinking:** User funds wasted, trust destroyed, hours of cleanup
+
+**If uncertain about git targets: STOP and ASK. Pattern-matching without reasoning = automation without a brain.**
+
 ## 🚀 Performance Architecture: Lazy Loading
 
 **Zeus uses a lazy loading architecture to optimize startup time and memory:**
