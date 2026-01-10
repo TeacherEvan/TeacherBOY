@@ -1771,30 +1771,52 @@ class CalendarAgent(BaseAgent):
             
             # Bulk add all remaining events
             added_count = 0
+            skipped_count = 0
             added_titles = []
             
             while session.current_extraction_index < len(session.extracted_dates):
                 date_info = session.extracted_dates[session.current_extraction_index]
                 
                 if self._calendar_service and user_id:
-                    self._calendar_service.add_event(
+                    # Check for duplicate before adding
+                    is_duplicate = self._calendar_service.has_duplicate_event(
                         user_id=user_id,
                         chat_id=chat_id,
                         title=date_info["title"],
                         event_date=date_info["date"],
-                        description=date_info.get("description", ""),
-                        reminder_days=reminder_days,
-                        is_friend=session.pending_is_friend
                     )
-                    added_count += 1
-                    added_titles.append(date_info["title"])
+                    
+                    if is_duplicate:
+                        logger.info(f"⏩ Skipping duplicate: {date_info['title']} on {date_info['date']}")
+                        skipped_count += 1
+                    else:
+                        try:
+                            self._calendar_service.add_event(
+                                user_id=user_id,
+                                chat_id=chat_id,
+                                title=date_info["title"],
+                                event_date=date_info["date"],
+                                description=date_info.get("description", ""),
+                                reminder_days=reminder_days,
+                                is_friend=session.pending_is_friend,
+                                skip_duplicate_check=True,  # Already checked above
+                            )
+                            added_count += 1
+                            added_titles.append(date_info["title"])
+                        except ValueError as e:
+                            # Validation error (shouldn't be duplicate since we checked)
+                            logger.error(f"❌ Failed to add event: {e}")
+                            skipped_count += 1
                 
                 session.current_extraction_index += 1
             
             # Show summary
             calendar_session_manager.end_session(chat_id)
             
-            summary = f"✅ Added {added_count} event(s) to calendar!\n\n"
+            summary = f"✅ Added {added_count} event(s) to calendar!"
+            if skipped_count > 0:
+                summary += f" (⏩ {skipped_count} duplicate(s) skipped)"
+            summary += "\n\n"
             if added_count <= 5:
                 # Show all titles if 5 or fewer
                 for i, title in enumerate(added_titles, 1):
@@ -1869,21 +1891,44 @@ class CalendarAgent(BaseAgent):
             )
             
             if event_data and self._calendar_service and user_id:
-                # Create the event
-                self._calendar_service.add_event(
+                # Check for duplicate before creating
+                is_duplicate = self._calendar_service.has_duplicate_event(
                     user_id=user_id,
                     chat_id=chat_id,
                     title=event_data["title"],
                     event_date=event_data["date"],
-                    description=event_data["description"],
-                    reminder_days=event_data["reminder_days"],
-                    is_friend=event_data["is_friend"]
                 )
                 
-                await self._send_message(
-                    event, line_bot_api,
-                    f"✅ Added: {event_data['title']}"
-                )
+                if is_duplicate:
+                    logger.info(f"⏩ Duplicate detected: {event_data['title']} on {event_data['date']}")
+                    await self._send_message(
+                        event, line_bot_api,
+                        f"⏩ Skipped: {event_data['title']} (duplicate)"
+                    )
+                else:
+                    # Create the event
+                    try:
+                        self._calendar_service.add_event(
+                            user_id=user_id,
+                            chat_id=chat_id,
+                            title=event_data["title"],
+                            event_date=event_data["date"],
+                            description=event_data["description"],
+                            reminder_days=event_data["reminder_days"],
+                            is_friend=event_data["is_friend"],
+                            skip_duplicate_check=True,  # Already checked above
+                        )
+                        
+                        await self._send_message(
+                            event, line_bot_api,
+                            f"✅ Added: {event_data['title']}"
+                        )
+                    except ValueError as e:
+                        logger.error(f"❌ Failed to add event: {e}")
+                        await self._send_message(
+                            event, line_bot_api,
+                            f"❌ Failed: {event_data['title']} ({str(e)})"
+                        )
             
             # Move to next extracted date
             has_more = calendar_session_manager.advance_extraction_index(chat_id)

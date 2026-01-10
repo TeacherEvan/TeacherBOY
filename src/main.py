@@ -650,16 +650,12 @@ async def webhook(request: Request) -> JSONResponse:
             for event in events:
                 try:
                     if isinstance(event, MessageEvent):
-                        # CRITICAL: Check if message is from bot itself (prevent infinite loop)
                         user_id = getattr(event.source, "user_id", None) if event.source else None
-                        if bot_user_id and user_id == bot_user_id:
-                            logger.info(
-                                f"🔒 Skipping bot's own message (self-message detection)"
-                            )
-                            continue
-
+                        
                         if isinstance(event.message, TextMessageContent):
                             # Store message in buffer for "zeus scrape" feature
+                            # NOTE: We now store ALL messages including bot's own messages
+                            # This allows Zeus to scrape dates from his own responses
                             chat_id = None
                             if event.source:
                                 if getattr(event.source, "group_id", None):
@@ -676,6 +672,14 @@ async def webhook(request: Request) -> JSONResponse:
                                     user_id=user_id,
                                     message_id=event.message.id if hasattr(event.message, 'id') else None
                                 )
+                            
+                            # CRITICAL: Check if message is from bot itself (prevent infinite loop)
+                            # Skip agent routing for bot's own messages to prevent responding to itself
+                            if bot_user_id and user_id == bot_user_id:
+                                logger.debug(
+                                    f"🔒 Skipping agent routing for bot's own message (stored in buffer only)"
+                                )
+                                continue
                             
                             # Route text message to appropriate agent
                             await agent_router.route_message(event, line_bot_api)

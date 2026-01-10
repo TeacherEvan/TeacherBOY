@@ -388,6 +388,44 @@ class CalendarService:
         except Exception as e:
             logger.error(f"❌ Failed to save calendar to local storage: {e}")
 
+    def has_duplicate_event(
+        self,
+        user_id: str,
+        chat_id: str,
+        title: str,
+        event_date: date,
+    ) -> bool:
+        """
+        Check if a duplicate event already exists.
+        
+        An event is considered a duplicate if:
+        - Same user_id
+        - Same chat_id
+        - Same title (case-insensitive, trimmed)
+        - Same event_date
+        
+        Args:
+            user_id: LINE user ID
+            chat_id: Chat ID
+            title: Event title
+            event_date: Event date
+            
+        Returns:
+            True if duplicate exists
+        """
+        title_normalized = title.strip().lower()
+        
+        for event in self._events.values():
+            if (
+                event.user_id == user_id
+                and event.chat_id == chat_id
+                and event.title.strip().lower() == title_normalized
+                and event.event_date == event_date
+            ):
+                return True
+        
+        return False
+
     def add_event(
         self,
         user_id: str,
@@ -397,6 +435,7 @@ class CalendarService:
         description: str = "",
         reminder_days: Optional[List[int]] = None,
         is_friend: bool = False,
+        skip_duplicate_check: bool = False,
     ) -> CalendarEvent:
         """
         Add a new calendar event.
@@ -409,10 +448,21 @@ class CalendarService:
             description: Event description
             reminder_days: Days before to remind
             is_friend: Whether user is LINE friend
+            skip_duplicate_check: If True, bypass duplicate detection (use with caution)
             
         Returns:
             Created CalendarEvent
+            
+        Raises:
+            ValueError: If event is invalid or duplicate exists
         """
+        # Check for duplicates first (before validation to save processing)
+        if not skip_duplicate_check:
+            if self.has_duplicate_event(user_id, chat_id, title, event_date):
+                raise ValueError(
+                    f"Duplicate event: '{title}' on {event_date.isoformat()} already exists"
+                )
+        
         # Validate and sanitize inputs (defense-in-depth)
         is_valid, sanitized, error = calendar_validator.validate_event(
             title=title,
