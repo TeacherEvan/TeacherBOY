@@ -274,8 +274,8 @@ class CalendarService:
                 squash_history=True,
             )
             
-            # Load existing events from HF Hub
-            asyncio.create_task(self._load_from_hub())
+            # Load existing events from HF Hub (synchronously during startup)
+            self._load_from_hub_sync()
             
             logger.info("📅 Calendar service initialized with HF Hub persistence")
             
@@ -285,6 +285,46 @@ class CalendarService:
         except Exception as e:
             logger.error(f"❌ Failed to initialize HF storage for calendar: {e}")
             self._hf_enabled = False
+
+    def _load_from_hub_sync(self):
+        """Load events from HF Hub synchronously during startup."""
+        if not self._hf_enabled or not self._hf_api:
+            return
+            
+        try:
+            import importlib
+            hf = importlib.import_module("huggingface_hub")
+            hf_hub_download = getattr(hf, "hf_hub_download")
+            
+            logger.info(f"📥 Downloading calendar from HF Hub: {self.hf_repo_id}")
+            
+            local_file = hf_hub_download(
+                repo_id=self.hf_repo_id,
+                filename=CALENDAR_FILENAME,
+                repo_type="dataset",
+                token=self.hf_token,
+                local_dir=str(self.local_storage_path),
+            )
+            
+            with open(local_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            # Clear existing events before loading from HF Hub
+            self._events.clear()
+            
+            events_data = data.get("events", [])
+            for event_dict in events_data:
+                try:
+                    event = CalendarEvent.from_dict(event_dict)
+                    self._events[event.event_id] = event
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to load event: {e}")
+            
+            logger.info(f"✅ Loaded {len(self._events)} events from HF Hub")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load events from HF Hub (repo may be empty): {e}")
+            logger.info("📅 Starting with empty calendar - will sync to HF Hub on first save")
 
     async def _load_from_hub(self):
         """Load events from HF Hub on startup."""
@@ -306,6 +346,9 @@ class CalendarService:
             
             with open(local_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            
+            # Clear existing events before loading from HF Hub
+            self._events.clear()
             
             events_data = data.get("events", [])
             for event_dict in events_data:
@@ -747,8 +790,6 @@ class CalendarService:
         if storage_path:
             self.local_storage_path = Path(storage_path)
             self.local_storage_path.mkdir(parents=True, exist_ok=True)
-            # Reload events from new location
-            self._load_from_local_storage()
         
         # Update HF Hub configuration
         if hf_token and hf_repo_id:
@@ -758,6 +799,8 @@ class CalendarService:
             self._setup_hf_storage()
             logger.info(f"📅 Calendar service configured with HF Hub: {hf_repo_id}")
         else:
+            # Only reload from local if NOT using HF Hub
+            self._load_from_local_storage()
             self._hf_enabled = False
             logger.info("📅 Calendar service configured (local storage only)")
 
