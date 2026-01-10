@@ -145,8 +145,9 @@ def __import_translation_agent():
 
 def __import_calendar_agent():
     from .calendar_agent import CalendarAgent
+    from src.services.calendar_service import calendar_service
 
-    return CalendarAgent()
+    return CalendarAgent(calendar_service=calendar_service)
 
 
 def __import_profiler_agent():
