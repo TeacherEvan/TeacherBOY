@@ -9,19 +9,23 @@
 ## 🎯 **Problems Solved**
 
 ### Issue 1: Broken Quick Reply Button Triggers
+
 **Problem:** Zeus interactive menu buttons sent placeholder instructions instead of triggering actual features.
 
 **Example Before:**
+
 - "Image Q&A" button → Sent text: `"Send image then ask"` ❌
-- "Profile" button → Sent text: `"Send image to profile"` ❌  
+- "Profile" button → Sent text: `"Send image to profile"` ❌
 - "Search" button → Sent text: `"zeus search "` (trailing space) ❌
 
 **Solution:** Updated button triggers to provide helpful guidance instead of broken commands.
 
 ### Issue 2: Calendar Fails on Bulk Date Input
+
 **Problem:** When pasting Zeus's image analysis output (bulk event list) into calendar's date field, agent showed error instead of intelligently extracting events.
 
 **Example Before:**
+
 ```
 User: zeus add event
 Bot: Step 1/4: When is the event?
@@ -37,15 +41,16 @@ Bot: ❌ I couldn't understand that date.
 
 ### 1. Quick Reply Button Fixes (`src/agents/llm_agent.py`)
 
-| Button | Before | After | Status |
-|--------|--------|-------|--------|
-| Image Q&A | `"Send image then ask"` | `"zeus To analyze an image, send it first then ask a question"` | ✅ Fixed |
-| Profile | `"Send image to profile"` | `"zeus To profile someone, send their image"` | ✅ Fixed |
-| Search | `"zeus search "` | `"zeus search what would you like to search for?"` | ✅ Fixed |
-| Chat | `"Zeus "` | `"Zeus what would you like to talk about?"` | ✅ Fixed |
-| Translate | `"Send text to translate"` | `"zeus Send Thai or English text for instant translation"` | ✅ Fixed |
+| Button    | Before                     | After                                                           | Status   |
+| --------- | -------------------------- | --------------------------------------------------------------- | -------- |
+| Image Q&A | `"Send image then ask"`    | `"zeus To analyze an image, send it first then ask a question"` | ✅ Fixed |
+| Profile   | `"Send image to profile"`  | `"zeus To profile someone, send their image"`                   | ✅ Fixed |
+| Search    | `"zeus search "`           | `"zeus search what would you like to search for?"`              | ✅ Fixed |
+| Chat      | `"Zeus "`                  | `"Zeus what would you like to talk about?"`                     | ✅ Fixed |
+| Translate | `"Send text to translate"` | `"zeus Send Thai or English text for instant translation"`      | ✅ Fixed |
 
 **Implementation:**
+
 - Lines 860, 865, 880, 885 in `llm_agent.py`
 - Changed `MessageAction.text` from placeholder to helpful guidance
 - Maintained button labels and emoji icons
@@ -55,6 +60,7 @@ Bot: ❌ I couldn't understand that date.
 ### 2. Intelligent Bulk Date Detection (`src/agents/calendar_agent.py`)
 
 #### New Method: `_looks_like_bulk_dates()`
+
 ```python
 def _looks_like_bulk_dates(self, text: str) -> bool:
     """Detect if text contains bulk date input (multiple events/dates)."""
@@ -66,6 +72,7 @@ def _looks_like_bulk_dates(self, text: str) -> bool:
 ```
 
 **Detection Heuristics:**
+
 - ✅ "zeus observes" keyword
 - ✅ Horizontal dividers (`━━━━━`)
 - ✅ 3+ numbered list items (`1.`, `2.`, `3.`)
@@ -73,9 +80,11 @@ def _looks_like_bulk_dates(self, text: str) -> bool:
 - ✅ 3+ lines containing dates
 
 #### Enhanced: `_handle_date_input()`
+
 **Flow Decision:**
+
 ```
-Bulk Detected? 
+Bulk Detected?
 ├─ YES → Switch to extraction flow
 │         ├─ End manual add session
 │         ├─ Start scrape review session
@@ -87,6 +96,7 @@ Bulk Detected?
 ```
 
 **User Experience:**
+
 ```
 User: zeus add event
 Bot: Step 1/4: When is the event?
@@ -112,11 +122,13 @@ Add this event?
 ## 📊 **Testing Results**
 
 ### Test Coverage
+
 - ✅ **16/16** Menu & scraping tests
-- ✅ **31/31** Calendar agent tests  
+- ✅ **31/31** Calendar agent tests
 - ✅ **47/47** Total tests passing
 
 ### Validated Scenarios
+
 1. ✅ Quick Reply buttons send helpful guidance
 2. ✅ Bulk date detection triggers on ZEUS OBSERVES output
 3. ✅ Single date input still works normally
@@ -129,11 +141,13 @@ Add this event?
 ## 🚀 **Deployment**
 
 ### GitHub
+
 - **Commit:** `841b210`
 - **Branch:** `main`
 - **Status:** ✅ Pushed successfully
 
 ### Testing Command
+
 ```bash
 pytest tests/test_zeus_menu.py tests/test_calendar_scraping_fixes.py tests/test_calendar_agent.py -v
 ```
@@ -143,11 +157,13 @@ pytest tests/test_zeus_menu.py tests/test_calendar_scraping_fixes.py tests/test_
 ## 💡 **User Impact**
 
 ### Before This Fix
+
 - 🔴 Quick Reply buttons sent broken commands
 - 🔴 Calendar crashed on bulk date paste
 - 🔴 Users had to manually type "zeus scrape" first
 
 ### After This Fix
+
 - 🟢 Quick Reply buttons provide helpful instructions
 - 🟢 Calendar intelligently extracts bulk events
 - 🟢 Seamless UX: paste once, confirm all events
@@ -157,12 +173,14 @@ pytest tests/test_zeus_menu.py tests/test_calendar_scraping_fixes.py tests/test_
 ## 📝 **Future Enhancements**
 
 ### Potential Improvements
+
 1. **Button Refinement:** Consider making "Image Q&A" send actual command like `"zeus analyze"` if we add that trigger
 2. **Bulk Detection Tuning:** Adjust thresholds (currently 3+ matches) based on user feedback
 3. **Extraction Confidence:** Show warning if AI extraction confidence is low
 4. **Quick Add Mode:** Add "zeus quick add [date] [title]" for single-line event creation
 
 ### Known Limitations
+
 - Bulk detection requires 3+ date matches (won't trigger on 2 events)
 - Non-standard date formats may not be detected
 - Extraction relies on AI quality (GPT-4o-mini)

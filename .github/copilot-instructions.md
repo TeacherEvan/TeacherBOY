@@ -4,7 +4,7 @@ Note to Agent: Do NOT automatically fetch these files. This is a map for situati
 
 ## 🚀 Performance Architecture: Lazy Loading
 
-**TeacherBOY uses a lazy loading architecture to optimize startup time and memory:**
+**Zeus uses a lazy loading architecture to optimize startup time and memory:**
 
 - **Agent Factory** (`src/agents/agent_factory.py`) — Registers agent classes without instantiation
 - **On-Demand Loading** — Agents instantiate only when first message triggers them
@@ -16,6 +16,14 @@ Startup Flow (Lazy):
                      (lightweight)            (no instantiation yet)
 
 First Message → route_message() → Factory.get_agent() → Instantiate on-demand
+                                   (checks _instances cache first)
+
+Agent Factory Pattern:
+  AgentFactory.register("agent_name", lambda: AgentClass())
+  ↓
+  AgentFactory.get_agent("agent_name")  # Lazy instantiation
+  ↓
+  Cached in _instances for future calls
 ```
 
 🏗️ Core System
@@ -42,7 +50,9 @@ First Message → route_message() → Factory.get_agent() → Instantiate on-dem
 
       - **Modular:** src/agents/calendar/parsers.py (Date parsing logic)
 
-    Profiler: src/agents/profiler_agent.py (P7)
+    Hannibal Profiler: src/agents/hannibal_agent.py (P6) - Message history psychological analysis
+
+    Profiler: src/agents/profiler_agent.py (P7) - Image-based psychological profiling
 
     Vision: src/agents/image_analyzer_agent.py (P7)
 
@@ -155,8 +165,29 @@ First Message → route_message() → Factory.get_agent() → Instantiate on-dem
 
 ## Testing & Debugging
 
-- Run tests with `pytest` (asyncio enabled in [pytest.ini](../pytest.ini)). Prefer single files, e.g., `pytest tests/test_news_agent.py`.
-- For env-driven behavior in tests: Agents cache admin IDs in `__init__`; patch module-local `settings` before instantiation.
+**Test Execution:**
+
+- Run tests with `pytest` (asyncio enabled in [pytest.ini](../pytest.ini))
+- Prefer single files: `pytest tests/test_news_agent.py`
+- Use `-v` for verbose output, `-k` for pattern matching
+- All async tests use `@pytest.mark.asyncio` decorator (auto-detected via `asyncio_mode = auto`)
+
+**Mocking Patterns:**
+
+- LINE SDK v3: Mock `MessagingApi` and `MessageEvent` objects
+- Agents cache admin IDs in `__init__`: patch module-local `settings` before instantiation
+- HTTP clients: Use `Mock()` with `AsyncMock()` for async methods
+- Privilege service: Call `privilege_service._reset_for_testing()` in fixtures
+- Example pattern:
+  ```python
+  @pytest.fixture
+  def agent():
+      privilege_service._reset_for_testing()
+      with patch("src.agents.my_agent.settings") as mock:
+          mock.get_admin_user_ids.return_value = ["U123"]
+          yield MyAgent()
+      privilege_service._reset_for_testing()
+  ```
 
 ## Observability
 
@@ -355,17 +386,30 @@ CALENDAR_REMINDER_HOUR=8                 # Daily reminder hour (Bangkok time)
 
 ## �🛠️ Developer Workflows
 
-```bash
-# Local development
+```powershell
+# Local development (Windows PowerShell)
 python -m uvicorn src.main:app --reload --port 8000
 
-# Docker
+# Docker (works on Windows with Docker Desktop)
 docker-compose up --build
 
 # Testing (pytest with asyncio auto mode - see pytest.ini)
 pytest                                    # All tests
 pytest --cov=src --cov-report=html       # With coverage
 pytest tests/test_news_agent.py          # Single file
+pytest -v -k "test_calendar"             # Run specific test pattern
+
+# HF Hub Sync (manual backup/restore)
+python scripts/hf_sync.py --help                    # See all options
+python scripts/hf_sync.py --conversations           # Sync conversation memory
+python scripts/hf_sync.py --logs                    # Sync history logs
+python scripts/hf_sync.py --calendar                # Sync calendar events
+python scripts/hf_sync.py --all                     # Sync everything
+
+# Windows env var examples
+$env:HF_MEMORY_TOKEN = "hf_..."
+$env:HF_MEMORY_REPO_ID = "username/zeus-memory"
+$env:GOOGLE_TRANSLATE_API_KEY = "..."
 ```
 
 ## ➕ Adding a New Agent
@@ -450,6 +494,36 @@ LLM_PROVIDER_PRIORITY=github,openrouter         # LLM provider order
 ```
 
 See src/config.py(../src/config.py) for full list with validation ranges.
+
+## 🔄 Data Persistence & HF Hub Sync
+
+**Architecture:**
+
+- Local storage: `data/conversations`, `data/logs`, `data/calendar`
+- Optional HF Hub backup: Uses `huggingface_hub.CommitScheduler` for auto-sync
+- Manual sync: `scripts/hf_sync.py` for one-shot uploads/downloads
+
+**HF Hub Configuration:**
+
+```powershell
+# Required env vars
+$env:HF_MEMORY_TOKEN = "hf_..."           # Token with write scope
+$env:HF_MEMORY_REPO_ID = "user/zeus-memory"       # Conversation memory
+$env:HISTORY_LOG_HF_REPO_ID = "user/zeus-logs"    # History logs
+$env:CALENDAR_HF_REPO_ID = "user/zeus-calendar"   # Calendar events
+```
+
+**Manual Sync Workflow:**
+
+1. **Backup to HF Hub:** `python scripts/hf_sync.py --all`
+2. **Restore from HF Hub:** Delete local `data/` folders and restart (auto-downloads)
+3. **Sync specific dataset:** `--conversations`, `--logs`, `--calendar`
+
+**Sync Intervals:**
+
+- Conversation memory: Every 5 minutes (configurable)
+- History logs: Every 5 minutes
+- Calendar events: Every 5 minutes (300s default)
 
 ## Change Documentation
 
