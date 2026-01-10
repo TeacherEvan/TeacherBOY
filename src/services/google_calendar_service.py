@@ -222,7 +222,7 @@ class GoogleCalendarService:
             flow = InstalledAppFlow.from_client_secrets_file(
                 str(self._credentials_path), SCOPES
             )
-            self._credentials = flow.run_local_server(port=8080)
+            self._credentials = flow.run_local_server(port=0)
             self._save_credentials()
             self._build_service()
             self._initialized = True

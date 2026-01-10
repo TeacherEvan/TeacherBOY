@@ -201,6 +201,14 @@ class EventType(str, Enum):
     AUTH_SUCCESS = "auth_success"
     AUTH_FAILURE = "auth_failure"
     ACCESS_DENIED = "access_denied"
+    ACCESS_GRANTED = "access_granted"
+    
+    # Calendar events (new)
+    CALENDAR_EVENT_CREATED = "calendar_event_created"
+    CALENDAR_EVENT_VIEWED = "calendar_event_viewed"
+    CALENDAR_EVENT_MODIFIED = "calendar_event_modified"
+    CALENDAR_EVENT_DELETED = "calendar_event_deleted"
+    CALENDAR_ACCESS_DENIED = "calendar_access_denied"
     
     # Errors
     ERROR = "error"

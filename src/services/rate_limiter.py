@@ -32,6 +32,18 @@ class RateLimiter:
         # Chat-based rate limiting (existing)
         # Dictionary: {chat_id: [timestamp1, timestamp2, ...]}
         self._request_history: Dict[str, List[datetime]] = defaultdict(list)
+        
+        # Calendar operation rate limiting
+        # Dictionary: {user_id: [timestamps]}
+        self._calendar_user_limits: Dict[str, List[datetime]] = defaultdict(list)
+        # Dictionary: {chat_id: [timestamps]}
+        self._calendar_chat_limits: Dict[str, List[datetime]] = defaultdict(list)
+        
+        # Calendar limits configuration
+        self.calendar_user_limit = 10  # 10 operations per minute per user
+        self.calendar_user_window = timedelta(minutes=1)
+        self.calendar_chat_limit = 30  # 30 operations per minute per chat
+        self.calendar_chat_window = timedelta(minutes=1)
 
         # User-based rate limiting for authenticated users
         # Dictionary: {user_id: {"daily": [timestamps], "burst": [timestamps]}}
@@ -260,10 +272,38 @@ class RateLimiter:
 
         for user_id in users_to_remove:
             del self._user_limits[user_id]
+        
+        # Clean up calendar limits
+        calendar_users_to_remove = []
+        for user_id, timestamps in self._calendar_user_limits.items():
+            valid = [ts for ts in timestamps if ts > now - self.calendar_user_window]
+            if not valid:
+                calendar_users_to_remove.append(user_id)
+            else:
+                self._calendar_user_limits[user_id] = valid
+        
+        for user_id in calendar_users_to_remove:
+            del self._calendar_user_limits[user_id]
+        
+        calendar_chats_to_remove = []
+        for chat_id, timestamps in self._calendar_chat_limits.items():
+            valid = [ts for ts in timestamps if ts > now - self.calendar_chat_window]
+            if not valid:
+                calendar_chats_to_remove.append(chat_id)
+            else:
+                self._calendar_chat_limits[chat_id] = valid
+        
+        for chat_id in calendar_chats_to_remove:
+            del self._calendar_chat_limits[chat_id]
 
-        total_cleaned = len(chats_to_remove) + len(users_to_remove)
+        total_cleaned = len(chats_to_remove) + len(users_to_remove) + len(calendar_users_to_remove) + len(calendar_chats_to_remove)
         if total_cleaned > 0:
-            logger.debug(f"🧹 Cleaned up {len(chats_to_remove)} inactive chat(s) and {len(users_to_remove)} inactive user(s)")
+            logger.debug(
+                f"🧹 Cleaned up {len(chats_to_remove)} inactive chat(s), "
+                f"{len(users_to_remove)} inactive user(s), "
+                f"{len(calendar_users_to_remove)} calendar user(s), "
+                f"{len(calendar_chats_to_remove)} calendar chat(s)"
+            )
 
     async def _cleanup_loop(self) -> None:
         """Background task to periodically clean up stale rate limit entries."""
@@ -289,6 +329,61 @@ class RateLimiter:
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
             logger.info("✅ Rate limiter cleanup task stopped")
+    
+    def is_calendar_operation_allowed(
+        self,
+        user_id: str,
+        chat_id: str,
+        is_admin: bool = False
+    ) -> bool:
+        """
+        Check if a calendar operation is allowed.
+        
+        Args:
+            user_id: User identifier
+            chat_id: Chat identifier
+            is_admin: Whether user is an admin (bypasses limits)
+            
+        Returns:
+            True if operation is allowed, False if rate limited
+        """
+        # Admins bypass rate limits
+        if is_admin:
+            return True
+        
+        now = datetime.now()
+        
+        # Check user limit
+        user_cutoff = now - self.calendar_user_window
+        self._calendar_user_limits[user_id] = [
+            ts for ts in self._calendar_user_limits[user_id] if ts > user_cutoff
+        ]
+        
+        if len(self._calendar_user_limits[user_id]) >= self.calendar_user_limit:
+            logger.warning(
+                f"⚠️ Calendar rate limit exceeded for user {user_id}: "
+                f"{len(self._calendar_user_limits[user_id])}/{self.calendar_user_limit} operations"
+            )
+            return False
+        
+        # Check chat limit
+        chat_cutoff = now - self.calendar_chat_window
+        self._calendar_chat_limits[chat_id] = [
+            ts for ts in self._calendar_chat_limits[chat_id] if ts > chat_cutoff
+        ]
+        
+        if len(self._calendar_chat_limits[chat_id]) >= self.calendar_chat_limit:
+            logger.warning(
+                f"⚠️ Calendar rate limit exceeded for chat {chat_id}: "
+                f"{len(self._calendar_chat_limits[chat_id])}/{self.calendar_chat_limit} operations"
+            )
+            return False
+        
+        # Record this operation
+        self._calendar_user_limits[user_id].append(now)
+        self._calendar_chat_limits[chat_id].append(now)
+        
+        return True
 
 
 # Singleton instance

@@ -19,16 +19,30 @@ import json
 import logging
 import os
 import uuid
+import base64
 from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from collections import OrderedDict
+
+from src.services.history_log_service import get_history_log, EventType, LogLevel
+from src.services.calendar_validator import calendar_validator
+from src.config import settings
 
 logger = logging.getLogger(__name__)
 
 # Configuration constants
 SYNC_INTERVAL_MINUTES = 5  # How often to sync to HF Hub
 CALENDAR_FILENAME = "calendar_events.json"
+
+
+def _schedule_audit_log(coro: "asyncio.Future[Any] | asyncio.coroutines.CoroWrapper | Any") -> None:
+    """Best-effort scheduling of audit logging without breaking sync call sites."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    loop.create_task(coro)
 
 
 class CalendarEvent:
@@ -164,6 +178,7 @@ class CalendarService:
         hf_token: Optional[str] = None,
         hf_repo_id: Optional[str] = None,
         local_storage_path: str = "./data/calendar",
+        encryption_key: Optional[str] = None,
     ):
         """
         Initialize calendar service.
@@ -172,10 +187,13 @@ class CalendarService:
             hf_token: Hugging Face API token for persistent storage
             hf_repo_id: HF dataset repo ID (e.g., "username/zeus-memory")
             local_storage_path: Local directory for event storage
+            encryption_key: Optional AES encryption key for local storage (base64)
         """
         self.hf_token = hf_token
         self.hf_repo_id = hf_repo_id
         self.local_storage_path = Path(local_storage_path)
+        self._encryption_key = encryption_key
+        self._cipher_suite: Optional[Any] = None
         
         # In-memory event store: {event_id: CalendarEvent}
         self._events: OrderedDict[str, CalendarEvent] = OrderedDict()
@@ -184,6 +202,10 @@ class CalendarService:
         self._hf_enabled = bool(hf_token and hf_repo_id)
         self._hf_api: Optional[Any] = None
         self._commit_scheduler: Optional[Any] = None
+        
+        # Setup encryption if key provided
+        if self._encryption_key:
+            self._setup_encryption()
         
         # Ensure local storage directory exists
         self.local_storage_path.mkdir(parents=True, exist_ok=True)
@@ -195,6 +217,21 @@ class CalendarService:
             self._setup_hf_storage()
         else:
             logger.info("📅 Calendar service initialized (local storage only)")
+
+    def _setup_encryption(self):
+        """Initialize AES encryption for local storage."""
+        try:
+            from cryptography.fernet import Fernet
+            
+            # Validate key format
+            key_bytes = self._encryption_key.encode() if isinstance(self._encryption_key, str) else self._encryption_key
+            self._cipher_suite = Fernet(key_bytes)
+            logger.info("🔒 Calendar encryption enabled")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize encryption: {e}")
+            logger.warning("⚠️ Continuing without encryption")
+            self._encryption_key = None
+            self._cipher_suite = None
 
     def _setup_hf_storage(self):
         """Initialize Hugging Face Hub storage backend."""
@@ -284,7 +321,7 @@ class CalendarService:
             logger.warning(f"⚠️ Could not load events from HF Hub: {e}")
 
     def _load_from_local_storage(self):
-        """Load events from local JSON file."""
+        """Load events from local JSON file (with optional decryption)."""
         file_path = self.local_storage_path / CALENDAR_FILENAME
         
         if not file_path.exists():
@@ -292,8 +329,20 @@ class CalendarService:
             return
         
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            with open(file_path, "rb" if self._cipher_suite else "r", encoding=None if self._cipher_suite else "utf-8") as f:
+                file_content = f.read()
+            
+            # Decrypt if encryption enabled
+            if self._cipher_suite:
+                try:
+                    decrypted = self._cipher_suite.decrypt(file_content)
+                    data = json.loads(decrypted.decode("utf-8"))
+                    logger.debug("🔓 Decrypted calendar data")
+                except Exception as e:
+                    logger.error(f"❌ Failed to decrypt calendar: {e}")
+                    return
+            else:
+                data = json.loads(file_content) if isinstance(file_content, bytes) else file_content
             
             events_data = data.get("events", [])
             for event_dict in events_data:
@@ -309,7 +358,7 @@ class CalendarService:
             logger.error(f"❌ Failed to load calendar from local storage: {e}")
 
     def _save_to_local_storage(self):
-        """Save all events to local JSON file."""
+        """Save all events to local JSON file (with optional encryption)."""
         file_path = self.local_storage_path / CALENDAR_FILENAME
         
         try:
@@ -318,10 +367,23 @@ class CalendarService:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }
             
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            # Serialize to JSON
+            json_str = json.dumps(data, indent=2, ensure_ascii=False)
             
-            logger.debug(f"📅 Saved {len(self._events)} events to local storage")
+            # Encrypt if encryption enabled
+            if self._cipher_suite:
+                try:
+                    encrypted = self._cipher_suite.encrypt(json_str.encode("utf-8"))
+                    with open(file_path, "wb") as f:
+                        f.write(encrypted)
+                    logger.debug(f"🔒 Encrypted and saved {len(self._events)} events")
+                except Exception as e:
+                    logger.error(f"❌ Failed to encrypt calendar: {e}")
+                    return
+            else:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(json_str)
+                logger.debug(f"📅 Saved {len(self._events)} events to local storage")
             
         except Exception as e:
             logger.error(f"❌ Failed to save calendar to local storage: {e}")
@@ -351,21 +413,50 @@ class CalendarService:
         Returns:
             Created CalendarEvent
         """
-        event = CalendarEvent(
-            event_id=str(uuid.uuid4()),
-            user_id=user_id,
-            chat_id=chat_id,
+        # Validate and sanitize inputs (defense-in-depth)
+        is_valid, sanitized, error = calendar_validator.validate_event(
             title=title,
             event_date=event_date,
             description=description,
             reminder_days=reminder_days,
+        )
+        if not is_valid or not sanitized:
+            raise ValueError(error or "Invalid calendar event")
+
+        event = CalendarEvent(
+            event_id=str(uuid.uuid4()),
+            user_id=user_id,
+            chat_id=chat_id,
+            title=sanitized["title"],
+            event_date=sanitized["event_date"],
+            description=sanitized["description"],
+            reminder_days=sanitized["reminder_days"],
             is_friend=is_friend,
         )
         
         self._events[event.event_id] = event
         self._save_to_local_storage()
         
-        logger.info(f"📅 Added event '{title}' for {user_id} on {event_date}")
+        # Audit log: event creation (best-effort, non-blocking)
+        history_log = get_history_log()
+        if history_log:
+            _schedule_audit_log(
+                history_log.log_event(
+                    event_type=EventType.CALENDAR_EVENT_CREATED,
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    level=LogLevel.INFO,
+                    message=f"Created event '{event.title}' on {event.event_date}",
+                    metadata={
+                        "event_id": event.event_id,
+                        "title": event.title,
+                        "event_date": event.event_date.isoformat(),
+                        "reminder_days": event.reminder_days,
+                    },
+                )
+            )
+        
+        logger.info(f"📅 Added event '{event.title}' for {user_id} on {event.event_date}")
         return event
 
     def get_event(self, event_id: str) -> Optional[CalendarEvent]:
@@ -396,7 +487,8 @@ class CalendarService:
     def get_chat_events(
         self, 
         chat_id: str, 
-        include_past: bool = False
+        include_past: bool = False,
+        requesting_user_id: Optional[str] = None
     ) -> List[CalendarEvent]:
         """
         Get all events for a specific chat (group/room/DM).
@@ -404,6 +496,7 @@ class CalendarService:
         Args:
             chat_id: Chat ID
             include_past: Whether to include past events
+            requesting_user_id: User ID making the request (for audit logging)
             
         Returns:
             List of chat's events sorted by date
@@ -412,6 +505,22 @@ class CalendarService:
             event for event in self._events.values()
             if event.chat_id == chat_id and (include_past or not event.is_past())
         ]
+        
+        # Audit log: event viewing (best-effort)
+        if requesting_user_id:
+            history_log = get_history_log()
+            if history_log:
+                _schedule_audit_log(
+                    history_log.log_event(
+                        event_type=EventType.CALENDAR_EVENT_VIEWED,
+                        user_id=requesting_user_id,
+                        chat_id=chat_id,
+                        level=LogLevel.DEBUG,
+                        message=f"Viewed {len(events)} events in chat",
+                        metadata={"event_count": len(events), "include_past": include_past},
+                    )
+                )
+        
         return sorted(events, key=lambda e: e.event_date)
 
     def get_events_needing_reminder(self, days_before: int) -> List[CalendarEvent]:
@@ -473,6 +582,24 @@ class CalendarService:
         
         del self._events[event_id]
         self._save_to_local_storage()
+        
+        # Audit log: event deletion (best-effort, non-blocking)
+        history_log = get_history_log()
+        if history_log:
+            _schedule_audit_log(
+                history_log.log_event(
+                    event_type=EventType.CALENDAR_EVENT_DELETED,
+                    user_id=user_id or "system",
+                    chat_id=event.chat_id,
+                    level=LogLevel.INFO,
+                    message=f"Deleted event '{event.title}'",
+                    metadata={
+                        "event_id": event_id,
+                        "title": event.title,
+                        "event_date": event.event_date.isoformat(),
+                    },
+                )
+            )
         
         logger.info(f"📅 Removed event '{event.title}' ({event_id})")
         return True
@@ -607,6 +734,8 @@ def init_calendar_service(
     _calendar_service = CalendarService(
         hf_token=hf_token,
         hf_repo_id=hf_repo_id,
+        local_storage_path=settings.calendar_data_path,
+        encryption_key=settings.calendar_encryption_key,
     )
     return _calendar_service
 
@@ -618,4 +747,7 @@ def get_calendar_service() -> Optional[CalendarService]:
 
 # Singleton instance - used by main.py and other modules
 # Starts unconfigured; call calendar_service.configure() to set up HF Hub sync
-calendar_service = CalendarService()
+calendar_service = CalendarService(
+    local_storage_path=settings.calendar_data_path,
+    encryption_key=settings.calendar_encryption_key,
+)

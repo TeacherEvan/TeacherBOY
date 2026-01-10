@@ -428,6 +428,32 @@ class Settings(BaseSettings):
         le=3600,
         description="Interval in seconds for syncing calendar to HF Hub (default: 5 minutes).",
     )
+    calendar_encryption_key: Optional[str] = Field(
+        default=None,
+        description=(
+            "AES encryption key for local calendar data (32 bytes base64). "
+            "If set, all calendar events stored locally will be encrypted at rest. "
+            "Generate with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+        ),
+    )
+    calendar_max_events_per_user: int = Field(
+        default=100,
+        ge=10,
+        le=1000,
+        description="Maximum number of events allowed per user (spam prevention).",
+    )
+    calendar_max_title_length: int = Field(
+        default=200,
+        ge=10,
+        le=500,
+        description="Maximum length for event titles.",
+    )
+    calendar_max_description_length: int = Field(
+        default=1000,
+        ge=50,
+        le=5000,
+        description="Maximum length for event descriptions.",
+    )
 
     # ============================================================================
     # Google Calendar Integration (Recommended)
