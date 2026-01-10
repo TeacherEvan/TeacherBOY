@@ -1935,12 +1935,8 @@ class CalendarAgent(BaseAgent):
             )
             return True
 
-        # Send processing message
-        await self._send_message(
-            event, line_bot_api,
-            f"🔍 Scanning {len(messages)} recent messages...\n\n"
-            f"กำลังสแกน {len(messages)} ข้อความล่าสุด..."
-        )
+        # Log scan start (don't use reply token yet - save for final response)
+        logger.info(f"🔍 Scanning {len(messages)} messages for chat {chat_id}")
 
         # Check friendship status
         is_friend = await self._is_friend(event, line_bot_api)
@@ -1988,17 +1984,19 @@ class CalendarAgent(BaseAgent):
         # Store extracted events and move to review state
         calendar_session_manager.set_scraped_events(chat_id, events_data)
 
-        # Send summary and prompt for first event
-        await self._send_message(
-            event, line_bot_api,
-            f"✅ Found {len(events_data)} event(s) in messages!\n\n"
-            f"พบ {len(events_data)} กิจกรรมในข้อความ!"
-        )
-
-        # Prompt for first event
+        # Prompt for first event (combines summary with prompt in single message)
         first_event = calendar_session_manager.get_current_scraped_event(chat_id)
         if first_event:
-            await self._prompt_scraped_event(event, line_bot_api, first_event, 1, len(events_data))
+            await self._prompt_scraped_event(
+                event, line_bot_api, first_event, 1, len(events_data),
+                header=f"🔍 Scanned {len(messages)} messages - found {len(events_data)} event(s)!\nสแกน {len(messages)} ข้อความ - พบ {len(events_data)} กิจกรรม!\n\n"
+            )
+        else:
+            # Fallback if no first event (shouldn't happen)
+            await self._send_message(
+                event, line_bot_api,
+                f"✅ Found {len(events_data)} event(s) but couldn't load first one."
+            )
 
         return True
 
@@ -2008,9 +2006,14 @@ class CalendarAgent(BaseAgent):
         line_bot_api: MessagingApi,
         event_data: Dict[str, Any],
         current: int,
-        total: int
+        total: int,
+        header: str = ""
     ) -> None:
-        """Prompt user about a scraped event."""
+        """Prompt user about a scraped event.
+        
+        Args:
+            header: Optional header text to prepend (for consolidated messages)
+        """
         date_obj = event_data.get("date")
         title = event_data.get("title", "Event")
         source = event_data.get("source_text", "")
@@ -2018,7 +2021,7 @@ class CalendarAgent(BaseAgent):
         
         date_str = date_obj.strftime("%B %d, %Y") if date_obj else "Unknown"
         
-        msg = (
+        msg = header + (
             f"📅 Event {current}/{total}:\n\n"
             f"📌 {title}\n"
             f"📆 {date_str}\n"
@@ -2138,6 +2141,7 @@ class CalendarAgent(BaseAgent):
         # Get event data with reminder days
         event_data = calendar_session_manager.set_scrape_reminder_days(chat_id, reminder_days)
         
+        added_title = ""
         if event_data and self._calendar_service and user_id:
             # Create the event
             self._calendar_service.add_event(
@@ -2149,12 +2153,7 @@ class CalendarAgent(BaseAgent):
                 reminder_days=event_data["reminder_days"],
                 is_friend=event_data["is_friend"]
             )
-            
-            await self._send_message(
-                event, line_bot_api,
-                f"✅ Added: {event_data['title']}\n\n"
-                f"เพิ่มแล้ว: {event_data['title']}"
-            )
+            added_title = event_data["title"]
         
         # Move to next event
         has_more = calendar_session_manager.advance_scrape_index(chat_id)
@@ -2162,13 +2161,24 @@ class CalendarAgent(BaseAgent):
             next_event = calendar_session_manager.get_current_scraped_event(chat_id)
             if next_event:
                 current, total = calendar_session_manager.get_scrape_progress(chat_id)
+                # Combine confirmation with next event prompt to use reply token once
+                header = f"✅ Added: {added_title}\nเพิ่มแล้ว: {added_title}\n\n" if added_title else ""
                 await self._prompt_scraped_event(
-                    event, line_bot_api, next_event, current, total
+                    event, line_bot_api, next_event, current, total, header=header
+                )
+            else:
+                # Shouldn't happen, but just in case
+                await self._send_message(
+                    event, line_bot_api,
+                    f"✅ Added: {added_title}\n\nเพิ่มแล้ว: {added_title}" if added_title else "✅ Done"
                 )
         else:
             calendar_session_manager.end_session(chat_id)
             await self._send_message(
                 event, line_bot_api,
+                f"✅ Added: {added_title}\n\n"
+                f"เพิ่มกิจกรรมทั้งหมดเรียบร้อยแล้ว!\n"
+                "Finished adding all scraped events!" if added_title else
                 "✅ Finished adding all scraped events!\n\n"
                 "เพิ่มกิจกรรมทั้งหมดเรียบร้อยแล้ว"
             )

@@ -67,16 +67,16 @@ class TestMessageBufferService:
         assert messages[2].text == "Message 3"
     
     def test_buffer_limit(self):
-        """Test that buffer respects maxlen=20."""
-        for i in range(25):
+        """Test that buffer respects maxlen (default: 200 for Hannibal Profile)."""
+        for i in range(250):
             self.service.store_message("chat1", f"Message {i}", "user1")
         
-        messages = self.service.get_recent_messages("chat1", limit=30)
-        assert len(messages) == 20  # Buffer maxlen
+        messages = self.service.get_recent_messages("chat1", limit=300)
+        assert len(messages) == 200  # Buffer maxlen (increased for Hannibal Profile)
         
         # Verify oldest messages were dropped
-        assert "Message 4" not in [m.text for m in messages]
-        assert messages[-1].text == "Message 24"
+        assert "Message 49" not in [m.text for m in messages]
+        assert messages[-1].text == "Message 249"
     
     def test_separate_chats(self):
         """Test that different chats have separate buffers."""
