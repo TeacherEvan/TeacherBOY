@@ -417,7 +417,7 @@ class TestCalendarAgentTriggers:
         result = self.agent._parse_inline_add("zeus add tomorrow team meeting")
         
         assert result is not None
-        assert result["date"] == date.today() + timedelta(days=1)
+        assert result["date"].date() == date.today() + timedelta(days=1)
         assert "team meeting" in result["title"].lower()
     
     def test_parse_inline_add_in_days(self):
@@ -425,7 +425,7 @@ class TestCalendarAgentTriggers:
         result = self.agent._parse_inline_add("zeus add in 7 days project deadline")
         
         assert result is not None
-        assert result["date"] == date.today() + timedelta(days=7)
+        assert result["date"].date() == date.today() + timedelta(days=7)
     
     def test_parse_inline_add_next_week_not_supported(self):
         """Test that 'next week' without day number is not supported in inline add.
@@ -452,7 +452,7 @@ class TestCalendarAgentTriggers:
         result = self.agent._parse_inline_add("zeus add 15/06/2025 summer party")
         
         assert result is not None
-        assert result["date"] == date(2025, 6, 15)
+        assert result["date"].date() == date(2025, 6, 15)
         assert "summer party" in result["title"].lower()
     
     def test_parse_inline_add_iso_date(self):
@@ -460,7 +460,7 @@ class TestCalendarAgentTriggers:
         result = self.agent._parse_inline_add("zeus add 2025-06-15 concert")
         
         assert result is not None
-        assert result["date"] == date(2025, 6, 15)
+        assert result["date"].date() == date(2025, 6, 15)
     
     def test_parse_inline_add_no_date(self):
         """Test that invalid format returns None."""

@@ -1,7 +1,7 @@
 {
   "events": [
     {
-      "event_id": "5469e75f-2661-482a-b631-30849b26fb25",
+      "event_id": "2223eb6e-a7fc-480d-ad28-56f10b5e5b87",
       "user_id": "test_user_deletion_123",
       "chat_id": "user_test_user_deletion_123",
       "title": "User 1 Event",
@@ -13,8 +13,8 @@
       ],
       "is_friend": true,
       "notified_dates": [],
-      "created_at": "2026-01-11T21:27:08.962861+00:00"
+      "created_at": "2026-01-11T21:47:09.861132+00:00"
     }
   ],
-  "updated_at": "2026-01-11T21:27:08.962861+00:00"
+  "updated_at": "2026-01-11T21:47:09.861132+00:00"
 }

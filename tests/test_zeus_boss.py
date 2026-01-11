@@ -17,12 +17,12 @@ async def test_zeus_boss_reply_is_exact():
     event.reply_token = "reply_token"
 
     line_bot_api = MagicMock(spec=MessagingApi)
-    line_bot_api.reply_message = MagicMock()
+    line_bot_api.push_message = MagicMock()  # LLMAgent uses push_message, not reply_message
 
     ok = await agent.handle(event, "Zeus who is boss?", line_bot_api)
     assert ok is True
 
-    # Ensure the reply message text is exactly Evan...
-    line_bot_api.reply_message.assert_called_once()
-    request = line_bot_api.reply_message.call_args[0][0]
-    assert request.messages[0].text == "Evan..."
+    # Ensure the push message text is exactly the expected boss reply
+    line_bot_api.push_message.assert_called_once()
+    request = line_bot_api.push_message.call_args[0][0]
+    assert request.messages[0].text == "Evan's wife..... :'D ⛈️"
