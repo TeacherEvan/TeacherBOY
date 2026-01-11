@@ -5,9 +5,10 @@ Provides shared message sending, date formatting, and validation.
 
 import asyncio
 import logging
+import re
 from abc import ABC, abstractmethod
 from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from zoneinfo import ZoneInfo
 
 from linebot.v3.webhooks import MessageEvent
@@ -29,12 +30,12 @@ BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 class CalendarFlowBase(ABC):
     """Base class for calendar flow handlers with shared utilities."""
 
-    def __init__(self, calendar_service: Any):
+    def __init__(self, calendar_service: Optional[Any] = None):
         """
         Initialize flow handler.
 
         Args:
-            calendar_service: CalendarService instance for data operations
+            calendar_service: CalendarService instance for data operations (optional for lazy loading)
         """
         self._calendar_service = calendar_service
 
@@ -79,7 +80,7 @@ class CalendarFlowBase(ABC):
         event: MessageEvent,
         line_bot_api: MessagingApi,
         text: str,
-        actions: List[Dict[str, str]],
+        actions: Union[List[Dict[str, str]], QuickReply],
     ) -> bool:
         """
         Send message with Quick Reply buttons.
@@ -94,13 +95,18 @@ class CalendarFlowBase(ABC):
             True if message sent successfully
         """
         try:
-            quick_reply_items = [
-                QuickReplyItem(
-                    action=MessageAction(label=action["label"], text=action["text"])
-                )
-                for action in actions
-            ]
-            quick_reply = QuickReply(items=quick_reply_items)
+            if isinstance(actions, QuickReply):
+                quick_reply = actions
+            else:
+                quick_reply_items = [
+                    QuickReplyItem(
+                        type="action",
+                        imageUrl=None,
+                        action=MessageAction(label=action["label"], text=action["text"]),
+                    )
+                    for action in actions
+                ]
+                quick_reply = QuickReply(items=quick_reply_items)
 
             if event.reply_token:
                 await asyncio.to_thread(
@@ -241,6 +247,124 @@ class CalendarFlowBase(ABC):
             return False, "Date cannot be more than 30 days in the past"
 
         return True, ""
+
+    @staticmethod
+    def validate_future_date(dt: date) -> bool:
+        """Return True if date is today or later (Bangkok time)."""
+        today = datetime.now(BANGKOK_TZ).date()
+        return dt >= today
+
+    @staticmethod
+    def is_skip_command(text: str) -> bool:
+        """Return True if user indicates skipping an optional step."""
+        normalized = text.strip().lower()
+        return normalized in {"skip", "none", "no", "n/a", "-", "ข้าม", "ไม่"}
+
+    @staticmethod
+    def parse_date(text: str) -> Optional[date]:
+        """Parse a date-only user input into a date.
+
+        Supported formats:
+        - today, tomorrow
+        - next week
+        - in X days
+        - Month Day [Year] (e.g., Jan 15, 2026; January 15)
+        - DD/MM/YYYY
+        - YYYY-MM-DD
+        """
+        raw = text.strip()
+        if not raw:
+            return None
+
+        lowered = raw.lower()
+        now = datetime.now(BANGKOK_TZ)
+        today = now.date()
+
+        if lowered in {"today", "วันนี้"}:
+            return today
+        if lowered in {"tomorrow", "พรุ่งนี้"}:
+            return today + timedelta(days=1)
+        if lowered in {"next week"}:
+            return today + timedelta(days=7)
+
+        match = re.match(r"^in\s+(\d+)\s+days?$", lowered)
+        if match:
+            try:
+                days = int(match.group(1))
+                return today + timedelta(days=days)
+            except ValueError:
+                return None
+
+        match = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})$", raw)
+        if match:
+            try:
+                d, m, y = int(match.group(1)), int(match.group(2)), int(match.group(3))
+                return date(y, m, d)
+            except ValueError:
+                return None
+
+        match = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", raw)
+        if match:
+            try:
+                y, m, d = int(match.group(1)), int(match.group(2)), int(match.group(3))
+                return date(y, m, d)
+            except ValueError:
+                return None
+
+        match = re.match(
+            r"^(?P<month>[A-Za-z]+)\s+(?P<day>\d{1,2})(?:,?\s+(?P<year>\d{4}))?$",
+            raw,
+        )
+        if match:
+            month_str = match.group("month").lower()
+            day = int(match.group("day"))
+            year = int(match.group("year")) if match.group("year") else today.year
+
+            month_map = {
+                "jan": 1,
+                "january": 1,
+                "feb": 2,
+                "february": 2,
+                "mar": 3,
+                "march": 3,
+                "apr": 4,
+                "april": 4,
+                "may": 5,
+                "jun": 6,
+                "june": 6,
+                "jul": 7,
+                "july": 7,
+                "aug": 8,
+                "august": 8,
+                "sep": 9,
+                "sept": 9,
+                "september": 9,
+                "oct": 10,
+                "october": 10,
+                "nov": 11,
+                "november": 11,
+                "dec": 12,
+                "december": 12,
+            }
+
+            if month_str not in month_map:
+                return None
+
+            try:
+                parsed = date(year, month_map[month_str], day)
+            except ValueError:
+                return None
+
+            # If year not specified and date already passed, roll to next year.
+            if not match.group("year") and parsed < today:
+                try:
+                    parsed = date(year + 1, month_map[month_str], day)
+                except ValueError:
+                    return None
+
+            return parsed
+
+        return None
 
     # =========================================================================
     # Chat ID Utilities

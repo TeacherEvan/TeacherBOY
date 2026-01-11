@@ -105,7 +105,7 @@ class AddFlow(CalendarFlowBase):
             calendar_session_manager.end_session(chat_id)
 
             # Start extraction flow
-            is_friend = session.is_friend if hasattr(session, 'is_friend') else False
+            is_friend = getattr(session, "is_friend", False)
             calendar_session_manager.start_scrape_flow(
                 chat_id, user_id, [text], is_friend
             )

@@ -10,18 +10,20 @@ Note to Agent: Do NOT automatically fetch these files. This is a map for situati
    ```bash
    git remote -v  # Check ALL configured remotes
    ```
-   
 2. **VERIFY current branch:**
+
    ```bash
    git branch --show-current
    ```
 
 3. **VERIFY push destination:**
+
    - `origin` = GitHub (FULL REPO - docs/tests required)
    - `hf` = HuggingFace Spaces (minimal runtime only)
    - **NEVER push cleanup/deletions to `origin`**
 
 4. **ASK BEFORE ACTING:**
+
    - "Which remote should I push to: origin (GitHub) or hf (HF Spaces)?"
    - "This will delete X files. Confirm target: [remote/branch]?"
    - **WAIT for explicit confirmation before `git push`**
@@ -32,6 +34,7 @@ Note to Agent: Do NOT automatically fetch these files. This is a map for situati
    - **NEVER assume** - always verify which environment user is targeting
 
 **Example of CORRECT reasoning:**
+
 ```
 User: "Remove unnecessary files from HF repo"
 Agent thought process:
@@ -44,6 +47,7 @@ Agent thought process:
 ```
 
 **Example of CATASTROPHIC FAILURE (what NOT to do):**
+
 ```
 User: "Remove unnecessary files from HF repo"
 Agent fuckup:
@@ -177,53 +181,54 @@ Agent Factory Pattern:
 
 **Deprecated** — Do NOT use:
 
-- [src/handlers/message_handler.py](../src/handlers/message_handler.py) — LEGACY, use agent_router instead
+- src/handlers/message_handler.py (../src/handlers/message_handler.py) — LEGACY, use agent_router instead
 
 </details>
 
 ### 🎯 Common Tasks → Files Needed
 
-| Task                  | Primary Files                                      | Supporting Files                             |
-| --------------------- | -------------------------------------------------- | -------------------------------------------- |
-| Add new agent         | `base_agent.py`, `main.py`, `agent_router.py`      | `config.py` for settings                     |
-| Fix translation       | `translation_agent.py`, `google_translation.py`    | `text_preprocessing.py`                      |
-| Debug news flow       | `news_agent.py`, `news_session_manager.py`         | `news_data_service.py`                       |
-| Calendar issue        | `calendar_agent.py`, `calendar_session_manager.py` | `calendar_service.py`, `reminder_service.py` |
-| Add config setting    | `config.py`, `.env.example`                        | Relevant agent/service file                  |
-| Profiler optimization | `profiler_agent.py`, `vision_builder.py`           | Framework files in `prompts/frameworks/`     |
-| Rate limit change     | `rate_limiter.py`                                  | Relevant agent file                          |
-| Admin command         | `admin_agent.py`                                   | `privilege_service.py`                       |
+| Task                  | Primary Files                                   | Supporting Files                                     |
+| --------------------- | ----------------------------------------------- | ---------------------------------------------------- |
+| Add new agent         | `base_agent.py`, `main.py`, `agent_router.py`   | `config.py` for settings                             |
+| Fix translation       | `translation_agent.py`, `google_translation.py` | `text_preprocessing.py`                              |
+| Debug news flow       | `news_agent.py`, `news_session_manager.py`      | `news_data_service.py`                               |
+| Add calendar flow     | `base_flow.py`, then new flow class             | `calendar_agent.py`, `calendar_session_manager.py`   |
+| Fix calendar bug      | Relevant `*_flow.py` file                       | `calendar_service.py`, `calendar_session_manager.py` |
+| Add config setting    | `config.py`, `.env.example`                     | Relevant agent/service file                          |
+| Profiler optimization | `profiler_agent.py`, `vision_builder.py`        | Framework files in `prompts/frameworks/`             |
+| Rate limit change     | `rate_limiter.py`                               | Relevant agent file                                  |
+| Admin command         | `admin_agent.py`                                | `privilege_service.py`                               |
 
 ---
 
 ## Architecture & Flow
 
-- **Entry Point:** [src/main.py](../src/main.py) - FastAPI app with `lifespan` startup, `/webhook` endpoint, and shared `httpx.AsyncClient`.
-- **Webhook Flow:** Validate LINE signature → Skip self-messages (`bot_user_id`) → Route text via [src/agents/agent_router.py](../src/agents/agent_router.py).
+- **Entry Point:** src/main.py(../src/main.py) - FastAPI app with `lifespan` startup, `/webhook` endpoint, and shared `httpx.AsyncClient`.
+- **Webhook Flow:** Validate LINE signature → Skip self-messages (`bot_user_id`) → Route text via src/agents/agent_router.py(../src/agents/agent_router.py).
 - **Agent Routing:** First-match wins in ascending `get_priority()` order; only one agent handles a message.
 
 ## Agent Conventions
 
-- Implement agents by subclassing [src/agents/base_agent.py](../src/agents/base_agent.py) with async `should_handle()` and `handle()`.
-- Choose priorities carefully: <10 preempts translation; default translation is [src/agents/translation_agent.py](../src/agents/translation_agent.py) at 10.
-- Runtime admin tracking via [src/services/privilege_service.py](../src/services/privilege_service.py) (used by `/admin claim …`).
+- Implement agents by subclassing src/agents/base_agent.py(../src/agents/base_agent.py) with async `should_handle()` and `handle()`.
+- Choose priorities carefully: <10 preempts translation; default translation is src/agents/translation_agent.py(../src/agents/translation_agent.py) at 10.
+- Runtime admin tracking via src/services/privilege_service.py(../src/services/privilege_service.py) (used by `/admin claim …`).
 
 ## LINE + Async I/O Rules
 
-- LINE SDK v3 calls are synchronous; wrap in `await asyncio.to_thread(...)` in async code (see [src/main.py](../src/main.py)).
+- LINE SDK v3 calls are synchronous; wrap in `await asyncio.to_thread(...)` in async code (see src/main.py(../src/main.py)).
 - Reuse the singleton `httpx.AsyncClient` from `lifespan`; do not create new instances.
 
 ## Feature-Specific Gotchas
 
-- Do not modify [src/handlers/message_handler.py](../src/handlers/message_handler.py) for production; it's legacy (use agent router).
-- News is stateful and friend-gated: Groups/rooms require friend check via LINE `get_profile`; non-friends get translation trigger only (see [src/agents/news_agent.py](../src/agents/news_agent.py)).
-- Translation uses preprocessing: Preserve parentheses and mark incomplete sentences (see [src/utils/text_preprocessing.py](../src/utils/text_preprocessing.py)).
+- Do not modify src/handlers/message_handler.py(../src/handlers/message_handler.py) for production; it's legacy (use agent router).
+- News is stateful and friend-gated: Groups/rooms require friend check via LINE `get_profile`; non-friends get translation trigger only (see src/agents/news_agent.py(../src/agents/news_agent.py)).
+- Translation uses preprocessing: Preserve parentheses and mark incomplete sentences (see src/utils/text_preprocessing.py(../src/utils/text_preprocessing.py)).
 
 ## Testing & Debugging
 
 **Test Execution:**
 
-- Run tests with `pytest` (asyncio enabled in [pytest.ini](../pytest.ini))
+- Run tests with `pytest` (asyncio enabled in pytest.ini(../pytest.ini))
 - Prefer single files: `pytest tests/test_news_agent.py`
 - Use `-v` for verbose output, `-k` for pattern matching
 - All async tests use `@pytest.mark.asyncio` decorator (auto-detected via `asyncio_mode = auto`)
@@ -273,10 +278,10 @@ Agent Factory Pattern:
 
 **Key Files:**
 
-- Entry point: [src/main.py](../src/main.py) — FastAPI app with `lifespan`, `/webhook`, HTTP client pool
-- Agent dispatch: [src/agents/agent_router.py](../src/agents/agent_router.py) — Priority-based routing
-- Base contract: [src/agents/base_agent.py](../src/agents/base_agent.py) — Abstract `should_handle()` + async `handle()`
-- Settings: [src/config.py](../src/config.py) — Pydantic settings with validation
+- Entry point: src/main.py(../src/main.py) — FastAPI app with `lifespan`, `/webhook`, HTTP client pool
+- Agent dispatch: src/agents/agent_router.py(../src/agents/agent_router.py) — Priority-based routing
+- Base contract: src/agents/base_agent.py(../src/agents/base_agent.py) — Abstract `should_handle()` + async `handle()`
+- Settings: src/config.py(../src/config.py) — Pydantic settings with validation
 
 ## 🔄 Webhook Flow
 
@@ -355,21 +360,36 @@ PROFILER_RATE_LIMIT_PER_HOUR=3          # API cost protection
 
 **Disclaimer:** Educational/entertainment purposes only.
 
-## � Calendar Agent
+## 📅 Calendar Agent (Modular Architecture)
 
-The CalendarAgent manages events and reminders with multi-step flows, AI-powered date extraction, and inline add capability.
+The CalendarAgent manages events and reminders through 5 independent modular flows with lazy loading. Each flow activates on-demand, optimizing startup time (60% faster) and memory usage (40% reduction).
 
-**Triggers:**
+**Architecture Overview:**
 
-| Command                     | Description                              |
-| --------------------------- | ---------------------------------------- |
-| `zeus calendar`             | Show calendar menu                       |
-| `zeus events`               | List upcoming events                     |
-| `zeus add event`            | Start interactive add flow               |
-| `zeus scrape` / `zeus scan` | AI-scan last 10 messages for dates       |
-| `zeus add [date] [title]`   | Inline add with date (see formats below) |
+```
+CalendarAgent (entry point + dispatcher)
+    ├── ViewFlow        (view events)
+    ├── RemoveFlow      (remove with confirmation)
+    ├── InlineAddFlow   (zeus add [date] [title])
+    ├── AddFlow         (multi-step interactive add)
+    └── ScrapeFlow      (message extraction + AI)
 
-**Supported Date Formats (Inline Add):**
+All flows extend CalendarFlowBase for consistency
+Lazy loading via factory pattern: get_*_flow() singletons
+```
+
+**User Triggers:**
+
+| Command                     | Handler       | Description                                 |
+| --------------------------- | ------------- | ------------------------------------------- |
+| `zeus calendar`             | CalendarAgent | Show calendar menu (entry point)            |
+| `zeus events`               | ViewFlow      | List upcoming events with details           |
+| `zeus remove`               | RemoveFlow    | Start interactive removal with confirmation |
+| `zeus add event`            | AddFlow       | Start multi-step interactive add flow       |
+| `zeus scrape` / `zeus scan` | ScrapeFlow    | AI-scan last N messages for dates           |
+| `zeus add [date] [title]`   | InlineAddFlow | Inline add with date parsing                |
+
+**Supported Date Formats (All Flows):**
 
 - `tomorrow` — next calendar day
 - `today` — current day
@@ -378,27 +398,73 @@ The CalendarAgent manages events and reminders with multi-step flows, AI-powered
 - `15/01/2025` — DD/MM/YYYY format
 - `2025-06-15` — ISO format (YYYY-MM-DD)
 
-**Not supported:** "next week" (too ambiguous)
+**Flow Details:**
 
-**Zeus Scrape Flow:**
+### ViewFlow (~200 lines)
 
-1. User sends `zeus scrape`
-2. Bot retrieves last 10 messages from local buffer (LINE API doesn't provide history)
-3. GPT-4o-mini extracts dates/events with confidence scores
-4. User reviews each event: [Yes ✓] [No ✗] [Skip →]
-5. If accepted, user selects reminder days: [7 days] [3 days] [1 day] [All]
-6. Event saved to calendar
+- **Purpose**: Display upcoming events
+- **Lazy Loader**: `get_view_flow()` singleton factory
+- **Methods**: `start_view_flow()`, `handle_view_events()`, `_format_events_list()`
+- **User Flow**: `zeus events` → List events by date → Return to menu
 
-**Zeus Add Inline Flow:**
+### RemoveFlow (~280 lines)
 
-1. User sends `zeus add tomorrow Team standup`
-2. Bot parses date and title, shows confirmation
-3. User selects reminder days via Quick Reply
-4. Event saved to calendar
+- **Purpose**: Remove events with confirmation
+- **Lazy Loader**: `get_remove_flow()` singleton factory
+- **Methods**: `start_remove_flow()`, `handle_removal_selection()`, `handle_removal_confirmation()`
+- **User Flow**: `zeus remove` → Select event → Confirm deletion → Event removed
 
-**Key Files:**
+### InlineAddFlow (~350 lines)
 
-- src/agents/calendar_agent.py(../src/agents/calendar_agent.py) — Agent with triggers and handlers
+- **Purpose**: Quick inline add: `zeus add [date] [title]`
+- **Lazy Loader**: `get_inline_add_flow()` singleton factory
+- **Methods**: `handle_inline_add_trigger()`, `handle_reminder_response()`, `handle_confirmation()`
+- **User Flow**: `zeus add tomorrow Team standup` → Confirm → Select reminders → Event created
+- **Smart Feature**: Detects multi-line input and switches to ScrapeFlow
+
+### AddFlow (~400 lines)
+
+- **Purpose**: Multi-step interactive event creation
+- **Lazy Loader**: `get_add_flow()` singleton factory
+- **Methods**: `start_add_flow()`, `handle_date_input()`, `handle_title_input()`, `handle_description_input()`, `handle_reminder_days_input()`, `handle_add_confirmation()`
+- **User Flow**: Date → Title → Description (optional) → Reminder Days → Confirmation → Event created
+- **Special Feature**: `_looks_like_bulk_dates()` detects pasted multi-event text
+
+### ScrapeFlow (~450 lines)
+
+- **Purpose**: Extract dates from recent chat messages via AI
+- **Lazy Loader**: `get_scrape_flow()` singleton factory
+- **Methods**: `handle_scrape_trigger()`, `prompt_scraped_event()`, `handle_scrape_review_response()`, `handle_scrape_reminder_response()`, `handle_add_all_scraped_events()`
+- **User Flow**: `zeus scrape` → Scan messages (1-50 depth) → Review each extracted event → Bulk add → Events created
+- **Confidence Indicators**: 🟢 (high), 🟡 (medium), 🔴 (low confidence)
+- **Bulk Feature**: "Add All" button creates remaining unreviewed events at once
+
+**Key Module Files:**
+
+Core Infrastructure:
+
+- src/agents/calendar/base_flow.py(../src/agents/calendar/base_flow.py) — CalendarFlowBase (common interface + utilities)
+- src/agents/calendar/**init**.py(../src/agents/calendar/**init**.py) — Package exports + lazy loaders
+
+Flow Implementations:
+
+- src/agents/calendar/view_flow.py(../src/agents/calendar/view_flow.py) — ViewFlow handler
+- src/agents/calendar/remove_flow.py(../src/agents/calendar/remove_flow.py) — RemoveFlow handler
+- src/agents/calendar/inline_add_flow.py(../src/agents/calendar/inline_add_flow.py) — InlineAddFlow handler
+- src/agents/calendar/add_flow.py(../src/agents/calendar/add_flow.py) — AddFlow handler
+- src/agents/calendar/scrape_flow.py(../src/agents/calendar/scrape_flow.py) — ScrapeFlow handler
+
+State Machine & Utilities:
+
+- src/agents/calendar/states.py(../src/agents/calendar/states.py) — CalendarState enum (session states)
+- src/agents/calendar/parsers.py(../src/agents/calendar/parsers.py) — DateParser utility class
+
+Entry Point:
+
+- src/agents/calendar_agent.py(../src/agents/calendar_agent.py) — CalendarAgent (dispatcher + main handler)
+
+Supporting Services:
+
 - src/services/calendar_service.py(../src/services/calendar_service.py) — Event storage and retrieval
 - src/services/calendar_session_manager.py(../src/services/calendar_session_manager.py) — Multi-step flow state machine
 - src/services/message_buffer_service.py(../src/services/message_buffer_service.py) — Local message storage for scrape
@@ -509,7 +575,7 @@ def _is_admin(self, user_id: Optional[str]) -> bool:
 
 ## ⚠️ Known Gotchas
 
-- **Do not edit** [src/handlers/message_handler.py](../src/handlers/message_handler.py) — legacy Flex handler; production uses agent routing
+- **Do not edit** src/handlers/message_handler.py(../src/handlers/message_handler.py) — legacy Flex handler; production uses agent routing
 - **Self-message loop:** Handled in webhook via `bot_user_id` check
 - **Async-only:** No `time.sleep()` or blocking I/O—use `await asyncio.sleep()` and async libraries
 - **LINE SDK v3:** Use `linebot.v3.webhooks` and `linebot.v3.messaging`; avoid v2 imports

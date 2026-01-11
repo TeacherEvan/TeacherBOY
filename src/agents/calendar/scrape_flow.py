@@ -11,7 +11,7 @@ Uses lazy loading pattern for on-demand instantiation.
 
 import re
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, Dict, Any, List, TYPE_CHECKING
 
 from linebot.v3.webhooks import MessageEvent
@@ -376,7 +376,7 @@ class ScrapeFlow(CalendarFlowBase):
             calendar_session_manager.end_session(chat_id)
             return
 
-        is_friend = session.is_friend
+        is_friend = getattr(session, "is_friend", False)
         default_reminder_days = [1, 0]  # 1 day before + day-of
 
         # Get all remaining events
@@ -386,12 +386,16 @@ class ScrapeFlow(CalendarFlowBase):
 
         for event_data in remaining_events:
             try:
+                event_date = event_data.get("date")
+                if not isinstance(event_date, date):
+                    raise ValueError("Missing or invalid event date")
+
                 calendar_service.add_event(
                     user_id=user_id,
                     chat_id=chat_id,
-                    title=event_data.get("title", "Event"),
-                    event_date=event_data.get("date"),
-                    description=event_data.get("description", ""),
+                    title=str(event_data.get("title", "Event")),
+                    event_date=event_date,
+                    description=str(event_data.get("description", "")),
                     reminder_days=default_reminder_days,
                     is_friend=is_friend
                 )
