@@ -421,7 +421,7 @@ class CalendarAgent(BaseAgent):
                 # SCRAPE TRIGGER
                 if self._is_trigger(text, TRIGGERS_SCRAPE):
                     return await self.scrape_flow.handle_scrape_trigger(
-                        event, line_bot_api, chat_id, user_id, text
+                        event, text, line_bot_api, chat_id, user_id
                     )
 
                 # INLINE ADD (zeus add [date] [title])

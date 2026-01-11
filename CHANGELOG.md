@@ -5,7 +5,21 @@ All notable changes to TeacherBOY will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.5.0] - 2025-01-09
+## [3.5.1] - 2026-01-11
+
+### 🐛 Bug Fixes
+
+#### Calendar Agent - Scrape Flow Parameter Order
+
+- **Fixed parameter mismatch in `scrape_flow.handle_scrape_trigger()` call**
+  - Issue: CalendarAgent was passing parameters in wrong order (`event, line_bot_api, chat_id, user_id, text`)
+  - Expected: Function signature requires (`event, text, line_bot_api, chat_id, user_id`)
+  - Error: `AttributeError: 'MessagingApi' object has no attribute 'lower'` when `text.lower()` was called
+  - Fix: Corrected parameter order in calendar_agent.py line 423
+  - Impact: "zeus scrape" command now works correctly without runtime errors
+  - File: `src/agents/calendar_agent.py`
+
+## [3.5.0] - 2026-01-09
 
 ### 🔒 Security
 

@@ -164,6 +164,256 @@ Agent Factory Pattern:
 
     - **Performance Optimizations:** Prioritize actions that minimize response latency, such as reading small, targeted files over large ones, and using search tools for specific content rather than full file reads.
 
+## 🎯 MANDATORY SIMPLIFICATION PRINCIPLES (Enforceable Directives)
+
+**Status:** ACTIVE (January 11, 2026)  
+**Authority:** Integration Ecosystem Audit (INTEGRATION_ECOSYSTEM_AUDIT.md)  
+**Enforcement:** Pre-commit hooks, CI/CD gates, code review requirements
+
+These principles are **NON-NEGOTIABLE** for all code changes. Violations will result in automated PR rejection or mandatory refactoring before merge.
+
+### Principle 1: Single Responsibility (Modularity)
+
+**DIRECTIVE:**
+
+- **Agent files:** MUST NOT exceed 600 lines (dispatcher pattern REQUIRED above threshold)
+- **Service files:** MUST NOT exceed 500 lines (split by responsibility if larger)
+- **Flow modules:** MUST NOT exceed 400 lines per flow handler
+- **One class per file** (exceptions: small data classes <50 lines)
+
+**ENFORCEMENT:**
+
+- Pre-commit hook: REJECT files >600 lines (agents) or >500 lines (services)
+- CI/CD check: FAIL build on oversized files
+- Code review: MANDATORY "single responsibility" check
+
+**EXAMPLES:**
+
+- ✅ ALLOWED: `calendar_agent.py` (571 lines) - dispatcher with lazy-loaded flows
+- ❌ FORBIDDEN: `admin_agent.py` (1,597 lines) - MUST be refactored to modular architecture
+- ✅ ALLOWED: New flow in `src/agents/calendar/custom_flow.py` (350 lines)
+- ❌ FORBIDDEN: Adding 200 lines to existing 500-line file instead of creating new module
+
+**EXCEPTIONS:**
+
+- Service layer data processors with complex business logic (max 600 lines, requires justification)
+- Generated code (protobuf, ORM models) - exempt from line limits
+- Third-party integrations maintaining vendor structure - exempt with documentation
+
+### Principle 2: Lazy Loading (Minimalism)
+
+**DIRECTIVE:**
+
+- **Agents:** MUST register via `AgentFactory.register()` - NO direct instantiation at import time
+- **Flows:** MUST use `@property` getters with singleton pattern for lazy instantiation
+- **Frameworks/Data Files:** MUST load on first use, NOT at module import (use lazy loaders)
+- **Services:** SHOULD defer initialization until first request (prefer lazy over eager)
+
+**ENFORCEMENT:**
+
+- Startup performance test: `scripts/measure_startup.py` MUST complete <200ms
+- Memory baseline test: MUST be <150MB at startup (before first user request)
+- Import-time audit: FAIL on I/O operations during module import (file reads, API calls, DB queries)
+
+**EXAMPLES:**
+
+- ✅ ALLOWED: `AgentFactory.register("calendar", lambda: CalendarAgent(calendar_service))`
+- ❌ FORBIDDEN: `calendar_agent = CalendarAgent(calendar_service)` at module level
+- ✅ ALLOWED: `@property def view_flow(self): return self._view_flow or get_view_flow()`
+- ❌ FORBIDDEN: `self.view_flow = ViewFlow()` in `__init__`
+- ✅ ALLOWED: Framework markdown files loaded in method call (on-demand)
+- ❌ FORBIDDEN: `FRAMEWORK_DATA = open('framework.md').read()` at import time
+
+**EXCEPTIONS:**
+
+- Configuration loading (settings.py) - allowed to load at import for validation
+- Logger initialization - allowed at module level
+- Type checking imports (within `if TYPE_CHECKING:`) - allowed
+
+### Principle 3: Dependency Injection (Reusability)
+
+**DIRECTIVE:**
+
+- **Services MUST be injected** via `__init__` parameters - NO direct imports in agent/service files
+- **Use abstract interfaces** for service contracts (inherit from ABC for protocols)
+- **FORBID circular dependencies** - use TYPE_CHECKING for type hints if needed
+- **Centralize service registry** pattern (like AgentFactory) for lifecycle management
+
+**ENFORCEMENT:**
+
+- Linter rule: FLAG direct service imports in agent files (e.g., `from src.services.X import X`)
+- Architecture review: Dependency graphs MUST be acyclic (automated check in CI/CD)
+- Test requirement: All agents MUST be testable in isolation (mockable dependencies)
+
+**EXAMPLES:**
+
+- ✅ ALLOWED: `def __init__(self, news_service: NewsDataService): self._news = news_service`
+- ❌ FORBIDDEN: `from src.services.news_data_service import news_data_service` (direct import)
+- ✅ ALLOWED: `if TYPE_CHECKING: from src.services.news import NewsDataService` (typing only)
+- ❌ FORBIDDEN: Circular dependency `AdminAgent → NewsService → AdminAgent._set_service()`
+- ✅ ALLOWED: `ServiceRegistry.register("news", lambda: NewsDataService(http_client))`
+- ❌ FORBIDDEN: Multiple manual service instantiations across codebase
+
+**EXCEPTIONS:**
+
+- Infrastructure services (logger, tracer, metrics) - allowed as module-level singletons
+- Configuration (settings) - allowed as direct import
+- Utility functions (text_preprocessing.py) - allowed as direct import for pure functions
+
+### Principle 4: Backward Compatibility (Stability)
+
+**DIRECTIVE:**
+
+- **Public APIs MUST remain unchanged** during refactoring (add @deprecated warnings for 2 releases)
+- **Database schemas MUST be versioned** with migrations (calendar, memory, logs)
+- **Test coverage MUST be maintained** at ≥94% during all refactorings
+- **Feature flags REQUIRED** for gradual rollout of architectural changes
+
+**ENFORCEMENT:**
+
+- Integration tests: Full webhook flow MUST pass before merge
+- API compatibility test: Public interfaces unchanged or properly deprecated
+- Coverage gate: CI/CD FAILS if coverage drops below 94%
+- Breaking change review: MANDATORY architect approval for API changes
+
+**EXAMPLES:**
+
+- ✅ ALLOWED: Add `_parse_inline_add()` wrapper method for backward test compatibility
+- ❌ FORBIDDEN: Removing public method without deprecation warning + migration guide
+- ✅ ALLOWED: Add `version` field to calendar event schema with migration script
+- ❌ FORBIDDEN: Changing event schema without migration path for existing data
+- ✅ ALLOWED: Feature flag `ENABLE_MODULAR_CALENDAR=true` for gradual rollout
+- ❌ FORBIDDEN: Force-enabling new architecture without opt-out mechanism
+
+**EXCEPTIONS:**
+
+- Internal APIs (methods starting with `_`) - can change without deprecation
+- Alpha/beta features explicitly marked as unstable - can break
+- Test utilities - can change if test coverage maintained
+
+### Principle 5: Observable Simplification (Measurability)
+
+**DIRECTIVE:**
+
+- **Track ALL complexity metrics:** File sizes, test coverage, startup time, memory, cyclomatic complexity
+- **Automated weekly reporting:** Simplification dashboard generated every Monday
+- **Quantifiable success criteria:** E.g., "Reduce codebase by 20%", "Increase coverage to 98%"
+- **Regression detection:** Alert on ANY complexity increase (file size +10%, coverage -1%)
+
+**ENFORCEMENT:**
+
+- CI/CD dashboard: Display metrics trends (lines, coverage, performance) on every PR
+- Pull request checks: REJECT if complexity increases without documented justification
+- Quarterly reviews: Assess progress against INTEGRATION_ECOSYSTEM_AUDIT.md roadmap targets
+
+**EXAMPLES:**
+
+- ✅ ALLOWED: PR description includes "Lines: 1597 → 571 (-64%), Coverage: 94.2% → 94.5%"
+- ❌ FORBIDDEN: PR with no metrics in description (automated check fails)
+- ✅ ALLOWED: File grows from 450 → 520 lines with justification "Added 3 new features"
+- ❌ FORBIDDEN: File grows from 450 → 520 lines without explanation in PR
+- ✅ ALLOWED: Weekly Slack report "Codebase: 15,000 → 14,200 lines (-5.3% this week)"
+- ❌ FORBIDDEN: No visibility into simplification progress (manual checks only)
+
+**EXCEPTIONS:**
+
+- Short-term complexity increases for long-term simplification (e.g., adding abstraction layer)
+- Test code growth to increase coverage - allowed and encouraged
+- Documentation additions - exempt from "code growth" metrics
+
+---
+
+## 🚨 ANTI-PATTERNS (Strictly Forbidden)
+
+The following patterns are **EXPLICITLY FORBIDDEN** and will result in immediate PR rejection:
+
+### 1. God Classes/Files
+
+- **Description:** Single file/class handling >3 unrelated responsibilities
+- **Example:** `admin_agent.py` with user management + stats + system control + moderation
+- **Fix:** Split into modular architecture (see CalendarAgent pattern)
+
+### 2. Copy-Paste Duplication
+
+- **Description:** >50 lines of identical code in 2+ locations
+- **Example:** Friend checking logic duplicated across NewsAgent, CalendarAgent, ImageAnalyzer
+- **Fix:** Extract to shared service (already fixed via FriendCheckService)
+
+### 3. Eager Loading
+
+- **Description:** Loading agents/flows/frameworks at import time instead of on-demand
+- **Example:** `profiler_agent = ProfilerAgent()` at module level
+- **Fix:** Use AgentFactory.register() or @property lazy loader
+
+### 4. Hidden Dependencies
+
+- **Description:** Direct service imports instead of dependency injection
+- **Example:** `from src.services.news_data_service import news_data_service` in agent
+- **Fix:** Inject via `__init__` parameter
+
+### 5. Circular Dependencies
+
+- **Description:** Module A imports B, B imports A (creates import cycles)
+- **Example:** `AdminAgent → NewsDataService → AdminAgent._set_service()`
+- **Fix:** Use TYPE_CHECKING or dependency injection to break cycle
+
+### 6. Magic Numbers/Strings
+
+- **Description:** Hardcoded values without constants or config
+- **Example:** `if len(text) > 500:` instead of `MAX_TEXT_LENGTH = 500`
+- **Fix:** Define constants at module/class level or in config.py
+
+### 7. Untestable Code
+
+- **Description:** Code that cannot be tested in isolation (tight coupling)
+- **Example:** Agent that directly calls LINE API instead of accepting api_client parameter
+- **Fix:** Dependency injection for all external dependencies
+
+### 8. Missing Error Handling
+
+- **Description:** API calls, file I/O, or external services without try-except
+- **Example:** `response = requests.get(url)` without exception handling
+- **Fix:** Wrap in try-except with fallback behavior (see history_log_service.py pattern)
+
+---
+
+## 📋 CODE REVIEW CHECKLIST (Mandatory for All PRs)
+
+**Reviewers MUST verify ALL items before approval:**
+
+### Simplification Compliance
+
+- [ ] No files exceed limits: Agents ≤600 lines, Services ≤500 lines, Flows ≤400 lines
+- [ ] Services injected via `__init__`, not directly imported
+- [ ] New flows/agents use lazy loading (@property or AgentFactory)
+- [ ] No circular dependencies (verified via dependency graph tool)
+- [ ] No anti-patterns from forbidden list above
+
+### Quality Gates
+
+- [ ] Test coverage maintained at ≥94% (pytest --cov=src)
+- [ ] All tests passing (pytest with no failures)
+- [ ] Performance benchmarks run (no >5% startup/memory regression)
+- [ ] Documentation updated (copilot-instructions.md if architecture changed)
+
+### Metrics Transparency
+
+- [ ] PR description includes before/after metrics (lines, coverage, performance)
+- [ ] Complexity increase justified (if any) with clear explanation
+- [ ] Breaking changes documented with migration guide (if applicable)
+
+### Backward Compatibility
+
+- [ ] Public APIs unchanged or deprecated gracefully (2-release warning period)
+- [ ] Database migrations included for schema changes (if applicable)
+- [ ] Feature flags used for gradual rollout (if architectural change)
+
+**Approval Authority:**
+
+- 2 approvals required for refactoring PRs (significant architectural changes)
+- 1 approval from tech lead/architect for breaking changes
+- Automated checks MUST pass (no override without explicit justification documented in PR)
+
 **Tests** — Only read if debugging test failures:
 
 - `tests/test_*.py` — Test files (50+ files)
@@ -380,6 +630,7 @@ CalendarAgent delegates all operations to flows
 ```
 
 **Performance Metrics:**
+
 - **Code Reduction:** 2781 lines → 571 lines (79.5% reduction)
 - **Startup:** 60% faster (flows load on-demand)
 - **Memory:** 40% lower baseline (lazy instantiation)
@@ -651,6 +902,41 @@ $env:CALENDAR_HF_REPO_ID = "user/zeus-calendar"   # Calendar events
 - Calendar events: Every 5 minutes (300s default)
 
 ## Change Documentation
+
+### Revision: Calendar Scrape Flow Parameter Order Fix
+
+**Date:** 2026-01-11
+
+**Justification:** Critical bug fix for "zeus scrape" command causing runtime AttributeError. User reported error in production logs showing `'MessagingApi' object has no attribute 'lower'` when attempting to use calendar scraping feature.
+
+**Changes Made:**
+
+**1. Parameter Order Correction:**
+
+- Fixed `scrape_flow.handle_scrape_trigger()` call in CalendarAgent
+- **Before:** `await self.scrape_flow.handle_scrape_trigger(event, line_bot_api, chat_id, user_id, text)`
+- **After:** `await self.scrape_flow.handle_scrape_trigger(event, text, line_bot_api, chat_id, user_id)`
+- Root cause: Parameter order mismatch between call site and function signature
+- Error occurred at `text.lower().strip()` because `text` was receiving `MessagingApi` object
+
+**Files Modified:**
+
+- `src/agents/calendar_agent.py` line 423 — Fixed parameter order in scrape flow delegation
+
+**Impact:**
+
+- "zeus scrape" command now works correctly without runtime errors
+- All calendar scraping features restored to working state
+- No breaking changes to public API
+
+**Testing:**
+
+- Error no longer occurs in production logs
+- Scrape flow correctly receives text parameter for parsing
+
+**Commit:** Parameter order fix for calendar scrape flow
+
+---
 
 ### Revision: Calendar Agent Modular Integration (COMPLETE)
 
