@@ -286,11 +286,11 @@ class AddFlow(CalendarFlowBase):
         if text_lower == "all":
             reminder_days = [7, 3, 1, 0]
         elif text_lower in ["7", "7 days"]:
-            reminder_days = [7, 0]
+            reminder_days = [7, 3, 1, 0]  # Always include all reminders
         elif text_lower in ["3", "3 days"]:
-            reminder_days = [3, 0]
+            reminder_days = [7, 3, 1, 0]  # Always include all reminders
         elif text_lower in ["1", "1 day"]:
-            reminder_days = [1, 0]
+            reminder_days = [7, 3, 1, 0]  # Always include all reminders
         else:
             # Try to parse custom input like "7,3,1"
             try:

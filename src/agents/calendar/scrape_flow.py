@@ -287,11 +287,11 @@ class ScrapeFlow(CalendarFlowBase):
         if text_lower == "all":
             reminder_days = [7, 3, 1, 0]
         elif text_lower in ["7", "7 days"]:
-            reminder_days = [7, 0]
+            reminder_days = [7, 3, 1, 0]  # Always include all reminders
         elif text_lower in ["3", "3 days"]:
-            reminder_days = [3, 0]
+            reminder_days = [7, 3, 1, 0]  # Always include all reminders
         elif text_lower in ["1", "1 day"]:
-            reminder_days = [1, 0]
+            reminder_days = [7, 3, 1, 0]  # Always include all reminders
         else:
             await self.send_message(
                 event, line_bot_api,
@@ -377,7 +377,7 @@ class ScrapeFlow(CalendarFlowBase):
             return
 
         is_friend = getattr(session, "is_friend", False)
-        default_reminder_days = [1, 0]  # 1 day before + day-of
+        default_reminder_days = [7, 3, 1, 0]  # 7, 3, 1 days before + day-of (strictly enforced)
 
         # Get all remaining events
         remaining_events = session.scraped_events[session.current_scrape_index:]
@@ -413,8 +413,8 @@ class ScrapeFlow(CalendarFlowBase):
             msg = (
                 f"✅ Added {added_count} event(s) to calendar!\n"
                 f"เพิ่ม {added_count} กิจกรรมแล้ว!\n\n"
-                f"📌 Default reminders: 1 day before + day-of\n"
-                f"📌 การแจ้งเตือน: 1 วันก่อน + วันนั้น"
+                f"📌 Default reminders: 7, 3, 1 days before + day-of\n"
+                f"📌 การแจ้งเตือน: 7, 3, 1 วันก่อน + วันนั้น"
             )
             if failed_count > 0:
                 msg += f"\n\n⚠️ {failed_count} event(s) failed to add."

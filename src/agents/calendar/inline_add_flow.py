@@ -289,11 +289,11 @@ class InlineAddFlow(CalendarFlowBase):
         if text == "all":
             return [7, 3, 1, 0]
         elif text in ["7", "7 days"]:
-            return [7, 0]
+            return [7, 3, 1, 0]  # Always include all reminders
         elif text in ["3", "3 days"]:
-            return [3, 0]
+            return [7, 3, 1, 0]  # Always include all reminders
         elif text in ["1", "1 day"]:
-            return [1, 0]
+            return [7, 3, 1, 0]  # Always include all reminders
         else:
             return None
 
