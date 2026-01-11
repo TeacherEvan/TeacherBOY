@@ -497,7 +497,7 @@ class CalendarAgent(BaseAgent):
                 # Check for scrape trigger
                 if self._is_trigger(text, TRIGGERS_SCRAPE):
                     return await self._handle_scrape_trigger(
-                        event, line_bot_api, chat_id, user_id
+                        event, line_bot_api, chat_id, user_id, text
                     )
 
                 # Check for inline add format: "zeus add [date] [title]"
@@ -2015,7 +2015,8 @@ class CalendarAgent(BaseAgent):
         event: MessageEvent,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str]
+        user_id: Optional[str],
+        text: str
     ) -> bool:
         """
         Handle "zeus scrape" trigger.
