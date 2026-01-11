@@ -365,9 +365,9 @@ class CalendarAgent(BaseAgent):
         if session and session.state != CalendarState.IDLE:
             return True
 
-        # Check for explicit triggers
-        if any(trigger in text_lower for trigger in 
-               TRIGGERS_VIEW + TRIGGERS_ADD + TRIGGERS_REMOVE + TRIGGERS_SCRAPE + TRIGGERS_DISCRETE_SCRAPE):
+        # Check for explicit triggers (must START the message to avoid instructional text)
+        all_triggers = TRIGGERS_VIEW + TRIGGERS_ADD + TRIGGERS_REMOVE + TRIGGERS_SCRAPE + TRIGGERS_DISCRETE_SCRAPE
+        if self._is_trigger(text, all_triggers):
             return True
 
         # Check for inline add syntax (zeus add [date] [title])

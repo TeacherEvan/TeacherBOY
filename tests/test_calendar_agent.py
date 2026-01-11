@@ -329,6 +329,27 @@ class TestCalendarAgent:
             result = await calendar_agent.should_handle(mock_event, text)
             assert result is False, f"Should not handle: {text}"
 
+    @pytest.mark.asyncio
+    async def test_should_not_handle_instructional_text(self, calendar_agent, mock_event):
+        """Test that agent ignores instructional text containing trigger phrases.
+        
+        CRITICAL: This test ensures the trigger fix is working correctly.
+        Previously, substring matching caused false positives like:
+        'you can say zeus add event' triggering the calendar agent.
+        """
+        instructional_texts = [
+            "If you guys have any important events you would like zeus to remind you of just say zeus add event IN A DM TO ZEUS",
+            "you can say zeus add event to create a reminder",
+            "just say zeus scrape to scan messages",
+            "try using zeus remove event to delete",
+            "the command is zeus calendar but you need to DM",
+            "say zeus events to see your calendar",
+        ]
+        
+        for text in instructional_texts:
+            result = await calendar_agent.should_handle(mock_event, text)
+            assert result is False, f"Should NOT handle instructional text: {text}"
+
     def test_get_priority(self, calendar_agent):
         """Test agent priority."""
         assert calendar_agent.get_priority() == 6
