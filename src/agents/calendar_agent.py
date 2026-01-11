@@ -2373,7 +2373,7 @@ class CalendarAgent(BaseAgent):
             calendar_session_manager.end_session(chat_id)
             return
         
-        is_friend = session.is_friend
+        is_friend = session.pending_is_friend
         default_reminder_days = [1, 0]  # 1 day before + day-of
         
         # Get all remaining events (from current index onwards)
