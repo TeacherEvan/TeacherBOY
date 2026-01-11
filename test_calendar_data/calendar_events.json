@@ -1,19 +1,19 @@
 {
   "events": [
     {
-      "event_id": "bd62c444-7535-44f0-9cc7-06a57c17a0a2",
+      "event_id": "4a3cc665-b8de-43f4-b1a6-1c664fe6d280",
       "user_id": "U001",
       "chat_id": "group_A",
       "title": "Test Event",
-      "event_date": "2026-01-12",
+      "event_date": "2026-01-13",
       "description": "",
       "reminder_days": [
         0
       ],
       "is_friend": false,
       "notified_dates": [],
-      "created_at": "2026-01-11T06:27:33.663457+00:00"
+      "created_at": "2026-01-11T21:27:10.364722+00:00"
     }
   ],
-  "updated_at": "2026-01-11T06:27:33.663457+00:00"
+  "updated_at": "2026-01-11T21:27:10.364722+00:00"
 }
