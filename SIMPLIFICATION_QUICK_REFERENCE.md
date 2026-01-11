@@ -139,7 +139,7 @@ python scripts/check_circular_deps.py
 
 - **Architecture:** [.github/copilot-instructions.md](.github/copilot-instructions.md)
 - **Audit:** [INTEGRATION_ECOSYSTEM_AUDIT.md](INTEGRATION_ECOSYSTEM_AUDIT.md)
-- **Success Story:** [JOBCARD_CALENDAR_MODULAR_INTEGRATION.md](JOBCARD_CALENDAR_MODULAR_INTEGRATION.md)
+- **Success Story:** JOBCARD_CALENDAR_MODULAR_INTEGRATION.md(JOBCARD_CALENDAR_MODULAR_INTEGRATION.md)
 
 ---
 

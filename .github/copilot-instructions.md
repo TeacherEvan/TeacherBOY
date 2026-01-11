@@ -1,223 +1,43 @@
-🧠 Architectural Overview (Index Only)
+## Copilot instructions (Zeus / TeacherBOY)
 
-Note to Agent: Do NOT automatically fetch these files. This is a map for situational awareness. Only reference specific files when the user explicitly requests them or a specific feature implementation requires it.
+### Big picture
 
-## ⚠️ CRITICAL: Destructive Action Safety Protocol
+- Runtime is a FastAPI LINE webhook in `src/main.py` using LINE Bot SDK v3 + an async `httpx.AsyncClient` pool.
+- Message flow: `/webhook` → signature validation → normalize event → `AgentRouter.route_message()` in `src/agents/agent_router.py` → first agent match wins (lowest priority number).
+- Non-message events (join/leave/member changes) are handled via `src/handlers/message_handler.py` helpers.
 
-**BEFORE executing ANY destructive git operation (rm, reset, push -f, branch deletion):**
+### Agent system conventions
 
-1. **VERIFY git remote target:**
-   ```bash
-   git remote -v  # Check ALL configured remotes
-   ```
-2. **VERIFY current branch:**
+- Agents implement `BaseAgent` (`src/agents/base_agent.py`): `should_handle(event, text)` + `handle(event, text, line_bot_api)`.
+- Priorities matter: lower runs first (e.g., Admin/Help are 5, Translation is 10). Keep new agent priorities consistent with existing ones in `src/main.py`.
+- There is an optional lazy-loader mechanism (`src/agents/agent_factory.py` + `AgentRouter.load_agents_from_factory()`), but `src/main.py` currently registers agents eagerly. If you change registration, keep both paths consistent.
 
-   ```bash
-   git branch --show-current
-   ```
+### Async + LINE SDK gotchas
 
-3. **VERIFY push destination:**
+- LINE SDK calls are synchronous; in async code use `await asyncio.to_thread(...)` (see `src/main.py` bot info fetch + message send patterns).
+- Reuse the single `httpx.AsyncClient` created in FastAPI `lifespan`; do not create per-request clients.
 
-   - `origin` = GitHub (FULL REPO - docs/tests required)
-   - `hf` = HuggingFace Spaces (minimal runtime only)
-   - **NEVER push cleanup/deletions to `origin`**
+### Data/persistence integration points
 
-4. **ASK BEFORE ACTING:**
+- Local data lives under `data/` (calendar, conversations, logs). Optional HF Hub sync is configured via settings in `src/config.py`.
+- Startup performs a blocking “load-before-serve” via `src/services/startup_data_loader.py` (called from `src/main.py`) so HF-backed data is present before handling requests.
 
-   - "Which remote should I push to: origin (GitHub) or hf (HF Spaces)?"
-   - "This will delete X files. Confirm target: [remote/branch]?"
-   - **WAIT for explicit confirmation before `git push`**
+### Developer workflows (this repo)
 
-5. **Multi-Remote Deployments:**
-   - **GitHub (`origin`)**: Keep ALL documentation, tests, implementation logs
-   - **HF Spaces (`hf`)**: Minimal production build only (use `hf-deploy` branch)
-   - **NEVER assume** - always verify which environment user is targeting
+- Run locally: `pip install -r requirements.txt` then `python -m uvicorn src.main:app --reload --port 8000`.
+- Docker: `docker-compose up --build`.
+- Tests: `pytest` (async tests are common; see `pytest.ini`).
+- Performance check: `python scripts/measure_startup.py`.
 
-**Example of CORRECT reasoning:**
+### Test patterns to follow
 
-```
-User: "Remove unnecessary files from HF repo"
-Agent thought process:
-  1. Check `git remote -v` → Only see `origin` (GitHub)
-  2. Realize: No `hf` remote configured
-  3. ASK: "I don't see an HF remote configured. What's your HF Space URL?"
-  4. Create `hf-deploy` branch for cleanup
-  5. Add HF remote, push ONLY to `hf`
-  6. NEVER touch `main` or `origin`
-```
+- Many tests patch settings before instantiating agents: `with patch("src.config.settings") as mock_settings: ...` (see `tests/test_admin_agent.py`).
+- Reset global singletons between tests when provided (e.g., `privilege_service._reset_for_testing()`).
+- Mock LINE types with `Mock(spec=MessageEvent)` and `Mock(spec=MessagingApi)`.
 
-**Example of CATASTROPHIC FAILURE (what NOT to do):**
+### Safety (multi-remote deployments)
 
-```
-User: "Remove unnecessary files from HF repo"
-Agent fuckup:
-  1. Assume "HF repo" = "current repo"
-  2. Run cleanup script on `main` branch
-  3. Push to `origin` (GitHub) ← DESTROYS DOCUMENTATION
-  4. Force-revert causing git history mess
-  5. Waste hours of user's time and money
-```
-
-**Cost of not thinking:** User funds wasted, trust destroyed, hours of cleanup
-
-**If uncertain about git targets: STOP and ASK. Pattern-matching without reasoning = automation without a brain.**
-
-## 🚀 Performance Architecture: Lazy Loading
-
-**Zeus uses a lazy loading architecture to optimize startup time and memory:**
-
-- **Agent Factory** (`src/agents/agent_factory.py`) — Registers agent classes without instantiation
-- **On-Demand Loading** — Agents instantiate only when first message triggers them
-- **Benefits:** 60% faster startup (500ms → 200ms), 40% lower baseline memory (200MB → 120MB)
-
-```
-Startup Flow (Lazy):
-  FastAPI lifespan → register_all_agents() → AgentRouter.load_agents_from_factory()
-                     (lightweight)            (no instantiation yet)
-
-First Message → route_message() → Factory.get_agent() → Instantiate on-demand
-                                   (checks _instances cache first)
-
-Agent Factory Pattern:
-  AgentFactory.register("agent_name", lambda: AgentClass())
-  ↓
-  AgentFactory.get_agent("agent_name")  # Lazy instantiation
-  ↓
-  Cached in _instances for future calls
-```
-
-🏗️ Core System
-
-    Entry Point: src/main.py (FastAPI app & lifecycle)
-
-    Routing: src/agents/agent_router.py (Priority-based logic)
-
-    **Factory:** src/agents/agent_factory.py (Lazy agent instantiation)
-
-    Config: src/config.py (Environment & validation)
-
-    Base Class: src/agents/base_agent.py
-
-🤖 Agent Registry (Priority Order)
-
-    Help: src/agents/help_agent.py (P5)
-
-    Admin: src/agents/admin_agent.py (P5)
-
-    Calendar: src/agents/calendar_agent.py (P6)
-
-      - **Modular:** src/agents/calendar/states.py (Session state machine)
-
-      - **Modular:** src/agents/calendar/parsers.py (Date parsing logic)
-
-    Hannibal Profiler: src/agents/hannibal_agent.py (P6) - Message history psychological analysis
-
-    Profiler: src/agents/profiler_agent.py (P7) - Image-based psychological profiling
-
-    Vision: src/agents/image_analyzer_agent.py (P7)
-
-    Search: src/agents/search_agent.py (P8)
-
-    Zeus Chat: src/agents/llm_agent.py (P9)
-
-    Translation: src/agents/translation_agent.py (P10)
-
-    Special News: src/agents/special_news_agent.py (P12)
-
-    General News: src/agents/news_agent.py (P15)
-
-⚙️ Business Logic (Services)
-
-    Translation: google_translation.py, translation_service.py
-
-    AI/LLM: github_models_service.py, openrouter_service.py, conversation_memory_service.py, conversation_summary_service.py
-
-    Vision/Profiling: profiler_service.py, vision_builder.py
-
-      - **Lazy Loader:** src/services/profiler/framework_loader.py (Load FBI/Ekman/Navarro on-demand)
-
-    Calendar/Scheduling: calendar_service.py, calendar_session_manager.py, reminder_service.py, date_extraction_service.py, calendar_access_control.py, calendar_validator.py
-
-    News/Data: news_data_service.py, special_news_service.py, news_session_manager.py
-
-    Infrastructure: rate_limiter.py, privilege_service.py, metrics_service.py, scheduler_service.py, history_log_service.py
-
-🛠️ Implementation Guidelines
-
-    Strict Context Management: Do not read files outside the immediate scope of the requested feature.
-
-    Dependency Awareness: When modifying a Service, check if the corresponding Session Manager or Agent needs an update.
-
-    Error Handling: All new scraping or API logic must include try-except blocks as per the history_log_service.py pattern.
-
-    **File Access Optimization Guidelines:**
-
-    - **Prevent Token Overuse:** Do not immediately incorporate all files referenced in the context. Only load files when directly relevant to the current task to reduce token consumption and response latency.
-
-    - **Prioritization:** Focus on highly relevant files first (e.g., core agents for agent-related tasks, services for service modifications). Supporting files should be accessed only if needed for dependencies.
-
-    - **Lazy Loading:** Implement lazy loading for optional references—read configuration files or documentation only when explicitly required, not preemptively.
-
-    - **Explicit Criteria for File Selection:** Select files based on task scope: primary files for direct implementation, supporting for integration, optional for edge cases. Avoid reading entire directories unless necessary.
-
-    - **Context Streamlining:** Minimize context usage by providing clear, unambiguous instructions. Eliminate interpretation ambiguities through precise task descriptions and examples.
-
-    - **Performance Optimizations:** Prioritize actions that minimize response latency, such as reading small, targeted files over large ones, and using search tools for specific content rather than full file reads.
-
-## 🎯 MANDATORY SIMPLIFICATION PRINCIPLES (Enforceable Directives)
-
-**Status:** ACTIVE (January 11, 2026)  
-**Authority:** Integration Ecosystem Audit (INTEGRATION_ECOSYSTEM_AUDIT.md)  
-**Enforcement:** Pre-commit hooks, CI/CD gates, code review requirements
-
-These principles are **NON-NEGOTIABLE** for all code changes. Violations will result in automated PR rejection or mandatory refactoring before merge.
-
-### Principle 1: Single Responsibility (Modularity)
-
-**DIRECTIVE:**
-
-- **Agent files:** MUST NOT exceed 600 lines (dispatcher pattern REQUIRED above threshold)
-- **Service files:** MUST NOT exceed 500 lines (split by responsibility if larger)
-- **Flow modules:** MUST NOT exceed 400 lines per flow handler
-- **One class per file** (exceptions: small data classes <50 lines)
-
-**ENFORCEMENT:**
-
-- Pre-commit hook: REJECT files >600 lines (agents) or >500 lines (services)
-- CI/CD check: FAIL build on oversized files
-- Code review: MANDATORY "single responsibility" check
-
-**EXAMPLES:**
-
-- ✅ ALLOWED: `calendar_agent.py` (571 lines) - dispatcher with lazy-loaded flows
-- ❌ FORBIDDEN: `admin_agent.py` (1,597 lines) - MUST be refactored to modular architecture
-- ✅ ALLOWED: New flow in `src/agents/calendar/custom_flow.py` (350 lines)
-- ❌ FORBIDDEN: Adding 200 lines to existing 500-line file instead of creating new module
-
-**EXCEPTIONS:**
-
-- Service layer data processors with complex business logic (max 600 lines, requires justification)
-- Generated code (protobuf, ORM models) - exempt from line limits
-- Third-party integrations maintaining vendor structure - exempt with documentation
-
-### Principle 2: Lazy Loading (Minimalism)
-
-**DIRECTIVE:**
-
-- **Agents:** MUST register via `AgentFactory.register()` - NO direct instantiation at import time
-- **Flows:** MUST use `@property` getters with singleton pattern for lazy instantiation
-- **Frameworks/Data Files:** MUST load on first use, NOT at module import (use lazy loaders)
-- **Services:** SHOULD defer initialization until first request (prefer lazy over eager)
-
-**ENFORCEMENT:**
-
-- Startup performance test: `scripts/measure_startup.py` MUST complete <200ms
-- Memory baseline test: MUST be <150MB at startup (before first user request)
-- Import-time audit: FAIL on I/O operations during module import (file reads, API calls, DB queries)
-
-**EXAMPLES:**
-
-- ✅ ALLOWED: `AgentFactory.register("calendar", lambda: CalendarAgent(calendar_service))`
+- Before destructive git actions or pushing, always check `git remote -v` and `git branch --show-current`, and ask which remote/branch to target (GitHub vs HF Spaces).
 - ❌ FORBIDDEN: `calendar_agent = CalendarAgent(calendar_service)` at module level
 - ✅ ALLOWED: `@property def view_flow(self): return self._view_flow or get_view_flow()`
 - ❌ FORBIDDEN: `self.view_flow = ViewFlow()` in `__init__`

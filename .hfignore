@@ -1,0 +1,115 @@
+# HuggingFace Hub Ignore File
+# Files/folders excluded when uploading to HF Hub (datasets, spaces, models)
+# Follows .gitignore syntax (glob patterns)
+
+# ============================================================================
+# Development & Testing (not needed on HF Hub)
+# ============================================================================
+tests/
+test_*/
+**/test_*.py
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+*.pyc
+*.pyo
+*.pyd
+
+# ============================================================================
+# Documentation (keep only README.md for HF Hub)
+# ============================================================================
+docs/
+ARCHITECTURE.md
+CODE_REVIEW.md
+COMPREHENSIVE_TECHNICAL_REVIEW.md
+CHANGELOG.md
+CALENDAR_*.md
+DEPLOYMENT_GUIDE.md
+QUICK_START.md
+QUICK_REFERENCE.md
+DOCUMENTATION_*.md
+FIX_SUMMARY_*.md
+IMPLEMENTATION_SUMMARY.md
+UX_FIXES_SUMMARY.md
+OPTIMIZATION_*.md
+PRODUCTIVITY_OPTIMIZATION_PLAN.md
+SECURITY.md
+JOBCARD*.md
+HF_DEPLOY_WORKFLOW.md
+INTEGRATION_ECOSYSTEM_AUDIT.md
+COMPLETION_CHECKLIST.md
+DATA_PERSISTENCE_FIX_SUMMARY.md
+SIMPLIFICATION_QUICK_REFERENCE.md
+
+# ============================================================================
+# Temporary & Development Files
+# ============================================================================
+*.tmp
+*.log
+temp/
+tmp/
+*.txt
+!requirements.txt
+!LICENSE.txt
+workspace_*.json
+form_translation.txt
+test_output.txt
+
+# ============================================================================
+# Legacy & Deprecated Code
+# ============================================================================
+python-connector-api/
+
+# ============================================================================
+# IDE & Environment
+# ============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ============================================================================
+# Build artifacts & Dependencies (rebuild on HF)
+# ============================================================================
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ============================================================================
+# Scripts (deployment-specific, not needed on HF Hub datasets)
+# ============================================================================
+cleanup_hf_space.sh
+scripts/measure_startup.py
+scripts/setup_*.py
+
+# ============================================================================
+# Git & CI/CD (HF uses own git system)
+# ============================================================================
+.git/
+.github/workflows/
+
+# ============================================================================
+# Sensitive Data (double-check .env is excluded)
+# ============================================================================
+.env*
+!.env.example
+client_secret*.json
+**/google_credentials.json
+**/google_token.json
+
+# ============================================================================
+# KEEP THESE (essential for runtime):
+# - README.md (required by HF)
+# - LICENSE
+# - src/ (application code)
+# - data/ (runtime storage - calendar, conversations, logs)
+# - requirements.txt (dependencies)
+# - Dockerfile, docker-compose.yml (HF Spaces deployment)
+# - .dockerignore
+# - pytest.ini (if running tests in CI)
+# ============================================================================
