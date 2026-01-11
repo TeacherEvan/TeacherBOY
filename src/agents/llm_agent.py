@@ -268,11 +268,22 @@ class LLMAgent(BaseAgent):
         return group_id, room_id
 
     def _is_boss_question(self, query: str) -> bool:
-        """Return True if the query is asking who is boss."""
+        """
+        Return True if the query is asking who is boss.
+        
+        Matches patterns like:
+        - "who is your boss"
+        - "who is the boss" 
+        - "who is boss"
+        - "who's your boss"
+        - "who's the boss"
+        - "zeus who is your boss" (handled via _parse_command removing 'zeus')
+        """
         q = (query or "").strip().lower()
+        # Match: "who is your boss", "who is the boss", "who is boss", "who's your boss", etc.
         return bool(
             re.match(
-                r"^who\s*(?:is|'?s)\s*(?:the\s*)?boss\s*[?!.]*$",
+                r"^who\s*(?:is|'?s)\s*(?:your\s*|the\s*)?boss\s*[?!.]*$",
                 q,
             )
         )
@@ -423,9 +434,14 @@ class LLMAgent(BaseAgent):
         is_private = self._is_private_chat(event)
         is_admin = privilege_service.is_admin(user_id)
 
-        # Hard-coded shortcut: boss question must reply with ONLY 'Evan...'
+        # Hard-coded shortcut: boss question with admin-specific response
         if self._is_boss_question(query):
-            await self._send_reply(event, line_bot_api, "Evan...")
+            # Different response for admin (Evan) vs regular users
+            if is_admin:
+                response = "Your wife! :'D ⛈️"
+            else:
+                response = "Evan's wife..... :'D ⛈️"
+            await self._send_reply(event, line_bot_api, response)
             return True
 
         # Admin-only Zeus outbound messaging helpers (named recipients).

@@ -54,12 +54,21 @@ class ScrapeFlow(CalendarFlowBase):
         line_bot_api: MessagingApi,
         chat_id: str,
         user_id: Optional[str],
+        discrete_mode: bool = False,
     ) -> bool:
         """
         Handle "zeus scrape" trigger.
         
         Retrieves recent messages from buffer, extracts dates using AI,
         and guides user through adding events.
+        
+        Args:
+            event: LINE message event
+            text: Message text
+            line_bot_api: LINE Messaging API client
+            chat_id: Chat ID (may be group for discrete scrape)
+            user_id: User ID
+            discrete_mode: If True, send all confirmations to user's DM instead of group
         """
         from src.services.date_extraction_service import date_extraction_service
 
@@ -146,9 +155,12 @@ class ScrapeFlow(CalendarFlowBase):
         # Prompt for first event
         first_event = calendar_session_manager.get_current_scraped_event(chat_id)
         if first_event:
+            # Check for discrete mode
+            discrete_target = calendar_session_manager.get_discrete_scrape_target(chat_id)
             await self.prompt_scraped_event(
                 event, line_bot_api, first_event, 1, len(events_data),
-                header=f"🔍 Scanned {len(messages)} messages - found {len(events_data)} event(s)!\nสแกน {len(messages)} ข้อความ - พบ {len(events_data)} กิจกรรม!\n\n"
+                header=f"🔍 Scanned {len(messages)} messages - found {len(events_data)} event(s)!\nสแกน {len(messages)} ข้อความ - พบ {len(events_data)} กิจกรรม!\n\n",
+                discrete_target_user_id=discrete_target
             )
         else:
             await self.send_message(
@@ -165,9 +177,24 @@ class ScrapeFlow(CalendarFlowBase):
         event_data: Dict[str, Any],
         current: int,
         total: int,
-        header: str = ""
+        header: str = "",
+        discrete_target_user_id: Optional[str] = None
     ) -> None:
-        """Prompt user about a scraped event."""
+        """
+        Prompt user about a scraped event.
+        
+        Args:
+            event: LINE message event
+            line_bot_api: LINE Messaging API client
+            event_data: Event data dictionary
+            current: Current event number
+            total: Total events
+            header: Optional header text
+            discrete_target_user_id: If provided, send via push message to this user instead of replying
+        """
+        import asyncio
+        from linebot.v3.messaging import PushMessageRequest, TextMessage as TextMsg
+        
         date_obj = event_data.get("date")
         title = event_data.get("title", "Event")
         source = event_data.get("source_text", "")
@@ -196,6 +223,23 @@ class ScrapeFlow(CalendarFlowBase):
             QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="➕ Add All", text="add all")),
             QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="🚫 Skip All", text="done")),
         ])
+        
+        # Send via push message if discrete mode, otherwise reply
+        if discrete_target_user_id:
+            try:
+                await asyncio.to_thread(
+                    line_bot_api.push_message,
+                    PushMessageRequest(
+                        to=discrete_target_user_id,
+                        messages=[TextMsg(text=msg, quickReply=quick_reply, quoteToken=None)],
+                        notificationDisabled=False,
+                    )
+                )
+                logger.info(f"📨 Sent discrete scrape prompt to user {discrete_target_user_id}")
+            except Exception as e:
+                logger.error(f"❌ Failed to send discrete scrape push message: {e}", exc_info=True)
+        else:
+            await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
 
         await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
 

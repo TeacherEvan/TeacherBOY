@@ -82,6 +82,13 @@ TRIGGERS_SCRAPE = [
     "zeus scan messages",
 ]
 
+TRIGGERS_DISCRETE_SCRAPE = [
+    "zeus scrape discretely",
+    "zeus scrape discreetly",
+    "zeus scan discretely",
+    "zeus scan discreetly",
+]
+
 # Cancel keywords
 CANCEL_KEYWORDS = ["cancel", "nevermind", "never mind", "ยกเลิก", "exit", "quit"]
 
@@ -192,9 +199,23 @@ class CalendarAgent(BaseAgent):
         return "user_unknown"
 
     def _is_trigger(self, text: str, triggers: List[str]) -> bool:
-        """Check if text matches any trigger."""
+        """
+        Check if text matches any trigger.
+        
+        IMPORTANT: Triggers must START the message (after normalization)
+        to prevent false matches from instructional text like:
+        'you can say zeus add event' or 'just say zeus scrape'.
+        
+        Examples:
+        - "zeus add event" -> MATCH
+        - "add event tomorrow" -> MATCH  
+        - "you can say zeus add event" -> NO MATCH (instructional)
+        - "If you guys want to add event just say zeus add" -> NO MATCH
+        """
         text_lower = text.lower().strip()
-        return any(trigger in text_lower for trigger in triggers)
+        
+        # Check if ANY trigger starts the message
+        return any(text_lower.startswith(trigger) for trigger in triggers)
 
     def _is_cancel_command(self, text: str) -> bool:
         """Check if text is a cancel command."""
@@ -346,12 +367,12 @@ class CalendarAgent(BaseAgent):
 
         # Check for explicit triggers
         if any(trigger in text_lower for trigger in 
-               TRIGGERS_VIEW + TRIGGERS_ADD + TRIGGERS_REMOVE + TRIGGERS_SCRAPE):
+               TRIGGERS_VIEW + TRIGGERS_ADD + TRIGGERS_REMOVE + TRIGGERS_SCRAPE + TRIGGERS_DISCRETE_SCRAPE):
             return True
 
         # Check for inline add syntax (zeus add [date] [title])
         if text_lower.startswith("zeus add ") and len(text) > 10:
-            parsed = self._date_parser.parse_inline_add(text)
+            parsed = self._parse_inline_add(text)
             if parsed:
                 return True
 
@@ -418,6 +439,12 @@ class CalendarAgent(BaseAgent):
                         event, line_bot_api, chat_id, user_id
                     )
 
+                # DISCRETE SCRAPE TRIGGER (friend-only, DM delivery)
+                if self._is_trigger(text, TRIGGERS_DISCRETE_SCRAPE):
+                    return await self._handle_discrete_scrape(
+                        event, text, line_bot_api, chat_id, user_id
+                    )
+
                 # SCRAPE TRIGGER
                 if self._is_trigger(text, TRIGGERS_SCRAPE):
                     return await self.scrape_flow.handle_scrape_trigger(
@@ -427,7 +454,7 @@ class CalendarAgent(BaseAgent):
                 # INLINE ADD (zeus add [date] [title])
                 text_lower = text.lower().strip()
                 if text_lower.startswith("zeus add ") and len(text) > 10:
-                    parsed = self._date_parser.parse_inline_add(text)
+                    parsed = self._parse_inline_add(text)
                     if parsed:
                         return await self.inline_add_flow.handle_inline_add_trigger(
                             event, line_bot_api, chat_id, user_id, parsed
@@ -527,6 +554,75 @@ class CalendarAgent(BaseAgent):
                 )
                 calendar_session_manager.cancel_flow(chat_id)
                 return True
+
+    # =========================================================================
+    # Discrete Scrape (Privacy-Preserving Group Scraping)
+    # =========================================================================
+
+    async def _handle_discrete_scrape(
+        self,
+        event: MessageEvent,
+        text: str,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: Optional[str],
+    ) -> bool:
+        """
+        Handle discrete scrape request.
+        
+        Scrapes dates from group messages but sends all confirmations
+        and reminders via DM to the requester (if they're a friend).
+        
+        Args:
+            event: LINE message event
+            text: Message text
+            line_bot_api: LINE Messaging API client
+            chat_id: Chat ID (group/room)
+            user_id: User ID of requester
+            
+        Returns:
+            True if handled
+        """
+        from src.services.friend_check_service import friend_check_service
+        import asyncio
+        from linebot.v3.messaging import (
+            PushMessageRequest,
+            TextMessage,
+        )
+
+        if not user_id:
+            await self._send_reply(
+                event, line_bot_api,
+                "❌ Cannot identify user for discrete scrape."
+            )
+            return True
+
+        # Check if user is a friend
+        is_friend = await friend_check_service.is_friend(user_id, line_bot_api)
+        
+        if not is_friend:
+            await self._send_reply(
+                event, line_bot_api,
+                "Dear Mortal, I only do favors for friends! 🌩️\n\n"
+                "Add me as a friend first to use discrete scraping.\n"
+                "เพิ่มฉันเป็นเพื่อนก่อนเพื่อใช้การสแกนแบบลับ"
+            )
+            return True
+
+        # Acknowledge request in group (briefly)
+        await self._send_reply(
+            event, line_bot_api,
+            "🔍 Scanning messages discretely... Check your DM! 📨"
+        )
+
+        # Now run the normal scrape flow, but store user_id for DM delivery
+        # We'll use the scrape flow but override the delivery target
+        calendar_session_manager.set_discrete_scrape_target(chat_id, user_id)
+        
+        # Delegate to scrape flow (which will check for discrete mode)
+        return await self.scrape_flow.handle_scrape_trigger(
+            event, text, line_bot_api, chat_id, user_id, discrete_mode=True
+        )
 
     # =========================================================================
     # Image-Triggered Calendar (ImageAnalyzerAgent Integration)
