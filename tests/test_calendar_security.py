@@ -387,12 +387,12 @@ async def test_audit_log_event_creation(calendar_service, monkeypatch):
     """Test that event creation is logged."""
     log_calls = []
     
-    async def mock_log_event(**kwargs):
+    async def mock_log(**kwargs):
         log_calls.append(kwargs)
     
     class _MockHistoryLog:
-        async def log_event(self, **kwargs):
-            await mock_log_event(**kwargs)
+        async def log(self, **kwargs):
+            await mock_log(**kwargs)
 
     from src.services import calendar_service as calendar_service_module
     monkeypatch.setattr(calendar_service_module, "get_history_log", lambda: _MockHistoryLog())
