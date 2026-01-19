@@ -277,15 +277,17 @@ class TestBulkEventAddition:
         
         agent = CalendarAgent()
         
-        # Should detect as event-like
-        assert agent._looks_like_event_message("Team meeting on Friday")
-        assert agent._looks_like_event_message("Deadline tomorrow")
+        # Should detect as event-like (with explicit date patterns)
+        assert agent._looks_like_event_message("Team meeting next Friday")
+        assert agent._looks_like_event_message("Deadline tomorrow at 3pm")
         assert agent._looks_like_event_message("Dear all, workshop next week")
+        assert agent._looks_like_event_message("Conference on Jan 15")
         
         # Should NOT detect as event-like
         assert not agent._looks_like_event_message("Hello")
         assert not agent._looks_like_event_message("How are you?")
         assert not agent._looks_like_event_message("zeus calendar")
+        assert not agent._looks_like_event_message("Meeting")  # Too short
 
 
 if __name__ == "__main__":

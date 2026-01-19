@@ -112,7 +112,7 @@ class CalendarHandler(ABC):
                 ),
             )
         except Exception as e:
-            self._logger.error(f"Failed to send message: {e}")
+            self._logger.warning(f"Failed to send message (reply token may be expired): {e}")
 
     async def _send_message_with_quick_reply(
         self,

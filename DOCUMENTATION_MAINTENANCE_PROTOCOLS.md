@@ -2,7 +2,7 @@
 
 **Project:** Zeus/TeacherBOY  
 **Version:** 1.0.0  
-**Last Updated:** 2026-01-08  
+**Last Updated:** 2026-01-11  
 **Purpose:** Establish sustainable documentation maintenance practices to prevent drift and ensure quality
 
 ---
@@ -23,20 +23,21 @@
 
 ### By Document Type
 
-| Document Type | Update Frequency | Update Triggers | Owner |
-|---------------|------------------|-----------------|-------|
-| **README.md** | Per major release | New features, architecture changes | Project Lead |
-| **CHANGELOG.md** | Every release | All code changes, bug fixes, features | Development Team |
-| **API/Reference Docs** | Per feature release | API changes, new endpoints, deprecations | Backend Developer |
-| **User Guides** | Quarterly + as-needed | Feature changes, workflow updates | Documentation Lead |
-| **Architecture Docs** | Semi-annually + as-needed | Major refactoring, design changes | Architect |
-| **Quick Start/Setup** | Quarterly review | Dependency updates, setup process changes | DevOps/Lead |
-| **Feature Documentation** | With feature deployment | New features, feature updates | Feature Owner |
-| **Admin Guides** | Quarterly review | New admin commands, policy changes | Admin Team |
+| Document Type             | Update Frequency          | Update Triggers                           | Owner              |
+| ------------------------- | ------------------------- | ----------------------------------------- | ------------------ |
+| **README.md**             | Per major release         | New features, architecture changes        | Project Lead       |
+| **CHANGELOG.md**          | Every release             | All code changes, bug fixes, features     | Development Team   |
+| **API/Reference Docs**    | Per feature release       | API changes, new endpoints, deprecations  | Backend Developer  |
+| **User Guides**           | Quarterly + as-needed     | Feature changes, workflow updates         | Documentation Lead |
+| **Architecture Docs**     | Semi-annually + as-needed | Major refactoring, design changes         | Architect          |
+| **Quick Start/Setup**     | Quarterly review          | Dependency updates, setup process changes | DevOps/Lead        |
+| **Feature Documentation** | With feature deployment   | New features, feature updates             | Feature Owner      |
+| **Admin Guides**          | Quarterly review          | New admin commands, policy changes        | Admin Team         |
 
 ### Update Triggers (When to Update Documentation)
 
 **Immediate Updates Required:**
+
 - 🔴 Breaking API changes
 - 🔴 New required environment variables
 - 🔴 Security-related configuration changes
@@ -44,12 +45,14 @@
 - 🔴 Critical bug fixes affecting documented behavior
 
 **Within 1 Week:**
+
 - 🟡 New features or agents
 - 🟡 New configuration options
 - 🟡 Performance improvements affecting usage
 - 🟡 Updated dependencies with new requirements
 
 **Next Sprint/Release:**
+
 - 🟢 Minor bug fixes
 - 🟢 Code refactoring (no behavior change)
 - 🟢 Internal improvements
@@ -63,27 +66,30 @@
 
 **Always use these standardized terms** (from Phase 4 audit):
 
-| Concept | Standard Form | Avoid |
-|---------|--------------|-------|
-| Project name | **Zeus** | TeacherBOY (legacy) |
-| LINE service | **LINE Bot**, **LINE Messaging API** | Line bot, linebot |
-| User identifier | **LINE user ID** (prose), `user_id` (code) | userid, user id |
-| Administrator | **Admin** (heading), **admin** (prose) | administrator |
-| Commands | `/admin`, `Zeus <query>` (with backticks) | admin (unformatted) |
-| Technical terms | **API**, **LLM**, **HF Hub**, **OTEL** (all caps) | Api, llm, otel |
-| Dates | **ISO 8601** (metadata: `YYYY-MM-DD`) | Mixed formats |
-| Agent names | **Calendar Agent** (title case in headings) | calendar agent (in titles) |
+| Concept         | Standard Form                                     | Avoid                      |
+| --------------- | ------------------------------------------------- | -------------------------- |
+| Project name    | **Zeus**                                          | TeacherBOY (legacy)        |
+| LINE service    | **LINE Bot**, **LINE Messaging API**              | Line bot, linebot          |
+| User identifier | **LINE user ID** (prose), `user_id` (code)        | userid, user id            |
+| Administrator   | **Admin** (heading), **admin** (prose)            | administrator              |
+| Commands        | `/admin`, `Zeus <query>` (with backticks)         | admin (unformatted)        |
+| Technical terms | **API**, **LLM**, **HF Hub**, **OTEL** (all caps) | Api, llm, otel             |
+| Dates           | **ISO 8601** (metadata: `YYYY-MM-DD`)             | Mixed formats              |
+| Agent names     | **Calendar Agent** (title case in headings)       | calendar agent (in titles) |
 
 **Full terminology reference:** [`DOCUMENTATION_AUDIT_PHASE4_STANDARDIZATION.md`](DOCUMENTATION_AUDIT_PHASE4_STANDARDIZATION.md) Section 2.
 
 ### Markdown Formatting Standards
 
 **Code Blocks:**
-```markdown
+
+````markdown
 Use language identifiers for all code blocks:
+
 ```python
 # Python code
 ```
+````
 
 ```bash
 # Shell commands
@@ -92,29 +98,36 @@ Use language identifiers for all code blocks:
 ```json
 // JSON configuration
 ```
+
 \`\`\`
 
 **Links:**
+
 ```markdown
 # Internal links (relative paths)
+
 [Link text](docs/file.md)
 [Link with anchor](docs/file.md#section-name)
 
 # External links (full URLs)
+
 [LINE Developers](https://developers.line.biz/)
 ```
 
 **Commands and Code References:**
+
 ```markdown
 Use backticks for inline code: `Zeus help`, `/admin stats`, `user_id`
 ```
 
 **Emphasis:**
+
 - **Bold** (`**text**`): Important terms, UI elements, emphasis
 - _Italic_ (`*text*`): Minimal use (quotes, light emphasis)
 - `Code` (`` `text` ``): Commands, filenames, variable names, code elements
 
 **Admonitions (Status Indicators):**
+
 - ✅ Success, completed, verified
 - ⚠️ Warning, caution, important
 - ❌ Error, forbidden, critical issue
@@ -139,6 +152,7 @@ Use backticks for inline code: `Zeus help`, `/admin stats`, `user_id`
 ```
 
 **For feature documentation, also include:**
+
 ```markdown
 **Feature Version:** 3.5.0  
 **Dependencies:** [List key dependencies]  
@@ -154,6 +168,7 @@ Use backticks for inline code: `Zeus help`, `/admin stats`, `user_id`
 5. **Include error handling** in complex examples
 
 **Good Example:**
+
 ```python
 # Check if user is admin before allowing privileged operation
 if user_id in settings.get_admin_user_ids():
@@ -175,6 +190,7 @@ else:
 Use this checklist when creating **any new documentation file**:
 
 #### Structure & Basics
+
 - [ ] Has clear H1 title at top of document
 - [ ] Includes Table of Contents (if >4 sections)
 - [ ] Uses proper heading hierarchy (H1 → H2 → H3, no skipping)
@@ -182,6 +198,7 @@ Use this checklist when creating **any new documentation file**:
 - [ ] File is in correct location (`docs/` folder structure)
 
 #### Content Quality
+
 - [ ] Uses standardized terminology (see terminology dictionary)
 - [ ] All technical terms defined on first use
 - [ ] Contains practical, realistic examples
@@ -190,13 +207,15 @@ Use this checklist when creating **any new documentation file**:
 - [ ] Prerequisites clearly stated (if applicable)
 
 #### Code & Commands
-- [ ] All code blocks have language identifiers (```python, ```bash, etc.)
+
+- [ ] All code blocks have language identifiers (`python, `bash, etc.)
 - [ ] Commands use proper formatting (backticks: `/command`)
 - [ ] Code examples include explanatory comments
 - [ ] Environment variables clearly marked (`VARIABLE_NAME`)
 - [ ] Expected output shown for commands (where helpful)
 
 #### Links & References
+
 - [ ] All internal links use relative paths (`docs/file.md`)
 - [ ] All links tested and verified working
 - [ ] External links use full URLs with HTTPS
@@ -204,6 +223,7 @@ Use this checklist when creating **any new documentation file**:
 - [ ] File is listed in [`DOCUMENTATION_INDEX.md`](DOCUMENTATION_INDEX.md)
 
 #### Formatting Consistency
+
 - [ ] Follows markdown best practices
 - [ ] Passes markdownlint validation (`.markdownlint.json` config)
 - [ ] Passes spell check (cspell validation)
@@ -212,6 +232,7 @@ Use this checklist when creating **any new documentation file**:
 - [ ] Proper emphasis usage (bold for important, code for technical)
 
 #### Accessibility & Usability
+
 - [ ] Written for intended audience level
 - [ ] Clear, concise sentences (avoid jargon where possible)
 - [ ] Logical organization (general → specific)
@@ -239,24 +260,28 @@ For documentation **changes/updates**:
 **Every 3 months** (Jan, Apr, Jul, Oct), conduct a focused documentation review:
 
 #### Week 1: Automated Checks
+
 1. **Run Link Checker** - Identify broken links
 2. **Run Spell Check** - Validate all documentation
 3. **Review Metadata** - Check all "Last Updated" dates
 4. **Check External Links** - Manually verify external resources
 
 #### Week 2: Content Review
+
 1. **Verify Accuracy** - Do docs match current behavior?
 2. **Check Completeness** - New features documented?
 3. **Review Examples** - Are code examples still valid?
 4. **Test Commands** - Verify all documented commands work
 
 #### Week 3: User Feedback Integration
+
 1. **Review GitHub Issues** - Documentation-related issues
 2. **Check Support Questions** - Common confusion points
 3. **Update FAQ** - Add frequently asked questions
 4. **Improve Clarity** - Rewrite confusing sections
 
 #### Week 4: Improvements & Publishing
+
 1. **Implement Fixes** - Address identified issues
 2. **Update Audit Report** - Document findings
 3. **Update CHANGELOG** - Record documentation improvements
@@ -266,15 +291,16 @@ For documentation **changes/updates**:
 
 **Peer Review for All Documentation Changes:**
 
-| Change Type | Review Required |
-|-------------|----------------|
-| New documentation file | 2 reviewers (1 technical, 1 for clarity) |
-| Major update (>50% changed) | 2 reviewers |
-| Minor update (<50% changed) | 1 reviewer |
-| Typo/formatting fix | Self-review + automated checks |
-| CHANGELOG entry | 1 reviewer |
+| Change Type                 | Review Required                          |
+| --------------------------- | ---------------------------------------- |
+| New documentation file      | 2 reviewers (1 technical, 1 for clarity) |
+| Major update (>50% changed) | 2 reviewers                              |
+| Minor update (<50% changed) | 1 reviewer                               |
+| Typo/formatting fix         | Self-review + automated checks           |
+| CHANGELOG entry             | 1 reviewer                               |
 
 **Review Criteria:**
+
 - ✅ Accuracy (technical correctness)
 - ✅ Clarity (understandable by target audience)
 - ✅ Completeness (all necessary information provided)
@@ -286,11 +312,13 @@ For documentation **changes/updates**:
 **How to flag content for review:**
 
 1. **In the document itself:**
+
    ```markdown
    > ⚠️ **NEEDS REVIEW:** This section may be outdated as of [date]. See issue #[number].
    ```
 
 2. **Create a GitHub issue:**
+
    - Label: `documentation`, `needs-update`
    - Template: Link to specific section needing update
    - Reason: Why it might be outdated
@@ -320,6 +348,7 @@ For documentation **changes/updates**:
 ### Documentation Update Workflow
 
 **Branch Strategy:**
+
 ```
 main (production docs)
   ├── docs/feature-name (new feature docs)
@@ -328,6 +357,7 @@ main (production docs)
 ```
 
 **Branch Naming:**
+
 - `docs/feature-name` - New feature documentation
 - `docs/update-section-name` - Updates to existing docs
 - `docs/audit-YYYY-MM` - Audit fixes
@@ -338,17 +368,20 @@ main (production docs)
 **Every documentation PR must include:**
 
 1. **Clear Description:**
+
    - What was changed and why
    - Which documents were affected
    - Link to related feature PR (if applicable)
 
 2. **Checklist Completion:**
+
    - Quality checklist completed (paste in PR)
    - Links verified
    - Spell check passed
    - Markdownlint passed
 
 3. **CHANGELOG Update:**
+
    - If user-facing documentation change, update [`CHANGELOG.md`](CHANGELOG.md)
    - Use semantic versioning for documentation versions
 
@@ -370,6 +403,7 @@ main (production docs)
 - ❌ Internal documentation updates
 
 **CHANGELOG entry format:**
+
 ```markdown
 ## [3.5.1] - 2026-01-08
 
@@ -395,6 +429,7 @@ Closes #123 (if applicable)
 ```
 
 **Examples:**
+
 ```
 docs: Add metadata to all user guides
 
@@ -427,6 +462,7 @@ Closes #456
 **Configuration:** [`.markdownlint.json`](.markdownlint.json)
 
 **Usage:**
+
 ```bash
 # Install (if not already installed)
 npm install -g markdownlint-cli
@@ -442,6 +478,7 @@ markdownlint --fix '**/*.md'
 ```
 
 **What it checks:**
+
 - Heading hierarchy
 - List formatting
 - Line length (disabled for flexibility)
@@ -453,6 +490,7 @@ markdownlint --fix '**/*.md'
 **Configuration:** [`cspell.json`](cspell.json)
 
 **Usage:**
+
 ```bash
 # Install
 npm install -g cspell
@@ -467,6 +505,7 @@ cspell docs/guides/quickstart.md
 ```
 
 **Project-specific dictionary includes:**
+
 - Zeus, TeacherBOY
 - LINE, OpenRouter, Hugging Face
 - Technical terms (async, webhook, LLM, etc.)
@@ -478,11 +517,13 @@ cspell docs/guides/quickstart.md
 **Tool:** `markdown-link-check`
 
 **Installation:**
+
 ```bash
 npm install -g markdown-link-check
 ```
 
 **Usage:**
+
 ```bash
 # Check a single file
 markdown-link-check README.md
@@ -498,11 +539,13 @@ find . -name '*.md' -not -path './node_modules/*' -exec markdown-link-check {} \
 **Tool:** Custom script (create `scripts/doc-coverage.py`)
 
 **Purpose:**
+
 - Track which modules have documentation
 - Identify undocumented features
 - Monitor documentation completeness over time
 
 **Metrics to track:**
+
 - Number of documented vs. undocumented agents
 - Number of documented vs. undocumented services
 - Percentage of code with docstrings
@@ -512,6 +555,7 @@ find . -name '*.md' -not -path './node_modules/*' -exec markdown-link-check {} \
 **Tool:** Pre-commit hook
 
 **Create:** `.git/hooks/pre-commit`
+
 ```bash
 #!/bin/bash
 # Update "Last Updated" dates in modified markdown files
@@ -534,40 +578,41 @@ name: Documentation Validation
 on:
   pull_request:
     paths:
-      - '**.md'
-      - 'docs/**'
+      - "**.md"
+      - "docs/**"
 
 jobs:
   validate-docs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Install Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
-      
+          node-version: "18"
+
       - name: Install validation tools
         run: |
           npm install -g markdownlint-cli
           npm install -g cspell
           npm install -g markdown-link-check
-      
+
       - name: Run markdownlint
         run: markdownlint '**/*.md' --ignore node_modules
-      
+
       - name: Run spell check
         run: cspell "**/*.md"
-      
+
       - name: Check internal links
         run: markdown-link-check --config .markdown-link-check.json README.md
-      
+
       - name: Validate documentation structure
         run: python scripts/validate-docs-structure.py
 ```
 
 **Benefits:**
+
 - Catches errors before merge
 - Enforces standards automatically
 - Reduces manual review burden
@@ -579,18 +624,18 @@ jobs:
 
 ### Documentation Ownership by Type
 
-| Documentation Type | Primary Owner | Backup | Review Frequency |
-|-------------------|---------------|---------|------------------|
-| README.md | Project Lead | Architect | Per major release |
-| CHANGELOG.md | Release Manager | Dev Team | Every release |
-| Architecture docs | Architect | Senior Developer | Quarterly |
-| API/Reference docs | Backend Lead | API developers | Per feature release |
-| User Guides | Documentation Lead | Product Manager | Quarterly |
-| Admin Guides | DevOps Lead | Admin Team | Quarterly |
-| Feature docs | Feature Owner | Tech Writer | With feature updates |
-| Quick Start | DevOps/Onboarding | Documentation Lead | Quarterly |
-| Deployment docs | DevOps Lead | SRE Team | Quarterly |
-| Security docs | Security Lead | DevOps | Semi-annually |
+| Documentation Type | Primary Owner      | Backup             | Review Frequency     |
+| ------------------ | ------------------ | ------------------ | -------------------- |
+| README.md          | Project Lead       | Architect          | Per major release    |
+| CHANGELOG.md       | Release Manager    | Dev Team           | Every release        |
+| Architecture docs  | Architect          | Senior Developer   | Quarterly            |
+| API/Reference docs | Backend Lead       | API developers     | Per feature release  |
+| User Guides        | Documentation Lead | Product Manager    | Quarterly            |
+| Admin Guides       | DevOps Lead        | Admin Team         | Quarterly            |
+| Feature docs       | Feature Owner      | Tech Writer        | With feature updates |
+| Quick Start        | DevOps/Onboarding  | Documentation Lead | Quarterly            |
+| Deployment docs    | DevOps Lead        | SRE Team           | Quarterly            |
+| Security docs      | Security Lead      | DevOps             | Semi-annually        |
 
 ### Escalation Path
 
@@ -645,8 +690,8 @@ jobs:
 
 ---
 
-**Document Version:** 1.0.0  
-**Last Updated:** 2026-01-08  
+**Document Version:** 1.0.1  
+**Last Updated:** 2026-01-11  
 **Maintained By:** Documentation Lead  
 **Review Cycle:** Semi-annually (January, July)  
-**Next Review Due:** 2026-07-08
+**Next Review Due:** 2026-07-11

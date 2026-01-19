@@ -50,21 +50,21 @@ class TranslationAgent(BaseAgent):
         """
         Check if text is a sleep command (puts bot to sleep for 24 hours).
 
-        Sleep pattern: "amen" (case insensitive)
+        Sleep patterns: "good night zeus", "sleep zeus", "zeus sleep" (case insensitive)
         """
         text_lower = text.lower().strip()
-        # Simple pattern for "amen" with optional punctuation
-        sleep_pattern = r"^amen[\s.!]*$"
+        # Pattern for explicit sleep commands addressing Zeus
+        sleep_pattern = r"^(good\s*night\s*zeus|sleep\s*zeus|zeus\s*sleep)[\s.!]*$"
         return bool(re.search(sleep_pattern, text_lower))
 
     def is_wake_command(self, text: str) -> bool:
         """
         Check if text is a wake command (wakes bot from sleep).
 
-        Wake pattern: "Dear Zeus" alone (exact match, not among other text)
+        Wake pattern: Any message starting with "Zeus"
         """
-        # Allow for case-insensitive "dear zeus" with optional trailing punctuation/whitespace
-        zeus_pattern = r"^dear\s+zeus[\s.!]*$"
+        # Wake up if message starts with "Zeus"
+        zeus_pattern = r"^zeus\b"
         return bool(re.match(zeus_pattern, text.lower().strip()))
 
     def is_help_command(self, text: str) -> bool:
@@ -773,7 +773,7 @@ class TranslationAgent(BaseAgent):
         message_text = (
             "😴 ราตรีสวัสดิ์ Good Night!\n\n"
             "Zeus is sleeping for 24 hours.\n\n"
-            '☀️ Say "Dear Zeus" to wake me up anytime!'
+            '☀️ Say "Zeus" to wake me up anytime!'
         )
 
         return TextMessage(text=message_text, quickReply=None, quoteToken=None)

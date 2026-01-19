@@ -73,6 +73,7 @@ from src.services.history_log_service import (
     EventType,
     LogLevel,
 )
+from src.services.startup_data_loader import startup_loader
 from src.utils.tracing import setup_tracing
 
 # ============================================================================
@@ -241,6 +242,23 @@ async def lifespan(app: FastAPI):
         logger.info(f"⏰ Reminder service configured (daily at {settings.calendar_reminder_hour}:00 Bangkok)")
     else:
         logger.info("📅 Calendar service disabled")
+
+    # ========================================================================
+    # PHASE 2a4: Synchronous Data Load from HF Hub (CRITICAL)
+    # ========================================================================
+    # This ensures all data is downloaded BEFORE the app starts serving requests.
+    # Without this, the app would appear to have lost all calendar events and memory
+    # because CommitScheduler downloads async in the background.
+    logger.info("🔄 Loading persistent data from HF Hub...")
+    load_results = await startup_loader.ensure_data_loaded(
+        calendar_service=calendar_service if settings.is_calendar_configured() else None,
+        memory_service=get_conversation_memory() if settings.conversation_memory_enabled else None,
+        history_log=get_history_log() if settings.is_history_log_configured() else None,
+    )
+    if load_results["calendar"]:
+        logger.info(f"✅ Calendar data loaded: {len(calendar_service._events)} events")
+    if load_results["backup_created"]:
+        logger.info("✅ LLM-readable backup created for disaster recovery")
 
     # ========================================================================
     # PHASE 2b: Translation Services Configuration
@@ -522,13 +540,18 @@ async def health_check() -> Dict[str, Any]:
     Kubernetes-style health check endpoint.
 
     Returns HTTP 200 if the service is healthy and ready to serve traffic.
-    Includes checks for critical external dependencies.
+    Includes checks for critical external dependencies AND data restoration status.
     """
     health_status = {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "checks": {},
     }
+
+    # Check if startup data load completed
+    health_status["checks"]["data_loaded"] = "ready" if startup_loader.is_ready() else "loading"
+    if settings.is_calendar_configured():
+        health_status["checks"]["calendar_events"] = len(calendar_service._events)
 
     # Check LINE Bot API connectivity
     try:

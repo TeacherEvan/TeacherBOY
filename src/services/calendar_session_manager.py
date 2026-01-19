@@ -76,6 +76,7 @@ class CalendarSession:
     scraped_events: List[Dict[str, Any]] = field(default_factory=list)  # Events extracted from messages
     current_scrape_index: int = 0  # Which scraped event is being processed
     scraped_source_messages: List[str] = field(default_factory=list)  # Source messages for context
+    discrete_scrape_target: Optional[str] = None  # User ID for discrete scrape DM delivery
 
     # For "Zeus Add Event" live bulk-add flow
     live_events: List[Dict[str, Any]] = field(default_factory=list)  # Events scraped from incoming messages
@@ -541,6 +542,41 @@ class CalendarSessionManager:
             f"with {len(source_messages)} messages"
         )
         return session
+
+    def set_discrete_scrape_target(
+        self,
+        chat_id: str,
+        target_user_id: str
+    ) -> bool:
+        """
+        Set discrete scrape target for sending DMs.
+        
+        Args:
+            chat_id: Chat identifier (group where scraping occurs)
+            target_user_id: User ID to send confirmations/reminders to
+            
+        Returns:
+            True if set successfully
+        """
+        session = self.get_session(chat_id)
+        if not session:
+            logger.warning(f"⚠️ No session found for discrete scrape target: {chat_id}")
+            return False
+        
+        session.discrete_scrape_target = target_user_id
+        session.update()
+        logger.info(f"🔒 Set discrete scrape target for {chat_id} -> user {target_user_id}")
+        return True
+    
+    def get_discrete_scrape_target(self, chat_id: str) -> Optional[str]:
+        """
+        Get discrete scrape target user ID.
+        
+        Returns:
+            User ID for discrete scrape DM delivery, or None
+        """
+        session = self.get_session(chat_id)
+        return session.discrete_scrape_target if session else None
 
     # =========================================================================
     # Live Bulk Add Flow ("zeus add event") - Enhanced with Smart Mode Selection
