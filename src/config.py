@@ -232,6 +232,37 @@ class Settings(BaseSettings):
         description="Hours before conversation session expires (1-168, default: 24).",
     )
 
+    # ==========================================================================
+    # Document Memory Configuration (PDF/DOCX persistence)
+    # ==========================================================================
+    document_memory_enabled: bool = Field(
+        default=True,
+        description="Enable document memory for PDF/DOCX uploads.",
+    )
+    document_storage_path: str = Field(
+        default="./data/documents",
+        description="Local directory for document storage.",
+    )
+    document_hf_repo_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Hugging Face dataset repo ID for document storage. "
+            "Example: 'username/zeus-documents'. Will be created as private if it doesn't exist."
+        ),
+    )
+    document_max_file_size_mb: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=50.0,
+        description="Max document file size in MB (1-50).",
+    )
+    document_max_text_chars: int = Field(
+        default=80000,
+        ge=1000,
+        le=500000,
+        description="Max extracted text chars stored per document.",
+    )
+
     # ============================================================================
     # History Logging Configuration
     # ============================================================================
@@ -625,6 +656,15 @@ class Settings(BaseSettings):
             self.conversation_memory_enabled
             and self.hf_memory_token
             and self.hf_memory_repo_id
+            and len(self.hf_memory_token) > 10
+        )
+
+    def is_document_memory_configured(self) -> bool:
+        """Check if document memory storage is configured."""
+        return bool(
+            self.document_memory_enabled
+            and self.hf_memory_token
+            and self.document_hf_repo_id
             and len(self.hf_memory_token) > 10
         )
 

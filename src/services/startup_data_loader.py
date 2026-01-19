@@ -29,6 +29,7 @@ class StartupDataLoader:
     def __init__(self):
         self._calendar_loaded = False
         self._memory_loaded = False
+        self._documents_loaded = False
         self._logs_loaded = False
         self._backup_created = False
 
@@ -36,6 +37,7 @@ class StartupDataLoader:
         self,
         calendar_service: Any = None,
         memory_service: Any = None,
+        document_service: Any = None,
         history_log: Any = None,
         max_retries: int = 3,
         retry_delay_seconds: int = 2,
@@ -46,6 +48,7 @@ class StartupDataLoader:
         Args:
             calendar_service: CalendarService instance (optional)
             memory_service: ConversationMemoryService instance (optional)
+            document_service: DocumentMemoryService instance (optional)
             history_log: HistoryLogService instance (optional)
             max_retries: Maximum number of download attempts per service
             retry_delay_seconds: Base delay between retries (exponential backoff)
@@ -59,6 +62,7 @@ class StartupDataLoader:
         results = {
             "calendar": False,
             "memory": False,
+            "documents": False,
             "logs": False,
             "backup_created": False,
         }
@@ -76,6 +80,13 @@ class StartupDataLoader:
                 memory_service, max_retries, retry_delay_seconds
             )
             self._memory_loaded = results["memory"]
+
+        # Load document memory
+        if document_service and hasattr(document_service, "_hf_enabled") and document_service._hf_enabled:
+            results["documents"] = await self._load_documents_with_retry(
+                document_service, max_retries, retry_delay_seconds
+            )
+            self._documents_loaded = results["documents"]
 
         # Load history logs
         if history_log and hasattr(history_log, "_hf_enabled") and history_log._hf_enabled:
@@ -130,6 +141,37 @@ class StartupDataLoader:
                     await asyncio.sleep(delay)
                 else:
                     logger.error(f"❌ Calendar load failed after {max_retries} attempts")
+                    return False
+
+        return False
+
+    async def _load_documents_with_retry(
+        self, document_service: Any, max_retries: int, retry_delay: int
+    ) -> bool:
+        """Load document memory from HF Hub with retry logic."""
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"📄 Downloading documents (attempt {attempt}/{max_retries})...")
+
+                if hasattr(document_service, "_load_from_hub"):
+                    await document_service._load_from_hub()
+                    logger.info("✅ Documents loaded")
+                    return True
+
+                logger.warning("⚠️ Document service missing load method")
+                return False
+
+            except FileNotFoundError:
+                logger.info("📄 Document HF repo is empty - starting fresh")
+                return True
+            except Exception as e:
+                logger.warning(f"⚠️ Document load attempt {attempt} failed: {e}")
+                if attempt < max_retries:
+                    delay = retry_delay * (2 ** (attempt - 1))
+                    logger.info(f"⏳ Retrying in {delay}s...")
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(f"❌ Document load failed after {max_retries} attempts")
                     return False
 
         return False

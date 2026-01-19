@@ -67,6 +67,10 @@ from src.services.conversation_memory_service import (
     init_conversation_memory,
     get_conversation_memory,
 )
+from src.services.document_memory_service import (
+    init_document_memory,
+    get_document_memory,
+)
 from src.services.history_log_service import (
     init_history_log,
     get_history_log,
@@ -194,6 +198,31 @@ async def lifespan(app: FastAPI):
         logger.info("💭 Conversation memory disabled")
 
     # ========================================================================
+    # PHASE 2a1: Document Memory Initialization
+    # ========================================================================
+    if settings.document_memory_enabled:
+        if settings.is_document_memory_configured():
+            document_service = init_document_memory(
+                hf_token=settings.hf_memory_token,
+                hf_repo_id=settings.document_hf_repo_id,
+                storage_path=settings.document_storage_path,
+                max_file_size_mb=settings.document_max_file_size_mb,
+                max_text_chars=settings.document_max_text_chars,
+            )
+            logger.info(
+                f"📄 Document memory enabled (HF Hub: {settings.document_hf_repo_id})"
+            )
+        else:
+            document_service = init_document_memory(
+                storage_path=settings.document_storage_path,
+                max_file_size_mb=settings.document_max_file_size_mb,
+                max_text_chars=settings.document_max_text_chars,
+            )
+            logger.info("📄 Document memory enabled (local-only)")
+    else:
+        logger.info("📄 Document memory disabled")
+
+    # ========================================================================
     # PHASE 2a2: History Logging Initialization
     # ========================================================================
     if settings.is_history_log_configured():
@@ -253,12 +282,15 @@ async def lifespan(app: FastAPI):
     load_results = await startup_loader.ensure_data_loaded(
         calendar_service=calendar_service if settings.is_calendar_configured() else None,
         memory_service=get_conversation_memory() if settings.conversation_memory_enabled else None,
+        document_service=get_document_memory() if settings.document_memory_enabled else None,
         history_log=get_history_log() if settings.is_history_log_configured() else None,
     )
     if load_results["calendar"]:
         logger.info(f"✅ Calendar data loaded: {len(calendar_service._events)} events")
     if load_results["backup_created"]:
         logger.info("✅ LLM-readable backup created for disaster recovery")
+    if load_results.get("documents"):
+        logger.info("✅ Document data loaded")
 
     # ========================================================================
     # PHASE 2b: Translation Services Configuration
@@ -284,6 +316,7 @@ async def lifespan(app: FastAPI):
     from src.agents.admin_agent import AdminAgent
     from src.agents.translation_agent import TranslationAgent
     from src.agents.calendar_agent import CalendarAgent
+    from src.agents.document_memory_agent import DocumentMemoryAgent
     from src.agents.profiler_agent import ProfilerAgent
     from src.agents.image_analyzer_agent import ImageAnalyzerAgent
     from src.agents.search_agent import SearchAgent
@@ -334,6 +367,18 @@ async def lifespan(app: FastAPI):
         logger.info("📅 Calendar Agent registered (events and reminders)")
     else:
         logger.info("📅 Calendar Agent not registered (calendar disabled)")
+
+    # Register Document Memory Agent (Priority: 8 - Handles PDF/DOCX uploads)
+    if settings.document_memory_enabled:
+        document_service = get_document_memory()
+        if document_service:
+            document_agent = DocumentMemoryAgent(document_service=document_service)
+            agent_router.register_agent(document_agent)
+            logger.info("📄 Document Memory Agent registered (PDF/DOCX storage)")
+        else:
+            logger.info("📄 Document Memory Agent not registered (service unavailable)")
+    else:
+        logger.info("📄 Document Memory Agent not registered (disabled)")
 
     # Register Hannibal Profile Agent (Priority: 6 - Psychological profiling from message history)
     if settings.is_github_models_configured():
@@ -479,6 +524,12 @@ async def lifespan(app: FastAPI):
     if memory_svc:
         memory_svc.stop()
         logger.info("✅ Conversation memory scheduler stopped")
+
+    # Stop document memory scheduler (HF Hub sync)
+    document_svc = get_document_memory()
+    if document_svc:
+        document_svc.stop()
+        logger.info("✅ Document memory scheduler stopped")
 
     await http_client_pool.aclose()
     logger.info("✅ HTTP client pool closed")

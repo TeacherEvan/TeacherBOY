@@ -10,11 +10,13 @@ Env vars (match src.config.Settings field names):
 - HF_MEMORY_REPO_ID: dataset repo for conversation memory (e.g. "user/zeus-memory")
 - HISTORY_LOG_HF_REPO_ID: dataset repo for history logs (e.g. "user/zeus-logs")
 - CALENDAR_HF_REPO_ID: dataset repo for calendar events (e.g. "user/zeus-calendar")
+- DOCUMENT_HF_REPO_ID: dataset repo for document storage (e.g. "user/zeus-documents")
 
 Folders:
 - data/conversations
 - data/logs/hf_sync
 - data/calendar
+- data/documents
 """
 
 from __future__ import annotations
@@ -155,15 +157,28 @@ def main() -> None:
         default=None,
         help="HF dataset repo id for calendar (e.g. 'username/zeus-calendar'). Defaults to CALENDAR_HF_REPO_ID env var.",
     )
+    parser.add_argument(
+        "--documents",
+        action="store_true",
+        help="Sync document memory folder (data/documents).",
+    )
+    parser.add_argument(
+        "--documents-repo",
+        type=str,
+        default=None,
+        help="HF dataset repo id for documents (e.g. 'username/zeus-documents'). Defaults to DOCUMENT_HF_REPO_ID env var.",
+    )
     args = parser.parse_args()
 
     do_memory = args.memory
     do_logs = args.logs
     do_calendar = args.calendar
-    if not do_memory and not do_logs and not do_calendar:
+    do_documents = args.documents
+    if not do_memory and not do_logs and not do_calendar and not do_documents:
         do_memory = True
         do_logs = True
         do_calendar = True  # Include calendar in default sync
+        do_documents = True  # Include documents in default sync
 
     token = _get_hf_token(args.token)
 
@@ -218,6 +233,22 @@ def main() -> None:
                 commit_message=f"Sync calendar ({datetime.now(timezone.utc).date().isoformat()})",
             )
             print(f"✅ Synced calendar to hf://datasets/{repo_id}")
+
+    if do_documents:
+        repo_id = (args.documents_repo or os.getenv("DOCUMENT_HF_REPO_ID") or "").strip()
+        if not repo_id:
+            print("⚠️  Skipping documents sync: No DOCUMENT_HF_REPO_ID provided")
+        else:
+            folder = root / "data" / "documents"
+            _ensure_folder(folder)
+            _ensure_nonempty(folder, marker_name=".hf_sync_marker.txt")
+            _sync_folder(
+                token=token,
+                repo_id=repo_id,
+                local_folder=folder,
+                commit_message=f"Sync documents ({datetime.now(timezone.utc).date().isoformat()})",
+            )
+            print(f"✅ Synced documents to hf://datasets/{repo_id}")
 
 
 if __name__ == "__main__":

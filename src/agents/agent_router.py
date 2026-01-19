@@ -2,7 +2,12 @@
 
 import logging
 from typing import List, Dict, Optional
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, ImageMessageContent
+from linebot.v3.webhooks import (
+    MessageEvent,
+    TextMessageContent,
+    ImageMessageContent,
+    FileMessageContent,
+)
 from linebot.v3.messaging import MessagingApi
 
 from .base_agent import BaseAgent
@@ -107,6 +112,10 @@ class AgentRouter:
                 text = ""  # No text for image messages
                 message_type = "image"
                 span.set_attribute("line.message.type", "image")
+            elif isinstance(event.message, FileMessageContent):
+                text = ""  # No text for file messages
+                message_type = "file"
+                span.set_attribute("line.message.type", "file")
             else:
                 logger.debug(f"Skipping unsupported message type: {type(event.message)}")
                 span.set_attribute("line.message.type", "unsupported")
