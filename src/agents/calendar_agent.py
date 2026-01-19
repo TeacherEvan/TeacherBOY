@@ -36,6 +36,7 @@ from src.services.calendar_session_manager import (
     calendar_session_manager,
     CalendarState,
 )
+from src.agents.calendar.handler_registry import get_handler_registry
 from src.services.privilege_service import privilege_service
 from src.services.message_buffer_service import message_buffer_service
 from src.services.date_extraction_service import date_extraction_service
@@ -275,27 +276,12 @@ class CalendarAgent(BaseAgent):
             return False
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
-        """
-        Handle if:
-        1. Text matches a calendar trigger
-        2. Text is "zeus add [date] [title]" inline format
-        3. Chat is in an active calendar flow
-        """
-        # Check for triggers
-        if self._is_trigger(text, TRIGGERS_VIEW):
-            return True
-        if self._is_trigger(text, TRIGGERS_ADD):
-            return True
-        if self._is_trigger(text, TRIGGERS_REMOVE):
-            return True
-        if self._is_trigger(text, TRIGGERS_SCRAPE):
-            return True
-        
-        # Check for inline add format: "zeus add [date] [title]"
-        if self._parse_inline_add(text):
+        """Return True when a calendar handler can handle this message."""
+        registry = get_handler_registry()
+        handler = await registry.find_matching_handler(event, text, line_bot_api=None)
+        if handler:
             return True
 
-        # Check if in active calendar flow
         chat_id = self._get_chat_id(event)
         return calendar_session_manager.is_in_calendar_flow(chat_id)
 
@@ -477,40 +463,16 @@ class CalendarAgent(BaseAgent):
                         return True
                     return False
 
-                # Handle based on trigger or session state
-                if self._is_trigger(text, TRIGGERS_VIEW):
-                    return await self._handle_view_events(
-                        event, text, line_bot_api, chat_id, user_id
-                    )
-
-                if self._is_trigger(text, TRIGGERS_ADD):
-                    # All add triggers now use the standard interactive flow
-                    return await self._start_add_flow(
-                        event, line_bot_api, chat_id, user_id
-                    )
-
-                if self._is_trigger(text, TRIGGERS_REMOVE):
-                    return await self._start_remove_flow(
-                        event, line_bot_api, chat_id, user_id
-                    )
-
-                # Check for scrape trigger
-                if self._is_trigger(text, TRIGGERS_SCRAPE):
-                    return await self._handle_scrape_trigger(
-                        event, line_bot_api, chat_id, user_id
-                    )
-
-                # Check for inline add format: "zeus add [date] [title]"
-                inline_data = self._parse_inline_add(text)
-                if inline_data:
-                    return await self._handle_inline_add_trigger(
-                        event, line_bot_api, chat_id, user_id, inline_data
-                    )
-
-                # Handle ongoing session
-                if session:
-                    return await self._handle_session_state(
-                        event, text, line_bot_api, chat_id, user_id, session
+                registry = get_handler_registry()
+                handler = await registry.find_matching_handler(event, text, line_bot_api)
+                if handler:
+                    return await handler.handle(
+                        event,
+                        text,
+                        line_bot_api,
+                        chat_id,
+                        user_id,
+                        {"calendar_service": self._calendar_service},
                     )
 
                 return False
@@ -1694,17 +1656,32 @@ class CalendarAgent(BaseAgent):
             event: Optional LINE message event (for sending prompts)
             line_bot_api: Optional LINE API client (for sending prompts)
         """
+        registry = get_handler_registry()
+        image_handler = registry.get_handler("image")
+        if image_handler and hasattr(image_handler, "start_extraction_flow_from_image"):
+            await image_handler.start_extraction_flow_from_image(
+                chat_id=chat_id,
+                user_id=user_id,
+                extracted_dates=extracted_dates,
+                is_friend=is_friend,
+                event=event,
+                line_bot_api=line_bot_api,
+            )
+            return
+
         calendar_session_manager.start_extraction_flow(
             chat_id, user_id, extracted_dates, is_friend
         )
-        
-        # If event and line_bot_api provided, prompt for first date with progress counter
+
         if event and line_bot_api and extracted_dates:
             current_date = calendar_session_manager.get_current_extracted_date(chat_id)
             if current_date:
                 await self._prompt_extracted_date(
-                    event, line_bot_api, current_date,
-                    current=1, total=len(extracted_dates)
+                    event,
+                    line_bot_api,
+                    current_date,
+                    current=1,
+                    total=len(extracted_dates),
                 )
 
     async def _handle_extracted_date_response(
