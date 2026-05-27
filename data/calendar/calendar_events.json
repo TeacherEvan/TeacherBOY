@@ -1,11 +1,11 @@
 {
   "events": [
     {
-      "event_id": "48725579-3902-4c3c-ab62-d6e7fc20c54f",
+      "event_id": "c3271048-af73-4b2b-993b-3dae1dbb493c",
       "user_id": "test_user_deletion_123",
       "chat_id": "user_test_user_deletion_123",
       "title": "User 1 Event",
-      "event_date": "2026-01-11",
+      "event_date": "2026-05-28",
       "description": "",
       "reminder_days": [
         0,
@@ -13,8 +13,8 @@
       ],
       "is_friend": true,
       "notified_dates": [],
-      "created_at": "2026-01-10T13:59:36.521060+00:00"
+      "created_at": "2026-05-27T21:55:18.031754+00:00"
     }
   ],
-  "updated_at": "2026-01-10T13:59:36.521060+00:00"
+  "updated_at": "2026-05-27T21:55:18.031767+00:00"
 }
