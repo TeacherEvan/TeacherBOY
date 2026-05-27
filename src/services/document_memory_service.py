@@ -7,7 +7,6 @@ Supports local storage and optional Hugging Face Hub persistence.
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -26,6 +25,7 @@ DEFAULT_MAX_FILE_SIZE_MB = 10.0
 DEFAULT_MAX_TEXT_CHARS = 80000
 DEFAULT_EXCERPT_CHARS = 600
 HF_SYNC_INTERVAL_MINUTES = 5
+DOC_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 
 SUPPORTED_EXTENSIONS = {
     ".pdf": "application/pdf",
@@ -104,7 +104,6 @@ class DocumentMemoryService:
                 squash_history=True,
             )
 
-            asyncio.create_task(self._load_from_hub())
             logger.info("📄 Document memory initialized with HF Hub persistence")
 
         except ModuleNotFoundError:
@@ -121,11 +120,16 @@ class DocumentMemoryService:
         safe = re.sub(r"[^A-Za-z0-9._-]+", "_", file_name.strip())
         return safe or "document"
 
+    def _is_valid_doc_id(self, doc_id: Any) -> bool:
+        return isinstance(doc_id, str) and bool(DOC_ID_PATTERN.fullmatch(doc_id))
+
     def _infer_extension(self, file_name: str) -> Optional[str]:
         _, ext = os.path.splitext(file_name.lower())
         return ext if ext in SUPPORTED_EXTENSIONS else None
 
     def _get_doc_dir(self, hashed_id: str, doc_id: str) -> Path:
+        if not self._is_valid_doc_id(doc_id):
+            raise ValueError("invalid_document_id")
         return self.storage_path / hashed_id / doc_id
 
     def _load_local_index(self) -> None:
@@ -146,6 +150,11 @@ class DocumentMemoryService:
                 try:
                     metadata = json.loads(meta_path.read_text(encoding="utf-8"))
                     doc_id = metadata.get("id") or doc_dir.name
+                    if not self._is_valid_doc_id(doc_id):
+                        logger.warning(
+                            "⚠️ Skipping document with invalid ID from storage: %s", doc_id
+                        )
+                        continue
                     self._documents.setdefault(hashed_id, {})[doc_id] = metadata
                 except Exception:
                     continue
@@ -251,6 +260,8 @@ class DocumentMemoryService:
         return sorted(docs, key=lambda d: d.get("uploaded_at", ""), reverse=True)
 
     def get_document_text(self, chat_id: str, doc_id: str) -> Optional[str]:
+        if not self._is_valid_doc_id(doc_id):
+            return None
         hashed_id = self._hash_chat_id(chat_id)
         metadata = self._documents.get(hashed_id, {}).get(doc_id)
         if not metadata:
@@ -293,6 +304,8 @@ class DocumentMemoryService:
         return results
 
     def delete_document(self, chat_id: str, doc_id: str) -> bool:
+        if not self._is_valid_doc_id(doc_id):
+            return False
         hashed_id = self._hash_chat_id(chat_id)
         metadata = self._documents.get(hashed_id, {}).pop(doc_id, None)
         if not metadata:
