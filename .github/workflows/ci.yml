@@ -34,16 +34,38 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Check code formatting with Black
+    - name: Resolve changed Python files
+      id: changed-python
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        BEFORE_SHA: ${{ github.event.before }}
       run: |
-        black --check src/ tests/
+        set -euo pipefail
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          diff_range="${BASE_SHA}...${GITHUB_SHA}"
+        elif [ -n "${BEFORE_SHA}" ] && [ "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]; then
+          diff_range="${BEFORE_SHA}...${GITHUB_SHA}"
+        else
+          diff_range="${GITHUB_SHA}"
+        fi
+
+        changed_python_files="$(git diff --name-only --diff-filter=ACMR "${diff_range}" -- '*.py' || true)"
+        {
+          echo "files<<EOF"
+          echo "${changed_python_files}"
+          echo "EOF"
+        } >> "${GITHUB_OUTPUT}"
+
+    - name: Check code formatting with Black
+      if: steps.changed-python.outputs.files != ''
+      run: |
+        printf '%s\n' "${{ steps.changed-python.outputs.files }}" | xargs black --check
     
     - name: Lint with flake8
+      if: steps.changed-python.outputs.files != ''
       run: |
-        # Stop the build if there are Python syntax errors or undefined names
-        flake8 src/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Exit-zero treats all errors as warnings
-        flake8 src/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        printf '%s\n' "${{ steps.changed-python.outputs.files }}" | xargs flake8 --count --select=E9,F63,F7,F82 --show-source --statistics
+        printf '%s\n' "${{ steps.changed-python.outputs.files }}" | xargs flake8 --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
   test:
     name: Run Tests

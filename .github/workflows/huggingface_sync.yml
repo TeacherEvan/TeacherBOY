@@ -7,15 +7,47 @@ on:
     # to run this workflow manually from the Actions tab
     workflow_dispatch:
 
+permissions:
+    contents: read
+
 jobs:
     sync-to-hub:
+        if: github.ref_name == 'main'
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
                   fetch-depth: 0
                   lfs: true
-            - name: Push to hub
+                  persist-credentials: false
+                  ref: ${{ github.ref_name }}
+            - name: Sync to hub
               env:
                   HF_TOKEN: ${{ secrets.HF_TOKEN }}
-              run: git push https://TeacherEvan:$HF_TOKEN@huggingface.co/spaces/EvilEvan/TeacherBOY main
+              run: |
+                  set -euo pipefail
+                  export GIT_TERMINAL_PROMPT=0
+
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+                  HF_REMOTE_URL="https://TeacherEvan:${HF_TOKEN}@huggingface.co/spaces/EvilEvan/TeacherBOY"
+
+                  if git remote get-url hf >/dev/null 2>&1; then
+                      git remote set-url hf "${HF_REMOTE_URL}"
+                  else
+                      git remote add hf "${HF_REMOTE_URL}"
+                  fi
+
+                  if git ls-remote --exit-code --heads hf main >/dev/null 2>&1; then
+                      git fetch hf main
+                      git pull --rebase hf main || {
+                          git rebase --abort || true
+                          echo "Failed to rebase local main onto Hugging Face main. Resolve the divergence manually and retry."
+                          exit 1
+                      }
+                  else
+                      echo "Hugging Face branch 'main' does not exist yet; pushing local branch."
+                  fi
+
+                  git push hf HEAD:main
