@@ -35,6 +35,7 @@ from .calendar import (
     get_scrape_flow,
     DateParser,
 )
+from src.services.bot_identity_service import get_bot_identity_service
 from src.services.calendar_session_manager import calendar_session_manager, CalendarState
 from src.services.message_buffer_service import message_buffer_service
 from src.utils.tracing import get_tracer
@@ -209,10 +210,18 @@ class CalendarAgent(BaseAgent):
         - "you can say zeus add event" -> NO MATCH (instructional)
         - "If you guys want to add event just say zeus add" -> NO MATCH
         """
-        text_lower = text.lower().strip()
-        
-        # Check if ANY trigger starts the message
-        return any(text_lower.startswith(trigger) for trigger in triggers)
+        text_lower = re.sub(r"\s+", " ", text.lower().strip())
+        identity_service = get_bot_identity_service()
+
+        for trigger in triggers:
+            for variant in identity_service.expand_prefixed_trigger(trigger):
+                if text_lower.startswith(variant):
+                    return True
+        return False
+
+    def _has_identity_prefix(self, text: str) -> bool:
+        prefix, _ = get_bot_identity_service().split_command_prefix(text)
+        return prefix is not None
 
     def _is_cancel_command(self, text: str) -> bool:
         """Check if text is a cancel command."""
@@ -267,7 +276,7 @@ class CalendarAgent(BaseAgent):
         text_lower = text.lower().strip()
         
         # Don't store Zeus commands or cancel keywords
-        if text_lower.startswith("zeus") or text_lower in CANCEL_KEYWORDS:
+        if self._has_identity_prefix(text) or text_lower in CANCEL_KEYWORDS:
             return
         
         # Store for scrape flow
@@ -305,7 +314,7 @@ class CalendarAgent(BaseAgent):
             return False
 
         # Zeus commands are not event messages
-        if t.startswith("zeus"):
+        if self._has_identity_prefix(text):
             return False
 
         # Check for date patterns
@@ -366,8 +375,9 @@ class CalendarAgent(BaseAgent):
         if self._is_trigger(text, all_triggers):
             return True
 
-        # Check for inline add syntax (zeus add [date] [title])
-        if text_lower.startswith("zeus add ") and len(text) > 10:
+        # Check for inline add syntax ([alias] add [date] [title])
+        prefix, rest = get_bot_identity_service().split_command_prefix(text)
+        if prefix and rest.lower().startswith("add ") and len(text) > 10:
             parsed = self._parse_inline_add(text)
             if parsed:
                 return True
@@ -406,7 +416,7 @@ class CalendarAgent(BaseAgent):
 
             try:
                 # Store message in buffer (for potential scraping later)
-                if user_id and text and not text.lower().startswith("zeus"):
+                if user_id and text and not self._has_identity_prefix(text):
                     self._store_message_in_buffer(chat_id, user_id, text)
 
                 # Check for cancel command
@@ -443,13 +453,17 @@ class CalendarAgent(BaseAgent):
 
                 # SCRAPE TRIGGER
                 if self._is_trigger(text, TRIGGERS_SCRAPE):
+                    if getattr(getattr(event, "source", None), "type", None) in {"group", "room"}:
+                        return await self._handle_discrete_scrape(
+                            event, text, line_bot_api, chat_id, user_id
+                        )
                     return await self.scrape_flow.handle_scrape_trigger(
                         event, text, line_bot_api, chat_id, user_id
                     )
 
                 # INLINE ADD (zeus add [date] [title])
-                text_lower = text.lower().strip()
-                if text_lower.startswith("zeus add ") and len(text) > 10:
+                prefix, rest = get_bot_identity_service().split_command_prefix(text)
+                if prefix and rest.lower().startswith("add ") and len(text) > 10:
                     parsed = self._parse_inline_add(text)
                     if parsed:
                         return await self.inline_add_flow.handle_inline_add_trigger(
@@ -579,36 +593,17 @@ class CalendarAgent(BaseAgent):
         Returns:
             True if handled
         """
-        from src.services.friend_check_service import friend_check_service
-        import asyncio
-        from linebot.v3.messaging import (
-            PushMessageRequest,
-            TextMessage,
-        )
-
         if not user_id:
-            await self._send_reply(
+            await self.add_flow.send_message(
                 event, line_bot_api,
                 "❌ Cannot identify user for discrete scrape."
             )
             return True
 
-        # Check if user is a friend
-        is_friend = await friend_check_service.is_friend(user_id, line_bot_api)
-        
-        if not is_friend:
-            await self._send_reply(
-                event, line_bot_api,
-                "Dear Mortal, I only do favors for friends! 🌩️\n\n"
-                "Add me as a friend first to use discrete scraping.\n"
-                "เพิ่มฉันเป็นเพื่อนก่อนเพื่อใช้การสแกนแบบลับ"
-            )
-            return True
-
         # Acknowledge request in group (briefly)
-        await self._send_reply(
+        await self.add_flow.send_message(
             event, line_bot_api,
-            "🔍 Scanning messages discretely... Check your DM! 📨"
+            "I'll continue in your DM."
         )
 
         # Now run the normal scrape flow, but store user_id for DM delivery

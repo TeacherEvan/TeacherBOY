@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from typing import Optional, Tuple
 import logging
 
+from src.services.bot_identity_service import get_bot_identity_service
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,8 +62,11 @@ class DateParser:
         Returns:
             Tuple of (parsed_date, remaining_title) or None
         """
-        # Remove 'zeus add' prefix (case-insensitive)
-        text = re.sub(r"^zeus\s+add\s+", "", text, flags=re.IGNORECASE).strip()
+        prefix, rest = get_bot_identity_service().split_command_prefix(text)
+        if prefix and rest.lower().startswith("add "):
+            text = rest[4:].strip()
+        else:
+            text = re.sub(r"^zeus\s+add\s+", "", text, flags=re.IGNORECASE).strip()
 
         if not text:
             return None

@@ -58,6 +58,7 @@ class CalendarEvent:
         description: str = "",
         reminder_days: Optional[List[int]] = None,
         is_friend: bool = False,
+        notification_target_user_id: Optional[str] = None,
         notified_dates: Optional[List[str]] = None,
         created_at: Optional[datetime] = None,
     ):
@@ -87,6 +88,7 @@ class CalendarEvent:
         if 0 not in self.reminder_days:
             self.reminder_days.append(0)
         self.is_friend = is_friend
+        self.notification_target_user_id = notification_target_user_id or user_id
         self.notified_dates = notified_dates if notified_dates else []
         self.created_at = created_at or datetime.now(timezone.utc)
 
@@ -101,6 +103,7 @@ class CalendarEvent:
             "description": self.description,
             "reminder_days": self.reminder_days,
             "is_friend": self.is_friend,
+            "notification_target_user_id": self.notification_target_user_id,
             "notified_dates": self.notified_dates,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
@@ -130,6 +133,7 @@ class CalendarEvent:
             description=data.get("description", ""),
             reminder_days=data.get("reminder_days", [7, 3, 1, 0]),
             is_friend=data.get("is_friend", False),
+            notification_target_user_id=data.get("notification_target_user_id"),
             notified_dates=data.get("notified_dates", []),
             created_at=created_at,
         )
@@ -478,6 +482,7 @@ class CalendarService:
         description: str = "",
         reminder_days: Optional[List[int]] = None,
         is_friend: bool = False,
+        notification_target_user_id: Optional[str] = None,
         skip_duplicate_check: bool = False,
     ) -> CalendarEvent:
         """
@@ -525,6 +530,7 @@ class CalendarService:
             description=sanitized["description"],
             reminder_days=sanitized["reminder_days"],
             is_friend=is_friend,
+            notification_target_user_id=notification_target_user_id,
         )
         
         self._events[event.event_id] = event

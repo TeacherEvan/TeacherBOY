@@ -189,9 +189,13 @@ class ReminderService:
         # Format the reminder message
         message_text = self._format_reminder_message(event, days_until)
         
-        # Determine where to send
-        # If user is friend, send DM. Otherwise, send to original chat (group/room)
-        if event.is_friend:
+        # Determine where to send.
+        # Explicit notification target overrides the original group/room target.
+        explicit_target = getattr(event, "notification_target_user_id", None)
+        if explicit_target:
+            target = explicit_target
+            logger.info(f"⏰ Sending reminder to explicit user target {target}")
+        elif event.is_friend:
             # Send as DM to user
             target = event.user_id
             logger.info(f"⏰ Sending DM reminder to user {target}")

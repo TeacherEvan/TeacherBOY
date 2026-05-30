@@ -144,19 +144,9 @@ class DateExtractionService:
         )
         
         try:
-            # Use GitHub Models Service for extraction
-            from src.services.github_models_service import github_models_service
-            
-            if not github_models_service.is_configured():
-                logger.warning("📅 GitHub Models not configured, using fallback extraction")
-                return self._fallback_extraction(messages, today)
-            
-            response = await github_models_service.chat_completion(
-                messages=[{"role": "user", "content": prompt}],
-                model="openai/gpt-4o-mini",  # Use mini for cost efficiency
-                temperature=0.1,  # Low temperature for consistent extraction
-                max_tokens=2000,
-            )
+            from src.services.ai_review_service import ai_review_service
+
+            response = await ai_review_service.extract_calendar_candidates([prompt])
             
             if not response:
                 logger.warning("📅 No response from AI, using fallback extraction")

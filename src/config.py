@@ -65,6 +65,19 @@ class Settings(BaseSettings):
         description="Comma-separated list of LINE user IDs authorized as moderators (can access news directly)"
     )
 
+    bot_identity_storage_path: str = Field(
+        default="./data/bot_identity/profile.json",
+        description="Local JSON storage for runtime bot name and aliases.",
+    )
+    bot_identity_default_name: str = Field(
+        default="KPS-Assistant",
+        description="Default runtime display name before admin changes.",
+    )
+    bot_identity_default_aliases: str = Field(
+        default="kps,lps-assistant,hey,bud,buddy,zeus",
+        description="Comma-separated default wake/prefix aliases.",
+    )
+
     # ============================================================================
     # Translation Service Configuration
     # ============================================================================
@@ -712,6 +725,13 @@ class Settings(BaseSettings):
         if not self.moderator_user_ids:
             return []
         return [uid.strip() for uid in self.moderator_user_ids.split(",") if uid.strip()]
+
+    def get_bot_identity_default_aliases(self) -> list[str]:
+        """Return configured default bot aliases as a normalized list."""
+        raw = (self.bot_identity_default_aliases or "").strip()
+        if not raw:
+            return []
+        return [alias.strip().lower() for alias in raw.split(",") if alias.strip()]
 
     def get_zeus_allowed_group_ids(self) -> set[str]:
         """Return allowed group/room IDs for Zeus AI (allowlist mode)."""

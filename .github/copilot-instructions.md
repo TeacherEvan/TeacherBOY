@@ -5,6 +5,8 @@
 - Runtime is a FastAPI LINE webhook in `src/main.py` using LINE Bot SDK v3 + an async `httpx.AsyncClient` pool.
 - Message flow: `/webhook` → signature validation → normalize event → `AgentRouter.route_message()` in `src/agents/agent_router.py` → first agent match wins (lowest priority number).
 - Non-message events (join/leave/member changes) are handled via `src/handlers/message_handler.py` helpers.
+- Runtime identity is now configurable via `src/services/bot_identity_service.py`; the default production-facing identity is `KPS-Assistant` while legacy `zeus` aliases can remain valid.
+- Explicit review flows live in `src/agents/review_agent.py`; plain Thai text should no longer be treated as an automatic translation trigger.
 
 ### Agent system conventions
 

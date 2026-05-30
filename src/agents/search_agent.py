@@ -13,6 +13,7 @@ from linebot.v3.messaging import (
 
 from .base_agent import BaseAgent
 from src.services.brave_search_service import brave_search_service
+from src.services.bot_identity_service import get_bot_identity_service
 from src.utils.tracing import get_tracer
 from src.services.privilege_service import privilege_service
 
@@ -56,12 +57,15 @@ class SearchAgent(BaseAgent):
         Trigger: 'Zeus search <query>'
         Returns query string or None.
         """
-        # Regex for trigger: "Zeus search" followed by query.
-        # Accept optional leading slash and common typo "Zues".
-        match = re.match(r"^/?(?:Zeus|Zues)\s+search\s+(.+)$", text.strip(), re.IGNORECASE)
-        if match:
-            return match.group(1).strip()
-        return None
+        prefix, rest = get_bot_identity_service().split_command_prefix(text)
+        if not prefix:
+            return None
+
+        match = re.match(r"^search\s+(.+)$", rest.strip(), re.IGNORECASE)
+        if not match:
+            return None
+
+        return match.group(1).strip()
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """

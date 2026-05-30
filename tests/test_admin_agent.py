@@ -84,6 +84,11 @@ class TestAdminAgent:
         assert admin_agent._is_admin_command("/ADMIN HELP") is True
         assert admin_agent._is_admin_command("Dear Zeus admin help") is True
         assert admin_agent._is_admin_command("dear zeus admin status") is True
+        assert admin_agent._is_admin_command("KPS admin help") is True
+
+    @pytest.mark.asyncio
+    async def test_admin_agent_handles_runtime_alias_admin_command(self, admin_agent):
+        assert admin_agent._is_admin_command("KPS admin help") is True
 
     def test_is_admin_command_invalid(self, admin_agent):
         """Test admin command detection with invalid commands."""

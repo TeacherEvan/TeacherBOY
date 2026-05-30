@@ -57,10 +57,16 @@ async def test_should_handle_search_triggers(search_agent, message_event):
         "Zeus search python",
         "zeus search python",
         "Zeus   search   python tutorial",
+        "KPS search python",
     ]
 
     for text in triggers:
         assert await search_agent.should_handle(message_event, text) is True
+
+
+@pytest.mark.asyncio
+async def test_search_agent_handles_runtime_alias_prefix(search_agent, group_message_event):
+    assert await search_agent.should_handle(group_message_event, "KPS search python") is True
 
 
 @pytest.mark.asyncio

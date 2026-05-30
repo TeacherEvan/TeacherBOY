@@ -13,12 +13,12 @@ app_port: 8000
 > known as **TeacherBOY**. You may see both names in various documentation files
 > during this transition period.
 
-**SMOOTH automatic Thai - English translator with Multi-Agent Architecture for LINE.**
+**Runtime-configurable staff assistant with explicit AI review, DM follow-up, and multi-agent LINE workflows.**
 
 Zeus is a high-performance, asynchronous LINE Bot featuring a modular
-multi-agent system. The Translation Agent provides intelligent
-Thai/English translation with smart session management, and the bot can be
-extended with additional specialized agents.
+multi-agent system. The current default runtime identity is `KPS-Assistant`,
+with persisted aliases and explicit review flows layered on top of the
+existing calendar, search, LLM, and news features.
 
 ## 📚 Documentation
 
@@ -31,12 +31,22 @@ extended with additional specialized agents.
 - **[🏗️ Architecture](docs/architecture/overview.md)**
 - **[🤖 Agents](docs/architecture/agents.md)**
 - **[🔧 Admin Commands](docs/ADMIN_COMMANDS.md)**
+- **[🏫 KPS Assistant](docs/KPS_ASSISTANT.md)**
 - **[🔎 Tracing](docs/TRACING.md)**
 - **[🛠️ Maintainer Notes](docs/reference/maintainers.md)**
 
 The `docs/` folder is the maintained documentation source of truth.
 
 ## 🚀 Features
+
+### KPS Assistant Review Flow
+
+- **🪪 Runtime Identity:** Display name and aliases are persisted across restarts
+- **📝 Explicit Review:** `KPS review` translates and summarizes the last recent non-English message on request only
+- **📨 DM Follow-Up:** Review results and scrape confirmations go directly to the requesting user
+- **📅 Requester-Bound Scrape:** `KPS scrape` stores a DM reminder target on created events
+- **📌 Weekly Summary:** `KPS whats important this week?` combines calendar items and structured staff memory
+- **🤝 Staff Framing:** `KPS who do you work for?` returns the fixed KPS staff-assistant answer
 
 ### Translation Agent (Primary)
 

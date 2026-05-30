@@ -10,6 +10,7 @@ import logging
 import httpx
 from datetime import datetime
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -56,6 +57,7 @@ from src.services.reminder_service import reminder_service
 from src.services.message_buffer_service import message_buffer_service
 from src.services.brave_search_service import brave_search_service
 from src.services.github_models_service import github_models_service
+from src.services.bot_identity_service import configure_bot_identity_service
 from src.handlers.message_handler import (
     handle_join_event,
     handle_leave_event,
@@ -178,6 +180,12 @@ async def lifespan(app: FastAPI):
     brave_search_service.set_client(http_client_pool)
     github_models_service.set_client(http_client_pool)
     logger.info("✅ HTTP client pool ready with connection pooling enabled")
+
+    configure_bot_identity_service(
+        storage_path=settings.bot_identity_storage_path,
+        default_name=settings.bot_identity_default_name,
+        default_aliases=settings.get_bot_identity_default_aliases(),
+    )
 
     # ========================================================================
     # PHASE 2a: Conversation Memory Initialization
@@ -314,8 +322,8 @@ async def lifespan(app: FastAPI):
     # Import agents here (after HTTP client is ready)
     from src.agents.help_agent import HelpAgent
     from src.agents.admin_agent import AdminAgent
-    from src.agents.translation_agent import TranslationAgent
     from src.agents.calendar_agent import CalendarAgent
+    from src.agents.review_agent import ReviewAgent
     from src.agents.document_memory_agent import DocumentMemoryAgent
     from src.agents.profiler_agent import ProfilerAgent
     from src.agents.image_analyzer_agent import ImageAnalyzerAgent
@@ -325,6 +333,7 @@ async def lifespan(app: FastAPI):
     from src.agents.special_news_agent import SpecialNewsAgent
     from src.services.news_data_service import NewsDataService
     from src.services.special_news_service import SpecialNewsService
+    from src.services.staff_memory_service import StaffMemoryService
 
     # Register Help Agent (Priority: 5 - Highest)
     help_agent = HelpAgent()
@@ -367,6 +376,13 @@ async def lifespan(app: FastAPI):
         logger.info("📅 Calendar Agent registered (events and reminders)")
     else:
         logger.info("📅 Calendar Agent not registered (calendar disabled)")
+
+    staff_memory_service = StaffMemoryService(
+        Path("./data/staff_memory/staff_memory.json")
+    )
+    review_agent = ReviewAgent(staff_memory_service=staff_memory_service)
+    agent_router.register_agent(review_agent)
+    logger.info("📝 Review Agent registered (explicit review and DM follow-up)")
 
     # Register Document Memory Agent (Priority: 8 - Handles PDF/DOCX uploads)
     if settings.document_memory_enabled:
@@ -420,11 +436,6 @@ async def lifespan(app: FastAPI):
         logger.info(f"🤖 LLM Agent registered (Model: {settings.openrouter_default_model})")
     else:
         logger.info("🤖 LLM Agent registered (API key missing - will return errors)")
-
-    # Register Translation Agent (Priority: 10)
-    translation_agent = TranslationAgent()
-    agent_router.register_agent(translation_agent)
-    logger.info("🌐 Translation Agent registered")
 
     # Register Special News Agent (Priority: 12)
     special_news_service = SpecialNewsService(

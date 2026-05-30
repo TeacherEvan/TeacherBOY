@@ -113,6 +113,8 @@ class ScrapeFlow(CalendarFlowBase):
         calendar_session_manager.start_scrape_flow(
             chat_id, user_id, messages, is_friend
         )
+        if discrete_mode and user_id:
+            calendar_session_manager.set_discrete_scrape_target(chat_id, user_id)
 
         # Extract dates using AI
         try:
@@ -241,8 +243,6 @@ class ScrapeFlow(CalendarFlowBase):
         else:
             await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
 
-        await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
-
     async def handle_scrape_review_response(
         self,
         event: MessageEvent,
@@ -349,6 +349,7 @@ class ScrapeFlow(CalendarFlowBase):
 
         added_title = ""
         if event_data and calendar_service and user_id:
+            notification_target_user_id = calendar_session_manager.get_discrete_scrape_target(chat_id)
             # Create the event
             calendar_service.add_event(
                 user_id=user_id,
@@ -357,7 +358,8 @@ class ScrapeFlow(CalendarFlowBase):
                 event_date=event_data["date"],
                 description=event_data["description"],
                 reminder_days=event_data["reminder_days"],
-                is_friend=event_data["is_friend"]
+                is_friend=event_data["is_friend"],
+                notification_target_user_id=notification_target_user_id,
             )
             added_title = event_data["title"]
 
@@ -434,6 +436,7 @@ class ScrapeFlow(CalendarFlowBase):
                 if not isinstance(event_date, date):
                     raise ValueError("Missing or invalid event date")
 
+                notification_target_user_id = calendar_session_manager.get_discrete_scrape_target(chat_id)
                 calendar_service.add_event(
                     user_id=user_id,
                     chat_id=chat_id,
@@ -441,7 +444,8 @@ class ScrapeFlow(CalendarFlowBase):
                     event_date=event_date,
                     description=str(event_data.get("description", "")),
                     reminder_days=default_reminder_days,
-                    is_friend=is_friend
+                    is_friend=is_friend,
+                    notification_target_user_id=notification_target_user_id,
                 )
                 added_count += 1
                 logger.info(f"✅ Batch added: {event_data.get('title')} on {event_data.get('date')}")

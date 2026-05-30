@@ -350,6 +350,11 @@ class TestCalendarAgent:
             result = await calendar_agent.should_handle(mock_event, text)
             assert result is False, f"Should NOT handle instructional text: {text}"
 
+    @pytest.mark.asyncio
+    async def test_calendar_agent_accepts_configured_alias_prefix(self, calendar_agent, mock_event):
+        result = await calendar_agent.should_handle(mock_event, "kps scrape")
+        assert result is True
+
     def test_get_priority(self, calendar_agent):
         """Test agent priority."""
         assert calendar_agent.get_priority() == 6

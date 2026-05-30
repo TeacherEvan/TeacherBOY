@@ -14,6 +14,7 @@ from linebot.v3.messaging import (
 )
 
 from .base_agent import BaseAgent
+from src.services.bot_identity_service import get_bot_identity_service
 from src.services.privilege_service import privilege_service
 from src.config import settings
 from src.utils.tracing import get_tracer
@@ -56,13 +57,22 @@ class HelpAgent(BaseAgent):
         # Standard help patterns
         help_patterns = [
             r"^/?help\s*$",  # /help or help
-            r"^/?zeus\s+--help\s*$",  # Zeus --help
-            r"^/?zeus\s+help\s*$",  # Zeus help
-            r"^dear\s+zeus\s+--help\s*$",  # Dear Zeus --help
-            r"^dear\s+zeus\s+help\s*$",  # Dear Zeus help
         ]
 
-        return any(re.match(pattern, text_lower) for pattern in help_patterns)
+        if any(re.match(pattern, text_lower) for pattern in help_patterns):
+            return True
+
+        identity_pattern = "|".join(
+            sorted(
+                (re.escape(alias) for alias in get_bot_identity_service().get_profile().aliases),
+                key=len,
+                reverse=True,
+            )
+        )
+        return bool(
+            re.match(rf"^/?(?:{identity_pattern})\s+(?:--help|help)\s*$", text_lower)
+            or re.match(rf"^dear\s+(?:{identity_pattern})\s+(?:--help|help)\s*$", text_lower)
+        )
 
     def _get_command_categories(
         self,

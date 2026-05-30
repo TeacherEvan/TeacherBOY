@@ -5,6 +5,23 @@ All notable changes to TeacherBOY will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0] - 2026-05-30
+
+### ✨ Added
+
+#### KPS Assistant Runtime Review Flow
+
+- Added persisted runtime bot identity with configurable aliases
+- Added explicit `KPS review` DM workflow backed by provider-fallback AI review service
+- Added structured staff memory and weekly priority summaries
+- Added requester-bound DM scrape follow-up and reminder target persistence
+
+### 🔄 Changed
+
+- Disabled automatic plain-Thai translation routing
+- Removed TranslationAgent startup registration in favor of explicit review flows
+- Updated scrape-triggered reminders to prefer explicit requester DM targets
+
 ## [3.5.1] - 2026-01-11
 
 ### 🐛 Bug Fixes

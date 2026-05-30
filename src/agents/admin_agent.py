@@ -26,6 +26,7 @@ from src.services.metrics_service import metrics_service
 from src.services.admin_confirmation_service import admin_confirmation_service
 from src.services.privilege_service import privilege_service
 from src.services.openrouter_service import openrouter_service
+from src.services.bot_identity_service import get_bot_identity_service
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -74,8 +75,18 @@ class AdminAgent(BaseAgent):
         if text_lower.startswith("/admin") or text_lower.startswith("!admin"):
             return True
 
-        zeus_pattern = r"dear\s+zeus"
-        return bool(re.match(rf"^{zeus_pattern}\s+admin\b", text_lower))
+        return bool(
+            re.match(
+                rf"^(?:dear\s+)?(?:{self._get_identity_pattern()})\s+admin\b",
+                text_lower,
+                flags=re.IGNORECASE,
+            )
+        )
+
+    def _get_identity_pattern(self) -> str:
+        aliases = get_bot_identity_service().get_profile().aliases
+        escaped = [re.escape(alias) for alias in aliases]
+        return "|".join(sorted(escaped, key=len, reverse=True))
 
     def _parse_admin_command(self, text: str) -> tuple[str | None, str | None]:
         """Parse an admin command into (cmd, args).
@@ -96,9 +107,8 @@ class AdminAgent(BaseAgent):
             arg = parts[2] if len(parts) > 2 else None
             return cmd, arg
 
-        zeus_pattern = r"dear\s+zeus"
         match = re.match(
-            rf"^\s*(?P<zeus>{zeus_pattern})\s+admin(?:\s+(?P<rest>.*))?$",
+            rf"^\s*(?:dear\s+)?(?:{self._get_identity_pattern()})\s+admin(?:\s+(?P<rest>.*))?$",
             raw,
             flags=re.IGNORECASE,
         )

@@ -156,8 +156,9 @@ class TranslationAgent(BaseAgent):
         if self.is_special_news_command(text):
             return False
 
-        # Handle if Thai detected or session is active
-        return self.contains_thai(text) or session_manager.is_session_active(chat_id)
+        # Auto-translation is disabled. Only explicit wake/help/sleep paths and
+        # already-active sessions should be handled here.
+        return session_manager.is_session_active(chat_id)
 
     async def handle(
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi

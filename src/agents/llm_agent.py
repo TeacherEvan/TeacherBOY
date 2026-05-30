@@ -22,6 +22,7 @@ from linebot.v3.messaging import (
 )
 
 from .base_agent import BaseAgent
+from src.services.bot_identity_service import get_bot_identity_service
 from src.services.openrouter_service import openrouter_service
 from src.services.github_models_service import github_models_service
 from src.services.brave_search_service import brave_search_service
@@ -295,8 +296,8 @@ class LLMAgent(BaseAgent):
         Returns:
             True if text is exactly 'Zeus' (case-insensitive)
         """
-        text_clean = text.lower().strip()
-        return text_clean == "zeus"
+        prefix, rest = get_bot_identity_service().split_command_prefix(text)
+        return prefix is not None and rest == ""
 
     def _parse_command(self, text: str) -> Optional[str]:
         """
@@ -305,23 +306,17 @@ class LLMAgent(BaseAgent):
         Returns:
             Command text without 'Zeus' prefix, or None if not a Zeus command
         """
-        text_lower = text.lower().strip()
-        if not text_lower.startswith("zeus"):
+        prefix, command = get_bot_identity_service().split_command_prefix(text)
+        if not prefix:
             return None
-        
-        # Remove "zeus" prefix
-        command = text[4:].strip()  # len("zeus") = 4
+
+        command = command.strip()
         return command if command else None
 
     def _is_search_command(self, text: str) -> bool:
         """Return True if text is a Zeus search command (reserved for SearchAgent)."""
-        return bool(
-            re.match(
-                r"^/?(?:Zeus|Zues)\s+search\b",
-                text.strip(),
-                re.IGNORECASE,
-            )
-        )
+        prefix, rest = get_bot_identity_service().split_command_prefix(text)
+        return prefix is not None and bool(re.match(r"^search\b", rest.strip(), re.IGNORECASE))
 
     def _get_named_users(self) -> dict[str, str]:
         """Return alias -> LINE user ID mapping from USER_<ALIAS> env vars."""

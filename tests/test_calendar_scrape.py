@@ -23,12 +23,14 @@ from src.services.date_extraction_service import (
     DateExtractionService,
     ExtractedEvent,
 )
+from src.services.calendar_service import CalendarEvent
 from src.services.calendar_session_manager import (
     CalendarSessionManager,
     CalendarSession,
     CalendarState,
 )
 from src.agents.calendar_agent import CalendarAgent
+from src.agents.calendar.scrape_flow import ScrapeFlow
 
 BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 
@@ -227,6 +229,63 @@ class TestDateExtractionService:
         assert len(deduped) == 2  # Same date+title merged
         # Should keep higher confidence one
         assert deduped[0].confidence == "high"
+
+
+@pytest.mark.asyncio
+async def test_scrape_flow_pushes_review_to_requester_dm_when_run_from_group():
+    flow = ScrapeFlow()
+    line_api = MagicMock()
+    line_api.push_message = MagicMock()
+    line_api.reply_message = MagicMock()
+
+    event = MagicMock()
+    event.reply_token = "reply"
+    event.source = MagicMock()
+    event.source.user_id = "U_REQ"
+    event.source.group_id = "G1"
+    event.source.type = "group"
+
+    messages = ["Exam papers due on 2026-06-05"]
+    extracted_events = [
+        ExtractedEvent(
+            event_date=date(2026, 6, 5),
+            title="Exam papers due",
+            description="",
+            source_text=messages[0],
+            confidence="high",
+        )
+    ]
+
+    with patch("src.agents.calendar.scrape_flow.message_buffer_service.get_message_texts", return_value=messages), patch(
+        "src.services.date_extraction_service.date_extraction_service.extract_events_from_messages",
+        AsyncMock(return_value=extracted_events),
+    ):
+        handled = await flow.handle_scrape_trigger(
+            event,
+            "kps scrape",
+            line_api,
+            "group_G1",
+            "U_REQ",
+            discrete_mode=True,
+        )
+
+    assert handled is True
+    assert line_api.push_message.called
+
+
+def test_calendar_event_persists_notification_target_user_id():
+    event = CalendarEvent(
+        event_id="1",
+        user_id="U_REQ",
+        chat_id="group_G1",
+        title="Exam papers due",
+        event_date=date(2026, 6, 5),
+        reminder_days=[1, 0],
+        is_friend=True,
+        notification_target_user_id="U_REQ",
+    )
+
+    assert event.to_dict()["notification_target_user_id"] == "U_REQ"
 
 
 # ============================================================================
