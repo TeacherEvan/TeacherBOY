@@ -11,7 +11,9 @@ from src.services.staff_memory_service import StaffMemoryService
 
 
 @pytest.mark.asyncio
-async def test_review_agent_translates_last_non_english_message_and_pushes_dm(tmp_path: Path):
+async def test_review_agent_translates_last_non_english_message_and_pushes_dm(
+    tmp_path: Path,
+):
     line_api = Mock()
     line_api.push_message = Mock()
     line_api.reply_message = Mock()
@@ -27,15 +29,23 @@ async def test_review_agent_translates_last_non_english_message_and_pushes_dm(tm
     buffer_service.store_message("group_G1", "ประชุมวันศุกร์", "U_OTHER")
 
     ai_review_service = AsyncMock()
-    ai_review_service.translate_and_summarize.return_value = "Friday meeting summary"
+    ai_review_service.translate_and_summarize.return_value = (
+        "Friday meeting summary"
+    )
 
     agent = ReviewAgent(
         ai_review_service=ai_review_service,
         message_buffer=buffer_service,
-        staff_memory_service=StaffMemoryService(tmp_path / "staff_memory.json"),
+        staff_memory_service=StaffMemoryService(
+            tmp_path / "staff_memory.json"
+        ),
     )
 
-    handled = await agent.handle(event, "KPS review", line_api)
+    handled = await agent.handle(
+        event,
+        "KPS review",
+        line_api,
+    )
 
     assert handled is True
     assert line_api.reply_message.called
@@ -57,7 +67,9 @@ async def test_review_agent_answers_who_do_you_work_for(tmp_path: Path):
     agent = ReviewAgent(
         ai_review_service=AsyncMock(),
         message_buffer=MessageBufferService(),
-        staff_memory_service=StaffMemoryService(tmp_path / "staff_memory.json"),
+        staff_memory_service=StaffMemoryService(
+            tmp_path / "staff_memory.json"
+        ),
     )
 
     handled = await agent.handle(event, "KPS who do you work for?", line_api)
@@ -65,11 +77,17 @@ async def test_review_agent_answers_who_do_you_work_for(tmp_path: Path):
     assert handled is True
     assert line_api.reply_message.called
     request = line_api.reply_message.call_args[0][0]
-    assert "I am purely a hardworking assitant and at the service of all KPS employees." in request.messages[0].text
+    assert (
+        "I am purely a hardworking assitant and at the service of all KPS "
+        "employees."
+        in request.messages[0].text
+    )
 
 
 @pytest.mark.asyncio
-async def test_review_agent_summarizes_weekly_priorities_from_calendar_and_memory(tmp_path: Path):
+async def test_review_agent_summarizes_weekly_priorities(
+    tmp_path: Path,
+):
     line_api = Mock()
     line_api.reply_message = Mock()
     line_api.push_message = Mock()
@@ -111,7 +129,11 @@ async def test_review_agent_summarizes_weekly_priorities_from_calendar_and_memor
         calendar_service_instance=calendar_service,
     )
 
-    handled = await agent.handle(event, "KPS whats important this week?", line_api)
+    handled = await agent.handle(
+        event,
+        "KPS whats important this week?",
+        line_api,
+    )
 
     assert handled is True
     request = line_api.reply_message.call_args[0][0]

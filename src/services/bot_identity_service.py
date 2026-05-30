@@ -7,7 +7,14 @@ import re
 
 
 DEFAULT_BOT_IDENTITY_NAME = "KPS-Assistant"
-DEFAULT_BOT_IDENTITY_ALIASES = ["kps", "lps-assistant", "hey", "bud", "buddy", "zeus"]
+DEFAULT_BOT_IDENTITY_ALIASES = [
+    "kps",
+    "lps-assistant",
+    "hey",
+    "bud",
+    "buddy",
+    "zeus",
+]
 
 
 _bot_identity_service: "BotIdentityService | None" = None
@@ -20,10 +27,17 @@ class BotIdentityProfile:
 
 
 class BotIdentityService:
-    def __init__(self, storage_path: Path, default_name: str, default_aliases: list[str]):
+    def __init__(
+        self,
+        storage_path: Path,
+        default_name: str,
+        default_aliases: list[str],
+    ):
         self._storage_path = Path(storage_path)
         self._default_name = default_name.strip()
-        self._default_aliases = self._normalize(default_aliases + [default_name])
+        self._default_aliases = self._normalize(
+            default_aliases + [default_name]
+        )
         self._profile = self._load()
 
     def _normalize(self, aliases: list[str]) -> list[str]:
@@ -38,7 +52,10 @@ class BotIdentityService:
 
     def _load(self) -> BotIdentityProfile:
         if not self._storage_path.exists():
-            return BotIdentityProfile(self._default_name, self._default_aliases)
+            return BotIdentityProfile(
+                self._default_name,
+                self._default_aliases,
+            )
 
         data = json.loads(self._storage_path.read_text(encoding="utf-8"))
         return BotIdentityProfile(
@@ -56,7 +73,9 @@ class BotIdentityService:
     def get_profile(self) -> BotIdentityProfile:
         return self._profile
 
-    def update_identity(self, display_name: str, aliases: list[str]) -> BotIdentityProfile:
+    def update_identity(
+        self, display_name: str, aliases: list[str]
+    ) -> BotIdentityProfile:
         previous_name = self._profile.display_name
         merged_aliases = self._normalize(
             aliases + [display_name, previous_name] + self._profile.aliases
@@ -122,10 +141,22 @@ def get_bot_identity_service() -> BotIdentityService:
     if not isinstance(default_name, str) or not default_name.strip():
         default_name = DEFAULT_BOT_IDENTITY_NAME
 
-    raw_aliases = getattr(current_settings, "bot_identity_default_aliases", None)
+    raw_aliases = getattr(
+        current_settings,
+        "bot_identity_default_aliases",
+        None,
+    )
     if isinstance(raw_aliases, str) and raw_aliases.strip():
-        default_aliases = [alias.strip() for alias in raw_aliases.split(",") if alias.strip()]
+        default_aliases = [
+            alias.strip()
+            for alias in raw_aliases.split(",")
+            if alias.strip()
+        ]
     else:
         default_aliases = DEFAULT_BOT_IDENTITY_ALIASES.copy()
 
-    return configure_bot_identity_service(storage_path, default_name, default_aliases)
+    return configure_bot_identity_service(
+        storage_path,
+        default_name,
+        default_aliases,
+    )

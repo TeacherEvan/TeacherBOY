@@ -13,7 +13,10 @@ async def test_ai_review_service_uses_github_models_first():
     openrouter = AsyncMock()
     openrouter.is_configured.return_value = True
 
-    service = AIReviewService(github_service=github, openrouter_service=openrouter)
+    service = AIReviewService(
+        github_service=github,
+        openrouter_service=openrouter,
+    )
     result = await service.translate_and_summarize("ข้อความภาษาไทย")
 
     assert result == "translated text"
@@ -31,7 +34,10 @@ async def test_ai_review_service_falls_back_to_openrouter():
     openrouter.is_configured.return_value = True
     openrouter.chat_completion.return_value = "fallback text"
 
-    service = AIReviewService(github_service=github, openrouter_service=openrouter)
+    service = AIReviewService(
+        github_service=github,
+        openrouter_service=openrouter,
+    )
     result = await service.translate_and_summarize("ข้อความภาษาไทย")
 
     assert result == "fallback text"
