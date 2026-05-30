@@ -231,9 +231,7 @@ def readiness_lifespan_environment(mock_settings):
         )
         stack.enter_context(patch("src.main.calendar_session_manager.start_cleanup"))
         stack.enter_context(patch("src.main.calendar_session_manager.stop_cleanup"))
-        stack.enter_context(
-            patch("src.main.message_buffer_service.start_cleanup_task")
-        )
+        stack.enter_context(patch("src.main.message_buffer_service.start_cleanup_task"))
         stack.enter_context(patch("src.main.message_buffer_service.stop_cleanup_task"))
         stack.enter_context(patch("src.main.rate_limiter.start_cleanup"))
         stack.enter_context(patch("src.main.rate_limiter.stop_cleanup"))
@@ -262,9 +260,13 @@ def test_readiness_returns_503_after_degraded_lifespan_startup(
     readiness_lifespan_environment,
 ):
     """Readiness should stay degraded when startup finishes with required data still loading."""
-    app, startup_loader, _, stop_scheduler_mock, scheduler_service = (
-        readiness_lifespan_environment
-    )
+    (
+        app,
+        startup_loader,
+        _,
+        stop_scheduler_mock,
+        scheduler_service,
+    ) = readiness_lifespan_environment
 
     async def degraded_ensure_data_loaded(*args, **kwargs):
         startup_loader._calendar_required = False
@@ -284,7 +286,9 @@ def test_readiness_returns_503_after_degraded_lifespan_startup(
             "backup_created": False,
         }
 
-    with patch("src.main.startup_loader.ensure_data_loaded", degraded_ensure_data_loaded):
+    with patch(
+        "src.main.startup_loader.ensure_data_loaded", degraded_ensure_data_loaded
+    ):
         with TestClient(app) as client:
             response = client.get("/readiness")
 
@@ -300,9 +304,13 @@ def test_readiness_returns_200_after_healthy_lifespan_startup(
     readiness_lifespan_environment,
 ):
     """Readiness should report ready once the startup path marks required data loaded."""
-    app, startup_loader, _, stop_scheduler_mock, scheduler_service = (
-        readiness_lifespan_environment
-    )
+    (
+        app,
+        startup_loader,
+        _,
+        stop_scheduler_mock,
+        scheduler_service,
+    ) = readiness_lifespan_environment
 
     async def healthy_ensure_data_loaded(*args, **kwargs):
         startup_loader._calendar_required = False
@@ -322,7 +330,9 @@ def test_readiness_returns_200_after_healthy_lifespan_startup(
             "backup_created": True,
         }
 
-    with patch("src.main.startup_loader.ensure_data_loaded", healthy_ensure_data_loaded):
+    with patch(
+        "src.main.startup_loader.ensure_data_loaded", healthy_ensure_data_loaded
+    ):
         with TestClient(app) as client:
             response = client.get("/readiness")
 
