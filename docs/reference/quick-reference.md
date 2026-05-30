@@ -36,17 +36,22 @@ USER_BOSS=U1234567890abcdef
 
 1. **HelpAgent** (Priority 5) - Comprehensive help system (`help`, `Dear Zeus help`, etc.)
 2. **AdminAgent** (Priority 5) - `/admin` commands
-3. **SearchAgent** (Priority 8) - `Zeus search ...` (DM-only for non-admins)
-4. **LLMAgent** (Priority 9) - `Zeus ...` (DM-only for non-admins)
-5. **TranslationAgent** (Priority 10) - Thai ↔ English translation
-6. **SpecialNewsAgent** (Priority 12) - `/special news` command (DM-only)
-7. **NewsAgent** (Priority 15) - `news` or `ข่าว` trigger
+3. **CalendarAgent** (Priority 6) - `zeus calendar`, `zeus add`, `zeus events`
+4. **HannibalProfileAgent** (Priority 6) - Message-history profiling
+5. **ProfilerAgent** (Priority 7) - Image-based psychological profiling
+6. **ImageAnalyzerAgent** (Priority 7) - General image Q&A
+7. **DocumentMemoryAgent** (Priority 8) - PDF/DOCX storage and retrieval
+8. **SearchAgent** (Priority 8) - `Zeus search ...`
+9. **LLMAgent** (Priority 9) - `Zeus ...`
+10. **TranslationAgent** (Priority 10) - Thai ↔ English translation
+11. **SpecialNewsAgent** (Priority 12) - `/special news` command
+12. **NewsAgent** (Priority 15) - `news` or `ข่าว` trigger
 
 ## 🤖 AI & Search Commands (Zeus)
 
 - **AI (OpenRouter LLM):** `Zeus <your question>` (also accepts `/zeus ...`, typo `Zues ...`)
   - **Admins:** allowed in any chat context
-  - **Regular users:** **admin-only** (denied everywhere)
+  - **Regular users:** available in direct messages; gated in non-private chats
 
 ### 📨 Zeus outbound messaging (admins)
 
@@ -72,7 +77,10 @@ Notes:
 
 ## 🚢 Hugging Face Spaces (Docker) gotcha
 
-- Avoid having multiple copies of the code (e.g., both top-level `src/` and nested `TeacherBOY/src/`). The container runs `uvicorn src.main:app` from the top-level `src/`, so nested code will be ignored unless the Dockerfile is updated.
+- Avoid having multiple copies of the code
+  (for example both top-level `src/` and nested `TeacherBOY/src/`).
+- The container runs `uvicorn src.main:app` from the top-level `src/`,
+  so nested code is ignored unless the Dockerfile is updated.
 
 ## ⏱️ Rate Limits
 
@@ -153,7 +161,12 @@ src/
 │   ├── agent_router.py        # Agent dispatch
 │   ├── base_agent.py          # Abstract base
 │   ├── help_agent.py          # Comprehensive help system
+│   ├── calendar_agent.py      # Calendar entry point
+│   ├── document_memory_agent.py # PDF/DOCX memory
+│   ├── hannibal_agent.py      # Message-history profiling
+│   ├── image_analyzer_agent.py # General image Q&A
 │   ├── llm_agent.py           # OpenRouter LLM (Zeus ...)
+│   ├── profiler_agent.py      # Image profiling
 │   ├── search_agent.py        # Brave Search (Zeus search ...)
 │   ├── translation_agent.py   # Translation logic
 │   ├── news_agent.py          # News logic
@@ -166,6 +179,9 @@ src/
 │   ├── google_translation.py       # Google Translate
 │   ├── news_data_service.py        # News/weather data
 │   ├── special_news_service.py     # Special news RSS
+│   ├── calendar_service.py         # Calendar storage
+│   ├── conversation_memory_service.py # Chat memory
+│   ├── document_memory_service.py  # Document storage
 │   ├── session_manager.py          # Translation sessions
 │   ├── news_session_manager.py     # News flow state
 │   └── rate_limiter.py             # Rate limiting
@@ -178,7 +194,7 @@ tests/
 ├── test_news_agent.py
 ├── test_special_news_agent.py
 ├── test_admin_agent.py
-└── ... (218 tests total)
+└── ...
 ```
 
 ## 📊 Cache TTLs (Configurable via .env)

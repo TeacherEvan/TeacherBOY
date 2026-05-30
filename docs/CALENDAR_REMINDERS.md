@@ -73,6 +73,7 @@ When using "Zeus analyze this" with an image containing dates (schedules, announ
 2. Show you what was found
 3. Ask if you want to add them to your calendar
 4. Guide you through the add process
+5. Let you add the remaining extracted events in one step after you confirm the reminder schedule
 
 Example images that work well:
 
@@ -80,6 +81,9 @@ Example images that work well:
 - Event flyers
 - Schedules and timetables
 - Meeting agendas with dates
+
+When multiple dates are detected, you can review them one by one or use the
+bulk-add option to save the remaining events with the same reminder selection.
 
 ## Commands Reference
 
@@ -91,6 +95,10 @@ Example images that work well:
 | `my events`        | Same as above             |
 | `my reminders`     | Same as above             |
 | `Zeus my calendar` | Same as above             |
+
+Calendar visibility is chat-scoped: events created in a group stay in that
+group, and events created in a direct message stay private to that direct
+message.
 
 ### Add Commands
 
@@ -219,7 +227,9 @@ class CalendarState(Enum):
 
 ## Privacy and Security
 
-- **User Isolation**: Users can only view/remove their own events
+- **Chat Isolation**: Event visibility is scoped to the current chat.
+    Group events stay in that group, and direct-message events stay private.
+- **Flow Ownership**: Only the user who started a flow can continue interactive calendar prompts.
 - **Session Ownership**: Only the user who started a flow can interact
 - **Data Location**: Stored locally by default; HF Hub is optional
 - **No Image Storage**: Images analyzed for dates are not saved

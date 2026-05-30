@@ -2,7 +2,8 @@
 
 ## 🎯 Overview
 
-This guide provides quick reference for Zeus's productivity optimization features designed to minimize latency and maximize throughput in production LLM applications.
+This guide provides quick reference for Zeus productivity features that
+reduce latency and improve throughput in production LLM workflows.
 
 ## 📊 Key Features
 
@@ -127,7 +128,7 @@ estimated_tokens = len(text) // 4
 
 **Pricing Reference** (as of Jan 2025):
 
-```
+```text
 GPT-4o:       $2.50 per 1M input tokens
 GPT-4o-mini:  $0.15 per 1M input tokens
 Gemma 2 9B:   Free (GitHub Models)
@@ -350,9 +351,9 @@ summary = await conversation_summarization_service.summarize_conversation(
 
 ## 📚 Additional Resources
 
-- [PRODUCTIVITY_OPTIMIZATION_PLAN.md](../PRODUCTIVITY_OPTIMIZATION_PLAN.md) - Full optimization plan
-- [GitHub Models Documentation](./GITHUB_MODELS.md) - LLM provider setup
-- [Conversation Memory Guide](./CONVERSATION_MEMORY.md) - Memory management
+- [reference/maintainers.md](../reference/maintainers.md) - Active maintainer guidance
+- [GITHUB_MODELS.md](./GITHUB_MODELS.md) - LLM provider setup
+- [CONVERSATION_MEMORY.md](./CONVERSATION_MEMORY.md) - Memory management
 
 ## 🎯 Best Practices
 

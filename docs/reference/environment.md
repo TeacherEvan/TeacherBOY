@@ -64,6 +64,12 @@ Notes:
 - `DEFAULT_MODEL` (alias of `OPENROUTER_DEFAULT_MODEL`, useful on Hugging Face Spaces)
 - `LLM_SYSTEM_PROMPT` (optional; controls bot personality/tone)
 
+## LLM (GitHub Models)
+
+- `GITHUB_MODELS_PAT`
+- `GITHUB_MODELS_DEFAULT_MODEL`
+- `LLM_PROVIDER_PRIORITY` (`github,openrouter` by default)
+
 ## Web Search (Brave)
 
 - `BRAVE_SEARCH_API_KEY`
@@ -72,6 +78,57 @@ Notes:
 
 - `EXCHANGE_RATE_API_KEY` (ExchangeRate-API)
 - `TAT_API_KEY` (Tourism Authority of Thailand events)
+
+## Conversation Memory (HF Hub)
+
+- `CONVERSATION_MEMORY_ENABLED`
+- `CONVERSATION_MAX_MESSAGES`
+- `CONVERSATION_TTL_HOURS`
+- `HF_MEMORY_TOKEN`
+- `HF_MEMORY_REPO_ID`
+
+## Document Memory
+
+- `DOCUMENT_MEMORY_ENABLED`
+- `DOCUMENT_STORAGE_PATH`
+- `DOCUMENT_MAX_FILE_SIZE_MB`
+- `DOCUMENT_MAX_TEXT_CHARS`
+- `DOCUMENT_HF_REPO_ID`
+
+## History Logging
+
+- `HISTORY_LOG_ENABLED`
+- `HISTORY_LOG_PATH`
+- `HISTORY_LOG_ROTATION_DAYS`
+- `HISTORY_LOG_ENCRYPTION_KEY`
+- `HISTORY_LOG_HF_REPO_ID`
+- `ZEUS_ERROR_STYLE`
+
+## Profiler
+
+- `PROFILER_ENABLED`
+- `PROFILER_MODEL`
+- `PROFILER_ANALYSIS_TYPE`
+- `PROFILER_ANALYSIS_DEPTH`
+- `PROFILER_RATE_LIMIT_PER_HOUR`
+- `PROFILER_MAX_IMAGE_SIZE_MB`
+
+## Productivity
+
+- `USE_OPTIMIZED_PROMPTS`
+- `ENABLE_CONVERSATION_SUMMARIZATION`
+- `CONVERSATION_SUMMARY_INTERVAL`
+- `CONVERSATION_MESSAGES_TO_KEEP_FULL`
+
+## HTTP Client
+
+- `HTTP_CLIENT_TIMEOUT_SECONDS`
+- `HTTP_CLIENT_MAX_CONNECTIONS`
+- `HTTP_CLIENT_MAX_KEEPALIVE`
+
+## MCP
+
+- `MCP_SERVER_URL`
 
 ## Cache TTLs (seconds)
 
@@ -111,7 +168,7 @@ Notes:
 
 - **Type:** String (Optional)
 - **Default:** `None`
-- **Description:** Hugging Face repository ID for calendar data synchronization (requires HF_TOKEN)
+- **Description:** Hugging Face repository ID for calendar data synchronization (requires `HF_MEMORY_TOKEN`)
 - **Example:** `CALENDAR_HF_REPO_ID=username/calendar-data`
 
 ### `CALENDAR_SYNC_INTERVAL_SECONDS`

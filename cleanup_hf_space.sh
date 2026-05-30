@@ -34,7 +34,6 @@ DOCS_TO_REMOVE=(
     "CODE_REVIEW.md"
     "COMPREHENSIVE_TECHNICAL_REVIEW.md"
     "CHANGELOG.md"
-    "CALENDAR_AND_MEMORY_ENHANCEMENTS.md"
     "CALENDAR_DUPLICATE_PREVENTION.md"
     "CALENDAR_PERSISTENCE_FIX.md"
     "CALENDAR_SCRAPING_FIXES_SUMMARY.md"
@@ -59,7 +58,6 @@ DOCS_TO_REMOVE=(
     "test_output.txt"
     "workspace_non_critical_issues.json"
     "JOBCARD.md"
-    "HF_DEPLOY_WORKFLOW.md"
 )
 
 for file in "${DOCS_TO_REMOVE[@]}"; do

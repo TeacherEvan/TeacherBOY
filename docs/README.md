@@ -2,8 +2,6 @@
 
 **📍 This folder is the single source of truth for all documentation.**
 
-> **📚 For a complete documentation index, see [DOCUMENTATION_INDEX.md](../DOCUMENTATION_INDEX.md)**
-
 ## Start Here
 
 - **Quick Start:** [guides/quickstart.md](guides/quickstart.md) - Get the bot running in 5 steps
@@ -31,12 +29,4 @@
 
 - **Environment Variables:** [reference/environment.md](reference/environment.md) - All settings explained
 - **Quick Reference Card:** [reference/quick-reference.md](reference/quick-reference.md) - Commands, rate limits, file locations
-
-## Legacy Documentation (Root Directory)
-
-The following files remain in the root directory for backward compatibility but have been superseded by this docs/ folder:
-
-- [../ARCHITECTURE.md](../ARCHITECTURE.md) → See [architecture/](architecture/)
-- [../DEPLOYMENT_GUIDE.md](../DEPLOYMENT_GUIDE.md) → See [guides/deployment.md](guides/deployment.md)
-- [../QUICK_START.md](../QUICK_START.md) → Redirect to [guides/quickstart.md](guides/quickstart.md)
-- [../QUICK_REFERENCE.md](../QUICK_REFERENCE.md) → Redirect to [reference/quick-reference.md](reference/quick-reference.md)
+- **Maintainer Notes:** [reference/maintainers.md](reference/maintainers.md) - Maintenance rules and architecture constraints

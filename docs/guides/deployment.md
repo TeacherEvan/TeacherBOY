@@ -60,7 +60,9 @@ Key notes:
 Gotcha (common cause of "it deployed but features are missing"):
 
 - Do not keep two copies of the app code (e.g., both top-level `src/` and a nested `TeacherBOY/src/`).
-- The Docker build runs `uvicorn src.main:app` and typically only copies the top-level `src/`, so any nested `src/` changes will be ignored unless the Dockerfile copy paths are updated.
+- The Docker build runs `uvicorn src.main:app` and typically only copies the
+   top-level `src/`, so any nested `src/` changes will be ignored unless the
+   Dockerfile copy paths are updated.
 
 ### Push updates (recommended workflow)
 
@@ -106,6 +108,30 @@ This repo includes tasks:
 - `hf:push`
 
 Run them via **Tasks: Run Task**.
+
+### Optional minimal `hf-deploy` branch
+
+If you want the Hugging Face Space git repo to stay smaller than the main
+development repo, this repository includes `cleanup_hf_space.sh` for a
+deployment-only branch.
+
+Use this only on a dedicated branch and only when pushing to the `hf` remote:
+
+```bash
+git checkout -b hf-deploy main
+./cleanup_hf_space.sh
+git add -A
+git commit -m "chore(hf): minimal production build"
+git push hf hf-deploy:main --force-with-lease
+git checkout main
+git branch -D hf-deploy
+```
+
+Important:
+
+- Never run the cleanup script on `main`.
+- Never push the cleaned branch to `origin`.
+- `README.md` must remain in the Space root because Hugging Face displays it.
 
 ## Azure Container Apps
 

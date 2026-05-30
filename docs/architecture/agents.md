@@ -1,25 +1,28 @@
 # Agents
 
-TeacherBOY uses a priority-based multi-agent router.
+Zeus uses a priority-based multi-agent router.
 
 ## Default agents (current)
 
-The router evaluates agents in ascending priority (lower runs first):
+The router evaluates agents in ascending priority (lower runs first).
+Registration happens in `src/main.py`, and some agents are conditional on configuration.
 
 <!-- markdownlint-disable MD060 -->
 
-| Priority | Agent Class | Trigger Pattern | Description |
-|----------|------------|-----------------|-------------|
-| 1 | `AdminAgent` | `/admin`, `/mod` | Administrative commands, system control |
-| 2 | `TranslationAgent` | `แปล`, `translate`, `แปลว่า` | Thai-English bidirectional translation |
-| 3 | `SpecialNewsAgent` | `ข่าว`, `news`, `🗞️` | Curated news summaries in Thai/English |
-| 4 | `SearchAgent` | `ค้นหา`, `search`, `🔍` | Web search via Brave Search API |
-| 5 | `NewsAgent` | Broader news patterns | Additional news functionality |
-| 6 | `CalendarAgent` | `calendar`, `remind`, `📅` | Event scheduling and reminders |
-| 7 | `ProfilerAgent` | `profile`, `analyze` | Psychological profiling and insights |
-| 8 | `HelpAgent` | `/help`, `Zeus help` | Interactive help and feature discovery |
-| 9 | `ImageAnalyzerAgent` | Image messages | Image analysis and description |
-| 10 | `LLMAgent` | All other patterns | General conversation and fallback |
+| Priority | Agent Class | Conditional | Trigger Pattern | Description |
+|----------|------------|-------------|-----------------|-------------|
+| 5 | `HelpAgent` | No | `help`, `/help`, `Zeus help` | Interactive help and command discovery |
+| 5 | `AdminAgent` | Yes | `/admin`, `/mod` | Administrative commands and privileged control |
+| 6 | `CalendarAgent` | Yes | `zeus calendar`, `zeus add`, `zeus events` | Event scheduling, reminders, scraping |
+| 6 | `HannibalProfileAgent` | Yes | `hannibal profile`, `analyze messages` | Psychological profiling from message history |
+| 7 | `ProfilerAgent` | Yes | Image profile triggers | Image-based behavioral profiling |
+| 7 | `ImageAnalyzerAgent` | Yes | `zeus analyze`, image follow-up flow | General image Q&A and date extraction |
+| 8 | `DocumentMemoryAgent` | Yes | File uploads, `zeus doc`, `zeus docs` | PDF/DOCX storage and retrieval |
+| 8 | `SearchAgent` | No | `Zeus search <query>` | Web search via Brave Search API |
+| 9 | `LLMAgent` | No | `Zeus <prompt>` | General LLM conversation |
+| 10 | `TranslationAgent` | No | Default/fallback | Thai-English bidirectional translation |
+| 12 | `SpecialNewsAgent` | No | `/special news` | Tourism, sports, and international news |
+| 15 | `NewsAgent` | No | `news`, `ข่าว` | Weather, air quality, headlines, markets |
 
 <!-- markdownlint-enable MD060 -->
 
@@ -30,6 +33,7 @@ The router evaluates agents in ascending `get_priority()` order and stops at the
 Key behaviors:
 
 - Only text messages are routed.
+- Image and file events can still be handled by agents that inspect non-text payloads.
 - Disabled agents are skipped.
 - Exceptions inside an agent do not crash the webhook; routing continues to the next agent.
 
@@ -37,14 +41,11 @@ Key behaviors:
 
 1. Create a new class implementing `BaseAgent`.
 1. Implement:
-   - `should_handle(event, text) -> bool`
-   - `handle(event, text, line_bot_api) -> bool`
-
+    - `should_handle(event, text) -> bool`
+    - `handle(event, text, line_bot_api) -> bool`
 1. Choose a priority:
-
-- Use < 10 only if your agent must preempt translation.
-- Use > 10 if translation should remain the default.
-
+    - Use < 10 only if your agent must preempt translation.
+    - Use > 10 if translation should remain the default.
 1. Register it during lifespan startup in `src/main.py`.
 
 ## Example skeleton
@@ -72,3 +73,4 @@ class ExampleAgent(BaseAgent):
 - Make `should_handle` cheap and specific.
 - Keep `handle` resilient: return `False` if you want the next agent to try.
 - Avoid global state; use the session manager if you need per-chat state.
+- Match new priorities to the existing routing contract in `src/main.py`.

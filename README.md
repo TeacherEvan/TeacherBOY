@@ -9,15 +9,18 @@ app_port: 8000
 
 ## Zeus 👨‍🏫
 
-> **Project Name:** This project is officially called **Zeus** and was formerly known as **TeacherBOY**. You may see both names in various documentation files during this transition period.
+> **Project Name:** This project is officially called **Zeus** and was formerly
+> known as **TeacherBOY**. You may see both names in various documentation files
+> during this transition period.
 
 **SMOOTH automatic Thai - English translator with Multi-Agent Architecture for LINE.**
 
-Zeus is a high-performance, asynchronous LINE Bot featuring a modular multi-agent system. The Translation Agent provides intelligent Thai/English translation with smart session management. Easily extensible with additional specialized agents.
+Zeus is a high-performance, asynchronous LINE Bot featuring a modular
+multi-agent system. The Translation Agent provides intelligent
+Thai/English translation with smart session management, and the bot can be
+extended with additional specialized agents.
 
 ## 📚 Documentation
-
-**[📖 Complete Documentation Index](DOCUMENTATION_INDEX.md)** - Browse all documentation files organized by category
 
 ### Quick Links
 
@@ -29,8 +32,9 @@ Zeus is a high-performance, asynchronous LINE Bot featuring a modular multi-agen
 - **[🤖 Agents](docs/architecture/agents.md)**
 - **[🔧 Admin Commands](docs/ADMIN_COMMANDS.md)**
 - **[🔎 Tracing](docs/TRACING.md)**
+- **[🛠️ Maintainer Notes](docs/reference/maintainers.md)**
 
-Legacy docs at repo root are kept for backward compatibility.
+The `docs/` folder is the maintained documentation source of truth.
 
 ## 🚀 Features
 
@@ -53,7 +57,8 @@ Legacy docs at repo root are kept for backward compatibility.
 ### News Agent **NEW!**
 
 - **📰 Real-time News:** Bangkok weather, air quality, PM2.5, and Thai news headlines
-- **🌡️ Weather Data:** Temperature and 5-hour rain forecast via Open-Meteo (no API key for non-commercial use; subject to Open-Meteo terms)
+- **🌡️ Weather Data:** Temperature and 5-hour rain forecast via Open-Meteo
+  (no API key for non-commercial use; subject to Open-Meteo terms)
 - **💨 Air Quality:** PM2.5 levels for Bangkok
 - **📱 Auto-Language Detection:** Type "news" for English or "ข่าว" for Thai
 - **🔒 Friend-Gated Access:** Full menu for friends in groups (1 request/hour), translation only for others
@@ -256,7 +261,9 @@ Zeus uses a **modular multi-agent architecture** where messages are routed to sp
 LINE Webhook → Agent Router → [TranslationAgent | MathAgent | CodeAgent | ...]
 ```
 
-**Want to understand how it all works?** See **[Architecture Guide](docs/architecture/overview.md)** and **[Agents Guide](docs/architecture/agents.md)** for:
+**Want to understand how it all works?**
+See **[Architecture Guide](docs/architecture/overview.md)** and
+**[Agents Guide](docs/architecture/agents.md)** for:
 
 - Complete data flow diagrams
 - Webhook explanation
