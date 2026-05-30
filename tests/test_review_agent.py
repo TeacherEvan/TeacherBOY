@@ -53,6 +53,45 @@ async def test_review_agent_translates_last_non_english_message_and_pushes_dm(
 
 
 @pytest.mark.asyncio
+async def test_review_agent_ignores_bot_buffered_messages(tmp_path: Path):
+    line_api = Mock()
+    line_api.push_message = Mock()
+    line_api.reply_message = Mock()
+
+    event = Mock()
+    event.reply_token = "reply"
+    event.source = Mock()
+    event.source.user_id = "U_REQ"
+    event.source.group_id = "G1"
+    event.source.type = "group"
+
+    buffer_service = MessageBufferService()
+    buffer_service.store_message("group_G1", "ประชุมวันศุกร์", "U_OTHER")
+    buffer_service.store_message("group_G1", "สรุปโดยบอท", "BOT")
+
+    ai_review_service = AsyncMock()
+    ai_review_service.translate_and_summarize.return_value = (
+        "Friday meeting summary"
+    )
+
+    agent = ReviewAgent(
+        ai_review_service=ai_review_service,
+        message_buffer=buffer_service,
+        staff_memory_service=StaffMemoryService(
+            tmp_path / "staff_memory.json"
+        ),
+        bot_user_id="BOT",
+    )
+
+    handled = await agent.handle(event, "KPS review", line_api)
+
+    assert handled is True
+    ai_review_service.translate_and_summarize.assert_awaited_once_with(
+        "ประชุมวันศุกร์"
+    )
+
+
+@pytest.mark.asyncio
 async def test_review_agent_answers_who_do_you_work_for(tmp_path: Path):
     line_api = Mock()
     line_api.reply_message = Mock()
@@ -78,9 +117,54 @@ async def test_review_agent_answers_who_do_you_work_for(tmp_path: Path):
     assert line_api.reply_message.called
     request = line_api.reply_message.call_args[0][0]
     assert (
-        "I am purely a hardworking assitant and at the service of all KPS "
+        "I am purely a hardworking assistant and at the service of all KPS "
         "employees."
         in request.messages[0].text
+    )
+
+
+@pytest.mark.asyncio
+async def test_review_agent_keeps_existing_pending_review(tmp_path: Path):
+    line_api = Mock()
+    line_api.push_message = Mock()
+    line_api.reply_message = Mock()
+
+    event = Mock()
+    event.reply_token = "reply"
+    event.source = Mock()
+    event.source.user_id = "U_REQ"
+    event.source.group_id = "G1"
+    event.source.type = "group"
+
+    buffer_service = MessageBufferService()
+    buffer_service.store_message("group_G1", "ข้อความแรก", "U_OTHER")
+
+    ai_review_service = AsyncMock()
+    ai_review_service.translate_and_summarize.return_value = "First summary"
+
+    agent = ReviewAgent(
+        ai_review_service=ai_review_service,
+        message_buffer=buffer_service,
+        staff_memory_service=StaffMemoryService(
+            tmp_path / "staff_memory.json"
+        ),
+    )
+
+    first_handled = await agent.handle(event, "KPS review", line_api)
+    assert first_handled is True
+
+    buffer_service.store_message("group_G1", "ข้อความใหม่", "U_OTHER")
+    second_handled = await agent.handle(event, "KPS review", line_api)
+
+    assert second_handled is True
+    ai_review_service.translate_and_summarize.assert_awaited_once_with(
+        "ข้อความแรก"
+    )
+    assert agent._pending_reviews["U_REQ"].summary == "First summary"
+    latest_reply = line_api.reply_message.call_args[0][0]
+    assert (
+        latest_reply.messages[0].text
+        == "Please finish the pending review in your DM before starting a new one."
     )
 
 

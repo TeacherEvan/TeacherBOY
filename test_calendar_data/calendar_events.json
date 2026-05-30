@@ -1,7 +1,7 @@
 {
   "events": [
     {
-      "event_id": "cd6b21a1-88fc-45e2-bbdd-543659c35138",
+      "event_id": "d8b8e3f6-357b-423f-9d68-69d6917ca2ee",
       "user_id": "U001",
       "chat_id": "group_A",
       "title": "Test Event",
@@ -13,8 +13,8 @@
       "is_friend": false,
       "notification_target_user_id": "U001",
       "notified_dates": [],
-      "created_at": "2026-05-30T07:54:08.140244+00:00"
+      "created_at": "2026-05-30T10:31:18.060131+00:00"
     }
   ],
-  "updated_at": "2026-05-30T07:54:08.140269+00:00"
+  "updated_at": "2026-05-30T10:31:18.060188+00:00"
 }

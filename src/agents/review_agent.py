@@ -33,8 +33,11 @@ logger = logging.getLogger(__name__)
 
 SAVE_OPTIONS = {"calendar", "memory", "both", "neither"}
 STAFF_ANSWER = (
-    "I am purely a hardworking assitant and at the service of all KPS "
+    "I am purely a hardworking assistant and at the service of all KPS "
     "employees."
+)
+PENDING_REVIEW_MESSAGE = (
+    "Please finish the pending review in your DM before starting a new one."
 )
 IMPORTANT_THIS_WEEK_COMMANDS = {
     "whats important this week?",
@@ -59,6 +62,7 @@ class ReviewAgent(BaseAgent):
         message_buffer: Optional[Any] = None,
         staff_memory_service: Optional[StaffMemoryService] = None,
         calendar_service_instance: Optional[Any] = None,
+        bot_user_id: Optional[str] = None,
     ):
         super().__init__(
             name="ReviewAgent",
@@ -72,6 +76,7 @@ class ReviewAgent(BaseAgent):
             Path("./data/staff_memory/staff_memory.json")
         )
         self._calendar_service = calendar_service_instance or calendar_service
+        self._bot_user_id = bot_user_id
         self._pending_reviews: dict[str, PendingReview] = {}
 
     def get_priority(self) -> int:
@@ -104,6 +109,13 @@ class ReviewAgent(BaseAgent):
 
         command = self._parse_prefixed_command(text)
         if command == "review":
+            if user_id in self._pending_reviews:
+                await self._send_reply(
+                    event,
+                    line_bot_api,
+                    PENDING_REVIEW_MESSAGE,
+                )
+                return True
             return await self._handle_review(
                 event,
                 text,
@@ -332,6 +344,7 @@ class ReviewAgent(BaseAgent):
         recent_messages = self._message_buffer.get_recent_messages(
             chat_id,
             limit=20,
+            exclude_user_id=self._bot_user_id,
         )
         for message in reversed(recent_messages):
             normalized = message.text.strip().lower()

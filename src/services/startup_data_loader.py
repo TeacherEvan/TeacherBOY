@@ -27,6 +27,11 @@ class StartupDataLoader:
     """Ensures all persistent data is loaded before app serves traffic."""
 
     def __init__(self):
+        self._calendar_required = False
+        self._memory_required = False
+        self._documents_required = False
+        self._logs_required = False
+
         self._calendar_loaded = False
         self._memory_loaded = False
         self._documents_loaded = False
@@ -59,11 +64,24 @@ class StartupDataLoader:
         logger.info("🔄 Starting synchronous data load from HF Hub...")
         start_time = time.time()
 
+        self._calendar_required = bool(
+            calendar_service and hasattr(calendar_service, "_hf_enabled") and calendar_service._hf_enabled
+        )
+        self._memory_required = bool(
+            memory_service and hasattr(memory_service, "_hf_enabled") and memory_service._hf_enabled
+        )
+        self._documents_required = bool(
+            document_service and hasattr(document_service, "_hf_enabled") and document_service._hf_enabled
+        )
+        self._logs_required = bool(
+            history_log and hasattr(history_log, "_hf_enabled") and history_log._hf_enabled
+        )
+
         results = {
-            "calendar": False,
-            "memory": False,
-            "documents": False,
-            "logs": False,
+            "calendar": not self._calendar_required,
+            "memory": not self._memory_required,
+            "documents": not self._documents_required,
+            "logs": not self._logs_required,
             "backup_created": False,
         }
 
@@ -217,8 +235,14 @@ class StartupDataLoader:
             try:
                 logger.info(f"📜 Downloading history logs (attempt {attempt}/{max_retries})...")
 
-                # History log might not have an explicit load method (uses CommitScheduler)
-                # Just verify the service is configured
+                commit_scheduler = getattr(history_log, "_commit_scheduler", None)
+                storage_path = getattr(history_log, "storage_path", None)
+                hf_sync_dir = Path(storage_path) / "hf_sync" if storage_path is not None else None
+
+                if commit_scheduler is None or hf_sync_dir is None or not hf_sync_dir.is_dir():
+                    logger.warning("⚠️ History log HF sync is not fully configured")
+                    return False
+
                 logger.info("✅ History log service ready")
                 return True
 
@@ -310,9 +334,15 @@ that were successfully loaded from HF Hub.
         Returns:
             True if app is ready to serve traffic
         """
-        # App is ready if calendar is loaded (most critical)
-        # Memory and logs are less critical (can start empty)
-        return self._calendar_loaded or self._backup_created
+        if self._calendar_required and not self._calendar_loaded:
+            return False
+        if self._memory_required and not self._memory_loaded:
+            return False
+        if self._documents_required and not self._documents_loaded:
+            return False
+        if self._logs_required and not self._logs_loaded:
+            return False
+        return True
 
 
 # Singleton instance

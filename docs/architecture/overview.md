@@ -44,8 +44,8 @@ TeacherBOY is a FastAPI webhook app for LINE.
 
 ## Operational endpoints
 
-- `/health` (liveness)
-- `/readiness` (dependencies/features)
+- `/health` (cheap liveness probe; no external provider calls)
+- `/readiness` (startup/data/agent readiness; returns HTTP 503 until ready)
 
 ## Observability
 

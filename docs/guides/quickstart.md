@@ -34,8 +34,9 @@ docker run --env-file .env -p 8000:8000 zeus
 
 Health endpoints:
 
-- `GET http://localhost:8000/health`
-- `GET http://localhost:8000/readiness`
+- `GET http://localhost:8000/health` — process liveness, always cheap
+- `GET http://localhost:8000/readiness` — startup readiness, may return `503`
+   until startup data is loaded and agents are registered
 
 ### Option B: Python (dev)
 

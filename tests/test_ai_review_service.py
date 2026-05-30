@@ -42,3 +42,31 @@ async def test_ai_review_service_falls_back_to_openrouter():
 
     assert result == "fallback text"
     openrouter.chat_completion.assert_awaited_once()
+
+
+class _FailingGithubService:
+    def is_configured(self):
+        return True
+
+    async def chat_completion(self, **kwargs):
+        raise RuntimeError("github failure")
+
+
+class _OpenRouterService:
+    def is_configured(self):
+        return True
+
+    async def chat_completion(self, **kwargs):
+        return "fallback after exception"
+
+
+@pytest.mark.asyncio
+async def test_ai_review_service_falls_back_when_github_raises():
+    service = AIReviewService(
+        github_service=_FailingGithubService(),
+        openrouter_service=_OpenRouterService(),
+    )
+
+    result = await service.translate_and_summarize("ข้อความภาษาไทย")
+
+    assert result == "fallback after exception"

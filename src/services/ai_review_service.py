@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
 from src.services.github_models_service import github_models_service
 from src.services.openrouter_service import (
     openrouter_service as default_openrouter_service,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class AIReviewService:
@@ -26,21 +30,33 @@ class AIReviewService:
         openrouter_model: str = "openai/gpt-4o",
     ) -> str | None:
         if self.github_service and self.github_service.is_configured():
-            response = await self.github_service.chat_completion(
-                messages=messages,
-                model=github_model,
-                temperature=0.2,
-                max_tokens=900,
-            )
-            if response:
-                return response
+            try:
+                response = await self.github_service.chat_completion(
+                    messages=messages,
+                    model=github_model,
+                    temperature=0.2,
+                    max_tokens=900,
+                )
+                if response:
+                    return response
+            except Exception:
+                logger.warning(
+                    "AIReviewService primary provider failed",
+                    exc_info=True,
+                )
 
         if self.openrouter_service and self.openrouter_service.is_configured():
-            return await self.openrouter_service.chat_completion(
-                messages=messages,
-                model=openrouter_model,
-                temperature=0.2,
-            )
+            try:
+                return await self.openrouter_service.chat_completion(
+                    messages=messages,
+                    model=openrouter_model,
+                    temperature=0.2,
+                )
+            except Exception:
+                logger.warning(
+                    "AIReviewService fallback provider failed",
+                    exc_info=True,
+                )
 
         return None
 

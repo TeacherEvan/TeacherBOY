@@ -63,7 +63,6 @@ class StaffMemoryService:
         ranked = []
         for item in self._items:
             if not item.due_date:
-                ranked.append(item)
                 continue
 
             due = date.fromisoformat(item.due_date)

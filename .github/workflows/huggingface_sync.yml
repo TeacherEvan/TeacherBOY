@@ -10,6 +10,10 @@ on:
 permissions:
     contents: read
 
+concurrency:
+    group: huggingface-sync-${{ github.ref }}
+    cancel-in-progress: false
+
 jobs:
     sync-to-hub:
         if: github.ref_name == 'main'
@@ -27,6 +31,12 @@ jobs:
               run: |
                   set -euo pipefail
                   export GIT_TERMINAL_PROMPT=0
+                  trap 'git remote remove hf >/dev/null 2>&1 || true' EXIT
+
+                  if [ -z "${HF_TOKEN:-}" ]; then
+                      echo "HF_TOKEN secret is required for Hugging Face sync."
+                      exit 1
+                  fi
 
                   git config user.name "github-actions[bot]"
                   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -37,6 +47,11 @@ jobs:
                       git remote set-url hf "${HF_REMOTE_URL}"
                   else
                       git remote add hf "${HF_REMOTE_URL}"
+                  fi
+
+                  if ! git ls-remote hf >/dev/null 2>&1; then
+                      echo "Unable to access the Hugging Face remote. Check HF_TOKEN and remote availability."
+                      exit 1
                   fi
 
                   if git ls-remote --exit-code --heads hf main >/dev/null 2>&1; then

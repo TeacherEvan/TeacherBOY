@@ -82,7 +82,7 @@ services
 
 ## Environment Setup
 
-- [ ] **Step 0: Create an isolated Python environment**
+- [x] **Step 0: Create an isolated Python environment**
 
 ```bash
 cd /home/ewaldt/Documents/VS/Other/Bot/TeacherBOY
@@ -103,7 +103,7 @@ prints `pytest 7.4.3`.
 - Modify: `src/services/startup_data_loader.py`
 - Create: `tests/test_startup_data_loader.py`
 
-- [ ] **Step 1: Write failing unit tests for readiness semantics**
+- [x] **Step 1: Write failing unit tests for readiness semantics**
 
 Create `tests/test_startup_data_loader.py` with these tests:
 
@@ -148,7 +148,7 @@ def test_backup_creation_does_not_make_loader_ready_by_itself():
     assert loader.is_ready() is False
 ```
 
-- [ ] **Step 2: Run the new unit tests and confirm they fail**
+- [x] **Step 2: Run the new unit tests and confirm they fail**
 
 Run:
 
@@ -162,7 +162,7 @@ Expected: at least one failure because `StartupDataLoader` does not yet track
 required-service flags and currently treats backup creation as sufficient
 readiness.
 
-- [ ] **Step 3: Implement required-service tracking in
+- [x] **Step 3: Implement required-service tracking in
   `src/services/startup_data_loader.py`**
 
 Update the initializer and readiness logic to track which services are
@@ -227,7 +227,7 @@ Replace `is_ready()` with this implementation:
         return True
 ```
 
-- [ ] **Step 4: Run the unit tests again**
+- [x] **Step 4: Run the unit tests again**
 
 Run:
 
@@ -239,7 +239,7 @@ pytest -q tests/test_startup_data_loader.py
 
 Expected: all tests in `tests/test_startup_data_loader.py` pass.
 
-- [ ] **Step 5: Review the diff for this slice**
+- [x] **Step 5: Review the diff for this slice**
 
 Run:
 
@@ -259,7 +259,7 @@ Expected: only readiness semantics and their direct tests are changed.
 - Modify: `src/main.py`
 - Modify: `tests/test_main.py`
 
-- [ ] **Step 1: Add failing endpoint tests for not-ready and ready states**
+- [x] **Step 1: Add failing endpoint tests for not-ready and ready states**
 
 Append these tests to `tests/test_main.py`:
 
@@ -288,7 +288,7 @@ def test_readiness_returns_200_when_startup_and_agents_are_ready(client):
     assert response.json()["checks"]["agents_registered"] == 1
 ```
 
-- [ ] **Step 2: Run the readiness tests and confirm failure**
+- [x] **Step 2: Run the readiness tests and confirm failure**
 
 Run:
 
@@ -301,7 +301,7 @@ pytest -q tests/test_main.py -k readiness
 Expected: failures because `/readiness` currently always returns HTTP 200 with
 `{"ready": true, ...}`.
 
-- [ ] **Step 3: Implement truthful readiness behavior in `src/main.py`**
+- [x] **Step 3: Implement truthful readiness behavior in `src/main.py`**
 
 Change the FastAPI import line to include `Response`:
 
@@ -331,7 +331,7 @@ async def readiness_check(response: Response) -> Dict[str, Any]:
     }
 ```
 
-- [ ] **Step 4: Re-run the readiness tests**
+- [x] **Step 4: Re-run the readiness tests**
 
 Run:
 
@@ -343,7 +343,7 @@ pytest -q tests/test_main.py -k readiness
 
 Expected: readiness tests pass.
 
-- [ ] **Step 5: Run the full `test_main` module before continuing**
+- [x] **Step 5: Run the full `test_main` module before continuing**
 
 Run:
 
@@ -364,7 +364,7 @@ Expected: all tests in `tests/test_main.py` pass before taking the next slice.
 - Modify: `src/main.py`
 - Modify: `tests/test_main.py`
 
-- [ ] **Step 1: Add a failing regression test that `/health` does not call
+- [x] **Step 1: Add a failing regression test that `/health` does not call
   external providers**
 
 Add this test to `tests/test_main.py`:
@@ -384,7 +384,7 @@ def test_health_check_does_not_call_translation_providers(client):
     assert response.json()["status"] == "healthy"
 ```
 
-- [ ] **Step 2: Run the health-only test and confirm failure**
+- [x] **Step 2: Run the health-only test and confirm failure**
 
 Run:
 
@@ -397,7 +397,7 @@ pytest -q tests/test_main.py -k health_check_does_not_call_translation_providers
 Expected: failure because `health_check()` currently performs live translation
 probes.
 
-- [ ] **Step 3: Replace expensive health logic with a cheap liveness
+- [x] **Step 3: Replace expensive health logic with a cheap liveness
   response**
 
 Replace `health_check()` in `src/main.py` with:
@@ -421,7 +421,7 @@ Delete the existing `ApiClient`, Google Translate, LibreTranslate, and
 OpenRouter probe blocks from this endpoint. Do not move them elsewhere in this
 plan.
 
-- [ ] **Step 4: Re-run health and `test_main` coverage for this slice**
+- [x] **Step 4: Re-run health and `test_main` coverage for this slice**
 
 Run:
 
@@ -444,7 +444,7 @@ code during tests.
 - Modify: `src/main.py`
 - Modify: `tests/test_main.py`
 
-- [ ] **Step 1: Add a failing test for generic webhook 500 responses**
+- [x] **Step 1: Add a failing test for generic webhook 500 responses**
 
 Add this test to `tests/test_main.py`:
 
@@ -464,7 +464,7 @@ def test_webhook_unexpected_error_returns_generic_500(client):
     }
 ```
 
-- [ ] **Step 2: Run the webhook error test and confirm failure**
+- [x] **Step 2: Run the webhook error test and confirm failure**
 
 Run:
 
@@ -477,7 +477,7 @@ pytest -q tests/test_main.py -k unexpected_error_returns_generic_500
 Expected: failure because the endpoint currently returns the raw exception text
 (`"boom"`).
 
-- [ ] **Step 3: Replace the generic webhook exception response in
+- [x] **Step 3: Replace the generic webhook exception response in
   `src/main.py`**
 
 Replace the final generic exception block in `webhook()` with:
@@ -493,7 +493,7 @@ Replace the final generic exception block in `webhook()` with:
 
 Leave the `InvalidSignatureError` branch unchanged.
 
-- [ ] **Step 4: Re-run the focused webhook tests**
+- [x] **Step 4: Re-run the focused webhook tests**
 
 Run:
 
@@ -515,7 +515,7 @@ passes.
 - Modify: `docs/architecture/overview.md`
 - Modify: `docs/guides/quickstart.md`
 
-- [ ] **Step 1: Update the architecture overview endpoint descriptions**
+- [x] **Step 1: Update the architecture overview endpoint descriptions**
 
 Change the operational endpoints section in `docs/architecture/overview.md` to:
 
@@ -526,7 +526,7 @@ Change the operational endpoints section in `docs/architecture/overview.md` to:
 - `/readiness` (startup/data/agent readiness; returns HTTP 503 until ready)
 ```
 
-- [ ] **Step 2: Update quickstart expectations for local checks**
+- [x] **Step 2: Update quickstart expectations for local checks**
 
 Replace the health endpoint bullets in `docs/guides/quickstart.md` with:
 
@@ -537,7 +537,7 @@ Health endpoints:
 - `GET http://localhost:8000/readiness` — startup readiness, may return `503` until startup data is loaded and agents are registered
 ```
 
-- [ ] **Step 3: Verify the doc diff only touches endpoint semantics**
+- [x] **Step 3: Verify the doc diff only touches endpoint semantics**
 
 Run:
 
@@ -561,7 +561,7 @@ Expected: only the two endpoint description blocks changed.
 - Review: `docs/architecture/overview.md`
 - Review: `docs/guides/quickstart.md`
 
-- [ ] **Step 1: Run the focused verification suite**
+- [x] **Step 1: Run the focused verification suite**
 
 Run:
 
@@ -573,7 +573,7 @@ pytest -q tests/test_startup_data_loader.py tests/test_main.py
 
 Expected: all focused tests pass.
 
-- [ ] **Step 2: Run the full repository test suite**
+- [x] **Step 2: Run the full repository test suite**
 
 Run:
 
@@ -585,7 +585,7 @@ pytest -q
 
 Expected: full suite passes with no new failures.
 
-- [ ] **Step 3: Run coverage and record the result honestly**
+- [x] **Step 3: Run coverage and record the result honestly**
 
 Run:
 
@@ -599,7 +599,7 @@ Expected: tests pass and total coverage does not decrease from the pre-change
 baseline. Record the actual percentage in the review notes; do not claim the
 repo meets the documented 94% target unless the command output proves it.
 
-- [ ] **Step 4: Do a manual endpoint smoke check**
+- [x] **Step 4: Do a manual endpoint smoke check**
 
 Run the app:
 
@@ -623,7 +623,7 @@ Expected:
   live app
 - response bodies match the new documented contract
 
-- [ ] **Step 5: Review the final diff**
+- [x] **Step 5: Review the final diff**
 
 Run:
 
@@ -635,7 +635,7 @@ git diff -- src/main.py src/services/startup_data_loader.py tests/test_main.py t
 Expected: diff is limited to the operational endpoint contract, readiness
 helper logic, tests, and docs.
 
-- [ ] **Step 6: Prepare PR/review notes**
+- [x] **Step 6: Prepare PR/review notes**
 
 Include these points in the PR description or review handoff:
 
