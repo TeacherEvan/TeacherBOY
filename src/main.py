@@ -1,5 +1,5 @@
 
-"""Ms. Green - Production-Grade Multi-Agent LINE Assistant.
+"""Zeus - Production-Grade Multi-Agent LINE Translation Bot.
 
 This module implements a FastAPI application with intelligent agent routing,
 high-performance async I/O, and production-ready error handling.
@@ -10,7 +10,6 @@ import logging
 import httpx
 from datetime import datetime
 from contextlib import asynccontextmanager
-from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,12 +41,14 @@ from linebot.v3.messaging import (
 from linebot.v3.exceptions import InvalidSignatureError
 
 from src.config import settings
+from src.services.translation_service import translation_service
+from src.services.google_translation import google_translation_service
 from src.services.scheduler_service import scheduler_service
 from src.services.profiler_session_manager import profiler_session_manager
 from src.services.news_session_manager import news_session_manager
 from src.services.image_analyzer_session_manager import image_analyzer_session_manager
 from src.services.rate_limiter import rate_limiter
-from src.agents.agent_router import AgentRouter, RouteResult
+from src.agents.agent_router import AgentRouter
 from src.services.openrouter_service import openrouter_service
 from src.services.calendar_service import calendar_service
 from src.services.calendar_session_manager import calendar_session_manager
@@ -55,10 +56,6 @@ from src.services.reminder_service import reminder_service
 from src.services.message_buffer_service import message_buffer_service
 from src.services.brave_search_service import brave_search_service
 from src.services.github_models_service import github_models_service
-from src.services.bot_identity_service import configure_bot_identity_service
-from src.services.convex_calendar_repository import ConvexCalendarRepository
-from src.services.convex_client import ConvexClient
-from src.services.structured_records_service import StructuredRecordsService
 from src.handlers.message_handler import (
     handle_join_event,
     handle_leave_event,
@@ -69,9 +66,6 @@ from src.services.metrics_service import metrics_service
 from src.services.conversation_memory_service import (
     init_conversation_memory,
     get_conversation_memory,
-)
-from src.services.convex_staff_memory_repository import (
-    ConvexStaffMemoryRepository,
 )
 from src.services.document_memory_service import (
     init_document_memory,
@@ -84,7 +78,6 @@ from src.services.history_log_service import (
     LogLevel,
 )
 from src.services.startup_data_loader import startup_loader
-from src.services.staff_memory_service import StaffMemoryService
 from src.utils.tracing import setup_tracing
 
 # ============================================================================
@@ -106,132 +99,9 @@ webhook_parser = linebot.v3.WebhookParser(settings.line_channel_secret)
 # Global Agent Router (Singleton Pattern)
 # ============================================================================
 agent_router = AgentRouter()
-structured_records_service: Optional[StructuredRecordsService] = None
-STRUCTURED_RECORD_WRITE_TIMEOUT_SECONDS = 0.5
 
 # Bot's own user ID for self-message detection (prevents infinite loops)
 bot_user_id: Optional[str] = None
-
-
-def _get_chat_id_for_event(event: MessageEvent) -> Optional[str]:
-    """Normalize LINE source identifiers into the app's chat_id format."""
-    source = getattr(event, "source", None)
-    if not source:
-        return None
-    if getattr(source, "group_id", None):
-        return f"group_{source.group_id}"
-    if getattr(source, "room_id", None):
-        return f"room_{source.room_id}"
-    if getattr(source, "user_id", None):
-        return f"user_{source.user_id}"
-    return None
-
-
-def _normalize_route_result(
-    route_outcome: object,
-    fallback_message_type: Optional[str],
-) -> RouteResult:
-    """Keep webhook integration compatible with legacy bool route results."""
-    if isinstance(route_outcome, RouteResult):
-        return route_outcome
-    return RouteResult(
-        handled=bool(route_outcome),
-        agent_name=None,
-        message_type=fallback_message_type,
-    )
-
-
-async def _write_structured_record(coro, action: str) -> None:
-    """Write a structured record without breaking inbound webhook handling."""
-    try:
-        await asyncio.wait_for(
-            coro,
-            timeout=STRUCTURED_RECORD_WRITE_TIMEOUT_SECONDS,
-        )
-    except Exception as error:
-        logger.warning("⚠️ Structured record write failed during %s: %s", action, error)
-
-
-async def _run_best_effort_structured_task(coro, action: str) -> None:
-    try:
-        await coro
-    except Exception as error:
-        logger.warning("⚠️ Structured record task failed during %s: %s", action, error)
-
-
-def _schedule_best_effort_structured_task(coro, action: str) -> None:
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return
-
-    loop.create_task(_run_best_effort_structured_task(coro, action))
-
-
-async def _upsert_known_line_user(
-    event: Any,
-    line_bot_api: MessagingApi,
-) -> None:
-    """Best-effort user upsert for events with a known LINE user ID."""
-    if structured_records_service is None:
-        return
-
-    source = getattr(event, "source", None)
-    line_user_id = getattr(source, "user_id", None) if source else None
-    if not line_user_id:
-        return
-
-    display_name = None
-    if getattr(source, "type", None) == "user":
-        try:
-            profile = await asyncio.to_thread(line_bot_api.get_profile, line_user_id)
-            display_name = getattr(profile, "display_name", None)
-        except Exception as error:
-            logger.warning(
-                "⚠️ Failed to load LINE profile for %s: %s",
-                line_user_id,
-                error,
-            )
-
-    await _write_structured_record(
-        structured_records_service.upsert_user(
-            line_user_id=line_user_id,
-            display_name=display_name,
-            role=None,
-        ),
-        action="upsert_user",
-    )
-
-
-async def _record_inbound_interaction(
-    event: MessageEvent,
-    route_result: RouteResult,
-) -> None:
-    """Persist an inbound interaction after routing completes."""
-    if structured_records_service is None:
-        return
-
-    source = getattr(event, "source", None)
-    line_user_id = getattr(source, "user_id", None) if source else None
-    source_chat_id = _get_chat_id_for_event(event)
-    if not line_user_id or not source_chat_id or not route_result.message_type:
-        return
-
-    text_preview = None
-    if isinstance(event.message, TextMessageContent):
-        text_preview = event.message.text
-
-    await _write_structured_record(
-        structured_records_service.record_interaction(
-            line_user_id=line_user_id,
-            source_chat_id=source_chat_id,
-            message_type=route_result.message_type,
-            direction="inbound",
-            text_preview=text_preview,
-            handled_agent=route_result.agent_name,
-        ),
-        action="record_interaction",
-    )
 
 
 def create_optimized_http_client() -> httpx.AsyncClient:
@@ -273,10 +143,10 @@ async def lifespan(app: FastAPI):
     - Scheduler configuration
     - Graceful shutdown
     """
-    global bot_user_id, structured_records_service
+    global bot_user_id
 
     logger.info("=" * 80)
-    logger.info("🚀 Ms. Green Assistant - Starting Up")
+    logger.info("🚀 Zeus Multi-Agent System - Starting Up")
     logger.info("=" * 80)
 
     # Tracing (OpenTelemetry) - optional, controlled by settings.enable_tracing
@@ -298,43 +168,16 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Failed to get bot user ID: {e}", exc_info=True)
         logger.warning("⚠️  Bot will operate without self-message detection (RISKY!)")
 
-    structured_records_service = None
-    convex_client: Optional[ConvexClient] = None
-    convex_primary_backend = settings.is_convex_primary_backend()
-    if convex_primary_backend and not settings.is_convex_configured():
-        raise RuntimeError(
-            "Convex primary backend selected, but Convex is not configured. "
-            "Set CONVEX_DEPLOYMENT_URL and CONVEX_SYNC_TOKEN or switch "
-            "PERSISTENCE_BACKEND back to local."
-        )
-
     # ========================================================================
     # PHASE 2: HTTP Client Initialization
     # ========================================================================
     logger.info("📡 Initializing optimized HTTP client pool...")
     http_client_pool = create_optimized_http_client()
+    translation_service.set_client(http_client_pool)
     openrouter_service.set_client(http_client_pool)
     brave_search_service.set_client(http_client_pool)
     github_models_service.set_client(http_client_pool)
     logger.info("✅ HTTP client pool ready with connection pooling enabled")
-
-    if convex_primary_backend:
-        convex_client = ConvexClient(
-            base_url=str(settings.convex_deployment_url),
-            sync_token=settings.convex_sync_token or "",
-            http_client=http_client_pool,
-            timeout_seconds=float(settings.convex_request_timeout_seconds),
-        )
-        structured_records_service = StructuredRecordsService(
-            convex_client=convex_client
-        )
-        logger.info("🧱 Structured records service enabled for Convex primary backend")
-
-    configure_bot_identity_service(
-        storage_path=settings.bot_identity_storage_path,
-        default_name=settings.bot_identity_default_name,
-        default_aliases=settings.get_bot_identity_default_aliases(),
-    )
 
     # ========================================================================
     # PHASE 2a: Conversation Memory Initialization
@@ -409,36 +252,17 @@ async def lifespan(app: FastAPI):
     # ========================================================================
     # PHASE 2a3: Calendar Service Initialization
     # ========================================================================
-    calendar_backend = "local"
-    calendar_repository = None
     if settings.is_calendar_configured():
-        if convex_client is not None:
-            calendar_repository = ConvexCalendarRepository(convex_client)
-            calendar_backend = "convex"
-        elif settings.is_calendar_hf_configured():
-            calendar_backend = "hf"
-
         calendar_service.configure(
             storage_path=settings.calendar_data_path,
-            hf_token=(
-                settings.hf_memory_token
-                if calendar_backend == "hf"
-                else None
-            ),
-            hf_repo_id=(
-                settings.calendar_hf_repo_id
-                if calendar_backend == "hf"
-                else None
-            ),
+            hf_token=settings.hf_memory_token if settings.is_calendar_hf_configured() else None,
+            hf_repo_id=settings.calendar_hf_repo_id,
             sync_interval_seconds=settings.calendar_sync_interval_seconds,
-            repository=calendar_repository,
         )
         logger.info(f"📅 Calendar service enabled (path: {settings.calendar_data_path})")
         
-        if calendar_backend == "hf":
+        if settings.is_calendar_hf_configured():
             logger.info(f"☁️ Calendar HF sync enabled: {settings.calendar_hf_repo_id}")
-        elif calendar_backend == "convex":
-            logger.info("🧱 Calendar persistence routed through Convex")
         
         # Configure reminder service (will be started later after LINE API is ready)
         reminder_service.configure(
@@ -448,35 +272,18 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("📅 Calendar service disabled")
 
-    from src.services.staff_memory_service import StaffMemoryService
-
-    staff_memory_backend = "convex" if convex_client is not None else "local"
-    staff_memory_repository = None
-    if convex_client is not None:
-        staff_memory_repository = ConvexStaffMemoryRepository(convex_client)
-
-    staff_memory_service = StaffMemoryService(
-        Path(settings.staff_memory_storage_path),
-        repository=staff_memory_repository,
-    )
-
     # ========================================================================
-    # PHASE 2a4: Synchronous Data Load from configured persistence backends (CRITICAL)
+    # PHASE 2a4: Synchronous Data Load from HF Hub (CRITICAL)
     # ========================================================================
-    # This ensures all data is checked/downloaded BEFORE the app starts serving requests.
-    # Without this, the app could appear to have lost state because remote backends have
-    # not been validated or HF downloads have not completed yet.
-    logger.info("🔄 Loading persistent data from configured backends...")
+    # This ensures all data is downloaded BEFORE the app starts serving requests.
+    # Without this, the app would appear to have lost all calendar events and memory
+    # because CommitScheduler downloads async in the background.
+    logger.info("🔄 Loading persistent data from HF Hub...")
     load_results = await startup_loader.ensure_data_loaded(
         calendar_service=calendar_service if settings.is_calendar_configured() else None,
-        staff_memory_service=staff_memory_service,
         memory_service=get_conversation_memory() if settings.conversation_memory_enabled else None,
         document_service=get_document_memory() if settings.document_memory_enabled else None,
         history_log=get_history_log() if settings.is_history_log_configured() else None,
-        convex_client=convex_client,
-        calendar_backend=calendar_backend,
-        staff_memory_backend=staff_memory_backend,
-        convex_health_required=settings.convex_require_healthcheck_on_startup,
     )
     if load_results["calendar"]:
         logger.info(f"✅ Calendar data loaded: {len(calendar_service._events)} events")
@@ -486,9 +293,18 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Document data loaded")
 
     # ========================================================================
-    # PHASE 2b: AI Translation Configuration
+    # PHASE 2b: Translation Services Configuration
     # ========================================================================
-    logger.info("✅ AI translation configured (GitHub Models -> OpenRouter fallback)")
+    if settings.is_google_translate_configured():
+        google_translation_service.api_key = settings.google_translate_api_key
+        google_translation_service.set_client(http_client_pool)
+        logger.info("✅ Google Cloud Translation API configured (PRIMARY)")
+    else:
+        logger.warning(
+            "⚠️  Google Translate API not configured - using LibreTranslate only"
+        )
+
+    logger.info("✅ LibreTranslate configured (FALLBACK)")
 
     # ========================================================================
     # PHASE 3: Agent Registration
@@ -498,8 +314,8 @@ async def lifespan(app: FastAPI):
     # Import agents here (after HTTP client is ready)
     from src.agents.help_agent import HelpAgent
     from src.agents.admin_agent import AdminAgent
+    from src.agents.translation_agent import TranslationAgent
     from src.agents.calendar_agent import CalendarAgent
-    from src.agents.review_agent import ReviewAgent
     from src.agents.document_memory_agent import DocumentMemoryAgent
     from src.agents.profiler_agent import ProfilerAgent
     from src.agents.image_analyzer_agent import ImageAnalyzerAgent
@@ -551,13 +367,6 @@ async def lifespan(app: FastAPI):
         logger.info("📅 Calendar Agent registered (events and reminders)")
     else:
         logger.info("📅 Calendar Agent not registered (calendar disabled)")
-
-    review_agent = ReviewAgent(
-        staff_memory_service=staff_memory_service,
-        bot_user_id=bot_user_id,
-    )
-    agent_router.register_agent(review_agent)
-    logger.info("📝 Review Agent registered (explicit review and DM follow-up)")
 
     # Register Document Memory Agent (Priority: 8 - Handles PDF/DOCX uploads)
     if settings.document_memory_enabled:
@@ -612,6 +421,11 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("🤖 LLM Agent registered (API key missing - will return errors)")
 
+    # Register Translation Agent (Priority: 10)
+    translation_agent = TranslationAgent()
+    agent_router.register_agent(translation_agent)
+    logger.info("🌐 Translation Agent registered")
+
     # Register Special News Agent (Priority: 12)
     special_news_service = SpecialNewsService(
         http_client=http_client_pool,
@@ -661,7 +475,7 @@ async def lifespan(app: FastAPI):
     logger.info("✅ All cleanup tasks started")
 
     logger.info("=" * 80)
-    logger.info("✅ Ms. Green is READY to serve! 🎉")
+    logger.info("✅ Zeus is READY to serve! 🎉")
     logger.info("=" * 80)
 
     yield
@@ -670,7 +484,7 @@ async def lifespan(app: FastAPI):
     # GRACEFUL SHUTDOWN
     # ========================================================================
     logger.info("=" * 80)
-    logger.info("🛑 Ms. Green - Shutting down gracefully...")
+    logger.info("🛑 Zeus - Shutting down gracefully...")
     logger.info("=" * 80)
 
     # Stop background cleanup tasks
@@ -684,7 +498,7 @@ async def lifespan(app: FastAPI):
     logger.info("✅ All cleanup tasks stopped")
 
     # Stop reminder service scheduler
-    reminder_service.stop_scheduler(scheduler_service)
+    reminder_service.stop()
     logger.info("✅ Reminder service stopped")
 
     # Stop calendar service HF Hub sync
@@ -696,7 +510,7 @@ async def lifespan(app: FastAPI):
     if history_svc:
         await history_svc.log(
             event_type=EventType.SHUTDOWN,
-            message="🛑 Ms. Green Assistant shutting down gracefully",
+            message="🛑 Zeus Multi-Agent System shutting down gracefully",
             level=LogLevel.INFO,
         )
         history_svc.stop()
@@ -719,9 +533,8 @@ async def lifespan(app: FastAPI):
 
     await http_client_pool.aclose()
     logger.info("✅ HTTP client pool closed")
-    structured_records_service = None
 
-    logger.info("👋 Ms. Green shutdown complete. Goodbye!")
+    logger.info("👋 Zeus shutdown complete. Goodbye!")
     logger.info("=" * 80)
 
 
@@ -729,8 +542,8 @@ async def lifespan(app: FastAPI):
 # FastAPI Application Initialization
 # ============================================================================
 app = FastAPI(
-    title="Ms. Green - AI Assistant",
-    description="Production-grade LINE assistant with AI translation and intelligent agent routing",
+    title="Zeus - Multi-Agent Translation Bot",
+    description="Production-grade Thai/English translation bot for LINE with intelligent agent routing",
     version="3.0.0",
     lifespan=lifespan,
     docs_url="/docs" if settings.debug else None,  # Disable docs in production
@@ -762,26 +575,32 @@ async def root() -> Dict[str, Any]:
     """
     return {
         "status": "operational",
-        "service": "Ms. Green Assistant",
+        "service": "Zeus Multi-Agent Translation Bot",
         "version": "3.0.0",
         "api_docs": "/docs" if settings.debug else "disabled",
         "features": {
-            "translation": "AI translation",
-            "translation_backend": "ai",
+            "translation": "Thai ↔ English",
+            "google_translate": settings.is_google_translate_configured(),
         },
     }
 
 
 @app.get("/health", tags=["Health"])
 async def health_check() -> Dict[str, Any]:
-    """Cheap liveness endpoint for process-level monitoring."""
+    """
+    Liveness-only health check endpoint.
+
+    Returns a cheap process-level status without probing external services.
+    """
+    agents_registered = len(agent_router.list_agents())
+
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "checks": {
             "process": "alive",
             "startup_data": "ready" if startup_loader.is_ready() else "loading",
-            "agents_registered": len(agent_router.list_agents()),
+            "agents_registered": agents_registered,
         },
     }
 
@@ -793,9 +612,9 @@ async def readiness_check(response: Response) -> Dict[str, Any]:
 
     Returns detailed status of critical dependencies.
     """
-    agents_status = agent_router.list_agents()
+    agents_registered = len(agent_router.list_agents())
     startup_ready = startup_loader.is_ready()
-    ready = startup_ready and len(agents_status) > 0
+    ready = startup_ready and agents_registered > 0
 
     response.status_code = 200 if ready else 503
 
@@ -803,9 +622,9 @@ async def readiness_check(response: Response) -> Dict[str, Any]:
         "ready": ready,
         "checks": {
             "startup_data": "ready" if startup_ready else "loading",
-            "agents_registered": len(agents_status),
+            "agents_registered": agents_registered,
         },
-        "translation_backend": "ai",
+        "google_translate_enabled": settings.is_google_translate_configured(),
     }
 
 
@@ -834,10 +653,10 @@ async def webhook(request: Request) -> JSONResponse:
     Raises:
         HTTPException: If signature validation fails
     """
+    # Extract signature up front; raw body decoding stays inside the protected path.
+    signature = request.headers.get("X-Line-Signature", "")
+
     try:
-        # Extract signature and body inside the guarded block so unexpected
-        # setup failures still use the generic webhook error response.
-        signature = request.headers.get("X-Line-Signature", "")
         body = await request.body()
         body_text = body.decode("utf-8")
 
@@ -859,17 +678,19 @@ async def webhook(request: Request) -> JSONResponse:
                 try:
                     if isinstance(event, MessageEvent):
                         user_id = getattr(event.source, "user_id", None) if event.source else None
-                        route_result = RouteResult(
-                            handled=False,
-                            agent_name=None,
-                            message_type=None,
-                        )
                         
                         if isinstance(event.message, TextMessageContent):
                             # Store message in buffer for "zeus scrape" feature
                             # NOTE: We now store ALL messages including bot's own messages
                             # This allows Zeus to scrape dates from his own responses
-                            chat_id = _get_chat_id_for_event(event)
+                            chat_id = None
+                            if event.source:
+                                if getattr(event.source, "group_id", None):
+                                    chat_id = f"group_{event.source.group_id}"
+                                elif getattr(event.source, "room_id", None):
+                                    chat_id = f"room_{event.source.room_id}"
+                                elif getattr(event.source, "user_id", None):
+                                    chat_id = f"user_{event.source.user_id}"
                             
                             if chat_id and user_id:
                                 message_buffer_service.store_message(
@@ -886,38 +707,14 @@ async def webhook(request: Request) -> JSONResponse:
                                     f"🔒 Skipping agent routing for bot's own message (stored in buffer only)"
                                 )
                                 continue
-
+                            
                             # Route text message to appropriate agent
-                            route_result = _normalize_route_result(
-                                await agent_router.route_message(event, line_bot_api),
-                                fallback_message_type="text",
-                            )
-                            _schedule_best_effort_structured_task(
-                                _record_inbound_interaction(event, route_result),
-                                "record_inbound_interaction",
-                            )
-                            _schedule_best_effort_structured_task(
-                                _upsert_known_line_user(event, line_bot_api),
-                                "upsert_known_line_user",
-                            )
-                            await asyncio.sleep(0)
+                            await agent_router.route_message(event, line_bot_api)
 
                         elif isinstance(event.message, ImageMessageContent):
                             # Route image message to ProfilerAgent via agent router
                             logger.info(f"📷 Received image message from {user_id}")
-                            route_result = _normalize_route_result(
-                                await agent_router.route_message(event, line_bot_api),
-                                fallback_message_type="image",
-                            )
-                            _schedule_best_effort_structured_task(
-                                _record_inbound_interaction(event, route_result),
-                                "record_inbound_interaction",
-                            )
-                            _schedule_best_effort_structured_task(
-                                _upsert_known_line_user(event, line_bot_api),
-                                "upsert_known_line_user",
-                            )
-                            await asyncio.sleep(0)
+                            await agent_router.route_message(event, line_bot_api)
 
                     elif isinstance(event, JoinEvent):
                         # Bot joined a group/room
@@ -935,11 +732,6 @@ async def webhook(request: Request) -> JSONResponse:
 
                         # Send welcome message
                         if user_id:
-                            _schedule_best_effort_structured_task(
-                                _upsert_known_line_user(event, line_bot_api),
-                                "upsert_known_line_user",
-                            )
-                            await asyncio.sleep(0)
                             welcome_msg = TextMessage(text="Welcome friend\n\nยินดีต้อนรับเพื่อน")  # type: ignore[call-arg]
                             try:
                                 await asyncio.to_thread(
@@ -995,8 +787,8 @@ async def webhook(request: Request) -> JSONResponse:
             status_code=400, detail="Invalid signature. Request rejected for security."
         )
 
-    except Exception:
-        logger.error("❌ Webhook processing error", exc_info=True)
+    except Exception as e:
+        logger.error(f"❌ Webhook processing error: {str(e)}", exc_info=True)
         return JSONResponse(
             content={"status": "error", "detail": "Internal server error"},
             status_code=500,

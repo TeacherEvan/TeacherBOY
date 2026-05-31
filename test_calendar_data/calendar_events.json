@@ -1,7 +1,7 @@
 {
   "events": [
     {
-      "event_id": "fe367102-5184-4ee3-9b24-4ae54fb48983",
+      "event_id": "17d71613-7f27-40af-ab7e-5e046d6a3cce",
       "user_id": "U001",
       "chat_id": "group_A",
       "title": "Test Event",
@@ -11,91 +11,9 @@
         0
       ],
       "is_friend": false,
-      "notification_target_user_id": "U001",
       "notified_dates": [],
-      "created_at": "2026-05-30T16:13:12.207655+00:00",
-      "repository_event_id": null
-    },
-    {
-      "event_id": "bba0032d-9880-4438-9c90-fa5d3cb35642",
-      "user_id": "U001",
-      "chat_id": "group_A",
-      "title": "Group A Event",
-      "event_date": "2026-06-01",
-      "description": "",
-      "reminder_days": [
-        0
-      ],
-      "is_friend": false,
-      "notification_target_user_id": "U001",
-      "notified_dates": [],
-      "created_at": "2026-05-31T06:27:05.470235+00:00",
-      "repository_event_id": null
-    },
-    {
-      "event_id": "35e2dfb7-772b-45f7-b0a9-76752fb71605",
-      "user_id": "U002",
-      "chat_id": "group_B",
-      "title": "Group B Event",
-      "event_date": "2026-06-02",
-      "description": "",
-      "reminder_days": [
-        0
-      ],
-      "is_friend": false,
-      "notification_target_user_id": "U002",
-      "notified_dates": [],
-      "created_at": "2026-05-31T06:27:05.470658+00:00",
-      "repository_event_id": null
-    },
-    {
-      "event_id": "ff37a71f-295f-4986-9a4b-8ba407ccfc49",
-      "user_id": "U001",
-      "chat_id": "user_U001",
-      "title": "Private Event",
-      "event_date": "2026-06-01",
-      "description": "",
-      "reminder_days": [
-        0
-      ],
-      "is_friend": false,
-      "notification_target_user_id": "U001",
-      "notified_dates": [],
-      "created_at": "2026-05-31T06:27:05.557149+00:00",
-      "repository_event_id": null
-    },
-    {
-      "event_id": "d5ffc62b-a78b-477f-8dfa-af3b49387245",
-      "user_id": "U001",
-      "chat_id": "group_A",
-      "title": "Group Event",
-      "event_date": "2026-06-02",
-      "description": "",
-      "reminder_days": [
-        0
-      ],
-      "is_friend": false,
-      "notification_target_user_id": "U001",
-      "notified_dates": [],
-      "created_at": "2026-05-31T06:27:05.557486+00:00",
-      "repository_event_id": null
-    },
-    {
-      "event_id": "079a782d-ff5c-4216-8748-4ce418f6d662",
-      "user_id": "U001",
-      "chat_id": "group_A",
-      "title": "Test Event",
-      "event_date": "2026-06-01",
-      "description": "",
-      "reminder_days": [
-        0
-      ],
-      "is_friend": false,
-      "notification_target_user_id": "U001",
-      "notified_dates": [],
-      "created_at": "2026-05-31T06:27:05.605602+00:00",
-      "repository_event_id": null
+      "created_at": "2026-05-30T06:06:49.113855+00:00"
     }
   ],
-  "updated_at": "2026-05-31T06:27:05.605647+00:00"
+  "updated_at": "2026-05-30T06:06:49.113877+00:00"
 }

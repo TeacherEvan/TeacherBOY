@@ -18,25 +18,19 @@ TeacherBOY is a FastAPI webhook app for LINE.
 
 ## Agents
 
-- Help Agent (priority 5): interactive help and command discovery.
 - Admin Agent (priority 5): in-chat operations, only registered when configured.
-- Calendar Agent (priority 6): reminders, inline add, scrape, and event management.
-- Hannibal Profile Agent (priority 6): message-history profiling when GitHub Models is configured.
-- Profiler Agent (priority 7): image-based psychological profiling.
-- Image Analyzer Agent (priority 7): general image Q&A plus calendar image integration.
-- Document Memory Agent (priority 8): PDF/DOCX storage and retrieval when enabled.
-- Search Agent (priority 8): Brave Search via `Ms. Green search ...`.
-- LLM Agent (priority 9): Ms. Green chat via configured LLM providers.
+- Search Agent (priority 8): Brave Search via `Zeus search ...` (DM-only for non-admins).
+- LLM Agent (priority 9): OpenRouter chat via `Zeus ...` (DM-only for non-admins).
 - Translation Agent (priority 10): Thai ↔ English translation with session + dedup + rate limiting.
 - Special News Agent (priority 12): `/special news` (DM-only).
 - News Agent (priority 15): `news` / `ข่าว` (friend-gated in groups; translation-only for non-friends).
 
 ## Services
 
-- Shared `httpx.AsyncClient` is created once and injected into provider services.
-- Translation provider stack:
-  - GitHub Models (preferred)
-  - OpenRouter (fallback)
+- Shared `httpx.AsyncClient` is created once and injected into translation services.
+- Translation providers:
+  - Google Cloud Translate (primary)
+  - LibreTranslate (fallback)
 
 - Session/rate-limit state:
   - `src/services/session_manager.py`
@@ -44,8 +38,8 @@ TeacherBOY is a FastAPI webhook app for LINE.
 
 ## Operational endpoints
 
-- `/health` (cheap liveness probe; no external provider calls)
-- `/readiness` (startup/data/agent readiness; returns HTTP 503 until ready)
+- `/health` (liveness)
+- `/readiness` (reports startup/data/agent readiness once the service is serving requests; may return HTTP 503 when startup data or agents are not ready)
 
 ## Observability
 

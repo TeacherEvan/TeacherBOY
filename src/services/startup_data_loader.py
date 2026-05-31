@@ -21,22 +21,18 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger(__name__)
-BACKUP_DIR = Path("src/prompts/backup")
-CALENDAR_BACKUP_FILE = BACKUP_DIR / "calendar_backup.md"
 
 
 class StartupDataLoader:
     """Ensures all persistent data is loaded before app serves traffic."""
 
     def __init__(self):
+        self._load_completed = False
         self._calendar_required = False
-        self._staff_memory_required = False
         self._memory_required = False
         self._documents_required = False
         self._logs_required = False
-
         self._calendar_loaded = False
-        self._staff_memory_loaded = False
         self._memory_loaded = False
         self._documents_loaded = False
         self._logs_loaded = False
@@ -45,14 +41,9 @@ class StartupDataLoader:
     async def ensure_data_loaded(
         self,
         calendar_service: Any = None,
-        staff_memory_service: Any = None,
         memory_service: Any = None,
         document_service: Any = None,
         history_log: Any = None,
-        convex_client: Any = None,
-        calendar_backend: str = "local",
-        staff_memory_backend: str = "local",
-        convex_health_required: bool = False,
         max_retries: int = 3,
         retry_delay_seconds: int = 2,
     ) -> Dict[str, bool]:
@@ -70,15 +61,11 @@ class StartupDataLoader:
         Returns:
             Dict with success status for each service
         """
-        logger.info("🔄 Starting synchronous data load from configured persistence backends...")
+        logger.info("🔄 Starting synchronous data load from HF Hub...")
         start_time = time.time()
 
         self._calendar_required = bool(
-            calendar_backend == "hf"
-            or (calendar_backend == "convex" and convex_health_required)
-        )
-        self._staff_memory_required = bool(
-            staff_memory_backend == "convex" and convex_health_required
+            calendar_service and hasattr(calendar_service, "_hf_enabled") and calendar_service._hf_enabled
         )
         self._memory_required = bool(
             memory_service and hasattr(memory_service, "_hf_enabled") and memory_service._hf_enabled
@@ -90,54 +77,42 @@ class StartupDataLoader:
             history_log and hasattr(history_log, "_hf_enabled") and history_log._hf_enabled
         )
 
+        self._calendar_loaded = not self._calendar_required
+        self._memory_loaded = not self._memory_required
+        self._documents_loaded = not self._documents_required
+        self._logs_loaded = not self._logs_required
+
         results = {
             "calendar": not self._calendar_required,
-            "staff_memory": not self._staff_memory_required,
             "memory": not self._memory_required,
             "documents": not self._documents_required,
             "logs": not self._logs_required,
             "backup_created": False,
         }
 
-        convex_health_ok = True
-        if calendar_backend == "convex" or staff_memory_backend == "convex":
-            convex_health_ok = await self._check_convex_health_with_retry(
-                convex_client,
-                max_retries,
-                retry_delay_seconds,
-            )
-
-        if calendar_backend == "convex":
-            results["calendar"] = convex_health_ok
-            self._calendar_loaded = convex_health_ok
-
-        if staff_memory_backend == "convex":
-            results["staff_memory"] = convex_health_ok
-            self._staff_memory_loaded = convex_health_ok
-
         # Load calendar data
-        if calendar_backend == "hf" and calendar_service:
+        if self._calendar_required:
             results["calendar"] = await self._load_calendar_with_retry(
                 calendar_service, max_retries, retry_delay_seconds
             )
             self._calendar_loaded = results["calendar"]
 
         # Load conversation memory
-        if memory_service and hasattr(memory_service, "_hf_enabled") and memory_service._hf_enabled:
+        if self._memory_required:
             results["memory"] = await self._load_memory_with_retry(
                 memory_service, max_retries, retry_delay_seconds
             )
             self._memory_loaded = results["memory"]
 
         # Load document memory
-        if document_service and hasattr(document_service, "_hf_enabled") and document_service._hf_enabled:
+        if self._documents_required:
             results["documents"] = await self._load_documents_with_retry(
                 document_service, max_retries, retry_delay_seconds
             )
             self._documents_loaded = results["documents"]
 
         # Load history logs
-        if history_log and hasattr(history_log, "_hf_enabled") and history_log._hf_enabled:
+        if self._logs_required:
             results["logs"] = await self._load_logs_with_retry(
                 history_log, max_retries, retry_delay_seconds
             )
@@ -145,56 +120,15 @@ class StartupDataLoader:
 
         # Create LLM-readable backup for disaster recovery
         if calendar_service:
-            if calendar_backend == "convex":
-                self._clear_llm_backup()
-                results["backup_created"] = False
-                self._backup_created = False
-            else:
-                results["backup_created"] = await self._create_llm_backup(
-                    calendar_service
-                )
-                self._backup_created = results["backup_created"]
+            results["backup_created"] = await self._create_llm_backup(calendar_service)
+            self._backup_created = results["backup_created"]
+
+        self._load_completed = True
 
         elapsed = time.time() - start_time
         logger.info(f"✅ Data load complete in {elapsed:.2f}s: {results}")
 
         return results
-
-    async def _check_convex_health_with_retry(
-        self,
-        convex_client: Any,
-        max_retries: int,
-        retry_delay: int,
-    ) -> bool:
-        """Check Convex health when Convex is the selected primary backend."""
-        if convex_client is None or not hasattr(convex_client, "healthcheck"):
-            logger.warning("⚠️ Convex backend selected but Convex client is unavailable")
-            return False
-
-        for attempt in range(1, max_retries + 1):
-            try:
-                logger.info(
-                    "🧱 Checking Convex health (attempt %s/%s)...",
-                    attempt,
-                    max_retries,
-                )
-                if await convex_client.healthcheck():
-                    logger.info("✅ Convex health check passed")
-                    return True
-            except Exception as error:
-                logger.warning(
-                    "⚠️ Convex health check attempt %s failed: %s",
-                    attempt,
-                    error,
-                )
-
-            if attempt < max_retries:
-                delay = retry_delay * (2 ** (attempt - 1))
-                logger.info("⏳ Retrying Convex health check in %ss...", delay)
-                await asyncio.sleep(delay)
-
-        logger.error("❌ Convex health check failed after %s attempts", max_retries)
-        return False
 
     async def _load_calendar_with_retry(
         self, calendar_service: Any, max_retries: int, retry_delay: int
@@ -308,14 +242,8 @@ class StartupDataLoader:
             try:
                 logger.info(f"📜 Downloading history logs (attempt {attempt}/{max_retries})...")
 
-                commit_scheduler = getattr(history_log, "_commit_scheduler", None)
-                storage_path = getattr(history_log, "storage_path", None)
-                hf_sync_dir = Path(storage_path) / "hf_sync" if storage_path is not None else None
-
-                if commit_scheduler is None or hf_sync_dir is None or not hf_sync_dir.is_dir():
-                    logger.warning("⚠️ History log HF sync is not fully configured")
-                    return False
-
+                # History log might not have an explicit load method (uses CommitScheduler)
+                # Just verify the service is configured
                 logger.info("✅ History log service ready")
                 return True
 
@@ -338,8 +266,10 @@ class StartupDataLoader:
         Stored in src/prompts/backup/ so it's included in Docker build.
         """
         try:
-            BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+            backup_dir = Path("src/prompts/backup")
+            backup_dir.mkdir(parents=True, exist_ok=True)
 
+            backup_file = backup_dir / "calendar_backup.md"
             timestamp = datetime.now(timezone.utc).isoformat()
 
             # Generate human-readable markdown
@@ -390,26 +320,13 @@ If calendar data is lost after HF deployment:
 that were successfully loaded from HF Hub.
 """
 
-            CALENDAR_BACKUP_FILE.write_text(backup_content, encoding="utf-8")
-            logger.info(
-                f"✅ LLM backup created: {CALENDAR_BACKUP_FILE} ({len(events)} events)"
-            )
+            backup_file.write_text(backup_content, encoding="utf-8")
+            logger.info(f"✅ LLM backup created: {backup_file} ({len(events)} events)")
             return True
 
         except Exception as e:
             logger.error(f"❌ Failed to create LLM backup: {e}")
             return False
-
-    def _clear_llm_backup(self) -> None:
-        """Remove stale local calendar backup when Convex is the source of truth."""
-        try:
-            if CALENDAR_BACKUP_FILE.exists():
-                CALENDAR_BACKUP_FILE.unlink()
-                logger.info(
-                    "🧹 Removed stale local calendar backup for Convex-primary startup"
-                )
-        except Exception as error:
-            logger.warning("⚠️ Failed to remove stale calendar backup: %s", error)
 
     def is_ready(self) -> bool:
         """
@@ -418,9 +335,10 @@ that were successfully loaded from HF Hub.
         Returns:
             True if app is ready to serve traffic
         """
-        if self._calendar_required and not self._calendar_loaded:
+        if not self._load_completed:
             return False
-        if self._staff_memory_required and not self._staff_memory_loaded:
+
+        if self._calendar_required and not self._calendar_loaded:
             return False
         if self._memory_required and not self._memory_loaded:
             return False
@@ -428,6 +346,7 @@ that were successfully loaded from HF Hub.
             return False
         if self._logs_required and not self._logs_loaded:
             return False
+
         return True
 
 
