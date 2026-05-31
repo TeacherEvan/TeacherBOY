@@ -169,10 +169,10 @@ def _schedule_best_effort_structured_task(coro, action: str) -> None:
 
 
 async def _upsert_known_line_user(
-    event: MessageEvent,
+    event: Any,
     line_bot_api: MessagingApi,
 ) -> None:
-    """Best-effort user upsert for message events with a known LINE user ID."""
+    """Best-effort user upsert for events with a known LINE user ID."""
     if structured_records_service is None:
         return
 
@@ -935,6 +935,11 @@ async def webhook(request: Request) -> JSONResponse:
 
                         # Send welcome message
                         if user_id:
+                            _schedule_best_effort_structured_task(
+                                _upsert_known_line_user(event, line_bot_api),
+                                "upsert_known_line_user",
+                            )
+                            await asyncio.sleep(0)
                             welcome_msg = TextMessage(text="Welcome friend\n\nยินดีต้อนรับเพื่อน")  # type: ignore[call-arg]
                             try:
                                 await asyncio.to_thread(

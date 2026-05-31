@@ -11,6 +11,9 @@ from linebot.v3.messaging import (
     TextMessage,
     FlexMessage,
     FlexContainer,
+    QuickReply,
+    QuickReplyItem,
+    MessageAction,
 )
 
 from .base_agent import BaseAgent
@@ -52,15 +55,15 @@ class HelpAgent(BaseAgent):
 
     def _is_help_command(self, text: str) -> bool:
         """Check if text is a help command."""
+        return self._extract_help_topic(text) is not None or bool(re.match(r"^/?help\s*$", text.lower().strip()))
+
+    def _extract_help_topic(self, text: str) -> Optional[str]:
+        """Extract a help topic from commands like 'help calendar' or '/help admin'."""
         text_lower = text.lower().strip()
-
-        # Standard help patterns
-        help_patterns = [
-            r"^/?help\s*$",  # /help or help
-        ]
-
-        if any(re.match(pattern, text_lower) for pattern in help_patterns):
-            return True
+        match = re.match(r"^/?help(?:\s+(?P<topic>.+?))?\s*$", text_lower)
+        if match and match.group("topic"):
+            topic = match.group("topic").strip()
+            return topic if topic else None
 
         identity_pattern = "|".join(
             sorted(
@@ -69,10 +72,17 @@ class HelpAgent(BaseAgent):
                 reverse=True,
             )
         )
-        return bool(
-            re.match(rf"^/?(?:{identity_pattern})\s+(?:--help|help)\s*$", text_lower)
-            or re.match(rf"^dear\s+(?:{identity_pattern})\s+(?:--help|help)\s*$", text_lower)
-        )
+        match = re.match(rf"^/?(?:{identity_pattern})\s+(?:--help|help)(?:\s+(?P<topic>.+?))?\s*$", text_lower)
+        if match and match.group("topic"):
+            topic = match.group("topic").strip()
+            return topic if topic else None
+
+        match = re.match(rf"^dear\s+(?:{identity_pattern})\s+(?:--help|help)(?:\s+(?P<topic>.+?))?\s*$", text_lower)
+        if match and match.group("topic"):
+            topic = match.group("topic").strip()
+            return topic if topic else None
+
+        return None
 
     def _get_command_categories(
         self,
@@ -270,203 +280,279 @@ class HelpAgent(BaseAgent):
 
         return tips
 
-    def _create_help_flex_message(self, categories: Dict[str, List[Dict[str, Any]]],
-                                tips: List[str], chat_type: str) -> FlexMessage:
-        """Create a visually appealing Flex Message for help content."""
-        # Build body contents
-        body_contents = []
+    def _build_quick_reply(self, display_name: str):
+        """Build quick reply shortcuts for common help actions."""
+        return QuickReply(items=[
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Help menu", text="help")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Calendar help", text=f"{display_name} calendar")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Search help", text=f"{display_name} search")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="News help", text="help news")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Image help", text="help image")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Admin help", text="/admin help")),
+            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Wake bot", text=display_name)),
+        ])
 
-        # Header
-        body_contents.append({
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "text",
-                    "text": "🗡️ MS. GREEN HELP SYSTEM",
-                    "weight": "bold",
-                    "size": "xl",
-                    "color": "#1F2937",
-                    "align": "center"
-                },
-                {
-                    "type": "text",
-                    "text": f"God-King of Olympus • {chat_type.title()}",
-                    "size": "sm",
-                    "color": "#6B7280",
-                    "align": "center",
-                    "margin": "sm"
-                }
-            ],
-            "backgroundColor": "#F3F4F6",
-            "paddingAll": "16px",
-            "cornerRadius": "8px",
-            "margin": "none"
-        })
-
-        # Command categories
-        for category_name, commands in categories.items():
-            available_commands = [cmd for cmd in commands if cmd["available"]]
-
-            if not available_commands:
-                continue
-
-            category_box = {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": f"⚡ {category_name.upper()}",
-                        "weight": "bold",
-                        "size": "md",
-                        "color": "#1F2937",
-                        "margin": "none"
-                    }
-                ],
-                "backgroundColor": "#FFFFFF",
-                "borderColor": "#E5E7EB",
-                "borderWidth": "1px",
-                "cornerRadius": "8px",
-                "paddingAll": "12px",
-                "margin": "md"
-            }
-
-            command_contents = []
-            for cmd in available_commands:
-                cmd_box_contents = [
-                    {
-                        "type": "text",
-                        "text": f"• {cmd['command']}",
-                        "weight": "bold",
-                        "size": "sm",
-                        "color": "#1F2937",
-                        "wrap": True
-                    },
-                    {
-                        "type": "text",
-                        "text": cmd['description'],
-                        "size": "xs",
-                        "color": "#6B7280",
-                        "wrap": True,
-                        "margin": "xs"
-                    }
-                ]
-                
-                # Add rate limit info if available
-                if 'rate_limit' in cmd and cmd['rate_limit']:
-                    cmd_box_contents.append({
-                        "type": "text",
-                        "text": f"⏱️ {cmd['rate_limit']}",
-                        "size": "xxs",
-                        "color": "#DC2626",
-                        "wrap": True,
-                        "margin": "xs"
-                    })
-                
-                cmd_box_contents.append({
-                    "type": "text",
-                    "text": f"Example: {cmd['examples'][0]}",
-                    "size": "xxs",
-                    "color": "#9CA3AF",
-                    "wrap": True,
-                    "margin": "xs"
-                })
-                
-                command_contents.append({
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": cmd_box_contents,
-                    "margin": "sm"
-                })
-
-            category_box["contents"].extend(command_contents)
-            body_contents.append(category_box)
-
-        # Tips section
-        if tips:
-            tips_box = {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": "💡 HELPFUL NOTES FROM MS. GREEN",
-                        "weight": "bold",
-                        "size": "md",
-                        "color": "#1F2937",
-                        "margin": "none"
-                    }
-                ],
-                "backgroundColor": "#FEF3C7",
-                "borderColor": "#F59E0B",
-                "borderWidth": "1px",
-                "cornerRadius": "8px",
-                "paddingAll": "12px",
-                "margin": "md"
-            }
-
-            tip_contents = []
-            for tip in tips[:3]:  # Limit to 3 tips
-                tip_contents.append({
-                    "type": "text",
-                    "text": tip,
-                    "size": "xs",
-                    "color": "#92400E",
-                    "wrap": True,
-                    "margin": "xs"
-                })
-
-            tips_box["contents"].extend(tip_contents)
-            body_contents.append(tips_box)
-
-        # Footer
-        body_contents.append({
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "separator",
-                    "color": "#E5E7EB",
-                    "margin": "md"
-                },
-                {
-                    "type": "text",
-                    "text": "⚡ Powered by Ms. Green • Assistant",
-                    "size": "xxs",
-                    "color": "#9CA3AF",
-                    "align": "center"
-                }
-            ],
-            "paddingAll": "8px"
-        })
-
-        flex_dict = {
-            "type": "bubble",
-            "size": "giga",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": body_contents,
-                "spacing": "none",
-                "paddingAll": "16px"
-            },
-            "styles": {
-                "body": {
-                    "backgroundColor": "#FAFAFA"
-                }
-            }
+    def _topic_aliases(self) -> Dict[str, str]:
+        """Map natural help topics to canonical help sections."""
+        display_name = get_bot_identity_service().get_profile().display_name.lower()
+        return {
+            "help": "Core Commands",
+            "commands": "Core Commands",
+            "core": "Core Commands",
+            "wake": "Core Commands",
+            "sleep": "Core Commands",
+            "translate": "Translation",
+            "translation": "Translation",
+            "news": "News & Information",
+            "calendar": "Calendar & Reminders",
+            "event": "Calendar & Reminders",
+            "events": "Calendar & Reminders",
+            "reminder": "Calendar & Reminders",
+            "reminders": "Calendar & Reminders",
+            "search": "AI & Search",
+            "ai": "AI & Search",
+            "image": "Image Analysis",
+            "photo": "Image Analysis",
+            "profile": "Image Analysis",
+            "admin": "Admin Commands",
+            display_name: "Core Commands",
         }
 
+    def _resolve_help_topic(self, topic: Optional[str], categories: Dict[str, List[Dict[str, Any]]]) -> Optional[str]:
+        """Normalize a help topic to a known category name."""
+        if not topic:
+            return None
+
+        normalized = topic.lower().strip()
+        canonical = self._topic_aliases().get(normalized)
+        if canonical and canonical in categories:
+            return canonical
+
+        for category_name, commands in categories.items():
+            haystack = " ".join(
+                [category_name] + [cmd["command"] for cmd in commands] + [" ".join(cmd["examples"]) for cmd in commands]
+            ).lower()
+            if normalized in haystack:
+                return category_name
+
+        return None
+
+    def _get_supported_sections(self, categories: Dict[str, List[Dict[str, Any]]]) -> List[str]:
+        """Build a compact list of all available help sections."""
+        section_order = [
+            "Core Commands",
+            "Translation",
+            "AI & Search",
+            "News & Information",
+            "Calendar & Reminders",
+            "Image Analysis",
+            "Admin Commands",
+        ]
+        return [section for section in section_order if section in categories and any(cmd["available"] for cmd in categories[section])]
+
+    def _build_category_box(self, category_name: str, commands: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build one category card."""
+        category_box = {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": f"⚡ {category_name.upper()}",
+                    "weight": "bold",
+                    "size": "md",
+                    "color": "#1F2937",
+                    "margin": "none"
+                }
+            ],
+            "backgroundColor": "#FFFFFF",
+            "borderColor": "#E5E7EB",
+            "borderWidth": "1px",
+            "cornerRadius": "8px",
+            "paddingAll": "12px",
+            "margin": "md"
+        }
+
+        command_contents = []
+        for cmd in commands:
+            cmd_box_contents = [
+                {
+                    "type": "text",
+                    "text": f"• {cmd['command']}",
+                    "weight": "bold",
+                    "size": "sm",
+                    "color": "#1F2937",
+                    "wrap": True
+                },
+                {
+                    "type": "text",
+                    "text": cmd['description'],
+                    "size": "xs",
+                    "color": "#6B7280",
+                    "wrap": True,
+                    "margin": "xs"
+                }
+            ]
+
+            if 'rate_limit' in cmd and cmd['rate_limit']:
+                cmd_box_contents.append({
+                    "type": "text",
+                    "text": f"⏱️ {cmd['rate_limit']}",
+                    "size": "xxs",
+                    "color": "#DC2626",
+                    "wrap": True,
+                    "margin": "xs"
+                })
+
+            cmd_box_contents.append({
+                "type": "text",
+                "text": f"Example: {cmd['examples'][0]}",
+                "size": "xxs",
+                "color": "#9CA3AF",
+                "wrap": True,
+                "margin": "xs"
+            })
+
+            command_contents.append({
+                "type": "box",
+                "layout": "vertical",
+                "contents": cmd_box_contents,
+                "margin": "sm"
+            })
+
+        category_box["contents"].extend(command_contents)
+        return category_box
+
+    def _create_help_cards(self, categories: Dict[str, List[Dict[str, Any]]],
+                           tips: List[str], chat_type: str, topic: Optional[str] = None,
+                           quick_reply: Optional[QuickReply] = None) -> List[FlexMessage]:
+        """Create 1-3 help cards to keep LINE messages readable."""
+        display_name = get_bot_identity_service().get_profile().display_name
+        if quick_reply is None:
+            quick_reply = self._build_quick_reply(display_name)
+
+        topic = topic or None
+        sections = self._get_supported_sections(categories)
+        if topic and topic in categories:
+            sections = [topic]
+
+        cards = []
+        chunks = [sections[i:i+2] for i in range(0, len(sections), 2)] if not topic else [sections]
+        for idx, chunk in enumerate(chunks, start=1):
+            body_contents = []
+            body_contents.append({
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {"type": "text", "text": "🗡️ MS. GREEN HELP SYSTEM", "weight": "bold", "size": "xl", "color": "#1F2937", "align": "center"},
+                    {"type": "text", "text": f"{('Focused help: ' + topic) if topic else 'Full feature menu'} • {chat_type.title()}", "size": "sm", "color": "#6B7280", "align": "center", "margin": "sm"},
+                    {"type": "text", "text": f"Part {idx}/{len(chunks)}", "size": "xxs", "color": "#6B7280", "align": "center", "margin": "xs"},
+                ],
+                "backgroundColor": "#F3F4F6",
+                "paddingAll": "16px",
+                "cornerRadius": "8px",
+                "margin": "none"
+            })
+
+            if not topic and idx == 1:
+                body_contents.append({
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {"type": "text", "text": "All features in one place. Tap a shortcut below or ask for a topic like help calendar.", "size": "xs", "color": "#374151", "wrap": True, "align": "center"},
+                        {"type": "text", "text": f"Sections: {', '.join(sections)}", "size": "xxs", "color": "#6B7280", "wrap": True, "align": "center", "margin": "xs"},
+                    ],
+                    "backgroundColor": "#EFF6FF",
+                    "borderColor": "#BFDBFE",
+                    "borderWidth": "1px",
+                    "cornerRadius": "8px",
+                    "paddingAll": "12px",
+                    "margin": "md"
+                })
+
+            for category_name in chunk:
+                commands = categories[category_name]
+                available_commands = [cmd for cmd in commands if cmd["available"]]
+                if not available_commands:
+                    continue
+                body_contents.append(self._build_category_box(category_name, available_commands))
+
+            if tips and idx == len(chunks):
+                tips_box = {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {"type": "text", "text": "💡 HELPFUL NOTES FROM MS. GREEN", "weight": "bold", "size": "md", "color": "#1F2937", "margin": "none"}
+                    ],
+                    "backgroundColor": "#FEF3C7",
+                    "borderColor": "#F59E0B",
+                    "borderWidth": "1px",
+                    "cornerRadius": "8px",
+                    "paddingAll": "12px",
+                    "margin": "md"
+                }
+                tip_contents = []
+                for tip in tips[:3]:
+                    tip_contents.append({"type": "text", "text": tip, "size": "xs", "color": "#92400E", "wrap": True, "margin": "xs"})
+                tips_box["contents"].extend(tip_contents)
+                body_contents.append(tips_box)
+
+            body_contents.append({
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {"type": "separator", "color": "#E5E7EB", "margin": "md"},
+                    {"type": "text", "text": "⚡ Powered by Ms. Green • Assistant", "size": "xxs", "color": "#9CA3AF", "align": "center"}
+                ],
+                "paddingAll": "8px"
+            })
+
+            flex_dict = {
+                "type": "bubble",
+                "size": "giga",
+                "body": {"type": "box", "layout": "vertical", "contents": body_contents, "spacing": "none", "paddingAll": "16px"},
+                "styles": {"body": {"backgroundColor": "#FAFAFA"}}
+            }
+            cards.append(FlexMessage(altText="Ms. Green Help System - Command Reference", contents=FlexContainer.from_dict(flex_dict), quickReply=quick_reply if idx == 1 else None))
+
+        return cards
+
+    def _create_help_flex_message(self, categories: Dict[str, List[Dict[str, Any]]],
+                                tips: List[str], chat_type: str, topic: Optional[str] = None,
+                                quick_reply: Optional[QuickReply] = None) -> FlexMessage:
+        """Create a visually appealing Flex Message for help content."""
+        display_name = get_bot_identity_service().get_profile().display_name
+        if quick_reply is None:
+            quick_reply = self._build_quick_reply(display_name)
+
+        cards = self._create_help_cards(categories, tips, chat_type, topic=topic, quick_reply=quick_reply)
+        if len(cards) == 1:
+            return cards[0]
+
+        carousel_dict = {
+            "type": "carousel",
+            "contents": [card.contents.to_dict() for card in cards],
+        }
         return FlexMessage(
             altText="Ms. Green Help System - Command Reference",
-            contents=FlexContainer.from_dict(flex_dict),
-            quickReply=None,
+            contents=FlexContainer.from_dict(carousel_dict),
+            quickReply=quick_reply,
         )
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """Handle if text is a help command."""
-        return self._is_help_command(text)
+        if not self._is_help_command(text):
+            return False
+            
+        chat_type = self._get_chat_type(event)
+        is_group_or_room = chat_type in ("group chat", "room chat")
+        user_id = getattr(event.source, "user_id", None) if getattr(event, "source", None) else None
+        
+        # Normal users in groups cannot trigger the help menu
+        if is_group_or_room and not privilege_service.is_privileged(user_id):
+            return False
+            
+        return True
 
     async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """Provide comprehensive help with contextual information."""
@@ -501,9 +587,18 @@ class HelpAgent(BaseAgent):
                     is_admin, chat_type, zeus_available, search_available
                 )
                 tips = self._get_adaptive_tips(is_admin, chat_type)
+                display_name = get_bot_identity_service().get_profile().display_name
+                quick_reply = self._build_quick_reply(display_name)
+                help_topic = self._resolve_help_topic(self._extract_help_topic(text), categories)
 
                 # Create help message
-                help_message = self._create_help_flex_message(categories, tips, chat_type)
+                help_message = self._create_help_flex_message(
+                    categories,
+                    tips,
+                    chat_type,
+                    topic=help_topic,
+                    quick_reply=quick_reply,
+                )
 
                 # Send reply
                 if event.reply_token:
@@ -527,13 +622,15 @@ class HelpAgent(BaseAgent):
                 # Fallback to simple text message
                 try:
                     fallback_message = TextMessage(
-                            text="🗡️ MS. GREEN HELP SYSTEM\n\n"
-                             "Available commands:\n"
-                             "• help - Show this menu\n"
-                                "• Ms. Green - Wake from sleep\n"
-                             "• amen - Sleep for 24h\n"
-                             "• Thai/English text - Auto-translate\n\n"
-                             "For admin commands: /admin help",
+                        text=(
+                            "🗡️ MS. GREEN HELP SYSTEM\n\n"
+                            "Available commands:\n"
+                            "• help - Show this menu\n"
+                            "• Ms. Green - Wake from sleep\n"
+                            "• amen - Sleep for 24h\n"
+                            "• Thai/English text - Auto-translate\n\n"
+                            "For admin commands: /admin help"
+                        ),
                         quickReply=None,
                         quoteToken=None,
                     )

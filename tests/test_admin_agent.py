@@ -1,7 +1,7 @@
 """Tests for admin agent functionality."""
 
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, AsyncMock, mock_open, patch
 from src.agents.admin_agent import AdminAgent
 from src.services.session_manager import SessionManager
 from src.services.admin_confirmation_service import AdminConfirmationService
@@ -97,6 +97,20 @@ class TestAdminAgent:
         assert admin_agent._is_admin_command("/not_admin") is False
         assert admin_agent._is_admin_command("RandomWord help") is False
 
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("Assistant add=U123", ("grant_mod", "U123")),
+            ("Assistant add = U123", ("grant_mod", "U123")),
+            ('Assistant add = "U123"', ("grant_mod", "U123")),
+        ],
+    )
+    def test_parse_admin_command_assistant_add_variants(
+        self, admin_agent, text, expected
+    ):
+        """Test Assistant add parsing accepts supported whitespace and quote variants."""
+        assert admin_agent._parse_admin_command(text) == expected
+
     @pytest.mark.asyncio
     async def test_should_handle_authorized_admin_command(
         self, admin_agent, mock_event
@@ -111,6 +125,48 @@ class TestAdminAgent:
         mock_event.source.user_id = "U0000000000000000"  # Unauthorized
         result = await admin_agent.should_handle(mock_event, "/admin help")
         assert result is False
+
+    @pytest.mark.asyncio
+    async def test_should_handle_assistant_add_non_admin_user(
+        self, admin_agent, mock_event
+    ):
+        """Test that non-admin users cannot trigger Assistant add moderator commands."""
+        mock_event.source.user_id = "U0000000000000000"
+
+        result = await admin_agent.should_handle(mock_event, 'Assistant add = "U123"')
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_handle_assistant_add_normalizes_user_id_for_authorized_admin(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        """Test Assistant add grants moderator via normalized ID without leaking state."""
+        assert await admin_agent.should_handle(mock_event, 'Assistant add = "U123"') is True
+
+        try:
+            mocked_open = mock_open()
+            with patch("os.makedirs") as mock_makedirs, patch(
+                "builtins.open", mocked_open
+            ):
+                result = await admin_agent.handle(
+                    mock_event,
+                    'Assistant add = "U123"',
+                    mock_line_bot_api,
+                )
+
+            assert result is True
+            mock_makedirs.assert_called_once_with("data", exist_ok=True)
+            mocked_open.assert_called_once_with("data/moderators.json", "w")
+            assert privilege_service.is_moderator("U123") is True
+            mock_line_bot_api.reply_message.assert_called_once()
+
+            call_args = mock_line_bot_api.reply_message.call_args
+            message_text = call_args[0][0].messages[0].text
+            assert "U123" in message_text
+            assert '"U123"' not in message_text
+        finally:
+            privilege_service._claimed_moderator_user_ids.discard("U123")
 
     @pytest.mark.asyncio
     async def test_should_handle_non_admin_command(self, admin_agent, mock_event):

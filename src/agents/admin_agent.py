@@ -72,7 +72,7 @@ class AdminAgent(BaseAgent):
         """Check if text is an admin command."""
         text_lower = text.lower().strip()
 
-        if text_lower.startswith("/admin") or text_lower.startswith("!admin"):
+        if text_lower.startswith("/admin") or text_lower.startswith("!admin") or re.match(r"^assistant\s+add\s*=", text_lower):
             return True
 
         return bool(
@@ -95,9 +95,15 @@ class AdminAgent(BaseAgent):
         - /admin <cmd> [args...]
         - !admin <cmd> [args...]
         - Dear Zeus admin <cmd> [args...]
+        - Assistant add =<user_id>
         """
         raw = text.strip()
         raw_lower = raw.lower()
+
+        # Handle Assistant add =<user_id> with flexible whitespace
+        mod_match = re.match(r"^assistant\s+add\s*=\s*(?P<uid>.*)$", raw, flags=re.IGNORECASE)
+        if mod_match:
+            return "grant_mod", mod_match.group("uid").strip(' "')
 
         if raw_lower.startswith("/admin") or raw_lower.startswith("!admin"):
             parts = raw.split(maxsplit=2)
@@ -169,6 +175,12 @@ class AdminAgent(BaseAgent):
                 # Normal admin commands
 
                 # Execute command
+                elif command == "grant_mod":
+                    if not arg:
+                        response = "⚠️ Please provide a USER ID. Usage: Assistant add =<USER_ID>"
+                    else:
+                        privilege_service.claim_moderator(arg)
+                        response = f"✅ User {arg} has been granted moderator privileges."
                 elif command == "help":
                     response = self._get_help_message()
                 elif command == "stats":

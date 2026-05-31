@@ -51,14 +51,20 @@ class TranslationAgent(BaseAgent):
 
     def is_sleep_command(self, text: str) -> bool:
         """
-        Check if text is a sleep command (puts bot to sleep for 24 hours).
-
-        Sleep patterns: "good night ms. green", "sleep ms. green", "ms. green sleep".
+        Check if text is a sleep command (puts bot to sleep indefinitely until admin wakes it).
+        Sleep patterns: "ms. green stop", "thank you ms. green", "good night ms. green"
         """
         text_lower = text.lower().strip()
+        
+        # Build pattern dynamically based on identity
+        aliases = get_bot_identity_service().get_profile().aliases
+        escaped = [re.escape(alias) for alias in aliases]
+        alias_pattern = "|".join(sorted(escaped, key=len, reverse=True))
+        
         sleep_pattern = (
-            r"^(good\s*night\s*ms\.?\s*green|sleep\s*ms\.?\s*green|"
-            r"ms\.?\s*green\s*sleep|amen)[\s.!]*$"
+            rf"^(good\s*night\s*(?:{alias_pattern})|sleep\s*(?:{alias_pattern})|"
+            rf"(?:{alias_pattern})\s*sleep|amen|"
+            rf"(?:{alias_pattern})\s*stop|thank\s*you\s*(?:{alias_pattern}))[\s.!]*$"
         )
         return bool(re.search(sleep_pattern, text_lower))
 
@@ -68,16 +74,13 @@ class TranslationAgent(BaseAgent):
 
         Wake pattern: Any message starting with the configured bot identity.
         """
+        if self.is_sleep_command(text):
+            return False
         prefix, _ = get_bot_identity_service().split_command_prefix(text)
         return prefix is not None
 
-    def is_help_command(self, text: str) -> bool:
-        """Check if text is a help command."""
-        return text.lower().strip() in {"help", "/help"}
-
-
-
     def _is_private_chat(self, event: MessageEvent) -> bool:
+
         if event.source and getattr(event.source, "group_id", None):
             return False
         if event.source and getattr(event.source, "room_id", None):
@@ -113,12 +116,6 @@ class TranslationAgent(BaseAgent):
         """
         chat_id = self._get_chat_id(event)
 
-        # Help is handled by HelpAgent in production, but keep a minimal help
-        # path here for backwards-compatible tests and direct invocation.
-        if self.is_help_command(text):
-            return True
-
-
 
         # Always handle wake command (even if not sleeping)
         if self.is_wake_command(text):
@@ -128,6 +125,9 @@ class TranslationAgent(BaseAgent):
         # Exception: if the chat is currently in a NewsAgent flow, let NewsAgent
         # own the shutdown phrase so it can exit its flow cleanly.
         if self.is_sleep_command(text):
+            user_id = getattr(event.source, "user_id", None) if event.source else None
+            if session_manager.is_sleeping(chat_id) and not privilege_service.is_privileged(user_id):
+                return False
             try:
                 from src.services.news_session_manager import news_session_manager
             except ImportError as exc:
@@ -150,6 +150,10 @@ class TranslationAgent(BaseAgent):
 
         # Don't handle anything else if sleeping
         if session_manager.is_sleeping(chat_id):
+            # Only admin waking the bot via Thai string starts a new session
+            user_id = getattr(event.source, "user_id", None) if event.source else None
+            if privilege_service.is_admin(user_id) and self.contains_thai(text):
+                return True
             return False
 
         # Skip news triggers - let NewsAgent handle them
@@ -174,39 +178,6 @@ class TranslationAgent(BaseAgent):
         with tracer.start_as_current_span("translation_agent.handle") as span:
             span.set_attribute("chat.id", chat_id)
             try:
-
-                # Minimal help path (HelpAgent handles this in production).
-                if self.is_help_command(text):
-                    is_admin = privilege_service.is_admin(user_id)
-                    msg = (
-                        "User commands\n"
-                        "- Send Thai to translate to English\n"
-                        "- Send English to translate to Thai\n"
-                        "- Ms. Green (wake)\n"
-                        "- amen (sleep)\n"
-                    )
-                    if is_admin:
-                        msg += (
-                            "\nAdmin commands\n"
-                            "- /admin help\n"
-                            "- /admin stats\n"
-                        )
-                    if event.reply_token:
-                        await asyncio.to_thread(
-                            line_bot_api.reply_message,
-                            ReplyMessageRequest(
-                                replyToken=event.reply_token,
-                                messages=[
-                                    TextMessage(
-                                        text=msg,
-                                        quickReply=None,
-                                        quoteToken=None,
-                                    )
-                                ],
-                                notificationDisabled=False,
-                            ),
-                        )
-                    return True
 
 
                 # Handle wake command
@@ -246,20 +217,26 @@ class TranslationAgent(BaseAgent):
 
                 # Handle sleep command
                 if self.is_sleep_command(text):
-                    span.set_attribute("translation.command", "sleep")
-                    session_manager.sleep_chat(chat_id, hours=24)
-                    sleep_message = self._create_sleep_message()
-                    if event.reply_token:
-                        await asyncio.to_thread(
-                            line_bot_api.reply_message,
-                            ReplyMessageRequest(
-                                replyToken=event.reply_token,
-                                messages=[sleep_message],
-                                notificationDisabled=False,
-                            ),
-                        )
-                    logger.info(f"😴 Chat {chat_id} put to sleep for 24 hours")
-                    return True
+                    if not privilege_service.is_privileged(user_id):
+                        logger.info(f"⚠️ User {user_id} tried to stop translations but lacks privileges.")
+                        # Fall through to standard translation or ignore
+                        # For a seamless experience, we just let it be translated.
+                    else:
+                        span.set_attribute("translation.command", "sleep")
+                        # Sleep indefinitely (100 years = 876000 hours) until admin wakes via Thai
+                        session_manager.sleep_chat(chat_id, hours=876000)
+                        sleep_message = self._create_sleep_message()
+                        if event.reply_token:
+                            await asyncio.to_thread(
+                                line_bot_api.reply_message,
+                                ReplyMessageRequest(
+                                    replyToken=event.reply_token,
+                                    messages=[sleep_message],
+                                    notificationDisabled=False,
+                                ),
+                            )
+                        logger.info(f"😴 Chat {chat_id} put to sleep indefinitely by {user_id}")
+                        return True
 
                 # Check for rate limiting (skip for admins)
                 if not privilege_service.is_admin(user_id) and not rate_limiter.is_allowed(chat_id, user_id):
@@ -291,6 +268,11 @@ class TranslationAgent(BaseAgent):
                 # Start session if Thai detected
                 if self.contains_thai(text):
                     span.set_attribute("translation.detected", "th")
+                    if session_manager.is_sleeping(chat_id):
+                        if privilege_service.is_admin(user_id):
+                            session_manager.wake_chat(chat_id)
+                            logger.info(f"☀️ Chat {chat_id} woken up by Admin sending Thai")
+                    
                     if not session_manager.is_session_active(chat_id):
                         session_manager.start_session(chat_id, user_id or "unknown")
                         logger.info(f"🔥 Translation session started for chat {chat_id}")

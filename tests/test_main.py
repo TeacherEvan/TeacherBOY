@@ -102,6 +102,11 @@ class _WebhookMessageEvent:
         self.source = source
 
 
+class _WebhookFollowEvent:
+    def __init__(self, source):
+        self.source = source
+
+
 class _WebhookTextMessageContent:
     def __init__(self, text, message_id="msg-1"):
         self.text = text
@@ -114,6 +119,9 @@ class _WebhookMessagingApi:
 
     def get_profile(self, user_id):
         return SimpleNamespace(display_name="Alice")
+
+    def push_message(self, request):
+        return None
 
 
 def _fake_module(name: str, **attrs):
@@ -927,6 +935,101 @@ def test_webhook_upserts_user_and_records_inbound_interaction(client, mock_setti
         direction="inbound",
         text_preview="help",
         handled_agent="HelpAgent",
+    )
+
+
+def test_follow_event_upserts_known_line_user(client, mock_settings):
+    """Follow events should persist the known LINE user without depending on welcome internals."""
+    event = _WebhookFollowEvent(
+        source=SimpleNamespace(
+            type="user",
+            user_id="U123",
+            group_id=None,
+            room_id=None,
+        )
+    )
+    records_service = MagicMock()
+    records_service.upsert_user = AsyncMock()
+    records_service.record_interaction = AsyncMock()
+
+    with patch("src.main.FollowEvent", _WebhookFollowEvent), patch(
+        "src.main.ApiClient", _FakeApiClient
+    ), patch("src.main.MessagingApi", _WebhookMessagingApi), patch(
+        "src.main.webhook_parser.parse", return_value=[event]
+    ), patch("src.main.structured_records_service", records_service), patch(
+        "src.main.bot_user_id", None
+    ):
+        response = client.post(
+            "/webhook",
+            data="{}",
+            headers={"X-Line-Signature": "sig"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "success", "processed": 1}
+    records_service.upsert_user.assert_awaited_once_with(
+        line_user_id="U123",
+        display_name="Alice",
+        role=None,
+    )
+    records_service.record_interaction.assert_not_called()
+
+
+def test_routed_llm_text_message_records_interaction_and_user(
+    client, mock_settings
+):
+    """Webhook should mirror handled LLMAgent text routes into structured persistence."""
+    from src.agents.agent_router import RouteResult
+
+    event = _WebhookMessageEvent(
+        message=_WebhookTextMessageContent("Zeus summarize this", message_id="msg-llm"),
+        source=SimpleNamespace(
+            type="user",
+            user_id="U123",
+            group_id=None,
+            room_id=None,
+        ),
+    )
+    records_service = MagicMock()
+    records_service.upsert_user = AsyncMock()
+    records_service.record_interaction = AsyncMock()
+    route_message = AsyncMock(
+        return_value=RouteResult(
+            handled=True,
+            agent_name="LLMAgent",
+            message_type="text",
+        )
+    )
+
+    with patch("src.main.MessageEvent", _WebhookMessageEvent), patch(
+        "src.main.TextMessageContent", _WebhookTextMessageContent
+    ), patch("src.main.ApiClient", _FakeApiClient), patch(
+        "src.main.MessagingApi", _WebhookMessagingApi
+    ), patch("src.main.webhook_parser.parse", return_value=[event]), patch(
+        "src.main.agent_router.route_message", route_message
+    ), patch("src.main.structured_records_service", records_service), patch(
+        "src.main.bot_user_id", None
+    ):
+        response = client.post(
+            "/webhook",
+            data="{}",
+            headers={"X-Line-Signature": "sig"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "success", "processed": 1}
+    records_service.upsert_user.assert_awaited_once_with(
+        line_user_id="U123",
+        display_name="Alice",
+        role=None,
+    )
+    records_service.record_interaction.assert_awaited_once_with(
+        line_user_id="U123",
+        source_chat_id="user_U123",
+        message_type="text",
+        direction="inbound",
+        text_preview="Zeus summarize this",
+        handled_agent="LLMAgent",
     )
 
 
