@@ -707,7 +707,7 @@ async def webhook(request: Request) -> JSONResponse:
                                     f"🔒 Skipping agent routing for bot's own message (stored in buffer only)"
                                 )
                                 continue
-                            
+
                             # Route text message to appropriate agent
                             await agent_router.route_message(event, line_bot_api)
 
