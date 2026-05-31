@@ -1,6 +1,6 @@
 # Environment variables
 
-Ms. Green reads configuration from `.env` (local) and environment variables (production).
+The bot reads configuration from `.env` (local) and environment variables (production).
 
 Start from `.env.example`.
 
@@ -76,8 +76,8 @@ This returns the bot to the existing local/HF-backed path without deleting local
 
 - Translation uses the shared AI translation service.
 - Configure at least one provider:
-	- `GITHUB_MODELS_PAT`
-	- `OPENROUTER_API_KEY`
+  - `GITHUB_MODELS_PAT`
+  - `OPENROUTER_API_KEY`
 
 ## LLM (OpenRouter)
 
@@ -101,13 +101,18 @@ This returns the bot to the existing local/HF-backed path without deleting local
 - `EXCHANGE_RATE_API_KEY` (ExchangeRate-API)
 - `TAT_API_KEY` (Tourism Authority of Thailand events)
 
-## Conversation Memory (HF Hub)
+## Conversation Memory
 
 - `CONVERSATION_MEMORY_ENABLED`
 - `CONVERSATION_MAX_MESSAGES`
 - `CONVERSATION_TTL_HOURS`
+- `CONVERSATION_STORAGE_PATH`
 - `HF_MEMORY_TOKEN`
 - `HF_MEMORY_REPO_ID`
+
+## Bot Identity
+
+- `BOT_IDENTITY_STORAGE_PATH`
 
 ## Document Memory
 
@@ -125,6 +130,10 @@ This returns the bot to the existing local/HF-backed path without deleting local
 - `HISTORY_LOG_ENCRYPTION_KEY`
 - `HISTORY_LOG_HF_REPO_ID`
 - `ZEUS_ERROR_STYLE`
+
+## Staff Memory
+
+- `STAFF_MEMORY_STORAGE_PATH`
 
 ## Profiler
 
@@ -162,6 +171,60 @@ This returns the bot to the existing local/HF-backed path without deleting local
 - `COLOR_CACHE_TTL_SECONDS`
 - `SUNSET_CACHE_TTL_SECONDS`
 - `FRIEND_CACHE_TTL_SECONDS`
+
+## Mounted-Volume Deployment
+
+- Mounted storage backs local filesystem paths. It does not replace the separate Hugging Face dataset repo IDs.
+- Keep HF repo separation explicit: `HF_MEMORY_REPO_ID` for conversations,
+  `DOCUMENT_HF_REPO_ID` for document memory, `HISTORY_LOG_HF_REPO_ID` for
+  history logs, and `CALENDAR_HF_REPO_ID` for calendar data.
+- Use mounted paths for local filesystem state and CommitScheduler working data.
+- For conversation memory, `CONVERSATION_STORAGE_PATH` is the local working/cache
+  directory used by the HF-backed sync path. Restart persistence for
+  conversation history still depends on `HF_MEMORY_TOKEN` and
+  `HF_MEMORY_REPO_ID` in the current implementation.
+- `BOT_IDENTITY_STORAGE_PATH` stores runtime identity overrides.
+- `STAFF_MEMORY_STORAGE_PATH` stores review-agent staff memory.
+- There is no persisted APScheduler task store in this implementation. Scheduled jobs remain runtime-only.
+
+Example mounted-volume paths:
+
+```env
+CONVERSATION_STORAGE_PATH=/data/ms-sunshine/conversations
+DOCUMENT_STORAGE_PATH=/data/ms-sunshine/documents
+HISTORY_LOG_PATH=/data/ms-sunshine/logs
+CALENDAR_DATA_PATH=/data/ms-sunshine/calendar
+BOT_IDENTITY_STORAGE_PATH=/data/ms-sunshine/bot_identity/profile.json
+STAFF_MEMORY_STORAGE_PATH=/data/ms-sunshine/staff_memory/staff_memory.json
+```
+
+## Local Storage Paths
+
+This section expands the mounted-path variables that are listed briefly in the
+feature sections above.
+
+### `CONVERSATION_STORAGE_PATH`
+
+- **Type:** String
+- **Default:** `./data/conversations`
+- **Description:** Local working/cache directory used by the HF-backed
+  conversation memory sync path; by itself it does not enable restart
+  persistence
+- **Example:** `CONVERSATION_STORAGE_PATH=/data/ms-sunshine/conversations`
+
+### `BOT_IDENTITY_STORAGE_PATH`
+
+- **Type:** String
+- **Default:** `./data/bot_identity/profile.json`
+- **Description:** Local JSON file for runtime bot identity name and alias overrides
+- **Example:** `BOT_IDENTITY_STORAGE_PATH=/data/ms-sunshine/bot_identity/profile.json`
+
+### `STAFF_MEMORY_STORAGE_PATH`
+
+- **Type:** String
+- **Default:** `./data/staff_memory/staff_memory.json`
+- **Description:** Local JSON file for review-agent staff memory on the mounted volume
+- **Example:** `STAFF_MEMORY_STORAGE_PATH=/data/ms-sunshine/staff_memory/staff_memory.json`
 
 ## Calendar & Reminder Configuration
 

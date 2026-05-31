@@ -5,7 +5,7 @@
 - Runtime is a FastAPI LINE webhook in `src/main.py` using LINE Bot SDK v3 + an async `httpx.AsyncClient` pool.
 - Message flow: `/webhook` → signature validation → normalize event → `AgentRouter.route_message()` in `src/agents/agent_router.py` → first agent match wins (lowest priority number).
 - Non-message events (join/leave/member changes) are handled via `src/handlers/message_handler.py` helpers.
-- Runtime identity is now configurable via `src/services/bot_identity_service.py`; the default production-facing identity is `KPS-Assistant` while legacy `zeus` aliases can remain valid.
+- Runtime identity is configurable via `src/services/bot_identity_service.py`; the current public-facing runtime identity is `Ms. Green`, while legacy aliases can remain valid for compatibility.
 - Explicit review flows live in `src/agents/review_agent.py`; plain Thai text should no longer be treated as an automatic translation trigger.
 
 ### Agent system conventions
@@ -21,8 +21,10 @@
 
 ### Data/persistence integration points
 
-- Local data lives under `data/` (calendar, conversations, logs). Optional HF Hub sync is configured via settings in `src/config.py`.
+- Local data lives under configurable filesystem paths (defaulting under `data/` for calendar, conversations, logs, bot identity, and staff memory).
+- Mounted paths back local filesystem state; optional HF Hub sync is configured via settings in `src/config.py` and remains separated by data type.
 - Startup performs a blocking “load-before-serve” via `src/services/startup_data_loader.py` (called from `src/main.py`) so HF-backed data is present before handling requests.
+- There is no persisted APScheduler task store in the current implementation.
 
 ### Developer workflows (this repo)
 
@@ -606,7 +608,7 @@ python scripts/hf_sync.py --all                     # Sync everything
 
 # Windows env var examples
 $env:HF_MEMORY_TOKEN = "hf_..."
-$env:HF_MEMORY_REPO_ID = "username/zeus-memory"
+$env:HF_MEMORY_REPO_ID = "username/ms-green-memory"
 $env:GOOGLE_TRANSLATE_API_KEY = "..."
 ```
 
@@ -700,15 +702,19 @@ See src/config.py(../src/config.py) for full list with validation ranges.
 - Local storage: `data/conversations`, `data/logs`, `data/calendar`
 - Optional HF Hub backup: Uses `huggingface_hub.CommitScheduler` for auto-sync
 - Manual sync: `scripts/hf_sync.py` for one-shot uploads/downloads
+- `CONVERSATION_STORAGE_PATH` is the local working/cache directory for HF-backed conversation sync; it is not standalone restart persistence by itself.
+- `BOT_IDENTITY_STORAGE_PATH` stores runtime identity overrides.
+- `STAFF_MEMORY_STORAGE_PATH` stores review-agent staff memory.
+- This note distinguishes the local filesystem path from the optional HF-backed remote persistence layer.
 
 **HF Hub Configuration:**
 
 ```powershell
 # Required env vars
 $env:HF_MEMORY_TOKEN = "hf_..."           # Token with write scope
-$env:HF_MEMORY_REPO_ID = "user/zeus-memory"       # Conversation memory
-$env:HISTORY_LOG_HF_REPO_ID = "user/zeus-logs"    # History logs
-$env:CALENDAR_HF_REPO_ID = "user/zeus-calendar"   # Calendar events
+$env:HF_MEMORY_REPO_ID = "user/ms-green-memory"      # Conversation memory
+$env:HISTORY_LOG_HF_REPO_ID = "user/ms-green-logs"   # History logs
+$env:CALENDAR_HF_REPO_ID = "user/ms-green-calendar"  # Calendar events
 ```
 
 **Manual Sync Workflow:**

@@ -2,7 +2,7 @@
 
 ## 🎯 Overview
 
-This guide provides quick reference for Zeus productivity features that
+This guide provides quick reference for Ms. Green productivity features that
 reduce latency and improve throughput in production LLM workflows.
 
 ## 📊 Key Features
@@ -41,7 +41,7 @@ context_blocks = [
 
 # Build optimized prompt
 result = prompt_builder_service.build_prompt(
-    system_prompt="You are Zeus, king of gods...",
+    system_prompt="You are Ms. Green, a polite staff assistant...",
     user_message="User's question here",
     context_blocks=context_blocks,
     max_tokens=128000,  # GPT-4o-mini context window

@@ -1,14 +1,16 @@
 # Conversation Memory
 
-Zeus supports multi-turn conversations with context retention using Hugging Face Hub for persistent storage.
+Ms. Green supports multi-turn conversations with context retention using local
+storage plus optional Hugging Face Hub sync for long-term persistence.
 
 ## Overview
 
-The conversation memory feature allows Zeus to:
+The conversation memory feature allows Ms. Green to:
 
 - **Remember previous messages** within a chat session
 - **Maintain context** across multiple exchanges
-- **Persist conversations** to Hugging Face Hub (optional)
+- **Persist conversations across restarts** when Hugging Face sync is
+   configured, using a local working/cache directory for the sync path
 - **Respect privacy** by hashing chat IDs before storage
 
 ## Quick Start
@@ -33,34 +35,52 @@ For persistence across restarts:
 
    ```bash
    HF_MEMORY_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-   HF_MEMORY_REPO_ID=your-username/zeus-memory
+   HF_MEMORY_REPO_ID=your-username/ms-green-memory
    ```
 
 3. The repo will be created automatically as a private dataset if it doesn't exist
 
+### Mounted Local Path Plus HF Sync
+
+For production deployments with a mounted volume, configure both the local path and the HF dataset:
+
+```bash
+HF_MEMORY_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+HF_MEMORY_REPO_ID=your-username/ms-green-memory
+CONVERSATION_STORAGE_PATH=/data/ms-sunshine/conversations
+```
+
+For the full storage contract and mounted-volume examples, see [Environment variables](reference/environment.md).
+
+In short:
+
+- `CONVERSATION_STORAGE_PATH` is the local working/cache directory for HF-backed sync.
+- Restart persistence for conversation history still depends on `HF_MEMORY_TOKEN` and `HF_MEMORY_REPO_ID`.
+
 ## Configuration
 
-| Variable                      | Default | Description                                   |
-| ----------------------------- | ------- | --------------------------------------------- |
-| `CONVERSATION_MEMORY_ENABLED` | `true`  | Enable/disable conversation memory            |
-| `HF_MEMORY_TOKEN`             | -       | Hugging Face API token (optional)             |
-| `HF_MEMORY_REPO_ID`           | -       | Dataset repo ID, e.g., `username/zeus-memory` |
-| `CONVERSATION_MAX_MESSAGES`   | `20`    | Max messages per session (5-50)               |
-| `CONVERSATION_TTL_HOURS`      | `24`    | Session expiration in hours (1-168)           |
+| Variable                      | Default                | Description                                         |
+| ----------------------------- | ---------------------- | --------------------------------------------------- |
+| `CONVERSATION_MEMORY_ENABLED` | `true`                 | Enable/disable conversation memory                  |
+| `HF_MEMORY_TOKEN`             | -                      | Hugging Face API token (optional)                   |
+| `HF_MEMORY_REPO_ID`           | -                      | Dataset repo ID, e.g., `username/ms-green-memory`   |
+| `CONVERSATION_STORAGE_PATH`   | `./data/conversations` | Local HF sync working/cache directory               |
+| `CONVERSATION_MAX_MESSAGES`   | `20`                   | Max messages per session (5-50)                     |
+| `CONVERSATION_TTL_HOURS`      | `24`                   | Session expiration in hours (1-168)                 |
 
 ## Usage
 
 ### Normal Conversation
 
-Simply chat with Zeus - context is automatically maintained:
+Simply chat with Ms. Green and context is automatically maintained:
 
 ```text
-User: Zeus who was the first president of the United States?
-Zeus: The first President of the United States was George Washington...
+User: Ms. Green who was the first president of the United States?
+Ms. Green: The first President of the United States was George Washington...
 
-User: Zeus when was he born?
-Zeus: George Washington was born on February 22, 1732...
-         ↑ Zeus remembers "he" refers to George Washington
+User: Ms. Green when was he born?
+Ms. Green: George Washington was born on February 22, 1732...
+         ↑ Ms. Green remembers "he" refers to George Washington
 ```
 
 ### Clear Memory
@@ -68,14 +88,14 @@ Zeus: George Washington was born on February 22, 1732...
 To start fresh:
 
 ```text
-User: Zeus clear
-Zeus: 🧹 Conversation memory cleared. I've forgotten our previous chat. Start fresh!
+User: Ms. Green clear
+Ms. Green: 🧹 Conversation memory cleared. I've forgotten our previous chat. Start fresh!
 ```
 
 Alternative commands:
 
-- `Zeus forget`
-- `Zeus reset`
+- `Ms. Green forget`
+- `Ms. Green reset`
 
 ## How It Works
 
@@ -154,13 +174,14 @@ summary = await memory.get_conversation_summary(chat_id)
 
 1. **Verify memory is enabled**: `CONVERSATION_MEMORY_ENABLED=true`
 2. **Check session hasn't expired**: default TTL is 24 hours
-3. **Clear and retry**: `Zeus clear` then start new conversation
+3. **Clear and retry**: `Ms. Green clear` then start new conversation
 
 ### HF Hub Sync Issues
 
 The service uses `CommitScheduler` which batches uploads every 5 minutes:
 
-- Immediate memory operations use local storage
+- Immediate memory operations use in-process memory; when HF sync is enabled,
+  JSON snapshots are staged under `CONVERSATION_STORAGE_PATH`
 - Hub sync happens asynchronously
 - On shutdown, remaining data is flushed
 

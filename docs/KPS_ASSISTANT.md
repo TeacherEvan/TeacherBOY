@@ -30,9 +30,10 @@ AI provider order:
 
 ## Persistence
 
-- Bot identity: `data/bot_identity/profile.json`
-- Staff memory: `data/staff_memory/staff_memory.json` locally, or Convex when `PERSISTENCE_BACKEND=convex`
-- Calendar reminder DM target: `notification_target_user_id` on each calendar event
+- Bot identity uses `BOT_IDENTITY_STORAGE_PATH` for runtime identity overrides.
+- Staff memory uses `STAFF_MEMORY_STORAGE_PATH` for local review-agent memory, or Convex when `PERSISTENCE_BACKEND=convex`.
+- Calendar reminder DM routing still depends on `notification_target_user_id` on each calendar event.
+- For the shared storage contract and mounted-volume examples, see [Environment variables](reference/environment.md).
 
 ## Structured Backend Option
 
@@ -48,7 +49,8 @@ Required Convex environment variables:
 - `CONVEX_SYNC_TOKEN`
 - `CONVEX_REQUEST_TIMEOUT_SECONDS`
 
-The admin-only configuration window is not implemented yet. Convex `appSettings` is the persistence target reserved for that future work.
+The admin-only configuration window is not implemented yet.
+Convex `appSettings` is the persistence target reserved for that future work.
 
 Rollback path:
 

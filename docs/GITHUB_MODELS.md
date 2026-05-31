@@ -1,6 +1,7 @@
 # GitHub Models Integration Guide
 
-This guide explains how to use **GitHub Models** as your primary LLM provider for Zeus, as an alternative to OpenRouter.
+This guide explains how to use **GitHub Models** as the primary LLM provider
+for Ms. Green, with OpenRouter as fallback when configured.
 
 ## 🎯 Overview
 
@@ -34,18 +35,15 @@ GitHub Models is a **free AI inference API** that lets you access state-of-the-a
 
 ### Step 1: Create a GitHub PAT
 
-1. Go to [github.com/settings/tokens](https://github.com/settings/tokens)
-2. Click **"Generate new token"** → **"Fine-grained token"** (recommended)
-3. Set:
-   - **Token name:** `Zeus-LLM` (or any name)
-   - **Expiration:** 90 days (or custom)
-   - **Repository access:** No repositories needed
-   - **Permissions:** Under "Account permissions", enable:
-     - `models:read` ✅
-4. Click **Generate token**
-5. Copy the token (starts with `github_pat_...`)
+1. Go to [github.com/settings/tokens](https://github.com/settings/tokens).
+2. Click **"Generate new token"** → **"Fine-grained token"**.
+3. Set the token name to `Ms-Green-LLM` or any equivalent label.
+4. Set an expiration such as 90 days and leave repository access disabled.
+5. Under account permissions, enable `models:read`.
+6. Click **Generate token** and copy the value that starts with
+   `github_pat_...`.
 
-### Step 2: Configure Zeus
+### Step 2: Configure Ms. Green
 
 Add these environment variables to your `.env` file or deployment secrets:
 
@@ -58,7 +56,7 @@ GITHUB_MODELS_DEFAULT_MODEL=openai/gpt-4o
 LLM_PROVIDER_PRIORITY=github,openrouter
 ```
 
-### Step 3: Restart Zeus
+### Step 3: Restart Ms. Green
 
 ```bash
 # Local development
@@ -100,13 +98,13 @@ These limits are subject to change without notice (see the official link in Reso
 | **Grok-3**              | 1            | 15           | 4000/4000       |
 | **DeepSeek-R1**         | 1            | 8            | 4000/4000       |
 
-Zeus automatically handles rate limits with exponential backoff retry.
+Ms. Green automatically handles rate limits with exponential backoff retry.
 
 ---
 
 ## 🔄 Provider Priority
 
-You can configure which LLM provider Zeus uses first:
+You can configure which LLM provider Ms. Green uses first:
 
 ```bash
 # Try GitHub Models first, fall back to OpenRouter
@@ -116,7 +114,7 @@ LLM_PROVIDER_PRIORITY=github,openrouter
 LLM_PROVIDER_PRIORITY=openrouter,github
 ```
 
-If the primary provider fails (rate limited, error), Zeus automatically tries the fallback.
+If the primary provider fails (rate limited, error), Ms. Green automatically tries the fallback.
 
 ---
 
@@ -125,7 +123,7 @@ If the primary provider fails (rate limited, error), Zeus automatically tries th
 Send a message to your LINE bot:
 
 ```text
-Zeus What is the capital of France?
+Ms. Green What is the capital of France?
 ```
 
 Check the logs for:

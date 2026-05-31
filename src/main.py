@@ -84,6 +84,7 @@ from src.services.history_log_service import (
     LogLevel,
 )
 from src.services.startup_data_loader import startup_loader
+from src.services.staff_memory_service import StaffMemoryService
 from src.utils.tracing import setup_tracing
 
 # ============================================================================
@@ -94,7 +95,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
 )
 logger = logging.getLogger(__name__)
-STAFF_MEMORY_STORAGE_PATH = Path("./data/staff_memory/staff_memory.json")
 
 # ============================================================================
 # LINE Bot SDK Configuration
@@ -456,7 +456,7 @@ async def lifespan(app: FastAPI):
         staff_memory_repository = ConvexStaffMemoryRepository(convex_client)
 
     staff_memory_service = StaffMemoryService(
-        STAFF_MEMORY_STORAGE_PATH,
+        Path(settings.staff_memory_storage_path),
         repository=staff_memory_repository,
     )
 

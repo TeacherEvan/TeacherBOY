@@ -2,7 +2,9 @@
 
 ## Overview
 
-Zeus handles image data with privacy-first design principles. All image data is **automatically scrubbed from memory** after processing to prevent unauthorized retention of sensitive visual data.
+Ms. Green handles image data with privacy-first design principles. All image
+data is **automatically scrubbed from memory** after processing to prevent
+unauthorized retention of sensitive visual data.
 
 ## Image Lifecycle
 
@@ -27,7 +29,7 @@ image_bytes  →  base64_encode  →  image_data_url
 
 #### **ProfilerAgent (Facial Profiling)**
 
-```
+```text
 Download → Encode → Send to GPT-4o → DELETE ALL → Send response
 ```
 
@@ -38,7 +40,7 @@ Download → Encode → Send to GPT-4o → DELETE ALL → Send response
 
 #### **ImageAnalyzerAgent (Q&A)**
 
-```
+```text
 Download → Encode → Store in Session → Wait for Question → Send to GPT-4o → DELETE ALL
 ```
 

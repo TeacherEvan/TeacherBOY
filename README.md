@@ -33,8 +33,23 @@ features.
 - **[🏫 KPS Assistant](docs/KPS_ASSISTANT.md)**
 - **[🔎 Tracing](docs/TRACING.md)**
 - **[🛠️ Maintainer Notes](docs/reference/maintainers.md)**
+- **[🧭 Environment Reference](docs/reference/environment.md)**
 
 The `docs/` folder is the maintained documentation source of truth.
+
+## 🗂️ Persistence Model
+
+Ms. Green uses mounted local paths for filesystem state and separate Hugging
+Face dataset repositories for optional cloud persistence.
+
+- `CONVERSATION_STORAGE_PATH` is the local working/cache directory for HF-backed
+  conversation sync; restart persistence still depends on `HF_MEMORY_TOKEN`
+  and `HF_MEMORY_REPO_ID`.
+- `BOT_IDENTITY_STORAGE_PATH` stores runtime identity overrides.
+- `STAFF_MEMORY_STORAGE_PATH` stores review-agent staff memory.
+- Scheduled jobs remain runtime-only; there is no persisted APScheduler task store in the current implementation.
+
+For the full variable reference and mounted-volume examples, see [Environment variables](docs/reference/environment.md).
 
 ## 🚀 Features
 

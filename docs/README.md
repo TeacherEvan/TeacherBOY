@@ -11,7 +11,8 @@
 
 ## Operating the Bot
 
-- **Admin Commands:** [guides/admin.md](guides/admin.md) or [ADMIN_COMMANDS.md](ADMIN_COMMANDS.md) - Sleep/wake/reset/stats
+- **Admin Quick Start:** [ADMIN_QUICK_START.md](ADMIN_QUICK_START.md) - Fastest path to enable admin access
+- **Admin Commands:** [ADMIN_COMMANDS.md](ADMIN_COMMANDS.md) - Full `/admin` command reference and remote-control flows
 - **Tracing:** [TRACING.md](TRACING.md) - OpenTelemetry tracing with VS Code AI Toolkit
 
 ## Developer Documentation
@@ -21,9 +22,17 @@
 
 ## Feature Documentation
 
+- **Calendar Reminders:** [CALENDAR_REMINDERS.md](CALENDAR_REMINDERS.md) - Commands, reminders, and chat-scoped event behavior
+- **Google Calendar Backend:** [GOOGLE_CALENDAR.md](GOOGLE_CALENDAR.md) - Optional Google Calendar integration
+- **Conversation Memory:** [CONVERSATION_MEMORY.md](CONVERSATION_MEMORY.md) - Multi-turn memory with optional HF sync
+- **Document Memory:** [DOCUMENT_MEMORY.md](DOCUMENT_MEMORY.md) - PDF and DOCX storage and retrieval
+- **Image Privacy:** [IMAGE_PRIVACY.md](IMAGE_PRIVACY.md) - Image retention and cleanup guarantees
+- **Profiler:** [PROFILER_USAGE.md](PROFILER_USAGE.md) - Vision-based profiling workflow
 - **News Agent:** [NEWS_AGENT.md](NEWS_AGENT.md) - Weather, headlines, access control
 - **News Usage:** [NEWS_USAGE_EXAMPLES.md](NEWS_USAGE_EXAMPLES.md) - How to use news features
-- **Translation:** [INCOMPLETE_SENTENCE_FIX.md](INCOMPLETE_SENTENCE_FIX.md) - Hallucination prevention
+- **Translation Behavior:** [INCOMPLETE_SENTENCE_FIX.md](INCOMPLETE_SENTENCE_FIX.md)
+	- Incomplete sentence handling and hallucination prevention
+- **LLM Provider Setup:** [GITHUB_MODELS.md](GITHUB_MODELS.md) - GitHub Models and provider priority
 
 ## Reference
 
