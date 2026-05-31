@@ -30,18 +30,18 @@ from src.services.rate_limiter import RateLimiter
 # ============================================================================
 
 @pytest.fixture
-def calendar_service():
+def calendar_service(tmp_path):
     """Calendar service without encryption."""
     return CalendarService(
         hf_token=None,
         hf_repo_id=None,
-        local_storage_path="./test_calendar_data",
+        local_storage_path=str(tmp_path / "calendar_data"),
         encryption_key=None,
     )
 
 
 @pytest.fixture
-def encrypted_calendar_service():
+def encrypted_calendar_service(tmp_path):
     """Calendar service with encryption."""
     # Generate a test encryption key (Fernet compatible)
     import os
@@ -51,7 +51,7 @@ def encrypted_calendar_service():
     return CalendarService(
         hf_token=None,
         hf_repo_id=None,
-        local_storage_path="./test_calendar_encrypted",
+        local_storage_path=str(tmp_path / "calendar_encrypted"),
         encryption_key=test_key,
     )
 

@@ -79,7 +79,7 @@ class ViewFlow(CalendarFlowBase):
             return True
 
         # CRITICAL PRIVACY: Use get_chat_events() to ensure isolation
-        events = self._calendar_service.get_chat_events(
+        events = await self._calendar_service.get_chat_events_async(
             chat_id, requesting_user_id=user_id
         )
 

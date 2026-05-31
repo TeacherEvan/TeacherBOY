@@ -369,7 +369,7 @@ class AddFlow(CalendarFlowBase):
                 return True
 
             # Create the event
-            new_event = calendar_service.add_event(
+            new_event = await calendar_service.add_event_async(
                 user_id=user_id,
                 chat_id=chat_id,
                 title=event_data["title"],

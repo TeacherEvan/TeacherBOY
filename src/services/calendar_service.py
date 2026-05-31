@@ -22,12 +22,15 @@ import uuid
 import base64
 from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from collections import OrderedDict
 
 from src.services.history_log_service import get_history_log, EventType, LogLevel
 from src.services.calendar_validator import calendar_validator
 from src.config import settings
+
+if TYPE_CHECKING:
+    from src.services.convex_calendar_repository import ConvexCalendarRepository
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +64,7 @@ class CalendarEvent:
         notification_target_user_id: Optional[str] = None,
         notified_dates: Optional[List[str]] = None,
         created_at: Optional[datetime] = None,
+        repository_event_id: Optional[str] = None,
     ):
         """
         Initialize a calendar event.
@@ -91,6 +95,7 @@ class CalendarEvent:
         self.notification_target_user_id = notification_target_user_id or user_id
         self.notified_dates = notified_dates if notified_dates else []
         self.created_at = created_at or datetime.now(timezone.utc)
+        self.repository_event_id = repository_event_id
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert event to dictionary for JSON serialization."""
@@ -106,6 +111,7 @@ class CalendarEvent:
             "notification_target_user_id": self.notification_target_user_id,
             "notified_dates": self.notified_dates,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "repository_event_id": self.repository_event_id,
         }
 
     @classmethod
@@ -136,6 +142,7 @@ class CalendarEvent:
             notification_target_user_id=data.get("notification_target_user_id"),
             notified_dates=data.get("notified_dates", []),
             created_at=created_at,
+            repository_event_id=data.get("repository_event_id"),
         )
 
     def days_until(self) -> int:
@@ -183,6 +190,7 @@ class CalendarService:
         hf_repo_id: Optional[str] = None,
         local_storage_path: str = "./data/calendar",
         encryption_key: Optional[str] = None,
+        repository: Optional["ConvexCalendarRepository"] = None,
     ):
         """
         Initialize calendar service.
@@ -198,6 +206,7 @@ class CalendarService:
         self.local_storage_path = Path(local_storage_path)
         self._encryption_key = encryption_key
         self._cipher_suite: Optional[Any] = None
+        self._repository = repository
         
         # In-memory event store: {event_id: CalendarEvent}
         self._events: OrderedDict[str, CalendarEvent] = OrderedDict()
@@ -389,7 +398,9 @@ class CalendarService:
                     logger.error(f"❌ Failed to decrypt calendar: {e}")
                     return
             else:
-                data = json.loads(file_content) if isinstance(file_content, bytes) else file_content
+                if isinstance(file_content, bytes):
+                    file_content = file_content.decode("utf-8")
+                data = json.loads(file_content)
             
             events_data = data.get("events", [])
             for event_dict in events_data:
@@ -504,37 +515,33 @@ class CalendarService:
         Raises:
             ValueError: If event is invalid or duplicate exists
         """
-        # Check for duplicates first (before validation to save processing)
-        if not skip_duplicate_check:
-            if self.has_duplicate_event(user_id, chat_id, title, event_date):
-                raise ValueError(
-                    f"Duplicate event: '{title}' on {event_date.isoformat()} already exists"
-                )
-        
-        # Validate and sanitize inputs (defense-in-depth)
-        is_valid, sanitized, error = calendar_validator.validate_event(
+        if self._repository and not skip_duplicate_check:
+            self._refresh_repository_chat_scope_sync(chat_id)
+
+        event = self._create_local_event(
+            user_id=user_id,
+            chat_id=chat_id,
             title=title,
             event_date=event_date,
             description=description,
             reminder_days=reminder_days,
-        )
-        if not is_valid or not sanitized:
-            raise ValueError(error or "Invalid calendar event")
-
-        event = CalendarEvent(
-            event_id=str(uuid.uuid4()),
-            user_id=user_id,
-            chat_id=chat_id,
-            title=sanitized["title"],
-            event_date=sanitized["event_date"],
-            description=sanitized["description"],
-            reminder_days=sanitized["reminder_days"],
             is_friend=is_friend,
             notification_target_user_id=notification_target_user_id,
+            skip_duplicate_check=skip_duplicate_check,
         )
-        
-        self._events[event.event_id] = event
-        self._save_to_local_storage()
+
+        if self._repository:
+            try:
+                event = self._sync_event_to_repository_sync(event)
+            except Exception as error:
+                logger.warning(
+                    "⚠️ Repository sync failed during upsert for %s: %s",
+                    event.event_id,
+                    error,
+                )
+                raise
+        else:
+            event = self._store_local_event(event)
         
         # Audit log: event creation (best-effort, non-blocking)
         history_log = get_history_log()
@@ -559,6 +566,46 @@ class CalendarService:
         logger.info(f"📅 Added event '{event.title}' for {user_id} on {event.event_date}")
         return event
 
+    async def add_event_async(
+        self,
+        user_id: str,
+        chat_id: str,
+        title: str,
+        event_date: date,
+        description: str = "",
+        reminder_days: Optional[List[int]] = None,
+        is_friend: bool = False,
+        notification_target_user_id: Optional[str] = None,
+        skip_duplicate_check: bool = False,
+    ) -> CalendarEvent:
+        if self._repository and not skip_duplicate_check:
+            await self._refresh_repository_chat_scope_async(chat_id)
+
+        event = self._create_local_event(
+            user_id=user_id,
+            chat_id=chat_id,
+            title=title,
+            event_date=event_date,
+            description=description,
+            reminder_days=reminder_days,
+            is_friend=is_friend,
+            notification_target_user_id=notification_target_user_id,
+            skip_duplicate_check=skip_duplicate_check,
+        )
+
+        if not self._repository:
+            return self._store_local_event(event)
+
+        try:
+            return await self._sync_event_to_repository(event)
+        except Exception as error:
+            logger.warning(
+                "⚠️ Repository sync failed during async upsert for %s: %s",
+                event.event_id,
+                error,
+            )
+            raise
+
     def get_event(self, event_id: str) -> Optional[CalendarEvent]:
         """Get event by ID."""
         return self._events.get(event_id)
@@ -578,11 +625,24 @@ class CalendarService:
         Returns:
             List of user's events sorted by date
         """
-        events = [
-            event for event in self._events.values()
-            if event.user_id == user_id and (include_past or not event.is_past())
-        ]
-        return sorted(events, key=lambda e: e.event_date)
+        if not self._repository:
+            return self._get_cached_user_events(user_id, include_past=include_past)
+
+        try:
+            events = self._repository.list_user_events_sync(
+                line_user_id=user_id,
+                include_past=include_past,
+            )
+        except Exception as error:
+            logger.warning(
+                "⚠️ Repository sync failed during list_user_events for %s: %s",
+                user_id,
+                error,
+            )
+            return self._get_cached_user_events(user_id, include_past=include_past)
+
+        self._replace_cached_scope_events(user_id=user_id, events=events)
+        return self._get_cached_user_events(user_id, include_past=include_past)
 
     def get_chat_events(
         self, 
@@ -601,28 +661,77 @@ class CalendarService:
         Returns:
             List of chat's events sorted by date
         """
-        events = [
-            event for event in self._events.values()
-            if event.chat_id == chat_id and (include_past or not event.is_past())
-        ]
-        
-        # Audit log: event viewing (best-effort)
-        if requesting_user_id:
-            history_log = get_history_log()
-            if history_log:
-                _schedule_audit_log(
-                    history_log.log(
-                        event_type=EventType.CALENDAR_EVENT_VIEWED,
-                        message=f"Viewed {len(events)} events in chat",
-                        level=LogLevel.DEBUG,
-                        chat_id=chat_id,
-                        user_id=requesting_user_id,
-                        agent_name="CalendarService",
-                        metadata={"event_count": len(events), "include_past": include_past},
-                    )
+        if self._repository:
+            try:
+                events = self._repository.list_chat_events_sync(
+                    source_chat_id=chat_id,
+                    include_past=include_past,
                 )
-        
-        return sorted(events, key=lambda e: e.event_date)
+            except Exception as error:
+                logger.warning(
+                    "⚠️ Repository sync failed during list_chat_events for %s: %s",
+                    chat_id,
+                    error,
+                )
+            else:
+                self._replace_cached_scope_events(chat_id=chat_id, events=events)
+
+        events = self._get_cached_chat_events(chat_id, include_past=include_past)
+        self._log_chat_view(chat_id, requesting_user_id, include_past, len(events))
+        return events
+
+    async def get_user_events_async(
+        self,
+        user_id: str,
+        include_past: bool = False,
+    ) -> List[CalendarEvent]:
+        if not self._repository:
+            return self._get_cached_user_events(user_id, include_past=include_past)
+
+        try:
+            events = await self._repository.list_user_events(
+                line_user_id=user_id,
+                include_past=include_past,
+            )
+        except Exception as error:
+            logger.warning(
+                "⚠️ Repository sync failed during async list_user_events for %s: %s",
+                user_id,
+                error,
+            )
+            return self._get_cached_user_events(user_id, include_past=include_past)
+
+        self._replace_cached_scope_events(user_id=user_id, events=events)
+        return self._get_cached_user_events(user_id, include_past=include_past)
+
+    async def get_chat_events_async(
+        self,
+        chat_id: str,
+        include_past: bool = False,
+        requesting_user_id: Optional[str] = None,
+    ) -> List[CalendarEvent]:
+        if not self._repository:
+            events = self._get_cached_chat_events(chat_id, include_past=include_past)
+            self._log_chat_view(chat_id, requesting_user_id, include_past, len(events))
+            return events
+
+        try:
+            events = await self._repository.list_chat_events(
+                source_chat_id=chat_id,
+                include_past=include_past,
+            )
+        except Exception as error:
+            logger.warning(
+                "⚠️ Repository sync failed during async list_chat_events for %s: %s",
+                chat_id,
+                error,
+            )
+        else:
+            self._replace_cached_scope_events(chat_id=chat_id, events=events)
+
+        events = self._get_cached_chat_events(chat_id, include_past=include_past)
+        self._log_chat_view(chat_id, requesting_user_id, include_past, len(events))
+        return events
 
     def get_events_needing_reminder(self, days_before: int) -> List[CalendarEvent]:
         """
@@ -634,13 +743,50 @@ class CalendarService:
         Returns:
             List of events needing reminders
         """
+        if not self._repository:
+            return self._get_cached_events_needing_reminder(days_before)
+
         today = date.today()
-        target_date = today + timedelta(days=days_before)
-        
-        return [
-            event for event in self._events.values()
-            if event.event_date == target_date and event.needs_reminder(days_before)
+        try:
+            reminders = self._repository.get_due_reminders_sync(today)
+        except Exception as error:
+            logger.warning(
+                "⚠️ Repository sync failed during get_due_reminders for %s days: %s",
+                days_before,
+                error,
+            )
+            return self._get_cached_events_needing_reminder(days_before)
+
+        events = [
+            item["event"]
+            for item in reminders
+            if int(item.get("days_until", -1)) == days_before
         ]
+        self._merge_cached_events(events)
+        return sorted(events, key=lambda event: event.event_date)
+
+    async def get_events_needing_reminder_async(
+        self,
+        today: date,
+    ) -> List[Dict[str, Any]]:
+        if self._repository:
+            try:
+                reminders = await self._repository.get_due_reminders(today)
+            except Exception as error:
+                logger.warning(
+                    "⚠️ Repository sync failed during async get_due_reminders for %s: %s",
+                    today.isoformat(),
+                    error,
+                )
+                return self._get_cached_reminders_for_date(today)
+
+            self._merge_cached_events([item["event"] for item in reminders])
+            reminders.sort(
+                key=lambda item: (item["event"].event_date, item["event"].title)
+            )
+            return reminders
+
+        return self._get_cached_reminders_for_date(today)
 
     def mark_event_notified(self, event_id: str, days_before: int) -> bool:
         """
@@ -656,9 +802,91 @@ class CalendarService:
         event = self._events.get(event_id)
         if not event:
             return False
-        
-        event.mark_notified(days_before)
-        self._save_to_local_storage()
+
+        if not self._repository or not event.repository_event_id:
+            event.mark_notified(days_before)
+            self._save_to_local_storage()
+            return True
+
+        try:
+            updated_event = self._repository.mark_event_notified_sync(
+                repository_event_id=event.repository_event_id,
+                reminder_day=days_before,
+                notified_date=date.today(),
+            )
+        except Exception as error:
+            logger.warning(
+                "⚠️ Repository sync failed during mark_notified for %s: %s",
+                event_id,
+                error,
+            )
+            return False
+
+        self._store_repository_event(
+            updated_event,
+            local_event_id=event.event_id,
+            repository_event_id=event.repository_event_id,
+        )
+        return True
+
+    async def mark_event_notified_async(
+        self,
+        event_id: str,
+        days_before: int,
+        notified_date: Optional[date] = None,
+    ) -> bool:
+        event = self._events.get(event_id)
+        if not event:
+            return False
+
+        if not self._repository or not event.repository_event_id:
+            return self.mark_event_notified(event_id, days_before)
+
+        updated_event = await self._repository.mark_event_notified(
+            repository_event_id=event.repository_event_id,
+            reminder_day=days_before,
+            notified_date=notified_date or date.today(),
+        )
+        self._store_repository_event(
+            updated_event,
+            local_event_id=event.event_id,
+            repository_event_id=event.repository_event_id,
+        )
+        return True
+
+    async def remove_event_async(
+        self,
+        event_id: str,
+        user_id: Optional[str] = None,
+    ) -> bool:
+        event = self._events.get(event_id)
+        if not event:
+            return False
+
+        if user_id and event.user_id != user_id:
+            logger.warning(f"⚠️ User {user_id} tried to remove event owned by {event.user_id}")
+            return False
+
+        if self._repository and event.repository_event_id:
+            try:
+                deleted = await self._repository.delete_event(event.repository_event_id)
+            except Exception as error:
+                logger.warning(
+                    "⚠️ Repository sync failed during async delete for %s: %s",
+                    event_id,
+                    error,
+                )
+                return False
+            if not deleted:
+                logger.warning(
+                    "⚠️ Repository delete reported no-op for %s (%s)",
+                    event_id,
+                    event.repository_event_id,
+                )
+                return False
+
+        self._remove_local_event(event, user_id=user_id or "system")
+        logger.info(f"📅 Removed event '{event.title}' ({event_id})")
         return True
 
     def remove_event(self, event_id: str, user_id: Optional[str] = None) -> bool:
@@ -680,31 +908,44 @@ class CalendarService:
         if user_id and event.user_id != user_id:
             logger.warning(f"⚠️ User {user_id} tried to remove event owned by {event.user_id}")
             return False
-        
-        del self._events[event_id]
-        self._save_to_local_storage()
-        
-        # Audit log: event deletion (best-effort, non-blocking)
-        history_log = get_history_log()
-        if history_log:
-            _schedule_audit_log(
-                history_log.log(
-                    event_type=EventType.CALENDAR_EVENT_DELETED,
-                    message=f"Deleted event '{event.title}'",
-                    level=LogLevel.INFO,
-                    chat_id=event.chat_id,
-                    user_id=user_id or "system",
-                    agent_name="CalendarService",
-                    metadata={
-                        "event_id": event_id,
-                        "title": event.title,
-                        "event_date": event.event_date.isoformat(),
-                    },
+
+        if self._repository and event.repository_event_id:
+            try:
+                deleted = self._repository.delete_event_sync(event.repository_event_id)
+            except Exception as error:
+                logger.warning(
+                    "⚠️ Repository sync failed during delete for %s: %s",
+                    event_id,
+                    error,
                 )
-            )
-        
+                return False
+            if not deleted:
+                logger.warning(
+                    "⚠️ Repository delete reported no-op for %s (%s)",
+                    event_id,
+                    event.repository_event_id,
+                )
+                return False
+
+        self._remove_local_event(event, user_id=user_id or "system")
         logger.info(f"📅 Removed event '{event.title}' ({event_id})")
         return True
+
+    async def remove_events_by_ids_async(
+        self,
+        event_ids: List[str],
+        user_id: str,
+    ) -> Tuple[int, int]:
+        removed = 0
+        failed = 0
+
+        for event_id in event_ids:
+            if await self.remove_event_async(event_id, user_id):
+                removed += 1
+            else:
+                failed += 1
+
+        return removed, failed
 
     def remove_events_by_ids(
         self, 
@@ -780,6 +1021,7 @@ class CalendarService:
         hf_token: Optional[str] = None,
         hf_repo_id: Optional[str] = None,
         sync_interval_seconds: int = 300,
+        repository: Optional["ConvexCalendarRepository"] = None,
     ) -> None:
         """
         Configure the calendar service after instantiation.
@@ -796,6 +1038,9 @@ class CalendarService:
         if storage_path:
             self.local_storage_path = Path(storage_path)
             self.local_storage_path.mkdir(parents=True, exist_ok=True)
+
+        if repository is not None:
+            self._repository = repository
         
         # Update HF Hub configuration
         if hf_token and hf_repo_id:
@@ -809,6 +1054,248 @@ class CalendarService:
             self._load_from_local_storage()
             self._hf_enabled = False
             logger.info("📅 Calendar service configured (local storage only)")
+
+    def _create_local_event(
+        self,
+        user_id: str,
+        chat_id: str,
+        title: str,
+        event_date: date,
+        description: str = "",
+        reminder_days: Optional[List[int]] = None,
+        is_friend: bool = False,
+        notification_target_user_id: Optional[str] = None,
+        skip_duplicate_check: bool = False,
+    ) -> CalendarEvent:
+        if not skip_duplicate_check and self.has_duplicate_event(
+            user_id,
+            chat_id,
+            title,
+            event_date,
+        ):
+            raise ValueError(
+                f"Duplicate event: '{title}' on {event_date.isoformat()} already exists"
+            )
+
+        is_valid, sanitized, error = calendar_validator.validate_event(
+            title=title,
+            event_date=event_date,
+            description=description,
+            reminder_days=reminder_days,
+        )
+        if not is_valid or not sanitized:
+            raise ValueError(error or "Invalid calendar event")
+
+        event = CalendarEvent(
+            event_id=str(uuid.uuid4()),
+            user_id=user_id,
+            chat_id=chat_id,
+            title=sanitized["title"],
+            event_date=sanitized["event_date"],
+            description=sanitized["description"],
+            reminder_days=sanitized["reminder_days"],
+            is_friend=is_friend,
+            notification_target_user_id=notification_target_user_id,
+        )
+        return event
+
+    def _store_local_event(self, event: CalendarEvent) -> CalendarEvent:
+        self._events[event.event_id] = event
+        self._save_to_local_storage()
+        return event
+
+    async def _sync_event_to_repository(self, event: CalendarEvent) -> CalendarEvent:
+        if not self._repository:
+            return event
+
+        stored_event = await self._repository.upsert_event(event)
+        return self._store_repository_event(
+            stored_event,
+            local_event_id=event.event_id,
+            repository_event_id=event.repository_event_id,
+        )
+
+    def _sync_event_to_repository_sync(self, event: CalendarEvent) -> CalendarEvent:
+        if not self._repository:
+            return event
+
+        stored_event = self._repository.upsert_event_sync(event)
+        return self._store_repository_event(
+            stored_event,
+            local_event_id=event.event_id,
+            repository_event_id=event.repository_event_id,
+        )
+
+    def _refresh_repository_chat_scope_sync(self, chat_id: str) -> None:
+        if not self._repository:
+            return
+
+        events = self._repository.list_chat_events_sync(
+            source_chat_id=chat_id,
+            include_past=True,
+        )
+        self._replace_cached_scope_events(chat_id=chat_id, events=events)
+
+    async def _refresh_repository_chat_scope_async(self, chat_id: str) -> None:
+        if not self._repository:
+            return
+
+        events = await self._repository.list_chat_events(
+            source_chat_id=chat_id,
+            include_past=True,
+        )
+        self._replace_cached_scope_events(chat_id=chat_id, events=events)
+
+    async def _run_repository_task(self, coro: Any, action: str) -> None:
+        try:
+            await coro
+        except Exception as error:
+            logger.warning("⚠️ Repository task failed during %s: %s", action, error)
+
+    def _schedule_repository_task(self, coro: Any, action: str) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+
+        loop.create_task(self._run_repository_task(coro, action))
+
+    def _store_repository_event(
+        self,
+        stored_event: CalendarEvent,
+        *,
+        local_event_id: str,
+        repository_event_id: Optional[str],
+    ) -> CalendarEvent:
+        stored_event.event_id = local_event_id
+        stored_event.repository_event_id = (
+            stored_event.repository_event_id or repository_event_id
+        )
+        self._events[stored_event.event_id] = stored_event
+        self._save_to_local_storage()
+        return stored_event
+
+    def _remove_local_event(self, event: CalendarEvent, *, user_id: str) -> None:
+        self._events.pop(event.event_id, None)
+        self._save_to_local_storage()
+
+        history_log = get_history_log()
+        if history_log:
+            _schedule_audit_log(
+                history_log.log(
+                    event_type=EventType.CALENDAR_EVENT_DELETED,
+                    message=f"Deleted event '{event.title}'",
+                    level=LogLevel.INFO,
+                    chat_id=event.chat_id,
+                    user_id=user_id,
+                    agent_name="CalendarService",
+                    metadata={
+                        "event_id": event.event_id,
+                        "title": event.title,
+                        "event_date": event.event_date.isoformat(),
+                    },
+                )
+            )
+
+    def _merge_cached_events(self, events: List[CalendarEvent]) -> None:
+        for event in events:
+            self._events[event.event_id] = event
+        if events:
+            self._save_to_local_storage()
+
+    def _get_cached_user_events(
+        self,
+        user_id: str,
+        *,
+        include_past: bool = False,
+    ) -> List[CalendarEvent]:
+        events = [
+            event for event in self._events.values()
+            if event.user_id == user_id and (include_past or not event.is_past())
+        ]
+        return sorted(events, key=lambda event: event.event_date)
+
+    def _get_cached_chat_events(
+        self,
+        chat_id: str,
+        *,
+        include_past: bool = False,
+    ) -> List[CalendarEvent]:
+        events = [
+            event for event in self._events.values()
+            if event.chat_id == chat_id and (include_past or not event.is_past())
+        ]
+        return sorted(events, key=lambda event: event.event_date)
+
+    def _get_cached_events_needing_reminder(self, days_before: int) -> List[CalendarEvent]:
+        today = date.today()
+        target_date = today + timedelta(days=days_before)
+        return [
+            event for event in self._events.values()
+            if event.event_date == target_date and event.needs_reminder(days_before)
+        ]
+
+    def _get_cached_reminders_for_date(self, today: date) -> List[Dict[str, Any]]:
+        reminders: List[Dict[str, Any]] = []
+        for event in self._events.values():
+            days_until = (event.event_date - today).days
+            if days_until < 0:
+                continue
+            if not event.needs_reminder(days_until):
+                continue
+            reminders.append({"event": event, "days_until": days_until})
+
+        reminders.sort(
+            key=lambda item: (item["event"].event_date, item["event"].title)
+        )
+        return reminders
+
+    def _log_chat_view(
+        self,
+        chat_id: str,
+        requesting_user_id: Optional[str],
+        include_past: bool,
+        event_count: int,
+    ) -> None:
+        if not requesting_user_id:
+            return
+
+        history_log = get_history_log()
+        if not history_log:
+            return
+
+        _schedule_audit_log(
+            history_log.log(
+                event_type=EventType.CALENDAR_EVENT_VIEWED,
+                message=f"Viewed {event_count} events in chat",
+                level=LogLevel.DEBUG,
+                chat_id=chat_id,
+                user_id=requesting_user_id,
+                agent_name="CalendarService",
+                metadata={"event_count": event_count, "include_past": include_past},
+            )
+        )
+
+    def _replace_cached_scope_events(
+        self,
+        *,
+        user_id: Optional[str] = None,
+        chat_id: Optional[str] = None,
+        events: List[CalendarEvent],
+    ) -> None:
+        retained: OrderedDict[str, CalendarEvent] = OrderedDict()
+        for existing_event_id, existing_event in self._events.items():
+            if user_id is not None and existing_event.user_id == user_id:
+                continue
+            if chat_id is not None and existing_event.chat_id == chat_id:
+                continue
+            retained[existing_event_id] = existing_event
+
+        for event in sorted(events, key=lambda item: item.event_date):
+            retained[event.event_id] = event
+
+        self._events = retained
+        self._save_to_local_storage()
 
 
 # Tuple import for type hint

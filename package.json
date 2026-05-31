@@ -1,0 +1,16 @@
+{
+  "name": "teacherboy-convex",
+  "private": true,
+  "scripts": {
+    "convex:dev": "convex dev",
+    "convex:codegen": "convex codegen",
+    "convex:deploy": "convex deploy",
+    "convex:test": "node --import tsx --test convex/**/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "convex": "1.39.1",
+    "tsx": "^4.20.6",
+    "typescript": "5.9.3"
+  }
+}

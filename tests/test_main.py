@@ -1,8 +1,9 @@
 """Tests for main application."""
 
 from contextlib import ExitStack
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +16,11 @@ def mock_settings():
         mock.line_channel_secret = "test_secret"
         mock.line_channel_access_token = "test_token"
         mock.debug = False
+        mock.is_convex_configured.return_value = False
+        mock.is_convex_primary_backend.return_value = False
+        mock.convex_deployment_url = None
+        mock.convex_sync_token = None
+        mock.convex_request_timeout_seconds = 10
         yield mock
 
 
@@ -89,6 +95,26 @@ class _FakeApiClient:
         return False
 
 
+class _WebhookMessageEvent:
+    def __init__(self, message, source):
+        self.message = message
+        self.source = source
+
+
+class _WebhookTextMessageContent:
+    def __init__(self, text, message_id="msg-1"):
+        self.text = text
+        self.id = message_id
+
+
+class _WebhookMessagingApi:
+    def __init__(self, api_client):
+        self.api_client = api_client
+
+    def get_profile(self, user_id):
+        return SimpleNamespace(display_name="Alice")
+
+
 def _fake_module(name: str, **attrs):
     module = ModuleType(name)
     for attr_name, value in attrs.items():
@@ -109,13 +135,16 @@ def readiness_lifespan_environment(mock_settings):
     agent_router._priority_map.clear()
     agent_router._map_dirty = True
     original_bot_user_id = main_module.bot_user_id
+    original_structured_records_service = main_module.structured_records_service
 
     original_loader_state = {
         "_calendar_required": startup_loader._calendar_required,
+        "_staff_memory_required": startup_loader._staff_memory_required,
         "_memory_required": startup_loader._memory_required,
         "_documents_required": startup_loader._documents_required,
         "_logs_required": startup_loader._logs_required,
         "_calendar_loaded": startup_loader._calendar_loaded,
+        "_staff_memory_loaded": startup_loader._staff_memory_loaded,
         "_memory_loaded": startup_loader._memory_loaded,
         "_documents_loaded": startup_loader._documents_loaded,
         "_logs_loaded": startup_loader._logs_loaded,
@@ -161,6 +190,8 @@ def readiness_lifespan_environment(mock_settings):
     mock_settings.is_brave_search_configured.return_value = False
     mock_settings.is_openrouter_configured.return_value = False
     mock_settings.is_news_api_configured.return_value = False
+    mock_settings.is_convex_configured.return_value = False
+    mock_settings.is_convex_primary_backend.return_value = False
     mock_settings.get_admin_user_ids.return_value = []
 
     fake_modules = {
@@ -251,6 +282,7 @@ def readiness_lifespan_environment(mock_settings):
     agent_router._priority_map.clear()
     agent_router._map_dirty = True
     main_module.bot_user_id = original_bot_user_id
+    main_module.structured_records_service = original_structured_records_service
     for attr_name, value in original_loader_state.items():
         setattr(startup_loader, attr_name, value)
 
@@ -341,6 +373,294 @@ def test_readiness_returns_200_after_healthy_lifespan_startup(
     assert data["checks"]["startup_data"] == "ready"
     assert data["checks"]["agents_registered"] > 0
     stop_scheduler_mock.assert_called_once_with(scheduler_service)
+
+
+def test_lifespan_does_not_initialize_structured_records_when_convex_is_not_primary(
+    readiness_lifespan_environment,
+    mock_settings,
+):
+    """Local-primary deployments should not initialize Convex structured records."""
+    app, startup_loader, _, stop_scheduler_mock, scheduler_service = (
+        readiness_lifespan_environment
+    )
+    mock_settings.is_convex_configured.return_value = True
+    mock_settings.is_convex_primary_backend.return_value = False
+    mock_settings.convex_deployment_url = "https://example.convex.cloud"
+    convex_client_ctor = MagicMock()
+    records_service_ctor = MagicMock()
+
+    async def healthy_ensure_data_loaded(*args, **kwargs):
+        startup_loader._calendar_required = False
+        startup_loader._calendar_loaded = False
+        startup_loader._memory_required = True
+        startup_loader._memory_loaded = True
+        startup_loader._documents_required = False
+        startup_loader._documents_loaded = False
+        startup_loader._logs_required = False
+        startup_loader._logs_loaded = False
+        startup_loader._backup_created = True
+        return {
+            "calendar": True,
+            "memory": True,
+            "documents": True,
+            "logs": True,
+            "backup_created": True,
+        }
+
+    with patch(
+        "src.main.startup_loader.ensure_data_loaded", healthy_ensure_data_loaded
+    ), patch("src.main.ConvexClient", convex_client_ctor), patch(
+        "src.main.StructuredRecordsService", records_service_ctor
+    ):
+        with TestClient(app):
+            pass
+
+    convex_client_ctor.assert_not_called()
+    records_service_ctor.assert_not_called()
+    stop_scheduler_mock.assert_called_once_with(scheduler_service)
+
+
+def test_lifespan_initializes_structured_records_when_convex_is_primary(
+    readiness_lifespan_environment,
+    mock_settings,
+):
+    """Convex-primary deployments should initialize structured records once."""
+    app, startup_loader, _, stop_scheduler_mock, scheduler_service = (
+        readiness_lifespan_environment
+    )
+    mock_settings.is_convex_configured.return_value = True
+    mock_settings.is_convex_primary_backend.return_value = True
+    mock_settings.convex_deployment_url = "https://example.convex.cloud"
+    mock_settings.convex_sync_token = "sync-token"
+    mock_settings.convex_request_timeout_seconds = 37
+
+    shared_http_client = MagicMock(name="shared_http_client")
+    shared_http_client.aclose = AsyncMock()
+    convex_client = MagicMock(name="convex_client")
+    records_service = MagicMock(name="structured_records_service")
+    convex_client_ctor = MagicMock(return_value=convex_client)
+    records_service_ctor = MagicMock(return_value=records_service)
+
+    async def healthy_ensure_data_loaded(*args, **kwargs):
+        startup_loader._calendar_required = False
+        startup_loader._calendar_loaded = False
+        startup_loader._memory_required = True
+        startup_loader._memory_loaded = True
+        startup_loader._documents_required = False
+        startup_loader._documents_loaded = False
+        startup_loader._logs_required = False
+        startup_loader._logs_loaded = False
+        startup_loader._backup_created = True
+        return {
+            "calendar": True,
+            "memory": True,
+            "documents": True,
+            "logs": True,
+            "backup_created": True,
+        }
+
+    with patch(
+        "src.main.startup_loader.ensure_data_loaded", healthy_ensure_data_loaded
+    ), patch(
+        "src.main.create_optimized_http_client", return_value=shared_http_client
+    ), patch("src.main.ConvexClient", convex_client_ctor), patch(
+        "src.main.StructuredRecordsService", records_service_ctor
+    ):
+        with TestClient(app):
+            pass
+
+    convex_client_ctor.assert_called_once_with(
+        base_url="https://example.convex.cloud",
+        sync_token="sync-token",
+        http_client=shared_http_client,
+        timeout_seconds=37.0,
+    )
+    records_service_ctor.assert_called_once_with(convex_client=convex_client)
+    shared_http_client.aclose.assert_awaited_once()
+    stop_scheduler_mock.assert_called_once_with(scheduler_service)
+
+
+def test_lifespan_wires_convex_calendar_and_staff_memory_when_convex_is_primary(
+    readiness_lifespan_environment,
+    mock_settings,
+):
+    """Convex-primary deployments should route calendar and staff memory through Convex."""
+    app, _, _, stop_scheduler_mock, scheduler_service = readiness_lifespan_environment
+    mock_settings.is_convex_configured.return_value = True
+    mock_settings.is_convex_primary_backend.return_value = True
+    mock_settings.convex_deployment_url = "https://example.convex.cloud"
+    mock_settings.convex_sync_token = "sync-token"
+    mock_settings.convex_request_timeout_seconds = 37
+    mock_settings.is_calendar_configured.return_value = True
+    mock_settings.is_calendar_hf_configured.return_value = True
+    mock_settings.hf_memory_token = "hf-token"
+    mock_settings.calendar_hf_repo_id = "teacherboy/calendar"
+
+    shared_http_client = MagicMock(name="shared_http_client")
+    shared_http_client.aclose = AsyncMock()
+    convex_client = MagicMock(name="convex_client")
+    calendar_repository = MagicMock(name="calendar_repository")
+    staff_memory_repository = MagicMock(name="staff_memory_repository")
+    structured_records_service = MagicMock(name="structured_records_service")
+    staff_memory_service = MagicMock(name="staff_memory_service")
+
+    ensure_data_loaded = AsyncMock(
+        return_value={
+            "calendar": True,
+            "memory": True,
+            "documents": True,
+            "logs": True,
+            "staff_memory": True,
+            "backup_created": True,
+        }
+    )
+    staff_memory_service_cls = MagicMock(return_value=staff_memory_service)
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "src.services.staff_memory_service": _fake_module(
+                "src.services.staff_memory_service",
+                StaffMemoryService=staff_memory_service_cls,
+            )
+        },
+    ), patch(
+        "src.main.create_optimized_http_client", return_value=shared_http_client
+    ), patch("src.main.ConvexClient", return_value=convex_client), patch(
+        "src.main.StructuredRecordsService",
+        return_value=structured_records_service,
+    ), patch(
+        "src.main.ConvexCalendarRepository", return_value=calendar_repository
+    ) as calendar_repo_ctor, patch(
+        "src.main.ConvexStaffMemoryRepository",
+        return_value=staff_memory_repository,
+    ) as staff_repo_ctor, patch(
+        "src.main.calendar_service.configure"
+    ) as calendar_configure, patch(
+        "src.main.startup_loader.ensure_data_loaded", ensure_data_loaded
+    ):
+        with TestClient(app):
+            pass
+
+    calendar_repo_ctor.assert_called_once_with(convex_client)
+    staff_repo_ctor.assert_called_once_with(convex_client)
+    calendar_configure.assert_called_once_with(
+        storage_path=mock_settings.calendar_data_path,
+        hf_token=None,
+        hf_repo_id=None,
+        sync_interval_seconds=mock_settings.calendar_sync_interval_seconds,
+        repository=calendar_repository,
+    )
+    staff_memory_service_cls.assert_called_once_with(
+        Path("./data/staff_memory/staff_memory.json"),
+        repository=staff_memory_repository,
+    )
+    ensure_call = ensure_data_loaded.await_args.kwargs
+    assert ensure_call["calendar_service"] is not None
+    assert ensure_call["staff_memory_service"] is staff_memory_service
+    assert ensure_call["memory_service"] is None
+    assert ensure_call["document_service"] is None
+    assert ensure_call["history_log"] is None
+    assert ensure_call["convex_client"] is convex_client
+    assert ensure_call["calendar_backend"] == "convex"
+    assert ensure_call["staff_memory_backend"] == "convex"
+    shared_http_client.aclose.assert_awaited_once()
+    stop_scheduler_mock.assert_called_once_with(scheduler_service)
+
+
+def test_readiness_returns_503_when_convex_primary_healthcheck_fails(
+    readiness_lifespan_environment,
+    mock_settings,
+):
+    """Readiness should stay degraded when Convex-primary startup health checks fail."""
+    app, _, _, stop_scheduler_mock, scheduler_service = readiness_lifespan_environment
+    mock_settings.is_convex_configured.return_value = True
+    mock_settings.is_convex_primary_backend.return_value = True
+    mock_settings.convex_require_healthcheck_on_startup = True
+    mock_settings.convex_deployment_url = "https://example.convex.cloud"
+    mock_settings.convex_sync_token = "sync-token"
+    mock_settings.is_calendar_configured.return_value = True
+
+    shared_http_client = MagicMock(name="shared_http_client")
+    shared_http_client.aclose = AsyncMock()
+    convex_client = MagicMock(name="convex_client")
+    convex_client.healthcheck = AsyncMock(return_value=False)
+
+    class _RepositoryAwareStaffMemoryService:
+        def __init__(self, storage_path, repository=None):
+            self._storage_path = storage_path
+            self._repository = repository
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "src.services.staff_memory_service": _fake_module(
+                "src.services.staff_memory_service",
+                StaffMemoryService=_RepositoryAwareStaffMemoryService,
+            )
+        },
+    ), patch(
+        "src.main.create_optimized_http_client", return_value=shared_http_client
+    ), patch("src.main.ConvexClient", return_value=convex_client), patch(
+        "src.main.StructuredRecordsService", return_value=MagicMock()
+    ), patch(
+        "src.main.ConvexCalendarRepository", return_value=MagicMock()
+    ), patch(
+        "src.main.ConvexStaffMemoryRepository", return_value=MagicMock()
+    ):
+        with TestClient(app) as client:
+            response = client.get("/readiness")
+
+    assert response.status_code == 503
+    assert response.json()["ready"] is False
+    convex_client.healthcheck.assert_awaited()
+    shared_http_client.aclose.assert_awaited_once()
+    stop_scheduler_mock.assert_called_once_with(scheduler_service)
+
+
+def test_lifespan_keeps_working_when_backend_is_local_and_convex_is_unset(
+    readiness_lifespan_environment,
+):
+    """Local-primary startup should not depend on Convex being configured."""
+    app, _, _, stop_scheduler_mock, scheduler_service = readiness_lifespan_environment
+    convex_client_ctor = MagicMock()
+    calendar_repo_ctor = MagicMock()
+    staff_repo_ctor = MagicMock()
+
+    with patch("src.main.ConvexClient", convex_client_ctor), patch(
+        "src.main.ConvexCalendarRepository", calendar_repo_ctor
+    ), patch("src.main.ConvexStaffMemoryRepository", staff_repo_ctor):
+        with TestClient(app) as client:
+            response = client.get("/readiness")
+
+    assert response.status_code == 200
+    convex_client_ctor.assert_not_called()
+    calendar_repo_ctor.assert_not_called()
+    staff_repo_ctor.assert_not_called()
+    stop_scheduler_mock.assert_called_once_with(scheduler_service)
+
+
+def test_lifespan_raises_when_convex_is_primary_but_not_configured(
+    readiness_lifespan_environment,
+    mock_settings,
+):
+    """Convex-primary startup should fail fast when Convex settings are missing."""
+    app, _, _, _, _ = readiness_lifespan_environment
+    mock_settings.is_convex_primary_backend.return_value = True
+    mock_settings.is_convex_configured.return_value = False
+
+    shared_http_client = MagicMock(name="shared_http_client")
+    shared_http_client.aclose = AsyncMock()
+
+    with patch(
+        "src.main.create_optimized_http_client", return_value=shared_http_client
+    ) as create_client:
+        with pytest.raises(RuntimeError, match="Convex"):
+            with TestClient(app):
+                pass
+
+    create_client.assert_not_called()
+    shared_http_client.aclose.assert_not_awaited()
 
 
 def test_root_endpoint(client):
@@ -512,3 +832,166 @@ def test_webhook_request_body_failure_returns_generic_500(mock_settings):
         "status": "error",
         "detail": "Internal server error",
     }
+
+
+def test_webhook_upserts_user_and_records_inbound_interaction(client, mock_settings):
+    """Webhook should mirror routed inbound messages into structured persistence."""
+    from src.agents.agent_router import RouteResult
+
+    event = _WebhookMessageEvent(
+        message=_WebhookTextMessageContent("help", message_id="msg-123"),
+        source=SimpleNamespace(
+            type="user",
+            user_id="U123",
+            group_id=None,
+            room_id=None,
+        ),
+    )
+    records_service = MagicMock()
+    records_service.upsert_user = AsyncMock()
+    records_service.record_interaction = AsyncMock()
+    route_message = AsyncMock(
+        return_value=RouteResult(
+            handled=True,
+            agent_name="HelpAgent",
+            message_type="text",
+        )
+    )
+
+    with patch("src.main.MessageEvent", _WebhookMessageEvent), patch(
+        "src.main.TextMessageContent", _WebhookTextMessageContent
+    ), patch("src.main.ApiClient", _FakeApiClient), patch(
+        "src.main.MessagingApi", _WebhookMessagingApi
+    ), patch("src.main.webhook_parser.parse", return_value=[event]), patch(
+        "src.main.agent_router.route_message", route_message
+    ), patch("src.main.structured_records_service", records_service), patch(
+        "src.main.bot_user_id", None
+    ):
+        response = client.post(
+            "/webhook",
+            data="{}",
+            headers={"X-Line-Signature": "sig"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "success", "processed": 1}
+    records_service.upsert_user.assert_awaited_once_with(
+        line_user_id="U123",
+        display_name="Alice",
+        role=None,
+    )
+    records_service.record_interaction.assert_awaited_once_with(
+        line_user_id="U123",
+        source_chat_id="user_U123",
+        message_type="text",
+        direction="inbound",
+        text_preview="help",
+        handled_agent="HelpAgent",
+    )
+
+
+def test_webhook_structured_record_failures_are_non_fatal_for_local_backend(
+    client, mock_settings
+):
+    """Local-primary deployments should ignore Convex mirror write failures."""
+    event = _WebhookMessageEvent(
+        message=_WebhookTextMessageContent("help", message_id="msg-123"),
+        source=SimpleNamespace(
+            type="user",
+            user_id="U123",
+            group_id=None,
+            room_id=None,
+        ),
+    )
+    records_service = MagicMock()
+    records_service.upsert_user = AsyncMock(side_effect=RuntimeError("convex down"))
+    records_service.record_interaction = AsyncMock(
+        side_effect=RuntimeError("convex down")
+    )
+    route_message = AsyncMock(return_value=True)
+
+    with patch("src.main.MessageEvent", _WebhookMessageEvent), patch(
+        "src.main.TextMessageContent", _WebhookTextMessageContent
+    ), patch("src.main.ApiClient", _FakeApiClient), patch(
+        "src.main.MessagingApi", _WebhookMessagingApi
+    ), patch("src.main.webhook_parser.parse", return_value=[event]), patch(
+        "src.main.agent_router.route_message", route_message
+    ), patch("src.main.structured_records_service", records_service), patch(
+        "src.main.bot_user_id", None
+    ):
+        response = client.post(
+            "/webhook",
+            data="{}",
+            headers={"X-Line-Signature": "sig"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "success", "processed": 1}
+    route_message.assert_awaited_once()
+    records_service.upsert_user.assert_awaited_once()
+    records_service.record_interaction.assert_awaited_once_with(
+        line_user_id="U123",
+        source_chat_id="user_U123",
+        message_type="text",
+        direction="inbound",
+        text_preview="help",
+        handled_agent=None,
+    )
+
+
+def test_webhook_structured_record_failures_do_not_prevent_routing_for_convex_primary(
+    client, mock_settings
+):
+    """Webhook routing should continue when Convex-backed structured writes fail."""
+    from src.agents.agent_router import RouteResult
+
+    mock_settings.is_convex_primary_backend.return_value = True
+    event = _WebhookMessageEvent(
+        message=_WebhookTextMessageContent("help", message_id="msg-123"),
+        source=SimpleNamespace(
+            type="user",
+            user_id="U123",
+            group_id=None,
+            room_id=None,
+        ),
+    )
+    records_service = MagicMock()
+    records_service.upsert_user = AsyncMock(side_effect=RuntimeError("convex down"))
+    records_service.record_interaction = AsyncMock(
+        side_effect=RuntimeError("convex down")
+    )
+    route_message = AsyncMock(
+        return_value=RouteResult(
+            handled=True,
+            agent_name="HelpAgent",
+            message_type="text",
+        )
+    )
+
+    with patch("src.main.MessageEvent", _WebhookMessageEvent), patch(
+        "src.main.TextMessageContent", _WebhookTextMessageContent
+    ), patch("src.main.ApiClient", _FakeApiClient), patch(
+        "src.main.MessagingApi", _WebhookMessagingApi
+    ), patch("src.main.webhook_parser.parse", return_value=[event]), patch(
+        "src.main.agent_router.route_message", route_message
+    ), patch("src.main.structured_records_service", records_service), patch(
+        "src.main.bot_user_id", None
+    ):
+        response = client.post(
+            "/webhook",
+            data="{}",
+            headers={"X-Line-Signature": "sig"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "success", "processed": 1}
+    route_message.assert_awaited_once()
+    records_service.upsert_user.assert_awaited_once()
+    records_service.record_interaction.assert_awaited_once_with(
+        line_user_id="U123",
+        source_chat_id="user_U123",
+        message_type="text",
+        direction="inbound",
+        text_preview="help",
+        handled_agent="HelpAgent",
+    )

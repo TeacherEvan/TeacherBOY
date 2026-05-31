@@ -142,9 +142,21 @@ message.
 
 ## Configuration
 
+## Persistence Backends
+
+Calendar persistence now supports two operator-selected modes:
+
+- `PERSISTENCE_BACKEND=local`: keep the existing local JSON plus optional HF backup path.
+- `PERSISTENCE_BACKEND=convex`: make Convex the primary structured backend for calendar events and reminder state.
+
+When Convex is primary, the local calendar directory remains available as a cache and rollback path. To roll back, set `PERSISTENCE_BACKEND=local` and restart the app.
+
 ### Environment Variables
 
 ```bash
+# Primary structured persistence backend
+PERSISTENCE_BACKEND=local
+
 # Enable/disable calendar feature
 CALENDAR_ENABLED=true
 
@@ -153,6 +165,11 @@ CALENDAR_REMINDER_HOUR=8
 
 # Local storage path for calendar data
 CALENDAR_DATA_PATH=./data/calendar
+
+# Convex primary backend (required when PERSISTENCE_BACKEND=convex)
+CONVEX_DEPLOYMENT_URL=
+CONVEX_SYNC_TOKEN=
+CONVEX_REQUEST_TIMEOUT_SECONDS=10
 
 # Optional: Hugging Face Hub backup
 CALENDAR_HF_REPO_ID=username/ms-green-calendar
@@ -183,6 +200,8 @@ CalendarService (CRUD + Persistence)
     ↓
 ReminderService (APScheduler + LINE Push)
 ```
+
+With `PERSISTENCE_BACKEND=convex`, `CalendarService` routes calendar CRUD and reminder state through the Convex repository adapter. With `PERSISTENCE_BACKEND=local`, it keeps the existing local/HF-backed behavior.
 
 ### Components
 

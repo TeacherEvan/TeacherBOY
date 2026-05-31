@@ -351,7 +351,7 @@ class ScrapeFlow(CalendarFlowBase):
         if event_data and calendar_service and user_id:
             notification_target_user_id = calendar_session_manager.get_discrete_scrape_target(chat_id)
             # Create the event
-            calendar_service.add_event(
+            await calendar_service.add_event_async(
                 user_id=user_id,
                 chat_id=chat_id,
                 title=event_data["title"],
@@ -437,7 +437,7 @@ class ScrapeFlow(CalendarFlowBase):
                     raise ValueError("Missing or invalid event date")
 
                 notification_target_user_id = calendar_session_manager.get_discrete_scrape_target(chat_id)
-                calendar_service.add_event(
+                await calendar_service.add_event_async(
                     user_id=user_id,
                     chat_id=chat_id,
                     title=str(event_data.get("title", "Event")),

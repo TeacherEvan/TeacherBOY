@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -126,6 +126,7 @@ async def test_ensure_data_loaded_treats_disabled_services_as_ready():
 
     assert results == {
         "calendar": True,
+        "staff_memory": True,
         "memory": True,
         "documents": True,
         "logs": True,
@@ -162,6 +163,7 @@ async def test_ensure_data_loaded_marks_ready_when_all_enabled_services_load(tmp
 
     assert results == {
         "calendar": True,
+        "staff_memory": True,
         "memory": True,
         "documents": True,
         "logs": True,
@@ -185,9 +187,28 @@ async def test_ensure_data_loaded_keeps_ready_false_when_required_service_fails(
 
     assert results == {
         "calendar": True,
+        "staff_memory": True,
         "memory": False,
         "documents": True,
         "logs": True,
         "backup_created": True,
     }
     assert loader.is_ready() is False
+
+
+@pytest.mark.asyncio
+async def test_ensure_data_loaded_skips_calendar_backup_for_convex_backend():
+    loader = StartupDataLoader()
+    loader._create_llm_backup = AsyncMock(return_value=True)
+    loader._clear_llm_backup = MagicMock()
+
+    results = await loader.ensure_data_loaded(
+        calendar_service=_FakeCalendarService(),
+        calendar_backend="convex",
+        convex_client=AsyncMock(healthcheck=AsyncMock(return_value=True)),
+    )
+
+    assert results["calendar"] is True
+    assert results["backup_created"] is False
+    loader._clear_llm_backup.assert_called_once_with()
+    loader._create_llm_backup.assert_not_awaited()

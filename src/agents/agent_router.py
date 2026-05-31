@@ -1,7 +1,8 @@
 """Agent router - Routes messages to appropriate agents."""
 
 import logging
-from typing import List, Dict, Optional
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 from linebot.v3.webhooks import (
     MessageEvent,
     TextMessageContent,
@@ -15,6 +16,18 @@ from src.utils.tracing import get_tracer
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
+
+
+@dataclass(frozen=True)
+class RouteResult:
+    """Lightweight route result that preserves truthy handled semantics."""
+
+    handled: bool
+    agent_name: Optional[str]
+    message_type: Optional[str]
+
+    def __bool__(self) -> bool:
+        return self.handled
 
 
 class AgentRouter:
@@ -80,7 +93,7 @@ class AgentRouter:
 
     async def route_message(
         self, event: MessageEvent, line_bot_api: MessagingApi
-    ) -> bool:
+    ) -> RouteResult:
         """
         Route message to first matching agent using priority-based lookup.
         
@@ -96,7 +109,7 @@ class AgentRouter:
             line_bot_api: LINE Messaging API client
 
         Returns:
-            True if message was handled by any agent
+            Route result with handled status and selected agent metadata
         """
         # Rebuild priority map if needed (lazy rebuild)
         self._rebuild_priority_map()
@@ -119,7 +132,11 @@ class AgentRouter:
             else:
                 logger.debug(f"Skipping unsupported message type: {type(event.message)}")
                 span.set_attribute("line.message.type", "unsupported")
-                return False
+                return RouteResult(
+                    handled=False,
+                    agent_name=None,
+                    message_type=None,
+                )
 
             source = getattr(event, "source", None)
             source_type = getattr(source, "type", None) if source else None
@@ -150,7 +167,11 @@ class AgentRouter:
                                 logger.info(
                                     f"✅ Message handled successfully by {agent.name}"
                                 )
-                                return True
+                                return RouteResult(
+                                    handled=True,
+                                    agent_name=agent.name,
+                                    message_type=message_type,
+                                )
                             else:
                                 logger.warning(
                                     f"⚠️  Agent {agent.name} failed to handle message"
@@ -163,7 +184,11 @@ class AgentRouter:
 
             logger.warning("⚠️  No agent handled this message")
             span.set_attribute("agent.handled", False)
-            return False
+            return RouteResult(
+                handled=False,
+                agent_name=None,
+                message_type=message_type,
+            )
 
     def list_agents(self) -> List[dict]:
         """

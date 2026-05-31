@@ -135,6 +135,14 @@ The `docs/` folder is the maintained documentation source of truth.
 - **💭 Conversation Memory:** Multi-turn context for the Ms. Green LLM agent with optional HF Hub persistence **NEW!**
 - **📜 History Logging:** Comprehensive audit trail with encryption and cloud backup **NEW!**
 
+### Structured Persistence
+
+- **🧱 Optional Convex Backend:** Set `PERSISTENCE_BACKEND=convex` to make Convex the primary structured persistence backend.
+- **🗓️ Calendar + Reminders:** Calendar events and reminder state can now persist through Convex when selected as primary.
+- **📝 Review Staff Memory:** Review-agent staff memory can now persist through Convex when selected as primary.
+- **⚙️ Future Admin Settings Target:** The admin-only config window is not implemented yet, but Convex `appSettings` is now the intended persistence target for that work.
+- **↩️ Rollback Path:** Set `PERSISTENCE_BACKEND=local` and restart the app to return to the local/HF-backed runtime path.
+
 ### Performance & Scalability
 
 - **High Performance:** Built on **FastAPI** with full async support
@@ -167,6 +175,14 @@ LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
 GITHUB_MODELS_PAT=your_github_models_pat
 OPENROUTER_API_KEY=your_openrouter_api_key  # Optional fallback
 
+# Structured persistence backend
+PERSISTENCE_BACKEND=local  # set to convex to use Convex as primary
+CONVEX_DEPLOYMENT_URL=
+CONVEX_SYNC_TOKEN=
+CONVEX_REQUEST_TIMEOUT_SECONDS=10
+# Optional: require Convex health before readiness turns green
+CONVEX_REQUIRE_HEALTHCHECK_ON_STARTUP=false
+
 # News Agent (optional)
 # NEWS_API_KEY is deprecated (headlines use RSS feeds; no key required)
 # NEWS_API_KEY=
@@ -192,6 +208,8 @@ USER_BOSS=
 
 DEBUG=False
 ```
+
+When `PERSISTENCE_BACKEND=convex`, the runtime uses Convex for structured calendar and staff-memory persistence. If you need to roll back quickly, change it back to `local` and restart the service.
 
 ### 2. Run Locally
 

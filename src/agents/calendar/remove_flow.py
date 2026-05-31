@@ -82,7 +82,7 @@ class RemoveFlow(CalendarFlowBase):
             return True
 
         # CRITICAL PRIVACY: Use get_chat_events() for isolation
-        events = self._calendar_service.get_chat_events(
+        events = await self._calendar_service.get_chat_events_async(
             chat_id, requesting_user_id=user_id
         )
 
@@ -202,7 +202,7 @@ class RemoveFlow(CalendarFlowBase):
                 return True
 
             # Remove events
-            removed_count, failed_count = self._calendar_service.remove_events_by_ids(
+            removed_count, failed_count = await self._calendar_service.remove_events_by_ids_async(
                 event_ids, user_id
             )
 

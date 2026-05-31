@@ -369,7 +369,7 @@ class TestCalendarDeleteAndLiveBulkAdd:
         from src.services.calendar_session_manager import calendar_session_manager, CalendarState
 
         agent = CalendarAgent(calendar_service=MagicMock())
-        agent._calendar_service.remove_events_by_ids.return_value = (2, 0)
+        agent._calendar_service.remove_events_by_ids_async = AsyncMock(return_value=(2, 0))
 
         event = MagicMock()
         event.source = MagicMock()
@@ -392,7 +392,7 @@ class TestCalendarDeleteAndLiveBulkAdd:
 
         await agent.handle(event, "yes", line_api)
 
-        agent._calendar_service.remove_events_by_ids.assert_called_once_with(["e1", "e2"], "U123456")
+        agent._calendar_service.remove_events_by_ids_async.assert_awaited_once_with(["e1", "e2"], "U123456")
 
 
     @pytest.mark.asyncio

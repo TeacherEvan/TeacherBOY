@@ -31,5 +31,26 @@ AI provider order:
 ## Persistence
 
 - Bot identity: `data/bot_identity/profile.json`
-- Staff memory: `data/staff_memory/staff_memory.json`
+- Staff memory: `data/staff_memory/staff_memory.json` locally, or Convex when `PERSISTENCE_BACKEND=convex`
 - Calendar reminder DM target: `notification_target_user_id` on each calendar event
+
+## Structured Backend Option
+
+Set `PERSISTENCE_BACKEND=convex` to make Convex the primary structured backend for:
+
+- review-agent staff memory
+- calendar events and reminder state
+- future admin configuration records via Convex `appSettings`
+
+Required Convex environment variables:
+
+- `CONVEX_DEPLOYMENT_URL`
+- `CONVEX_SYNC_TOKEN`
+- `CONVEX_REQUEST_TIMEOUT_SECONDS`
+
+The admin-only configuration window is not implemented yet. Convex `appSettings` is the persistence target reserved for that future work.
+
+Rollback path:
+
+- Set `PERSISTENCE_BACKEND=local`
+- Restart the app

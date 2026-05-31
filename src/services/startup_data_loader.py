@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger(__name__)
+BACKUP_DIR = Path("src/prompts/backup")
+CALENDAR_BACKUP_FILE = BACKUP_DIR / "calendar_backup.md"
 
 
 class StartupDataLoader:
@@ -28,11 +30,13 @@ class StartupDataLoader:
 
     def __init__(self):
         self._calendar_required = False
+        self._staff_memory_required = False
         self._memory_required = False
         self._documents_required = False
         self._logs_required = False
 
         self._calendar_loaded = False
+        self._staff_memory_loaded = False
         self._memory_loaded = False
         self._documents_loaded = False
         self._logs_loaded = False
@@ -41,9 +45,14 @@ class StartupDataLoader:
     async def ensure_data_loaded(
         self,
         calendar_service: Any = None,
+        staff_memory_service: Any = None,
         memory_service: Any = None,
         document_service: Any = None,
         history_log: Any = None,
+        convex_client: Any = None,
+        calendar_backend: str = "local",
+        staff_memory_backend: str = "local",
+        convex_health_required: bool = False,
         max_retries: int = 3,
         retry_delay_seconds: int = 2,
     ) -> Dict[str, bool]:
@@ -61,11 +70,15 @@ class StartupDataLoader:
         Returns:
             Dict with success status for each service
         """
-        logger.info("🔄 Starting synchronous data load from HF Hub...")
+        logger.info("🔄 Starting synchronous data load from configured persistence backends...")
         start_time = time.time()
 
         self._calendar_required = bool(
-            calendar_service and hasattr(calendar_service, "_hf_enabled") and calendar_service._hf_enabled
+            calendar_backend == "hf"
+            or (calendar_backend == "convex" and convex_health_required)
+        )
+        self._staff_memory_required = bool(
+            staff_memory_backend == "convex" and convex_health_required
         )
         self._memory_required = bool(
             memory_service and hasattr(memory_service, "_hf_enabled") and memory_service._hf_enabled
@@ -79,14 +92,31 @@ class StartupDataLoader:
 
         results = {
             "calendar": not self._calendar_required,
+            "staff_memory": not self._staff_memory_required,
             "memory": not self._memory_required,
             "documents": not self._documents_required,
             "logs": not self._logs_required,
             "backup_created": False,
         }
 
+        convex_health_ok = True
+        if calendar_backend == "convex" or staff_memory_backend == "convex":
+            convex_health_ok = await self._check_convex_health_with_retry(
+                convex_client,
+                max_retries,
+                retry_delay_seconds,
+            )
+
+        if calendar_backend == "convex":
+            results["calendar"] = convex_health_ok
+            self._calendar_loaded = convex_health_ok
+
+        if staff_memory_backend == "convex":
+            results["staff_memory"] = convex_health_ok
+            self._staff_memory_loaded = convex_health_ok
+
         # Load calendar data
-        if calendar_service and hasattr(calendar_service, "_hf_enabled") and calendar_service._hf_enabled:
+        if calendar_backend == "hf" and calendar_service:
             results["calendar"] = await self._load_calendar_with_retry(
                 calendar_service, max_retries, retry_delay_seconds
             )
@@ -115,13 +145,56 @@ class StartupDataLoader:
 
         # Create LLM-readable backup for disaster recovery
         if calendar_service:
-            results["backup_created"] = await self._create_llm_backup(calendar_service)
-            self._backup_created = results["backup_created"]
+            if calendar_backend == "convex":
+                self._clear_llm_backup()
+                results["backup_created"] = False
+                self._backup_created = False
+            else:
+                results["backup_created"] = await self._create_llm_backup(
+                    calendar_service
+                )
+                self._backup_created = results["backup_created"]
 
         elapsed = time.time() - start_time
         logger.info(f"✅ Data load complete in {elapsed:.2f}s: {results}")
 
         return results
+
+    async def _check_convex_health_with_retry(
+        self,
+        convex_client: Any,
+        max_retries: int,
+        retry_delay: int,
+    ) -> bool:
+        """Check Convex health when Convex is the selected primary backend."""
+        if convex_client is None or not hasattr(convex_client, "healthcheck"):
+            logger.warning("⚠️ Convex backend selected but Convex client is unavailable")
+            return False
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(
+                    "🧱 Checking Convex health (attempt %s/%s)...",
+                    attempt,
+                    max_retries,
+                )
+                if await convex_client.healthcheck():
+                    logger.info("✅ Convex health check passed")
+                    return True
+            except Exception as error:
+                logger.warning(
+                    "⚠️ Convex health check attempt %s failed: %s",
+                    attempt,
+                    error,
+                )
+
+            if attempt < max_retries:
+                delay = retry_delay * (2 ** (attempt - 1))
+                logger.info("⏳ Retrying Convex health check in %ss...", delay)
+                await asyncio.sleep(delay)
+
+        logger.error("❌ Convex health check failed after %s attempts", max_retries)
+        return False
 
     async def _load_calendar_with_retry(
         self, calendar_service: Any, max_retries: int, retry_delay: int
@@ -265,10 +338,8 @@ class StartupDataLoader:
         Stored in src/prompts/backup/ so it's included in Docker build.
         """
         try:
-            backup_dir = Path("src/prompts/backup")
-            backup_dir.mkdir(parents=True, exist_ok=True)
+            BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
-            backup_file = backup_dir / "calendar_backup.md"
             timestamp = datetime.now(timezone.utc).isoformat()
 
             # Generate human-readable markdown
@@ -319,13 +390,26 @@ If calendar data is lost after HF deployment:
 that were successfully loaded from HF Hub.
 """
 
-            backup_file.write_text(backup_content, encoding="utf-8")
-            logger.info(f"✅ LLM backup created: {backup_file} ({len(events)} events)")
+            CALENDAR_BACKUP_FILE.write_text(backup_content, encoding="utf-8")
+            logger.info(
+                f"✅ LLM backup created: {CALENDAR_BACKUP_FILE} ({len(events)} events)"
+            )
             return True
 
         except Exception as e:
             logger.error(f"❌ Failed to create LLM backup: {e}")
             return False
+
+    def _clear_llm_backup(self) -> None:
+        """Remove stale local calendar backup when Convex is the source of truth."""
+        try:
+            if CALENDAR_BACKUP_FILE.exists():
+                CALENDAR_BACKUP_FILE.unlink()
+                logger.info(
+                    "🧹 Removed stale local calendar backup for Convex-primary startup"
+                )
+        except Exception as error:
+            logger.warning("⚠️ Failed to remove stale calendar backup: %s", error)
 
     def is_ready(self) -> bool:
         """
@@ -335,6 +419,8 @@ that were successfully loaded from HF Hub.
             True if app is ready to serve traffic
         """
         if self._calendar_required and not self._calendar_loaded:
+            return False
+        if self._staff_memory_required and not self._staff_memory_loaded:
             return False
         if self._memory_required and not self._memory_loaded:
             return False

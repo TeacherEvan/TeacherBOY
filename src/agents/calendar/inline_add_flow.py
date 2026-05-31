@@ -345,7 +345,7 @@ class InlineAddFlow(CalendarFlowBase):
             return True
 
         # Create the event
-        new_event = self._calendar_service.add_event(
+        new_event = await self._calendar_service.add_event_async(
             user_id=user_id,
             chat_id=chat_id,
             title=session.inline_event_data["title"],

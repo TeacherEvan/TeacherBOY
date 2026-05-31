@@ -46,6 +46,9 @@ IMPORTANT_THIS_WEEK_COMMANDS = {
     "what's important this week",
     "important this week",
 }
+MEMORY_SAVE_FAILED_MESSAGE = (
+    "I couldn't save that to memory right now. Please try again."
+)
 
 
 @dataclass
@@ -218,14 +221,23 @@ class ReviewAgent(BaseAgent):
 
         notes: list[str] = []
         if choice in {"memory", "both"}:
-            self._staff_memory.add_item(
-                title=self._build_memory_title(pending.summary),
-                summary=pending.summary,
-                priority="P1",
-                due_date=None,
-                source_chat_id=pending.source_chat_id,
-                created_by=user_id,
-            )
+            try:
+                await self._staff_memory.add_item_async(
+                    title=self._build_memory_title(pending.summary),
+                    summary=pending.summary,
+                    priority="P1",
+                    due_date=None,
+                    source_chat_id=pending.source_chat_id,
+                    created_by=user_id,
+                )
+            except Exception as error:
+                logger.warning("⚠️ Failed to save review summary to memory: %s", error)
+                await self._send_reply(
+                    event,
+                    line_bot_api,
+                    MEMORY_SAVE_FAILED_MESSAGE,
+                )
+                return True
             notes.append("saved to memory")
 
         if choice in {"calendar", "both"}:
@@ -253,7 +265,7 @@ class ReviewAgent(BaseAgent):
         week_end = today + timedelta(days=6)
 
         calendar_items = []
-        for calendar_event in self._calendar_service.get_user_events(user_id):
+        for calendar_event in await self._calendar_service.get_user_events_async(user_id):
             if today <= calendar_event.event_date <= week_end:
                 calendar_items.append(
                     (
@@ -263,9 +275,10 @@ class ReviewAgent(BaseAgent):
                     )
                 )
 
+        memory_records = await self._staff_memory.get_items_for_week_async(today)
         memory_items = [
             (item.priority, item.title, item.due_date or "")
-            for item in self._staff_memory.get_items_for_week(today)
+            for item in memory_records
         ]
 
         combined = memory_items + calendar_items
@@ -312,7 +325,7 @@ class ReviewAgent(BaseAgent):
 
         try:
             event_date = date.fromisoformat(str(event_date_raw))
-            self._calendar_service.add_event(
+            await self._calendar_service.add_event_async(
                 user_id=user_id,
                 chat_id=pending.source_chat_id,
                 title=str(title),

@@ -507,6 +507,32 @@ class Settings(BaseSettings):
     )
 
     # ============================================================================
+    # Structured Persistence Configuration
+    # ============================================================================
+    persistence_backend: str = Field(
+        default="local",
+        description="Persistence backend selection: local or convex.",
+    )
+    convex_deployment_url: Optional[HttpUrl] = Field(
+        default=None,
+        description="Convex HTTP deployment URL for structured persistence.",
+    )
+    convex_sync_token: Optional[str] = Field(
+        default=None,
+        description="Bearer token used for Convex HTTP sync requests.",
+    )
+    convex_request_timeout_seconds: int = Field(
+        default=10,
+        ge=1,
+        le=60,
+        description="Timeout in seconds for Convex HTTP requests.",
+    )
+    convex_require_healthcheck_on_startup: bool = Field(
+        default=False,
+        description="Require a successful Convex health check during startup.",
+    )
+
+    # ============================================================================
     # HTTP Client Configuration
     # ============================================================================
     http_client_timeout_seconds: int = Field(
@@ -597,6 +623,26 @@ class Settings(BaseSettings):
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in additional_agents: {e}")
             raise ValueError(f"additional_agents must be valid JSON: {e}")
+
+    @field_validator("persistence_backend", mode="before")
+    @classmethod
+    def validate_persistence_backend(cls, v: Any) -> Any:
+        """Normalize and validate the structured persistence backend selection."""
+        if isinstance(v, str):
+            normalized = v.strip().lower()
+            if normalized not in {"local", "convex"}:
+                raise ValueError("persistence_backend must be one of: local, convex")
+            return normalized
+        return v
+
+    @field_validator("convex_deployment_url", mode="before")
+    @classmethod
+    def normalize_convex_deployment_url(cls, v: Any) -> Any:
+        """Trim Convex deployment URLs and treat blank values as unset."""
+        if isinstance(v, str):
+            normalized = v.strip()
+            return normalized or None
+        return v
 
     def parse_additional_agents(self) -> Dict[str, Dict[str, str]]:
         """
@@ -806,6 +852,14 @@ class Settings(BaseSettings):
             self.google_calendar_enabled
             and os.path.exists(self.google_calendar_credentials_file)
         )
+
+    def is_convex_configured(self) -> bool:
+        """Check if Convex structured persistence is configured."""
+        return bool(self.convex_deployment_url and (self.convex_sync_token or "").strip())
+
+    def is_convex_primary_backend(self) -> bool:
+        """Check if Convex is the selected primary persistence backend."""
+        return self.persistence_backend == "convex"
 
     def get_http_client_config(self) -> Dict[str, Any]:
         """

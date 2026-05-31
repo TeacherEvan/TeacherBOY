@@ -53,6 +53,25 @@ Notes:
 - `PORT` (default: `8000`)
 - `DEBUG` (default: `False`)
 
+## Structured Persistence (Convex)
+
+- `PERSISTENCE_BACKEND`
+	- `local` keeps the existing local/HF-backed runtime path.
+	- `convex` makes Convex the primary structured persistence backend.
+- `CONVEX_DEPLOYMENT_URL`
+- `CONVEX_SYNC_TOKEN`
+- `CONVEX_REQUEST_TIMEOUT_SECONDS` (default: `10`)
+- `CONVEX_REQUIRE_HEALTHCHECK_ON_STARTUP` (default: `False`)
+
+When `PERSISTENCE_BACKEND=convex`, the runtime routes structured calendar data and review-agent staff memory through Convex. The admin-only config window is not implemented yet, but Convex `appSettings` is now the persistence target prepared for that future work.
+
+Rollback path:
+
+- Set `PERSISTENCE_BACKEND=local`
+- Restart the app
+
+This returns the bot to the existing local/HF-backed path without deleting local files.
+
 ## AI Translation
 
 - Translation uses the shared AI translation service.
@@ -167,12 +186,16 @@ Notes:
 - **Description:** Local directory path for calendar event storage
 - **Example:** `CALENDAR_DATA_PATH=./data/calendar`
 
+This path remains the local cache/rollback store even when `PERSISTENCE_BACKEND=convex`.
+
 ### `CALENDAR_HF_REPO_ID`
 
 - **Type:** String (Optional)
 - **Default:** `None`
 - **Description:** Hugging Face repository ID for calendar data synchronization (requires `HF_MEMORY_TOKEN`)
 - **Example:** `CALENDAR_HF_REPO_ID=username/calendar-data`
+
+This is used only when the calendar runtime path remains local/HF-backed. When `PERSISTENCE_BACKEND=convex`, Convex becomes the primary structured store for calendar data.
 
 ### `CALENDAR_SYNC_INTERVAL_SECONDS`
 

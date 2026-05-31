@@ -134,7 +134,7 @@ class ReminderService:
             today = datetime.now(BANGKOK_TZ).date()
             
             # Get all events needing reminders
-            events_needing_reminder = await self._calendar_service.get_events_needing_reminder(today)
+            events_needing_reminder = await self._calendar_service.get_events_needing_reminder_async(today)
             
             if not events_needing_reminder:
                 logger.info("⏰ No reminders to send today")
@@ -152,9 +152,10 @@ class ReminderService:
                     success = await self._send_reminder(event, days_until)
                     if success:
                         # Mark as notified
-                        await self._calendar_service.mark_event_notified(
+                        await self._calendar_service.mark_event_notified_async(
                             event.event_id,
-                            today
+                            days_before=days_until,
+                            notified_date=today,
                         )
                         sent_count += 1
                 except Exception as e:
@@ -364,7 +365,7 @@ class ReminderService:
             return {"error": "Calendar service not configured"}
 
         today = datetime.now(BANGKOK_TZ).date()
-        events_needing_reminder = await self._calendar_service.get_events_needing_reminder(today)
+        events_needing_reminder = await self._calendar_service.get_events_needing_reminder_async(today)
         
         return {
             "date": today.isoformat(),

@@ -485,6 +485,8 @@ class TestAgentRouterImageHandling:
         
         result = await router.route_message(event, mock_api)
         
-        assert result is True
+        assert result.handled is True
+        assert result.agent_name == "ProfilerAgent"
+        assert result.message_type == "image"
         mock_profiler.should_handle.assert_called_once()
         mock_profiler.handle.assert_called_once()
