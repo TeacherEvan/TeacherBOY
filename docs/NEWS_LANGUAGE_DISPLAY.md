@@ -38,8 +38,8 @@ if language == "th":
 
 ### Translation Process
 
-1. **Primary:** Google Translate API (high quality)
-2. **Fallback:** LibreTranslate (if Google not configured)
+1. **Primary:** Shared AI translation service via GitHub Models
+2. **Fallback:** OpenRouter if GitHub Models is unavailable
 3. **Error handling:** Use original English if translation fails
 
 ---
@@ -101,7 +101,7 @@ async def _translate_headlines_to_thai(self, headlines: List[Dict[str, str]]) ->
     """
     Translate English headlines to Thai.
 
-    - Uses Google Translate (primary) or LibreTranslate (fallback)
+    - Uses the shared AI translation service
     - Preserves URLs
     - Skips fallback messages like "News unavailable"
     - Returns original English if translation fails
@@ -117,7 +117,7 @@ Parse Headlines
     ↓
 Language Check
     ↓
-If Thai → Translate via Google/LibreTranslate
+If Thai → Translate via AI translation service
     ↓
 Display in Menu
 ```
@@ -137,7 +137,7 @@ pytest tests/test_news_language_display.py -v
 1. ✅ Headlines translated to Thai when language='th'
 2. ✅ Fallback messages not translated
 3. ✅ Error handling (uses original if translation fails)
-4. ✅ LibreTranslate fallback works
+4. ✅ OpenRouter fallback works
 5. ✅ English headlines not translated when language='en'
 6. ✅ Thai menu format uses translated headlines
 7. ✅ English menu format uses English headlines
@@ -148,17 +148,15 @@ pytest tests/test_news_language_display.py -v
 
 ### Translation Services
 
-**Google Translate (Primary):**
+**GitHub Models (Primary):**
 
-- High-quality professional translation
-- Requires `GOOGLE_TRANSLATE_API_KEY` in `.env`
-- Recommended for production
+- Preferred AI translation provider
+- Requires `GITHUB_MODELS_PAT`
 
-**LibreTranslate (Fallback):**
+**OpenRouter (Fallback):**
 
-- Free, open-source translation
-- Used when Google not configured
-- Works without API key
+- Used when GitHub Models is unavailable
+- Requires `OPENROUTER_API_KEY`
 
 ---
 
@@ -183,11 +181,11 @@ pytest tests/test_news_language_display.py -v
 ### Environment Variables
 
 ```bash
-# Primary translation (recommended)
-GOOGLE_TRANSLATE_API_KEY=your_api_key_here
+# Preferred AI provider
+GITHUB_MODELS_PAT=your_pat_here
 
-# Fallback translation (no key needed)
-LIBRETRANSLATE_API_URL=https://libretranslate.de/translate
+# Optional fallback provider
+OPENROUTER_API_KEY=your_api_key_here
 ```
 
 ### Cache Settings
@@ -223,7 +221,7 @@ news_cache_ttl_seconds: int = 3600  # 1 hour
 
 If translation fails:
 
-1. Try LibreTranslate (fallback)
+1. Try OpenRouter (fallback)
 2. If both fail, show original English
 3. Log warning for monitoring
 4. Continue with rest of menu
@@ -231,8 +229,8 @@ If translation fails:
 ### Example Log
 
 ```
-⚠️ Google Translate failed for headline: API rate limit exceeded
-ℹ️ Falling back to LibreTranslate
+⚠️ GitHub Models failed for headline translation: provider unavailable
+ℹ️ Falling back to OpenRouter
 ```
 
 ---
@@ -280,7 +278,7 @@ If translation fails:
 ✅ **Feature Complete:**
 
 - Headlines now display in requested language
-- Thai translations via Google Translate or LibreTranslate
+- Thai translations via the shared AI translation service
 - Comprehensive error handling and fallbacks
 - Full test coverage (7/7 passing)
 - Zero breaking changes

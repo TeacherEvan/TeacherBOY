@@ -68,6 +68,9 @@ Gotcha (common cause of "it deployed but features are missing"):
 
 Spaces are git repos. Pushing triggers an automatic rebuild/restart.
 
+Treat the Space as a deployment target, not as a peer branch to merge with.
+GitHub `main` should remain the source of truth.
+
 1. Add the Space as a remote (once):
 
    ```bash
@@ -86,7 +89,7 @@ Spaces are git repos. Pushing triggers an automatic rebuild/restart.
 3. Push to Hugging Face:
 
    ```bash
-   git push hf main
+   git push --force-with-lease hf main:main
    ```
 
    Authentication:
@@ -94,11 +97,14 @@ Spaces are git repos. Pushing triggers an automatic rebuild/restart.
    - Password: a Hugging Face **Access Token** (not your account password)
 
 If you initially uploaded files via the web UI, the Space may have a different git history.
-If you control the Space and want your local repo to be the source of truth, you can sync with:
+Because this repository treats GitHub as authoritative, the first
+repo-driven deploy should intentionally overwrite the Space branch:
 
 ```bash
-git push --force-with-lease hf main
+git push --force-with-lease hf main:main
 ```
+
+After this switch, avoid direct edits in the Hugging Face Space UI. Make changes in this repository and redeploy from Git.
 
 ### VS Code one-click push
 

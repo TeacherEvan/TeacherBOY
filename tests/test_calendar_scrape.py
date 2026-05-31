@@ -557,7 +557,7 @@ class TestCalendarAgentIntegration:
         event.source.user_id = "test_user"
         event.source.group_id = "test_group"
         event.reply_token = "test_token"
-        event.message.text = "zeus scrape"
+        event.message.text = "Ms. Green scrape"
         return event
     
     @pytest.fixture
@@ -570,7 +570,7 @@ class TestCalendarAgentIntegration:
         """Test that agent handles scrape trigger."""
         agent = CalendarAgent()
         
-        result = await agent.should_handle(mock_event, "zeus scrape")
+        result = await agent.should_handle(mock_event, "Ms. Green scrape")
         assert result is True
     
     @pytest.mark.asyncio
@@ -578,7 +578,7 @@ class TestCalendarAgentIntegration:
         """Test that agent handles inline add trigger."""
         agent = CalendarAgent()
         
-        result = await agent.should_handle(mock_event, "zeus add tomorrow test event")
+        result = await agent.should_handle(mock_event, "Ms. Green add tomorrow test event")
         assert result is True
     
     @pytest.mark.asyncio

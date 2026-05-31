@@ -201,7 +201,7 @@ class TestLLMAgentIntegration:
             ]
             
             # Process a query that needs live data
-            await agent.handle(mock_event, "Zeus restaurants in Bangkok", mock_line_api)
+            await agent.handle(mock_event, "Ms. Green restaurants in Bangkok", mock_line_api)
             
             # Verify auto-search was called
             mock_search.assert_called_once()

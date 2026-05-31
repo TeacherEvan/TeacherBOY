@@ -23,6 +23,9 @@ from src.services.rate_limiter import RateLimiter
 from src.services.metrics_service import metrics_service
 from src.config import settings
 from src.services.privilege_service import privilege_service
+from src.services.ai_translation_service import (
+    ai_translation_service as default_ai_translation_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,25 +40,21 @@ class NewsAgent(BaseAgent):
 
     _NEWS_TRIGGERS = {"news", "ข่าว", "นิวส์"}
 
-    def __init__(self, news_data_service: NewsDataService):
+    def __init__(
+        self,
+        news_data_service: NewsDataService,
+        ai_translation_service=default_ai_translation_service,
+    ):
         super().__init__(
             name="NewsAgent",
             description="Weather, air quality, and news headlines for Bangkok",
         )
         self.news_service = news_data_service
+        self.ai_translation_service = ai_translation_service
 
         # Cache friendship checks to avoid repeated LINE API calls.
         # {user_id: (is_friend, cached_at_utc)}
         self._friend_cache: Dict[str, tuple[bool, datetime]] = {}
-        # Import translation services for headline translation
-        from src.services.google_translation import google_translation_service
-        from src.services.translation_service import (
-            translation_service as libre_translation,
-        )
-
-        self.google_translate = google_translation_service
-        self.libre_translate = libre_translation
-
     def get_priority(self) -> int:
         """News agent priority - runs after Translation (10)."""
         return 15
@@ -382,7 +381,7 @@ class NewsAgent(BaseAgent):
     async def _translate_headlines_to_thai(
         self, headlines: List[Dict[str, str]]
     ) -> List[Dict[str, str]]:
-        """Translate English headlines to Thai."""
+        """Translate English headlines to Thai using the shared AI service."""
         translated_headlines = []
 
         for headline in headlines:
@@ -394,29 +393,21 @@ class NewsAgent(BaseAgent):
                 translated_headlines.append(headline)
                 continue
 
-            # Try Google Translate first, fallback to LibreTranslate
-            translated_title = None
-            if self.google_translate.is_configured():
-                try:
-                    translated_title = await self.google_translate.translate(
-                        text=title, target_lang="th", source_lang="en"
-                    )
-                except Exception as e:
-                    logger.warning(f"Google Translate failed for headline: {e}")
-
-            # Fallback to LibreTranslate
-            if not translated_title:
-                try:
-                    translated_title = await self.libre_translate.translate(
-                        text=title, source_lang="en", target_lang="th"
-                    )
-                except Exception as e:
-                    logger.warning(f"LibreTranslate failed for headline: {e}")
-                    # Use original English if translation fails
-                    translated_title = title
+            translated_title = title
+            try:
+                result = await self.ai_translation_service.translate(
+                    title,
+                    source_lang="en",
+                    target_lang="th",
+                )
+            except Exception as e:
+                logger.warning(f"AI translation failed for headline: {e}")
+            else:
+                if result and result.text:
+                    translated_title = result.text
 
             translated_headlines.append(
-                {"title": translated_title or title, "url": url}
+                {"title": translated_title, "url": url}
             )
 
         return translated_headlines

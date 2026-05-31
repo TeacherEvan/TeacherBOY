@@ -1,4 +1,4 @@
-# Zeus Quick Reference Card
+# Ms. Green Quick Reference Card
 
 > **Essential information at a glance**
 
@@ -16,7 +16,7 @@ pytest
 pytest --cov=src --cov-report=html
 
 # Deploy to Hugging Face
-git push hf main
+git push --force-with-lease hf main:main
 ```
 
 ## 🔑 Environment Variables (Required)
@@ -24,7 +24,8 @@ git push hf main
 ```env
 LINE_CHANNEL_SECRET=your_channel_secret
 LINE_CHANNEL_ACCESS_TOKEN=your_access_token
-GOOGLE_TRANSLATE_API_KEY=your_google_api_key  # Optional but recommended
+GITHUB_MODELS_PAT=your_github_models_pat
+OPENROUTER_API_KEY=your_openrouter_api_key  # Optional fallback
 ADMIN_USER_IDS=U1234567890,U0987654321  # Comma-separated LINE user IDs
 MODERATOR_USER_IDS=U1234567890  # Optional: Moderators get direct news access
 
@@ -34,26 +35,26 @@ USER_BOSS=U1234567890abcdef
 
 ## 🤖 Agent Priority Order
 
-1. **HelpAgent** (Priority 5) - Comprehensive help system (`help`, `Dear Zeus help`, etc.)
+1. **HelpAgent** (Priority 5) - Comprehensive help system (`help`, `Dear Ms. Green help`, etc.)
 2. **AdminAgent** (Priority 5) - `/admin` commands
-3. **CalendarAgent** (Priority 6) - `zeus calendar`, `zeus add`, `zeus events`
+3. **CalendarAgent** (Priority 6) - `Ms. Green calendar`, `Ms. Green add`, `Ms. Green events`
 4. **HannibalProfileAgent** (Priority 6) - Message-history profiling
 5. **ProfilerAgent** (Priority 7) - Image-based psychological profiling
 6. **ImageAnalyzerAgent** (Priority 7) - General image Q&A
 7. **DocumentMemoryAgent** (Priority 8) - PDF/DOCX storage and retrieval
-8. **SearchAgent** (Priority 8) - `Zeus search ...`
-9. **LLMAgent** (Priority 9) - `Zeus ...`
+8. **SearchAgent** (Priority 8) - `Ms. Green search ...`
+9. **LLMAgent** (Priority 9) - `Ms. Green ...`
 10. **TranslationAgent** (Priority 10) - Thai ↔ English translation
 11. **SpecialNewsAgent** (Priority 12) - `/special news` command
 12. **NewsAgent** (Priority 15) - `news` or `ข่าว` trigger
 
-## 🤖 AI & Search Commands (Zeus)
+## 🤖 AI & Search Commands (Ms. Green)
 
-- **AI (OpenRouter LLM):** `Zeus <your question>` (also accepts `/zeus ...`, typo `Zues ...`)
+- **AI chat:** `Ms. Green <your question>`
   - **Admins:** allowed in any chat context
   - **Regular users:** available in direct messages; gated in non-private chats
 
-### 📨 Zeus outbound messaging (admins)
+### 📨 Ms. Green outbound messaging (admins)
 
 Requires configuring named recipients:
 
@@ -63,16 +64,16 @@ USER_BOSS=U1234567890abcdef
 
 Then:
 
-- `Zeus send <alias> <text>`
-- `Zeus llm_send <alias> <prompt>`
-- `Zeus send_weather <alias>` (also accepts `Zeus send the weather to my <alias>`)
-- **Web search (Brave Search):** `Zeus search <query>` (also accepts `/zeus search ...`, typo `Zues search ...`)
+- `Ms. Green send <alias> <text>`
+- `Ms. Green llm_send <alias> <prompt>`
+- `Ms. Green send_weather <alias>`
+- **Web search (Brave Search):** `Ms. Green search <query>`
   - **Admins:** allowed in any chat context
   - **Regular users:** **DM only** (1-on-1)
 
 Notes:
 
-- `Zeus search ...` is handled by SearchAgent before LLMAgent.
+- `Ms. Green search ...` is handled by SearchAgent before LLMAgent.
 - If `OPENROUTER_API_KEY` or `BRAVE_SEARCH_API_KEY` is missing, the bot replies with a configuration error.
 
 ## 🚢 Hugging Face Spaces (Docker) gotcha
@@ -131,7 +132,7 @@ Notes:
 - ✅ Parentheses preservation: `(Name)` stays as `(Name)`
 - ✅ Session management per chat
 - ✅ Sleep mode: "amen" → 24h sleep
-- ✅ Wake command: "Dear Zeus" alone
+- ✅ Wake command: "Dear Ms. Green" alone
 
 ## 📰 News Menu (Friends/Admins/Moderators)
 
@@ -165,9 +166,9 @@ src/
 │   ├── document_memory_agent.py # PDF/DOCX memory
 │   ├── hannibal_agent.py      # Message-history profiling
 │   ├── image_analyzer_agent.py # General image Q&A
-│   ├── llm_agent.py           # OpenRouter LLM (Zeus ...)
+│   ├── llm_agent.py           # LLM chat (Ms. Green ...)
 │   ├── profiler_agent.py      # Image profiling
-│   ├── search_agent.py        # Brave Search (Zeus search ...)
+│   ├── search_agent.py        # Brave Search (Ms. Green search ...)
 │   ├── translation_agent.py   # Translation logic
 │   ├── news_agent.py          # News logic
 │   ├── special_news_agent.py  # Special news (DM-only)
@@ -175,8 +176,7 @@ src/
 ├── services/
 │   ├── openrouter_service.py       # OpenRouter client
 │   ├── brave_search_service.py     # Brave Search client
-│   ├── translation_service.py      # LibreTranslate
-│   ├── google_translation.py       # Google Translate
+│   ├── ai_translation_service.py   # Shared AI translation orchestration
 │   ├── news_data_service.py        # News/weather data
 │   ├── special_news_service.py     # Special news RSS
 │   ├── calendar_service.py         # Calendar storage

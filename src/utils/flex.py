@@ -1,4 +1,4 @@
-"""Flex Message templates for Zeus."""
+"""Flex Message templates for Ms. Green."""
 
 
 def create_translation_flex(
@@ -39,7 +39,7 @@ def create_translation_flex(
                     "contents": [
                         {
                             "type": "text",
-                            "text": "Zeus",
+                            "text": "Ms. Green",
                             "weight": "bold",
                             "color": primary_color,
                             "size": "sm",
@@ -123,7 +123,7 @@ def create_translation_flex(
             "contents": [
                 {
                     "type": "text",
-                    "text": "Powered by LibreTranslate",
+                    "text": "Powered by AI translation",
                     "size": "xxs",
                     "color": "#aaaaaa",
                     "align": "center",

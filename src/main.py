@@ -1,5 +1,5 @@
 
-"""Zeus - Production-Grade Multi-Agent LINE Translation Bot.
+"""Ms. Green - Production-Grade Multi-Agent LINE Assistant.
 
 This module implements a FastAPI application with intelligent agent routing,
 high-performance async I/O, and production-ready error handling.
@@ -42,8 +42,6 @@ from linebot.v3.messaging import (
 from linebot.v3.exceptions import InvalidSignatureError
 
 from src.config import settings
-from src.services.translation_service import translation_service
-from src.services.google_translation import google_translation_service
 from src.services.scheduler_service import scheduler_service
 from src.services.profiler_session_manager import profiler_session_manager
 from src.services.news_session_manager import news_session_manager
@@ -148,7 +146,7 @@ async def lifespan(app: FastAPI):
     global bot_user_id
 
     logger.info("=" * 80)
-    logger.info("🚀 Zeus Multi-Agent System - Starting Up")
+    logger.info("🚀 Ms. Green Assistant - Starting Up")
     logger.info("=" * 80)
 
     # Tracing (OpenTelemetry) - optional, controlled by settings.enable_tracing
@@ -175,7 +173,6 @@ async def lifespan(app: FastAPI):
     # ========================================================================
     logger.info("📡 Initializing optimized HTTP client pool...")
     http_client_pool = create_optimized_http_client()
-    translation_service.set_client(http_client_pool)
     openrouter_service.set_client(http_client_pool)
     brave_search_service.set_client(http_client_pool)
     github_models_service.set_client(http_client_pool)
@@ -301,18 +298,9 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Document data loaded")
 
     # ========================================================================
-    # PHASE 2b: Translation Services Configuration
+    # PHASE 2b: AI Translation Configuration
     # ========================================================================
-    if settings.is_google_translate_configured():
-        google_translation_service.api_key = settings.google_translate_api_key
-        google_translation_service.set_client(http_client_pool)
-        logger.info("✅ Google Cloud Translation API configured (PRIMARY)")
-    else:
-        logger.warning(
-            "⚠️  Google Translate API not configured - using LibreTranslate only"
-        )
-
-    logger.info("✅ LibreTranslate configured (FALLBACK)")
+    logger.info("✅ AI translation configured (GitHub Models -> OpenRouter fallback)")
 
     # ========================================================================
     # PHASE 3: Agent Registration
@@ -489,7 +477,7 @@ async def lifespan(app: FastAPI):
     logger.info("✅ All cleanup tasks started")
 
     logger.info("=" * 80)
-    logger.info("✅ Zeus is READY to serve! 🎉")
+    logger.info("✅ Ms. Green is READY to serve! 🎉")
     logger.info("=" * 80)
 
     yield
@@ -498,7 +486,7 @@ async def lifespan(app: FastAPI):
     # GRACEFUL SHUTDOWN
     # ========================================================================
     logger.info("=" * 80)
-    logger.info("🛑 Zeus - Shutting down gracefully...")
+    logger.info("🛑 Ms. Green - Shutting down gracefully...")
     logger.info("=" * 80)
 
     # Stop background cleanup tasks
@@ -524,7 +512,7 @@ async def lifespan(app: FastAPI):
     if history_svc:
         await history_svc.log(
             event_type=EventType.SHUTDOWN,
-            message="🛑 Zeus Multi-Agent System shutting down gracefully",
+            message="🛑 Ms. Green Assistant shutting down gracefully",
             level=LogLevel.INFO,
         )
         history_svc.stop()
@@ -548,7 +536,7 @@ async def lifespan(app: FastAPI):
     await http_client_pool.aclose()
     logger.info("✅ HTTP client pool closed")
 
-    logger.info("👋 Zeus shutdown complete. Goodbye!")
+    logger.info("👋 Ms. Green shutdown complete. Goodbye!")
     logger.info("=" * 80)
 
 
@@ -556,8 +544,8 @@ async def lifespan(app: FastAPI):
 # FastAPI Application Initialization
 # ============================================================================
 app = FastAPI(
-    title="Zeus - Multi-Agent Translation Bot",
-    description="Production-grade Thai/English translation bot for LINE with intelligent agent routing",
+    title="Ms. Green - AI Assistant",
+    description="Production-grade LINE assistant with AI translation and intelligent agent routing",
     version="3.0.0",
     lifespan=lifespan,
     docs_url="/docs" if settings.debug else None,  # Disable docs in production
@@ -589,12 +577,12 @@ async def root() -> Dict[str, Any]:
     """
     return {
         "status": "operational",
-        "service": "Zeus Multi-Agent Translation Bot",
+        "service": "Ms. Green Assistant",
         "version": "3.0.0",
         "api_docs": "/docs" if settings.debug else "disabled",
         "features": {
-            "translation": "Thai ↔ English",
-            "google_translate": settings.is_google_translate_configured(),
+            "translation": "AI translation",
+            "translation_backend": "ai",
         },
     }
 
@@ -632,7 +620,7 @@ async def readiness_check(response: Response) -> Dict[str, Any]:
             "startup_data": "ready" if startup_ready else "loading",
             "agents_registered": len(agents_status),
         },
-        "google_translate_enabled": settings.is_google_translate_configured(),
+        "translation_backend": "ai",
     }
 
 

@@ -30,22 +30,24 @@ class TestMessageHandler:
         with patch(
             "src.handlers.message_handler.session_manager"
         ) as mock_session, patch(
-            "src.handlers.message_handler.translation_service"
-        ) as mock_trans_service, patch(
-            "src.handlers.message_handler.google_translation_service"
-        ) as mock_google_service, patch(
+            "src.handlers.message_handler.ai_translation_service"
+        ) as mock_ai_translation_service, patch(
             "asyncio.to_thread"
         ) as mock_to_thread:
             # Setup mocks
             mock_session.is_session_active.return_value = True
-            mock_google_service.is_configured.return_value = False
-            mock_trans_service.auto_translate = AsyncMock(return_value=("Hello", "th"))
+            mock_ai_translation_service.translate = AsyncMock(
+                return_value=MagicMock(text="Hello")
+            )
             mock_to_thread.return_value = None  # Mock the reply_message call
 
             await handle_text_message(mock_event, mock_line_bot_api)
 
-            # Verify translation service was called
-            mock_trans_service.auto_translate.assert_called_once_with("สวัสดี")
+            mock_ai_translation_service.translate.assert_awaited_once_with(
+                "สวัสดี",
+                source_lang="th",
+                target_lang="en",
+            )
 
             # Verify session message count was incremented
             mock_session.increment_message_count.assert_called_once()
@@ -60,16 +62,13 @@ class TestMessageHandler:
         with patch(
             "src.handlers.message_handler.session_manager"
         ) as mock_session, patch(
-            "src.handlers.message_handler.translation_service"
-        ) as mock_trans_service, patch(
-            "src.handlers.message_handler.google_translation_service"
-        ) as mock_google_service, patch(
+            "src.handlers.message_handler.ai_translation_service"
+        ) as mock_ai_translation_service, patch(
             "asyncio.to_thread"
         ) as mock_to_thread:
             # Setup mocks - translation fails
             mock_session.is_session_active.return_value = True
-            mock_google_service.is_configured.return_value = False
-            mock_trans_service.auto_translate = AsyncMock(return_value=(None, None))
+            mock_ai_translation_service.translate = AsyncMock(return_value=None)
             mock_to_thread.return_value = None
 
             await handle_text_message(mock_event, mock_line_bot_api)
@@ -87,10 +86,8 @@ class TestMessageHandler:
         with patch(
             "src.handlers.message_handler.session_manager"
         ) as mock_session, patch(
-            "src.handlers.message_handler.translation_service"
-        ) as mock_trans_service, patch(
-            "src.handlers.message_handler.google_translation_service"
-        ) as mock_google_service, patch(
+            "src.handlers.message_handler.ai_translation_service"
+        ) as mock_ai_translation_service, patch(
             "asyncio.to_thread"
         ) as mock_to_thread:
             # Setup mocks - session not active initially
@@ -98,8 +95,9 @@ class TestMessageHandler:
                 False,
                 True,
             ]  # First check False, second True
-            mock_google_service.is_configured.return_value = False
-            mock_trans_service.auto_translate = AsyncMock(return_value=("Hello", "th"))
+            mock_ai_translation_service.translate = AsyncMock(
+                return_value=MagicMock(text="Hello")
+            )
             mock_to_thread.return_value = None
 
             await handle_text_message(mock_event, mock_line_bot_api)

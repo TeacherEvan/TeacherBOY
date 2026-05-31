@@ -2,7 +2,9 @@
 
 ## Overview
 
-The Zeus Psychological Profiler analyzes photos and artwork using advanced vision AI (GPT-4o) to provide comprehensive behavioral and psychological assessments based on established frameworks:
+The Ms. Green Psychological Profiler analyzes photos and artwork using
+advanced vision AI (GPT-4o) to provide comprehensive behavioral and
+psychological assessments based on established frameworks:
 
 - **FBI Behavioral Analysis Unit (BAU)** methodology
 - **Paul Ekman's FACS** (Facial Action Coding System) and 7 universal emotions
@@ -16,7 +18,9 @@ The Zeus Psychological Profiler analyzes photos and artwork using advanced visio
 - **Creative Projects**: Art direction support for music videos, storytelling, and visual narratives
 - **Accessibility**: Assists neurodivergent users (autism) with understanding character expressions in art
 
-⚠️ **DISCLAIMER**: For educational, entertainment, and creative purposes only. NOT for professional psychological assessments, hiring decisions, or legal judgments.
+⚠️ **DISCLAIMER**: For educational, entertainment, and creative purposes
+only. NOT for professional psychological assessments, hiring decisions, or
+legal judgments.
 
 ## How to Use (Trigger-Based Workflow)
 
@@ -24,7 +28,7 @@ The Zeus Psychological Profiler analyzes photos and artwork using advanced visio
 
 First, send one of these trigger phrases to activate profiling mode:
 
-- `zeus profile`
+- `Ms. Green profile`
 - `profile this`
 - `analyze this image`
 - `analyze this photo`
@@ -35,9 +39,9 @@ First, send one of these trigger phrases to activate profiling mode:
 
 **Example:**
 
-```
-User: zeus profile
-Zeus: 🔬 Ready to analyze!
+```text
+User: Ms. Green profile
+Ms. Green: 🔬 Ready to analyze!
 
 Please send the image you want me to profile.
 (You have 60 seconds)
@@ -49,7 +53,7 @@ Please send the image you want me to profile.
 
 Within 60 seconds, send the image you want analyzed.
 
-Zeus will:
+Ms. Green will:
 
 1. Send "🔬 Analyzing image... Please wait." message
 2. Download the image from LINE
@@ -58,8 +62,8 @@ Zeus will:
 
 ## Example Analysis Output
 
-```
-⚡ ZEUS PSYCHOLOGICAL PROFILER ⚡
+```text
+⚡ MS. GREEN PSYCHOLOGICAL PROFILER ⚡
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ## 🎯 SUBJECT IDENTIFICATION
@@ -162,7 +166,7 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 
 **GitHub Models (Required):**
 
-- Free tier: https://github.com/marketplace/models
+- Free tier: <https://github.com/marketplace/models>
 - Create GitHub PAT with `models:read` scope
 - Set `GITHUB_MODELS_PAT` in `.env`
 
@@ -253,12 +257,12 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 
 **Music Video Character Design:**
 
-```
-User: zeus profile
-Zeus: 🔬 Ready to analyze!
+```text
+User: Ms. Green profile
+Ms. Green: 🔬 Ready to analyze!
 
 User: [sends Viking character sketch]
-Zeus: [Analyzes facial expression, posture, armor design, color psychology]
+Ms. Green: [Analyzes facial expression, posture, armor design, color psychology]
 ```
 
 **Accessibility Support:**

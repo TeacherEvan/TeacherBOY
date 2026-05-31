@@ -14,13 +14,15 @@ from linebot.v3.messaging import (
 )
 
 from .base_agent import BaseAgent
-from src.services.translation_service import translation_service
-from src.services.google_translation import google_translation_service
+from src.services.ai_translation_service import (
+    ai_translation_service as default_ai_translation_service,
+)
 from src.services.session_manager import session_manager
 from src.services.rate_limiter import rate_limiter
 from src.services.metrics_service import metrics_service
 from src.utils.tracing import get_tracer
 from src.config import settings
+from src.services.bot_identity_service import get_bot_identity_service
 from src.services.privilege_service import privilege_service
 
 logger = logging.getLogger(__name__)
@@ -32,11 +34,12 @@ class TranslationAgent(BaseAgent):
 
     _NEWS_TRIGGERS = {"news", "ข่าว", "นิวส์"}
 
-    def __init__(self):
+    def __init__(self, ai_translation_service=default_ai_translation_service):
         super().__init__(
             name="TranslationAgent",
             description="Thai/English translation with continuous session mode",
         )
+        self.ai_translation_service = ai_translation_service
 
     def get_priority(self) -> int:
         """Translation has high priority."""
@@ -50,22 +53,23 @@ class TranslationAgent(BaseAgent):
         """
         Check if text is a sleep command (puts bot to sleep for 24 hours).
 
-        Sleep patterns: "good night zeus", "sleep zeus", "zeus sleep" (case insensitive)
+        Sleep patterns: "good night ms. green", "sleep ms. green", "ms. green sleep".
         """
         text_lower = text.lower().strip()
-        # Pattern for explicit sleep commands addressing Zeus
-        sleep_pattern = r"^(good\s*night\s*zeus|sleep\s*zeus|zeus\s*sleep)[\s.!]*$"
+        sleep_pattern = (
+            r"^(good\s*night\s*ms\.?\s*green|sleep\s*ms\.?\s*green|"
+            r"ms\.?\s*green\s*sleep|amen)[\s.!]*$"
+        )
         return bool(re.search(sleep_pattern, text_lower))
 
     def is_wake_command(self, text: str) -> bool:
         """
         Check if text is a wake command (wakes bot from sleep).
 
-        Wake pattern: Any message starting with "Zeus"
+        Wake pattern: Any message starting with the configured bot identity.
         """
-        # Wake up if message starts with "Zeus"
-        zeus_pattern = r"^zeus\b"
-        return bool(re.match(zeus_pattern, text.lower().strip()))
+        prefix, _ = get_bot_identity_service().split_command_prefix(text)
+        return prefix is not None
 
     def is_help_command(self, text: str) -> bool:
         """Check if text is a help command."""
@@ -178,7 +182,7 @@ class TranslationAgent(BaseAgent):
                         "User commands\n"
                         "- Send Thai to translate to English\n"
                         "- Send English to translate to Thai\n"
-                        "- Dear Zeus (wake)\n"
+                        "- Ms. Green (wake)\n"
                         "- amen (sleep)\n"
                     )
                     if is_admin:
@@ -326,30 +330,20 @@ class TranslationAgent(BaseAgent):
                 return False
 
     async def _translate_message(self, text: str, chat_id: Optional[str] = None) -> str:
-        """Translate using Google (primary) or LibreTranslate (fallback)."""
-        # Try Google Translate first
-        if google_translation_service.is_configured():
-            with tracer.start_as_current_span("translation.translate.google") as span:
-                span.set_attribute("translation.provider", "google")
-                result = await google_translation_service.auto_translate(text)
-            if result:
-                metrics_service.record_translation("google", chat_id)
-                return result
-            logger.warning("⚠️  Google Translate failed, trying LibreTranslate...")
+        """Translate using the shared AI translation service."""
+        source_lang = "th" if self.contains_thai(text) else "en"
+        target_lang = "en" if source_lang == "th" else "th"
 
-        # Fallback to LibreTranslate
-        with tracer.start_as_current_span("translation.translate.libre") as span:
-            span.set_attribute("translation.provider", "libretranslate")
-            if self.contains_thai(text):
-                result = await translation_service.translate(text, "th", "en")
-            else:
-                result = await translation_service.translate(text, "en", "th")
+        result = await self.ai_translation_service.translate(
+            text,
+            source_lang=source_lang,
+            target_lang=target_lang,
+        )
 
         if result:
-            metrics_service.record_translation("libre", chat_id)
-            return result
+            metrics_service.record_translation(result.provider, chat_id)
+            return result.text
 
-        # Record final failure only if both providers failed
         metrics_service.record_failed_translation()
         return "Translation failed"
 
@@ -423,7 +417,7 @@ class TranslationAgent(BaseAgent):
                             },
                             {
                                 "type": "text",
-                                "text": "Zeus Translate",
+                                "text": "Ms. Green Translate",
                                 "weight": "bold",
                                 "size": "lg",
                                 "color": "#ffffff",
@@ -773,8 +767,8 @@ class TranslationAgent(BaseAgent):
         """
         message_text = (
             "😴 ราตรีสวัสดิ์ Good Night!\n\n"
-            "Zeus is sleeping for 24 hours.\n\n"
-            '☀️ Say "Zeus" to wake me up anytime!'
+            "Ms. Green is sleeping for 24 hours.\n\n"
+            '☀️ Say "Ms. Green" to wake me up anytime!'
         )
 
         return TextMessage(text=message_text, quickReply=None, quoteToken=None)
@@ -790,7 +784,7 @@ class TranslationAgent(BaseAgent):
         """
         message_text = (
             "☀️ สวัสดี! Good Morning!\n\n"
-            "Zeus is now awake and ready!\n\n"
+            "Ms. Green is now awake and ready!\n\n"
             "🚀 Send Thai text to start translating!"
         )
 

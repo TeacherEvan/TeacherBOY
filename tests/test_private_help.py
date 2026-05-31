@@ -44,6 +44,8 @@ async def test_private_help_non_admin_shows_user_commands(line_bot_api):
     msg_text = line_bot_api.reply_message.call_args[0][0].messages[0].text
     assert "User commands" in msg_text
     assert "Admin commands" not in msg_text
+    assert "Ms. Green" in msg_text
+    assert "Zeus" not in msg_text
     
     # Reset after test
     privilege_service._reset_for_testing()
@@ -68,6 +70,25 @@ async def test_private_help_admin_includes_admin_commands(line_bot_api):
         msg_text = line_bot_api.reply_message.call_args[0][0].messages[0].text
         assert "User commands" in msg_text
         assert "Admin commands" in msg_text
+        assert "Ms. Green" in msg_text
+        assert "Zeus" not in msg_text
     
     # Reset after test
+    privilege_service._reset_for_testing()
+
+
+@pytest.mark.asyncio
+async def test_translation_agent_wake_command_uses_ms_green(line_bot_api):
+    privilege_service._reset_for_testing()
+
+    with patch("src.config.settings") as mock_settings:
+        mock_settings.get_admin_user_ids.return_value = ["UADMIN"]
+        mock_settings.get_moderator_user_ids.return_value = []
+        agent = TranslationAgent()
+
+    event = _make_private_event("UUSER")
+
+    assert await agent.should_handle(event, "Ms. Green") is True
+    assert await agent.should_handle(event, "Zeus") is False
+
     privilege_service._reset_for_testing()

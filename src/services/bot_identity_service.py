@@ -6,14 +6,10 @@ from pathlib import Path
 import re
 
 
-DEFAULT_BOT_IDENTITY_NAME = "KPS-Assistant"
+DEFAULT_BOT_IDENTITY_NAME = "Ms. Green"
 DEFAULT_BOT_IDENTITY_ALIASES = [
-    "kps",
-    "lps-assistant",
-    "hey",
-    "bud",
-    "buddy",
-    "zeus",
+    "ms. green",
+    "ms green",
 ]
 
 
@@ -96,20 +92,30 @@ class BotIdentityService:
         if not cleaned:
             return None, ""
 
-        parts = cleaned.split(" ", 1)
-        prefix = parts[0].lower()
-        rest = parts[1] if len(parts) > 1 else ""
-        if self.matches_prefix(prefix):
-            return prefix, rest
+        lowered = cleaned.lower()
+        for alias in sorted(self._profile.aliases, key=len, reverse=True):
+            if lowered == alias:
+                return alias, ""
+            if lowered.startswith(f"{alias} "):
+                return alias, cleaned[len(alias):].lstrip()
         return None, cleaned
 
     def expand_prefixed_trigger(self, trigger: str) -> list[str]:
         normalized = re.sub(r"\s+", " ", (trigger or "").strip().lower())
-        if not normalized.startswith("zeus "):
-            return [normalized]
+        expansion_aliases = sorted(
+            {self._profile.display_name.lower(), *self._profile.aliases, "zeus"},
+            key=len,
+            reverse=True,
+        )
 
-        suffix = normalized[5:]
-        return [f"{alias} {suffix}".strip() for alias in self._profile.aliases]
+        for alias in expansion_aliases:
+            if normalized == alias:
+                return self._profile.aliases.copy()
+            if normalized.startswith(f"{alias} "):
+                suffix = normalized[len(alias):].lstrip()
+                return [f"{candidate} {suffix}".strip() for candidate in self._profile.aliases]
+
+        return [normalized]
 
 
 def configure_bot_identity_service(

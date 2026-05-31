@@ -25,7 +25,7 @@ def mock_event():
     event = MagicMock(spec=MessageEvent)
     event.reply_token = "valid_token_123"
     event.message = MagicMock(spec=TextMessageContent)
-    event.message.text = "Zeus what is the weather?"
+    event.message.text = "Ms. Green what is the weather?"
     
     # Mock source
     source = MagicMock(spec=Source)
@@ -57,8 +57,7 @@ async def test_push_message_success(llm_agent, mock_event, mock_line_api):
                 # Mock successful push_message call
                 mock_to_thread.return_value = None
 
-                # Call the agent with proper Zeus command
-                result = await llm_agent.handle(mock_event, "Zeus what is the weather?", mock_line_api)
+                result = await llm_agent.handle(mock_event, "Ms. Green what is the weather?", mock_line_api)
 
                 # Verify it was handled successfully
                 assert result is True
@@ -81,7 +80,7 @@ async def test_push_message_handles_errors(llm_agent, mock_event, mock_line_api)
                 mock_to_thread.side_effect = Exception("Push failed")
 
                 # Should handle gracefully (log error but not crash)
-                result = await llm_agent.handle(mock_event, "Zeus hello", mock_line_api)
+                result = await llm_agent.handle(mock_event, "Ms. Green hello", mock_line_api)
                 assert result is True
 
 
@@ -97,7 +96,7 @@ async def test_push_message_called_once(llm_agent, mock_event, mock_line_api):
                 # Mock successful push_message call
                 mock_to_thread.return_value = None
 
-                result = await llm_agent.handle(mock_event, "Zeus test", mock_line_api)
+                result = await llm_agent.handle(mock_event, "Ms. Green test", mock_line_api)
                 assert result is True
 
                 # Should only call push_message
@@ -119,7 +118,7 @@ async def test_error_message_sent_via_push(llm_agent, mock_event, mock_line_api)
                     mock_to_thread.return_value = None
 
                     # Should handle gracefully
-                    result = await llm_agent.handle(mock_event, "Zeus test", mock_line_api)
+                    result = await llm_agent.handle(mock_event, "Ms. Green test", mock_line_api)
                     assert result is True
 
                     # Should call push_message for error message

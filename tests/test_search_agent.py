@@ -54,10 +54,10 @@ def group_message_event():
 @pytest.mark.asyncio
 async def test_should_handle_search_triggers(search_agent, message_event):
     triggers = [
-        "Zeus search python",
-        "zeus search python",
-        "Zeus   search   python tutorial",
-        "KPS search python",
+        "Ms. Green search python",
+        "ms. green search python",
+        "Ms. Green   search   python tutorial",
+        "ms green search python",
     ]
 
     for text in triggers:
@@ -66,14 +66,19 @@ async def test_should_handle_search_triggers(search_agent, message_event):
 
 @pytest.mark.asyncio
 async def test_search_agent_handles_runtime_alias_prefix(search_agent, group_message_event):
-    assert await search_agent.should_handle(group_message_event, "KPS search python") is True
+    assert await search_agent.should_handle(group_message_event, "ms green search python") is True
+
+
+@pytest.mark.asyncio
+async def test_should_handle_ms_green_search_trigger(search_agent, message_event):
+    assert await search_agent.should_handle(message_event, "Ms. Green search python") is True
 
 
 @pytest.mark.asyncio
 async def test_should_not_handle_search_in_group_for_non_admin(
     search_agent, group_message_event
 ):
-    assert await search_agent.should_handle(group_message_event, "Zeus search python") is True
+    assert await search_agent.should_handle(group_message_event, "Ms. Green search python") is True
 
 
 @pytest.mark.asyncio
@@ -86,7 +91,7 @@ async def test_should_handle_search_in_group_for_admin(search_agent, group_messa
         mock_settings.get_moderator_user_ids.return_value = []
         
         assert (
-            await search_agent.should_handle(group_message_event, "Zeus search python")
+            await search_agent.should_handle(group_message_event, "Ms. Green search python")
             is True
         )
     
@@ -110,7 +115,7 @@ async def test_should_not_handle_search_in_group_when_allowlist_denies(
         "some_other_group",
         raising=False,
     )
-    assert await search_agent.should_handle(group_message_event, "Zeus search python") is False
+    assert await search_agent.should_handle(group_message_event, "Ms. Green search python") is False
 
 @pytest.mark.asyncio
 async def test_should_not_handle_other_text(search_agent, message_event):
@@ -121,7 +126,7 @@ async def test_should_not_handle_other_text(search_agent, message_event):
 
 @pytest.mark.asyncio
 async def test_handle_search_command(search_agent, mock_brave_service, mock_line_bot_api, message_event):
-    text = "Zeus search python tutorial"
+    text = "Ms. Green search python tutorial"
     
     result = await search_agent.handle(message_event, text, mock_line_bot_api)
     
@@ -136,7 +141,7 @@ async def test_handle_search_command(search_agent, mock_brave_service, mock_line
 
 @pytest.mark.asyncio
 async def test_handle_search_error(search_agent, mock_brave_service, mock_line_bot_api, message_event):
-    text = "Zeus search error"
+    text = "Ms. Green search error"
     mock_brave_service.search.side_effect = Exception("API Error")
     
     result = await search_agent.handle(message_event, text, mock_line_bot_api)

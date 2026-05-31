@@ -70,33 +70,17 @@ class Settings(BaseSettings):
         description="Local JSON storage for runtime bot name and aliases.",
     )
     bot_identity_default_name: str = Field(
-        default="KPS-Assistant",
+        default="Ms. Green",
         description="Default runtime display name before admin changes.",
     )
     bot_identity_default_aliases: str = Field(
-        default="kps,lps-assistant,hey,bud,buddy,zeus",
+        default="ms. green,ms green",
         description="Comma-separated default wake/prefix aliases.",
     )
 
     # ============================================================================
     # Translation Service Configuration
     # ============================================================================
-
-    # Google Cloud Translation API (Primary - Professional Grade)
-    google_translate_api_key: Optional[str] = Field(
-        default=None,
-        description="Google Cloud Translation API key for high-quality translation",
-    )
-
-    # LibreTranslate API (Fallback/Development)
-    libretranslate_api_url: str = Field(
-        default="https://libretranslate.com/translate",
-        description="LibreTranslate API endpoint URL",
-    )
-    libretranslate_api_key: Optional[str] = Field(
-        default=None,
-        description="LibreTranslate API key (optional, for rate limit increases)",
-    )
 
     # Translation Performance Optimization
     # NOTE: Caching implementation is planned for future release
@@ -561,7 +545,7 @@ class Settings(BaseSettings):
     )
 
     otel_service_name: str = Field(
-        default="Zeus",
+        default="Ms. Green",
         description="OpenTelemetry service.name resource attribute",
     )
 
@@ -633,12 +617,6 @@ class Settings(BaseSettings):
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse additional_agents: {e}")
             return {}
-
-    def is_google_translate_configured(self) -> bool:
-        """Check if Google Translate API is properly configured."""
-        return bool(
-            self.google_translate_api_key and len(self.google_translate_api_key) > 20
-        )
 
     def is_news_api_configured(self) -> bool:
         """Check if NewsAPI.org is properly configured."""

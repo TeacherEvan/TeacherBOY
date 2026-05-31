@@ -154,16 +154,16 @@ class TestLLMAgentMemoryIntegration:
     """Tests for LLM agent memory integration."""
 
     @pytest.mark.asyncio
-    async def test_zeus_clear_command_recognized(self):
-        """Test that Zeus clear command is recognized."""
+    async def test_ms_green_clear_command_recognized(self):
+        """Test that Ms. Green clear command is recognized."""
         from src.agents.llm_agent import LLMAgent
         
         agent = LLMAgent()
         
         # These should be recognized as clear commands
-        assert agent._parse_command("Zeus clear") == "clear"
-        assert agent._parse_command("Zeus forget") == "forget"
-        assert agent._parse_command("Zeus reset") == "reset"
+        assert agent._parse_command("Ms. Green clear") == "clear"
+        assert agent._parse_command("Ms. Green forget") == "forget"
+        assert agent._parse_command("Ms. Green reset") == "reset"
 
     @pytest.mark.asyncio
     async def test_get_chat_id_formats(self):

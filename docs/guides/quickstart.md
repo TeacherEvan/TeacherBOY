@@ -1,6 +1,6 @@
 # Quick Start
 
-Goal: run Zeus locally (Docker) and connect it to LINE.
+Goal: run Ms. Green locally (Docker) and connect it to LINE.
 
 ## Prerequisites
 
@@ -28,8 +28,8 @@ Goal: run Zeus locally (Docker) and connect it to LINE.
 ### Option A: Docker (recommended)
 
 ```bash
-docker build -t zeus .
-docker run --env-file .env -p 8000:8000 zeus
+docker build -t ms-green-assistant .
+docker run --env-file .env -p 8000:8000 ms-green-assistant
 ```
 
 Health endpoints:
@@ -64,12 +64,12 @@ Follow: [docs/guides/line-setup.md](line-setup.md)
 - Send a Thai message (e.g., `สวัสดีครับ`) to start translation mode.
 - Send English/Thai messages; the bot replies with translations.
 - Stop/sleep: `amen`
-- Wake: `Dear Zeus`
+- Wake: `Dear Ms. Green`
 
 ### Optional: AI + Web Search (DM-only for regular users)
 
-- **AI (OpenRouter):** `Zeus <your question>` (also accepts `/zeus ...`, and typo `Zues ...`)
-- **Web search (Brave Search):** `Zeus search <query>` (also accepts `/zeus search ...`, and typo `Zues search ...`)
+- **AI chat:** `Ms. Green <your question>`
+- **Web search (Brave Search):** `Ms. Green search <query>`
 
 Access rules:
 
@@ -79,17 +79,31 @@ Access rules:
 ## Deploy on Hugging Face Spaces (Docker)
 
 1. Create a Space: <https://huggingface.co/new-space> (SDK: Docker)
-2. Push this repo to the Space (Git remote) and wait for build.
-3. In Space settings, add Secrets:
+2. Add the Space as a git remote and publish from this repo:
+
+   ```bash
+   git remote add hf https://huggingface.co/spaces/<owner>/<space>
+   git push --force-with-lease hf main:main
+   ```
+
+3. Wait for the Space build to finish.
+4. In Space settings, add Secrets:
    - `LINE_CHANNEL_SECRET`
    - `LINE_CHANNEL_ACCESS_TOKEN`
    - `GOOGLE_TRANSLATE_API_KEY` (recommended)
    - Optional: `ADMIN_SETUP_KEY`
 
-4. Set LINE webhook URL to:
+5. Set LINE webhook URL to:
 
 - `https://<your-username>-<your-space>.hf.space/webhook`
 
+Do not use the Space page URL:
+
+- `https://huggingface.co/spaces/<owner>/<space>`
+
 Gotcha:
 
-- Avoid having both a top-level `src/` and a nested `TeacherBOY/src/`. Docker Spaces typically runs `uvicorn src.main:app` from the top-level `src/`, so nested code won’t take effect unless the Dockerfile copy paths are updated.
+- Avoid having both a top-level `src/` and a nested `TeacherBOY/src/`.
+   Docker Spaces typically runs `uvicorn src.main:app` from the top-level
+   `src/`, so nested code will not take effect unless the Dockerfile copy
+   paths are updated.

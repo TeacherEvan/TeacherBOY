@@ -43,7 +43,7 @@ async def test_review_agent_translates_last_non_english_message_and_pushes_dm(
 
     handled = await agent.handle(
         event,
-        "KPS review",
+        "Ms. Green review",
         line_api,
     )
 
@@ -83,7 +83,7 @@ async def test_review_agent_ignores_bot_buffered_messages(tmp_path: Path):
         bot_user_id="BOT",
     )
 
-    handled = await agent.handle(event, "KPS review", line_api)
+    handled = await agent.handle(event, "Ms. Green review", line_api)
 
     assert handled is True
     ai_review_service.translate_and_summarize.assert_awaited_once_with(
@@ -111,7 +111,7 @@ async def test_review_agent_answers_who_do_you_work_for(tmp_path: Path):
         ),
     )
 
-    handled = await agent.handle(event, "KPS who do you work for?", line_api)
+    handled = await agent.handle(event, "Ms. Green who do you work for?", line_api)
 
     assert handled is True
     assert line_api.reply_message.called
@@ -150,11 +150,11 @@ async def test_review_agent_keeps_existing_pending_review(tmp_path: Path):
         ),
     )
 
-    first_handled = await agent.handle(event, "KPS review", line_api)
+    first_handled = await agent.handle(event, "Ms. Green review", line_api)
     assert first_handled is True
 
     buffer_service.store_message("group_G1", "ข้อความใหม่", "U_OTHER")
-    second_handled = await agent.handle(event, "KPS review", line_api)
+    second_handled = await agent.handle(event, "Ms. Green review", line_api)
 
     assert second_handled is True
     ai_review_service.translate_and_summarize.assert_awaited_once_with(
@@ -215,7 +215,7 @@ async def test_review_agent_summarizes_weekly_priorities(
 
     handled = await agent.handle(
         event,
-        "KPS whats important this week?",
+        "Ms. Green whats important this week?",
         line_api,
     )
 

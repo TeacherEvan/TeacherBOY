@@ -117,6 +117,9 @@ class LLMAgent(BaseAgent):
         # Keep legacy reference for admin actions that use llm_service.client
         self.llm_service = openrouter_service
 
+    def _identity_name(self) -> str:
+        return get_bot_identity_service().get_profile().display_name
+
     def _get_configured_provider(self) -> tuple[Optional[Any], str]:
         """
         Get the first configured LLM provider based on priority settings.
@@ -505,7 +508,7 @@ class LLMAgent(BaseAgent):
                     )
                     return True
                 except Exception as e:
-                    logger.error(f"❌ Zeus send_weather failed: {e}", exc_info=True)
+                    logger.error(f"❌ {self._identity_name()} send_weather failed: {e}", exc_info=True)
                     await self._send_reply(event, line_bot_api, "❌ Failed to fetch/send weather.")
                     return True
 
@@ -576,7 +579,7 @@ class LLMAgent(BaseAgent):
             await self._send_reply(
                 event,
                 line_bot_api,
-                "🔒 Zeus is not enabled in this group.",
+                f"🔒 {self._identity_name()} is not enabled in this group.",
             )
             return True
 
@@ -592,7 +595,7 @@ class LLMAgent(BaseAgent):
                         event, 
                         line_bot_api, 
                         (
-                            "⚠️ Zeus cannot speak without an Oracle!\n\n"
+                            f"⚠️ {self._identity_name()} cannot speak without an Oracle!\n\n"
                             "No LLM service is configured for divine wisdom.\n\n"
                             "🔧 Configure one of:\n"
                             "• GITHUB_MODELS_PAT (Classic PAT with models:read)\n"
@@ -715,7 +718,7 @@ class LLMAgent(BaseAgent):
                                 line_bot_api,
                                 (
                                     "⚡ By the thunderbolts of Olympus! The gates of wisdom are CLOSED!\n\n"
-                                    f"Error 403: {provider_name} denies entry to Zeus.\n\n"
+                                    f"Error 403: {provider_name} denies entry to {self._identity_name()}.\n\n"
                                     "🔑 Mortal decrees to restore access:\n"
                                     "• Use a CLASSIC PAT (not fine-grained)\n"
                                     "• Enable 'models:read' scope\n"
@@ -739,7 +742,7 @@ class LLMAgent(BaseAgent):
                             line_bot_api,
                             (
                                 "🌩️ The mists of Olympus cloud my thoughts...\n\n"
-                                "Zeus cannot summon an answer at this moment.\n"
+                                    f"{self._identity_name()} cannot summon an answer at this moment.\n"
                                 "Try again shortly, brave mortal!"
                             ),
                         )
@@ -764,7 +767,7 @@ class LLMAgent(BaseAgent):
                         line_bot_api, 
                         (
                             "⚡ A divine mishap on Mount Olympus!\n\n"
-                            "Zeus encountered an unexpected storm.\n"
+                            f"{self._identity_name()} encountered an unexpected storm.\n"
                             "The gods are working to restore order."
                         )
                     )
@@ -826,8 +829,11 @@ class LLMAgent(BaseAgent):
         is_admin = privilege_service.is_admin(user_id)
         
         # Build menu message
+        identity_name = self._identity_name()
+        identity_name_lower = identity_name.lower()
+
         msg = (
-            "⚡ **Zeus Command Center** ⚡\n\n"
+            f"⚡ **{identity_name} Command Center** ⚡\n\n"
             "Select a feature to begin:\n\n"
             "🔍 **Scrape** - Extract events from messages\n"
             "📅 **Add Event** - Create calendar reminders\n"
@@ -836,7 +842,7 @@ class LLMAgent(BaseAgent):
             "🎭 **Profile Image** - FBI-level behavioral analysis\n"
             "📰 **News** - Latest updates & weather\n"
             "🔎 **Search** - Web search powered by Brave\n"
-            "💬 **Ask Zeus** - General questions & chat\n"
+            f"💬 **Ask {identity_name}** - General questions & chat\n"
             "🌐 **Translate** - Thai ↔ English translation\n"
         )
         
@@ -853,27 +859,27 @@ class LLMAgent(BaseAgent):
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="🔍 Scrape", text="zeus scrape")
+                action=MessageAction(label="🔍 Scrape", text=f"{identity_name} scrape")
             ),
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="📅 Add Event", text="zeus add event")
+                action=MessageAction(label="📅 Add Event", text=f"{identity_name} add event")
             ),
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="🗓️ Calendar", text="zeus calendar")
+                action=MessageAction(label="🗓️ Calendar", text=f"{identity_name} calendar")
             ),
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="🖼️ Image Q&A", text="zeus To analyze an image, send it first then ask a question")
+                action=MessageAction(label="🖼️ Image Q&A", text=f"{identity_name} analyze this")
             ),
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="🎭 Profile", text="zeus To profile someone, send their image")
+                action=MessageAction(label="🎭 Profile", text=f"{identity_name} profile")
             ),
             QuickReplyItem(
                 type="action",
@@ -883,17 +889,17 @@ class LLMAgent(BaseAgent):
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="🔎 Search", text="zeus search what would you like to search for?")
+                action=MessageAction(label="🔎 Search", text=f"{identity_name} search what would you like to search for?")
             ),
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="💬 Chat", text="Zeus what would you like to talk about?")
+                action=MessageAction(label="💬 Chat", text=f"{identity_name} what would you like to talk about?")
             ),
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="🌐 Translate", text="zeus Send Thai or English text for instant translation")
+                action=MessageAction(label="🌐 Translate", text=f"{identity_name} send Thai or English text for instant translation")
             ),
         ]
         
@@ -912,7 +918,7 @@ class LLMAgent(BaseAgent):
             QuickReplyItem(
                 type="action",
                 imageUrl=None,
-                action=MessageAction(label="🧪 DR. Hanibal", text="zeus hannibal")
+                action=MessageAction(label="🧪 DR. Hanibal", text=f"{identity_name} hannibal")
             )
         )
         

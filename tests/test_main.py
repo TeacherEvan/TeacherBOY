@@ -131,8 +131,8 @@ def readiness_lifespan_environment(mock_settings):
         "http2": False,
     }
     mock_settings.bot_identity_storage_path = "./data/test_bot_identity.json"
-    mock_settings.bot_identity_default_name = "Test Zeus"
-    mock_settings.get_bot_identity_default_aliases.return_value = ["Test Zeus"]
+    mock_settings.bot_identity_default_name = "Ms. Green"
+    mock_settings.get_bot_identity_default_aliases.return_value = ["Ms. Green"]
     mock_settings.conversation_memory_enabled = False
     mock_settings.document_memory_enabled = False
     mock_settings.history_log_path = "./data/test_history"
@@ -214,7 +214,6 @@ def readiness_lifespan_environment(mock_settings):
         stack.enter_context(patch("src.main.ApiClient", _FakeApiClient))
         stack.enter_context(patch("src.main.MessagingApi", _FakeMessagingApi))
         stack.enter_context(patch("src.main.setup_tracing"))
-        stack.enter_context(patch("src.main.translation_service.set_client"))
         stack.enter_context(patch("src.main.openrouter_service.set_client"))
         stack.enter_context(patch("src.main.brave_search_service.set_client"))
         stack.enter_context(patch("src.main.github_models_service.set_client"))
@@ -350,7 +349,10 @@ def test_root_endpoint(client):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "operational"  # Updated from "ok"
-    assert "Zeus" in data["service"]
+    assert data["service"] == "Ms. Green Assistant"
+    assert data["features"]["translation"] == "AI translation"
+    assert data["features"]["translation_backend"] == "ai"
+    assert "google_translate" not in data["features"]
 
 
 def test_health_check(client):
@@ -377,11 +379,11 @@ def test_health_check_does_not_call_translation_providers(client):
     with patch("src.main.startup_loader.is_ready", return_value=False), patch(
         "src.main.agent_router.list_agents", return_value=[]
     ), patch(
-        "src.main.google_translation_service.translate",
-        side_effect=AssertionError("google translate probe should not run"),
+        "src.main.github_models_service.chat_completion",
+        side_effect=AssertionError("github models probe should not run"),
     ), patch(
-        "src.main.translation_service.translate",
-        side_effect=AssertionError("libretranslate probe should not run"),
+        "src.main.openrouter_service.chat_completion",
+        side_effect=AssertionError("openrouter probe should not run"),
     ):
         response = client.get("/health")
 
@@ -406,6 +408,8 @@ def test_readiness_returns_503_when_startup_is_not_ready(client):
     data = response.json()
     assert data["ready"] is False
     assert data["checks"]["startup_data"] == "loading"
+    assert data["translation_backend"] == "ai"
+    assert "google_translate_enabled" not in data
 
 
 def test_readiness_returns_503_when_agents_exist_but_startup_is_still_loading(client):
@@ -436,6 +440,8 @@ def test_readiness_returns_200_when_startup_and_agents_are_ready(client):
     assert data["ready"] is True
     assert data["checks"]["startup_data"] == "ready"
     assert data["checks"]["agents_registered"] == 1
+    assert data["translation_backend"] == "ai"
+    assert "google_translate_enabled" not in data
 
 
 def test_readiness_returns_503_when_startup_is_ready_but_no_agents_registered(client):

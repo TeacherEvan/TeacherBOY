@@ -279,10 +279,10 @@ class TestCalendarAgent:
         """Test that agent handles view triggers."""
         # Test various view triggers
         view_triggers = [
-            "zeus calendar",
+            "Ms. Green calendar",
             "my events",
             "my reminders",
-            "zeus my calendar",
+            "Ms. Green my calendar",
         ]
         
         for trigger in view_triggers:
@@ -293,9 +293,9 @@ class TestCalendarAgent:
     async def test_should_handle_add_trigger(self, calendar_agent, mock_event):
         """Test that agent handles add triggers."""
         add_triggers = [
-            "zeus add event",
-            "zeus remind me",
-            "zeus calendar add",
+            "Ms. Green add event",
+            "Ms. Green remind me",
+            "Ms. Green calendar add",
         ]
         
         for trigger in add_triggers:
@@ -306,9 +306,9 @@ class TestCalendarAgent:
     async def test_should_handle_remove_trigger(self, calendar_agent, mock_event):
         """Test that agent handles remove triggers."""
         remove_triggers = [
-            "zeus remove event",
-            "zeus delete event",
-            "zeus calendar remove",
+            "Ms. Green remove event",
+            "Ms. Green delete event",
+            "Ms. Green calendar remove",
         ]
         
         for trigger in remove_triggers:
@@ -352,7 +352,7 @@ class TestCalendarAgent:
 
     @pytest.mark.asyncio
     async def test_calendar_agent_accepts_configured_alias_prefix(self, calendar_agent, mock_event):
-        result = await calendar_agent.should_handle(mock_event, "kps scrape")
+        result = await calendar_agent.should_handle(mock_event, "Ms. Green scrape")
         assert result is True
 
     def test_get_priority(self, calendar_agent):
@@ -414,7 +414,7 @@ class TestCalendarDeleteAndLiveBulkAdd:
         event.source.room_id = None
         event.reply_token = "reply"
         event.message = MagicMock()
-        event.message.text = "zeus add event"
+        event.message.text = "Ms. Green add event"
 
         line_api = MagicMock()
         chat_id = "user_U123456"
@@ -422,12 +422,12 @@ class TestCalendarDeleteAndLiveBulkAdd:
         # Ensure clean
         calendar_session_manager.end_session(chat_id)
 
-        handled = await agent.handle(event, "zeus add event", line_api)
+        handled = await agent.handle(event, "Ms. Green add event", line_api)
         assert handled is True
 
         session = calendar_session_manager.get_session(chat_id)
         assert session is not None
-        # "zeus add event" now triggers interactive add flow, not live bulk add
+        # "Ms. Green add event" now triggers interactive add flow, not live bulk add
         assert session.state == CalendarState.AWAITING_DATE
 
 

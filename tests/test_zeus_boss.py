@@ -6,7 +6,7 @@ from linebot.v3.messaging import MessagingApi
 
 
 @pytest.mark.asyncio
-async def test_zeus_boss_reply_is_exact():
+async def test_ms_green_boss_reply_is_exact():
     from src.agents.llm_agent import LLMAgent
 
     agent = LLMAgent()
@@ -19,7 +19,7 @@ async def test_zeus_boss_reply_is_exact():
     line_bot_api = MagicMock(spec=MessagingApi)
     line_bot_api.push_message = MagicMock()  # LLMAgent uses push_message, not reply_message
 
-    ok = await agent.handle(event, "Zeus who is boss?", line_bot_api)
+    ok = await agent.handle(event, "Ms. Green who is boss?", line_bot_api)
     assert ok is True
 
     # Ensure the push message text is exactly the expected boss reply

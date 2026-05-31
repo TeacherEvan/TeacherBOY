@@ -11,8 +11,7 @@ from linebot.v3.messaging import (
     FlexContainer,
 )
 
-from src.services.translation_service import translation_service
-from src.services.google_translation import google_translation_service
+from src.services.ai_translation_service import ai_translation_service
 from src.services.session_manager import session_manager
 
 logger = logging.getLogger(__name__)
@@ -31,8 +30,8 @@ def is_sleep_command(text: str) -> bool:
 
 
 def is_wake_command(text: str) -> bool:
-    """Check if text is a wake command (Dear Zeus alone)."""
-    return text.lower().strip() == "dear zeus"
+    """Check if text is a wake command (Dear Ms. Green alone)."""
+    return text.lower().strip() == "dear ms. green"
 
 
 def is_exit_command(text: str) -> bool:
@@ -77,14 +76,14 @@ def create_translation_flex_dict(
                     "contents": [
                         {
                             "type": "text",
-                            "text": "Zeus",
+                            "text": "Ms. Green",
                             "weight": "bold",
                             "color": primary_color,
                             "size": "sm",
                         },
                         {
                             "type": "text",
-                            "text": "TRANSLATOR",
+                            "text": "AI TRANSLATION",
                             "weight": "bold",
                             "color": secondary_color,
                             "size": "xxs",
@@ -158,7 +157,7 @@ def create_translation_flex_dict(
             "contents": [
                 {
                     "type": "text",
-                    "text": "Powered by LibreTranslate",
+                    "text": "Powered by AI translation",
                     "size": "xxs",
                     "color": "#aaaaaa",
                     "align": "center",
@@ -276,20 +275,16 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
     # Increment message counter
     session_manager.increment_message_count(chat_id)
 
-    # Try Google Translate first, fall back to LibreTranslate
-    translated_text = None
-    source_lang = None
+    source_lang = "th" if contains_thai(text) else "en"
+    target_lang = "en" if source_lang == "th" else "th"
 
-    if google_translation_service.is_configured():
-        logger.info("Using Google Cloud Translation API")
-        translated_text = await google_translation_service.auto_translate(text)
-        if translated_text:
-            # Prefer cheap heuristic for source language to avoid double-calling Google
-            source_lang = "th" if contains_thai(text) else "en"
-
-    if not translated_text:
-        logger.info("Using LibreTranslate (fallback)")
-        translated_text, source_lang = await translation_service.auto_translate(text)
+    logger.info("Using shared AI translation service")
+    result = await ai_translation_service.translate(
+        text,
+        source_lang=source_lang,
+        target_lang=target_lang,
+    )
+    translated_text = result.text if result else None
 
     if not translated_text or not source_lang:
         error_msg = TextMessage(text="Sorry, translation failed. Please try again.")  # type: ignore[call-arg]
@@ -303,8 +298,6 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
         except Exception as e:
             logger.error(f"Error sending error message: {str(e)}")
         return
-
-    target_lang = "en" if source_lang == "th" else "th"
 
     # Create Flex Message
     flex_dict = create_translation_flex_dict(

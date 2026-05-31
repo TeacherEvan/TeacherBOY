@@ -78,16 +78,16 @@ class TestProfilerAgentShouldHandle:
             
             # Test face-specific trigger phrases (no "analyze" - that goes to ImageAnalyzer)
             triggers = [
-                "zeus profile",
+                "Ms. Green profile",
                 "profile this",
                 "profile image",
                 "profile photo",
                 "profile face",
                 "profile person",
-                "zeus read face",
+                "Ms. Green read face",
                 "read this face",
                 "read face",
-                "zeus face",
+                "Ms. Green face",
                 "face analysis",
                 "facial analysis",
                 "read expression",
@@ -123,6 +123,18 @@ class TestProfilerAgentShouldHandle:
                 mock_text_event.message.text = trigger
                 result = await agent.should_handle(mock_text_event, trigger)
                 assert result is False, f"Trigger '{trigger}' should NOT be handled by Profiler"
+
+    @pytest.mark.asyncio
+    async def test_should_not_handle_legacy_zeus_profile_trigger(self, mock_text_event, mock_settings):
+        with patch("src.agents.profiler_agent.settings", mock_settings), \
+             patch("src.agents.profiler_agent.github_models_service") as mock_gms:
+            mock_gms.is_configured.return_value = True
+
+            from src.agents.profiler_agent import ProfilerAgent
+            agent = ProfilerAgent()
+
+            result = await agent.should_handle(mock_text_event, "zeus profile")
+            assert result is False
 
     @pytest.mark.asyncio
     async def test_should_handle_image_with_active_session(self, mock_event, mock_settings):

@@ -1,5 +1,5 @@
 ---
-title: Zeus
+title: Ms. Green
 emoji: 👨‍🏫
 colorFrom: blue
 colorTo: green
@@ -7,18 +7,17 @@ sdk: docker
 app_port: 8000
 ---
 
-## Zeus 👨‍🏫
+## Ms. Green 👨‍🏫
 
-> **Project Name:** This project is officially called **Zeus** and was formerly
-> known as **TeacherBOY**. You may see both names in various documentation files
-> during this transition period.
+> **Repository note:** The repository is still named **TeacherBOY**, but the
+> public bot identity and documentation target are now **Ms. Green**.
 
 **Runtime-configurable staff assistant with explicit AI review, DM follow-up, and multi-agent LINE workflows.**
 
-Zeus is a high-performance, asynchronous LINE Bot featuring a modular
-multi-agent system. The current default runtime identity is `KPS-Assistant`,
-with persisted aliases and explicit review flows layered on top of the
-existing calendar, search, LLM, and news features.
+Ms. Green is a high-performance, asynchronous LINE Bot featuring a modular
+multi-agent system. The default runtime identity is now `Ms. Green`, with
+explicit review flows layered on top of calendar, search, LLM, image, and news
+features.
 
 ## 📚 Documentation
 
@@ -39,21 +38,20 @@ The `docs/` folder is the maintained documentation source of truth.
 
 ## 🚀 Features
 
-### KPS Assistant Review Flow
+### Ms. Green Review Flow
 
 - **🪪 Runtime Identity:** Display name and aliases are persisted across restarts
-- **📝 Explicit Review:** `KPS review` translates and summarizes the last recent non-English message on request only
-- **📨 DM Follow-Up:** Review results and scrape confirmations go directly to the requesting user
-- **📅 Requester-Bound Scrape:** `KPS scrape` stores a DM reminder target on created events
-- **📌 Weekly Summary:** `KPS whats important this week?` combines calendar items and structured staff memory
-- **🤝 Staff Framing:** `KPS who do you work for?` returns the fixed KPS staff-assistant answer
+- **📝 Explicit Review:** `Ms. Green review` translates and summarizes the last recent non-English message on request only
+- **📨 DM Follow-Up:** Review results go directly to the requesting user
+- **📌 Weekly Summary:** `Ms. Green what's important this week?` combines calendar items and structured staff memory
+- **🤝 Staff Framing:** `Ms. Green who do you work for?` returns the fixed staff-assistant answer
 
 ### Translation Agent (Primary)
 
 - **🔥 Smart Auto-Detection:** Automatically starts when Thai text is detected
 - **🔄 Continuous Mode:** Translates EVERY message until you say "amen"
-- **😴 Sleep Mode:** Bot sleeps for 24 hours - say "Dear Zeus" alone to wake up
-- **🌐 Professional Quality:** Google Translate (primary) + LibreTranslate (fallback)
+- **😴 Sleep Mode:** Bot sleeps for 24 hours - say "Dear Ms. Green" alone to wake up
+- **🌐 AI Translation:** Shared AI translation service with GitHub Models first and OpenRouter fallback
 - **🛡️ Hallucination Prevention:** Detects incomplete sentences and prevents unwanted context injection
 - **💬 Bi-directional:** Thai 🇹🇭 → English 🇬🇧 and English 🇬🇧 → Thai 🇹🇭
 - **👥 Group Chat Support:** Works in 1-on-1, groups, and multi-person chats
@@ -84,13 +82,13 @@ The `docs/` folder is the maintained documentation source of truth.
 - **Trigger:** Type `news` or `ข่าว` to start
 - **📰 Special News:** `/special news` in DM provides interactive carousel with tourism, sports, international headlines
 
-### Zeus AI (LLM Agent) **NEW!**
+### Ms. Green AI (LLM Agent) **NEW!**
 
-- **🤖 Ask Zeus:** `Zeus <question>` or `/zeus <question>`
+- **🤖 Ask Ms. Green:** `Ms. Green <question>`
 - **🌡️ Warmth (Temperature):** Configure via `LLM_TEMPERATURE` (default: `1.0`)
 - **🧊 Stoic Persona (Default):** Controlled by `LLM_SYSTEM_PROMPT` (optional override)
 - **👥 Group Access Policy:**
-  - Admins can use Zeus anywhere
+  - Admins can use Ms. Green anywhere
   - Non-admins follow `ZEUS_GROUP_ACCESS_MODE`:
     - `all` (default)
     - `allowlist` with `ZEUS_ALLOWED_GROUP_IDS`
@@ -100,7 +98,7 @@ The `docs/` folder is the maintained documentation source of truth.
 ### Psychological Profiler **NEW!**
 
 - **🔬 FBI/Ekman/Navarro Frameworks:** Professional behavioral analysis
-- **📸 Trigger-Based:** Send "zeus profile" then your image
+- **📸 Trigger-Based:** Send `Ms. Green profile` then your image
 - **🎨 Fictional Artwork Support:** Analyze anime, manga, pencil drawings, concept art
 - **♿ Accessibility:** Helps neurodivergent users (autism) understand character expressions
 - **🎬 Creative Projects:** Art direction for music videos, storytelling, visual narratives
@@ -110,12 +108,12 @@ The `docs/` folder is the maintained documentation source of truth.
 
 ### Image Analyzer **NEW!**
 
-- **🖼️ General Image Q&A:** Ask Zeus questions about any image
+- **🖼️ General Image Q&A:** Ask Ms. Green questions about any image
 - **🔄 Multi-Step Flow:**
-  1. Trigger: "Zeus analyze this" / "analyze image" / "examine this"
-  2. Zeus asks for the image (60 seconds timeout)
+  1. Trigger: `Ms. Green analyze this` / `analyze image` / `examine this`
+  2. Ms. Green asks for the image (60 seconds timeout)
   3. Send your image
-  4. Zeus asks what you want to know
+  4. Ms. Green asks what you want to know
   5. Get your answer from GPT-4o vision
 - **💡 Use Cases:**
   - Menu translation: "What would be most enjoyable on this menu to a westerner?"
@@ -134,7 +132,7 @@ The `docs/` folder is the maintained documentation source of truth.
 - **📊 Priority System:** Control which agent handles messages first
 - **🔧 Admin Commands:** In-chat control commands for authorized admins
 - **📊 Admin Stats:** Enhanced dashboard with current tourism news headlines
-- **💭 Conversation Memory:** Multi-turn context for Zeus LLM agent with optional HF Hub persistence **NEW!**
+- **💭 Conversation Memory:** Multi-turn context for the Ms. Green LLM agent with optional HF Hub persistence **NEW!**
 - **📜 History Logging:** Comprehensive audit trail with encryption and cloud backup **NEW!**
 
 ### Performance & Scalability
@@ -148,7 +146,7 @@ The `docs/` folder is the maintained documentation source of truth.
 
 - **Framework:** Python 3.11+, FastAPI
 - **Platform:** LINE Messaging API v3 (Async)
-- **Translation:** Google Cloud Translation API (primary), LibreTranslate (fallback)
+- **Translation:** Shared AI translation service backed by GitHub Models and OpenRouter
 - **Architecture:** Multi-agent system with modular design
 - **Libraries:** `line-bot-sdk`, `httpx`, `pydantic`
 
@@ -161,13 +159,13 @@ See **[LINE Setup Guide](docs/guides/line-setup.md)** for detailed instructions.
 **Already have tokens?** Create a `.env` file:
 
 ```env
-# Primary Agent - Zeus (Translation)
+# Primary Agent - Ms. Green
 LINE_CHANNEL_SECRET=your_channel_secret
 LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
 
-# Translation APIs
-GOOGLE_TRANSLATE_API_KEY=your_google_api_key  # Recommended!
-LIBRETRANSLATE_API_URL=https://libretranslate.de/translate
+# AI translation providers
+GITHUB_MODELS_PAT=your_github_models_pat
+OPENROUTER_API_KEY=your_openrouter_api_key  # Optional fallback
 
 # News Agent (optional)
 # NEWS_API_KEY is deprecated (headlines use RSS feeds; no key required)
@@ -176,13 +174,13 @@ LIBRETRANSLATE_API_URL=https://libretranslate.de/translate
 # Optional: Additional agents
 ADDITIONAL_AGENTS=
 
-# Zeus AI (LLM) (optional)
+# Ms. Green AI (optional)
 LLM_TEMPERATURE=1.0
-# Group/room policy for non-admin Zeus usage: all|allowlist|denylist
+# Group/room policy for non-admin Ms. Green usage: all|allowlist|denylist
 ZEUS_GROUP_ACCESS_MODE=all
 ZEUS_ALLOWED_GROUP_IDS=
 ZEUS_DENIED_GROUP_IDS=
-# Optional: override Zeus persona
+# Optional: override Ms. Green persona
 # LLM_SYSTEM_PROMPT=
 
 # Admin Control (for bot management)
@@ -199,8 +197,8 @@ DEBUG=False
 
 ```bash
 # With Docker (recommended)
-docker build -t zeus .
-docker run --env-file .env -p 8000:8000 zeus
+docker build -t ms-green-assistant .
+docker run --env-file .env -p 8000:8000 ms-green-assistant
 
 # Or with Python directly
 pip install -r requirements.txt
@@ -230,7 +228,7 @@ ngrok http 8000
 - Send: `Hello` → Translates to Thai automatically
 - Send: `How are you?` → Keeps translating
 - Say: `amen` → Bot sleeps for 24 hours 😴
-- Say: `Dear Zeus` → Bot wakes up! ☀️
+- Say: `Dear Ms. Green` → Bot wakes up! ☀️
 
 **The bot will translate EVERY message until you say "amen"!**
 
@@ -238,7 +236,7 @@ ngrok http 8000
 
 ### 6. Admin & Moderator Setup (Optional)
 
-For bot management and privileged access, Zeus supports two levels:
+For bot management and privileged access, Ms. Green supports two levels:
 
 **Admin Users (Full Control):**
 
@@ -265,7 +263,8 @@ For bot management and privileged access, Zeus supports two levels:
 
 ## 🏗️ Architecture
 
-Zeus uses a **modular multi-agent architecture** where messages are routed to specialized agents based on content and context.
+Ms. Green uses a **modular multi-agent architecture** where messages are
+routed to specialized agents based on content and context.
 
 ```text
 LINE Webhook → Agent Router → [TranslationAgent | MathAgent | CodeAgent | ...]
@@ -290,8 +289,7 @@ src/
 │   └── translation_agent.py  # Translation logic
 ├── handlers/            # Event handlers (join, leave, members)
 ├── services/            # Translation & session management
-│   ├── translation_service.py     # LibreTranslate
-│   ├── google_translation.py      # Google API
+│   ├── ai_translation_service.py  # Shared AI translation
 │   └── session_manager.py         # Session state
 ├── config.py           # Environment configuration
 └── main.py             # FastAPI entry point
@@ -357,10 +355,10 @@ pytest --cov=src --cov-report=html
 
 - Smart Thai character detection
 - Continuous translation mode
-- Google Translate + LibreTranslate fallback
+- Shared AI translation via GitHub Models with OpenRouter fallback
 - Session management per chat
 - "amen" sleep command (24h)
-- "Dear Zeus" wake command
+- "Dear Ms. Green" wake command
 - Rate limiting (10 translations/minute)
 
 ✅ **Group Chat Support:**

@@ -56,13 +56,9 @@ jobs:
 
                   if git ls-remote --exit-code --heads hf main >/dev/null 2>&1; then
                       git fetch hf main
-                      git pull --rebase hf main || {
-                          git rebase --abort || true
-                          echo "Failed to rebase local main onto Hugging Face main. Resolve the divergence manually and retry."
-                          exit 1
-                      }
+                      echo "Publishing GitHub main to Hugging Face Space main (repo-authoritative deploy)."
+                      git push --force-with-lease hf HEAD:main
                   else
-                      echo "Hugging Face branch 'main' does not exist yet; pushing local branch."
+                      echo "Hugging Face branch 'main' does not exist yet; creating it from GitHub main."
+                      git push hf HEAD:main
                   fi
-
-                  git push hf HEAD:main

@@ -235,8 +235,8 @@ class CalendarAgent(BaseAgent):
         
         text_lower = text.lower()
         
-        # Check for Zeus OBSERVES pattern (image analysis output)
-        if "zeus observes" in text_lower or "━━━━━" in text:
+        # Check for image analysis output headers
+        if "zeus observes" in text_lower or "ms. green observes" in text_lower or "━━━━━" in text:
             return True
         
         # Check for multiple date patterns (numbered lists)

@@ -1,6 +1,6 @@
 # Agents
 
-Zeus uses a priority-based multi-agent router.
+Ms. Green uses a priority-based multi-agent router.
 
 ## Default agents (current)
 
@@ -11,15 +11,15 @@ Registration happens in `src/main.py`, and some agents are conditional on config
 
 | Priority | Agent Class | Conditional | Trigger Pattern | Description |
 |----------|------------|-------------|-----------------|-------------|
-| 5 | `HelpAgent` | No | `help`, `/help`, `Zeus help` | Interactive help and command discovery |
+| 5 | `HelpAgent` | No | `help`, `/help`, `Ms. Green help` | Interactive help and command discovery |
 | 5 | `AdminAgent` | Yes | `/admin`, `/mod` | Administrative commands and privileged control |
-| 6 | `CalendarAgent` | Yes | `zeus calendar`, `zeus add`, `zeus events` | Event scheduling, reminders, scraping |
+| 6 | `CalendarAgent` | Yes | `Ms. Green calendar`, `Ms. Green add`, `Ms. Green events` | Event scheduling, reminders, scraping |
 | 6 | `HannibalProfileAgent` | Yes | `hannibal profile`, `analyze messages` | Psychological profiling from message history |
 | 7 | `ProfilerAgent` | Yes | Image profile triggers | Image-based behavioral profiling |
-| 7 | `ImageAnalyzerAgent` | Yes | `zeus analyze`, image follow-up flow | General image Q&A and date extraction |
-| 8 | `DocumentMemoryAgent` | Yes | File uploads, `zeus doc`, `zeus docs` | PDF/DOCX storage and retrieval |
-| 8 | `SearchAgent` | No | `Zeus search <query>` | Web search via Brave Search API |
-| 9 | `LLMAgent` | No | `Zeus <prompt>` | General LLM conversation |
+| 7 | `ImageAnalyzerAgent` | Yes | `Ms. Green analyze`, image follow-up flow | General image Q&A and date extraction |
+| 8 | `DocumentMemoryAgent` | Yes | File uploads, `Ms. Green doc`, `Ms. Green docs` | PDF/DOCX storage and retrieval |
+| 8 | `SearchAgent` | No | `Ms. Green search <query>` | Web search via Brave Search API |
+| 9 | `LLMAgent` | No | `Ms. Green <prompt>` | General LLM conversation |
 | 10 | `TranslationAgent` | No | Default/fallback | Thai-English bidirectional translation |
 | 12 | `SpecialNewsAgent` | No | `/special news` | Tourism, sports, and international news |
 | 15 | `NewsAgent` | No | `news`, `ข่าว` | Weather, air quality, headlines, markets |

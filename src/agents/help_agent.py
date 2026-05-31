@@ -82,18 +82,19 @@ class HelpAgent(BaseAgent):
         search_available: bool,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Get categorized command list based on user permissions and context."""
+        display_name = get_bot_identity_service().get_profile().display_name
         categories = {
             "Core Commands": [
                 {
                     "command": "help",
                     "description": "Show this help menu",
-                    "examples": ["help", "/help", "Dear Zeus help"],
+                    "examples": ["help", "/help", f"{display_name} help"],
                     "available": True
                 },
                 {
-                    "command": "Dear Zeus",
+                    "command": display_name,
                     "description": "Wake the bot from sleep mode",
-                    "examples": ["Dear Zeus"],
+                    "examples": [display_name],
                     "available": True
                 },
                 {
@@ -119,15 +120,15 @@ class HelpAgent(BaseAgent):
             ],
             "AI & Search": [
                 {
-                    "command": "Zeus <question>",
-                    "description": "Ask Zeus AI general questions",
-                    "examples": ["Zeus what is the weather?", "Zeus tell me a joke"],
+                    "command": f"{display_name} <question>",
+                    "description": f"Ask {display_name} AI general questions",
+                    "examples": [f"{display_name} what is the weather?", f"{display_name} tell me a joke"],
                     "available": zeus_available
                 },
                 {
-                    "command": "Zeus search <query>",
+                    "command": f"{display_name} search <query>",
                     "description": "Search the web for information",
-                    "examples": ["Zeus search Python tutorials"],
+                    "examples": [f"{display_name} search Python tutorials"],
                     "available": search_available
                 }
             ],
@@ -147,48 +148,48 @@ class HelpAgent(BaseAgent):
             ],
             "Calendar & Reminders": [
                 {
-                    "command": "Zeus calendar",
+                    "command": f"{display_name} calendar",
                     "description": "View your upcoming events and reminders",
-                    "examples": ["Zeus calendar", "my events", "my reminders"],
+                    "examples": [f"{display_name} calendar", "my events", "my reminders"],
                     "available": settings.is_calendar_configured()
                 },
                 {
-                    "command": "Zeus add event",
+                    "command": f"{display_name} add event",
                     "description": "Create event with customizable reminders (7/3/1 days)",
-                    "examples": ["Zeus add event", "Zeus remind me"],
+                    "examples": [f"{display_name} add event", f"{display_name} remind me"],
                     "available": settings.is_calendar_configured()
                 },
                 {
-                    "command": "Zeus add [date] [title]",
-                    "description": "Quick add: Zeus add Jan 15 Birthday party",
-                    "examples": ["Zeus add tomorrow Meeting", "Zeus add 15/01 Conference"],
+                    "command": f"{display_name} add [date] [title]",
+                    "description": f"Quick add: {display_name} add Jan 15 Birthday party",
+                    "examples": [f"{display_name} add tomorrow Meeting", f"{display_name} add 15/01 Conference"],
                     "available": settings.is_calendar_configured()
                 },
                 {
-                    "command": "Zeus scrape",
+                    "command": f"{display_name} scrape",
                     "description": "AI-powered date extraction from recent messages",
-                    "examples": ["Zeus scrape", "Zeus scan messages"],
+                    "examples": [f"{display_name} scrape", f"{display_name} scan messages"],
                     "available": settings.is_calendar_configured()
                 },
                 {
-                    "command": "Zeus remove event",
+                    "command": f"{display_name} remove event",
                     "description": "Delete events with multi-select support",
-                    "examples": ["Zeus remove event", "Zeus delete event"],
+                    "examples": [f"{display_name} remove event", f"{display_name} delete event"],
                     "available": settings.is_calendar_configured()
                 }
             ],
             "Image Analysis": [
                 {
-                    "command": "Zeus profile",
+                    "command": f"{display_name} profile",
                     "description": "Psychological profiling from photos using FBI/Ekman/Navarro frameworks",
-                    "examples": ["Zeus profile", "Zeus analyze this photo"],
+                    "examples": [f"{display_name} profile", f"{display_name} analyze this photo"],
                     "rate_limit": "3 analyses/hour (admins unlimited)" if not is_admin else "Unlimited",
                     "available": settings.is_profiler_configured()
                 },
                 {
-                    "command": "Zeus analyze this",
+                    "command": f"{display_name} analyze this",
                     "description": "General image Q&A with GPT-4o vision",
-                    "examples": ["Zeus analyze this", "analyze image", "examine this photo"],
+                    "examples": [f"{display_name} analyze this", "analyze image", "examine this photo"],
                     "rate_limit": "5 analyses/hour (admins unlimited)" if not is_admin else "Unlimited",
                     "available": settings.is_github_models_configured()
                 }
@@ -235,10 +236,11 @@ class HelpAgent(BaseAgent):
     def _get_adaptive_tips(self, is_admin: bool, chat_type: str) -> List[str]:
         """Get contextual tips based on user status and chat type."""
         tips = []
+        display_name = get_bot_identity_service().get_profile().display_name
 
         # Interactive tutorial prompts
-        tips.append("📚 Try 'Zeus calendar' to explore the events feature")
-        tips.append("🎓 Use 'Zeus scrape' to see AI date extraction in action")
+        tips.append(f"📚 Try '{display_name} calendar' to explore the events feature")
+        tips.append(f"🎓 Use '{display_name} scrape' to see AI date extraction in action")
         
         if chat_type == "private chat":
             tips.append("💡 In private chats, you can use simple 'help' command")
@@ -258,16 +260,13 @@ class HelpAgent(BaseAgent):
         if settings.is_calendar_configured():
             tips.append("⚙️ Customize reminder timing: 7/3/1 days or all")
         
-        if settings.is_google_translate_configured():
-            tips.append("⚡ Professional Google Translate is active")
-        else:
-            tips.append("🔄 Using LibreTranslate (free tier)")
+        tips.append("⚡ AI translation is active")
 
-        tips.append("😴 Bot sleeps after 24h of inactivity - wake with 'Dear Zeus'")
+        tips.append(f"😴 Bot sleeps after 24h of inactivity - wake with '{display_name}'")
         
         # Advanced search tip
         if settings.is_brave_search_configured():
-            tips.append("🔍 Advanced: 'Zeus search' for web results with AI summary")
+            tips.append(f"🔍 Advanced: '{display_name} search' for web results with AI summary")
 
         return tips
 
@@ -284,7 +283,7 @@ class HelpAgent(BaseAgent):
             "contents": [
                 {
                     "type": "text",
-                    "text": "🗡️ ZEUS HELP SYSTEM",
+                    "text": "🗡️ MS. GREEN HELP SYSTEM",
                     "weight": "bold",
                     "size": "xl",
                     "color": "#1F2937",
@@ -392,7 +391,7 @@ class HelpAgent(BaseAgent):
                 "contents": [
                     {
                         "type": "text",
-                        "text": "💡 WISE COUNSEL FROM ZEUS",
+                        "text": "💡 HELPFUL NOTES FROM MS. GREEN",
                         "weight": "bold",
                         "size": "md",
                         "color": "#1F2937",
@@ -433,7 +432,7 @@ class HelpAgent(BaseAgent):
                 },
                 {
                     "type": "text",
-                    "text": "⚡ Powered by Zeus • Ruler of Olympus",
+                    "text": "⚡ Powered by Ms. Green • Assistant",
                     "size": "xxs",
                     "color": "#9CA3AF",
                     "align": "center"
@@ -460,7 +459,7 @@ class HelpAgent(BaseAgent):
         }
 
         return FlexMessage(
-            altText="Zeus Help System - Command Reference",
+            altText="Ms. Green Help System - Command Reference",
             contents=FlexContainer.from_dict(flex_dict),
             quickReply=None,
         )
@@ -528,10 +527,10 @@ class HelpAgent(BaseAgent):
                 # Fallback to simple text message
                 try:
                     fallback_message = TextMessage(
-                        text="🗡️ ZEUS HELP SYSTEM\n\n"
+                            text="🗡️ MS. GREEN HELP SYSTEM\n\n"
                              "Available commands:\n"
                              "• help - Show this menu\n"
-                             "• Dear Zeus - Wake from sleep\n"
+                                "• Ms. Green - Wake from sleep\n"
                              "• amen - Sleep for 24h\n"
                              "• Thai/English text - Auto-translate\n\n"
                              "For admin commands: /admin help",

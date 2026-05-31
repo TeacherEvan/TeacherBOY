@@ -9,12 +9,12 @@ handles general image-based questions like:
 - "What products are shown here?"
 
 Flow:
-1. User: "Zeus analyze this" / "analyze image"
-2. Zeus: "Provide me with thy image to examine (60 seconds)"
+1. User: "Ms. Green analyze this" / "analyze image"
+2. Ms. Green: "Please send the image you'd like me to analyze (60 seconds)"
 3. User: [sends image]
-4. Zeus: "What is thy question about this image?"
+4. Ms. Green: "What would you like to know about this image?"
 5. User: "What would be most enjoyable on this menu to a westerner?"
-6. Zeus: [analyzes image and answers question]
+6. Ms. Green: [analyzes image and answers question]
 
 Calendar Integration:
 When dates are detected in an image (schedules, announcements, etc.),
@@ -53,6 +53,7 @@ from src.services.github_models_service import github_models_service
 from src.services.rate_limiter import RateLimiter
 from src.services.metrics_service import metrics_service
 from src.services.privilege_service import privilege_service
+from src.services.bot_identity_service import get_bot_identity_service
 from src.config import settings
 from src.utils.tracing import get_tracer
 
@@ -74,14 +75,17 @@ class ImageAnalyzerAgent(BaseAgent):
     """
 
     # Trigger phrases that start an image analysis session
-    TRIGGERS = [
-        "zeus analyze",
+    PREFIXED_TRIGGERS = [
+        "analyze",
+        "examine",
+        "look at",
+    ]
+
+    GENERIC_TRIGGERS = [
         "analyze this",
         "analyze image",
-        "zeus examine",
         "examine this",
         "examine image",
-        "zeus look at",
         "look at this",
     ]
 
@@ -99,6 +103,9 @@ class ImageAnalyzerAgent(BaseAgent):
         self.http_client = http_client
         # Cache for friend status checks
         self._friend_cache: Dict[str, tuple[bool, datetime]] = {}
+
+    def _identity_name(self) -> str:
+        return get_bot_identity_service().get_profile().display_name
         
     def get_priority(self) -> int:
         """
@@ -129,7 +136,7 @@ class ImageAnalyzerAgent(BaseAgent):
         line_bot_api: MessagingApi
     ) -> bool:
         """
-        Check if user is a LINE friend of Zeus.
+        Check if user is a LINE friend of the bot.
         
         Uses LINE API get_profile() which returns error for non-friends.
         Results are cached for 5 minutes.
@@ -205,8 +212,13 @@ class ImageAnalyzerAgent(BaseAgent):
         ]
         if any(keyword in text_lower for keyword in profiler_keywords):
             return False
-        
-        return any(trigger in text_lower for trigger in self.TRIGGERS)
+
+        prefix, rest = get_bot_identity_service().split_command_prefix(text)
+        if prefix:
+            rest_lower = rest.lower().strip()
+            return any(rest_lower.startswith(trigger) for trigger in self.PREFIXED_TRIGGERS)
+
+        return any(text_lower.startswith(trigger) for trigger in self.GENERIC_TRIGGERS)
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
@@ -320,7 +332,7 @@ class ImageAnalyzerAgent(BaseAgent):
         image_analyzer_session_manager.start_session(chat_id, user_id)
         
         prompt_msg = TextMessage(
-            text="🖼️ Provide me with thy image to examine.\n\n"
+            text="🖼️ Please send the image you'd like me to analyze.\n\n"
                  "(You have 60 seconds to send an image)\n\n"
                  "ส่งภาพที่ต้องการให้วิเคราะห์ (60 วินาที)",
             quickReply=None,
@@ -375,7 +387,11 @@ class ImageAnalyzerAgent(BaseAgent):
         del image_base64  # Remove base64 string (data URL is kept in session)
         
         if not image_analyzer_session_manager.store_image(chat_id, image_data_url):
-            await self._send_error_message(event, line_bot_api, "Session expired. Please start again with 'Zeus analyze this'.")
+            await self._send_error_message(
+                event,
+                line_bot_api,
+                f"Session expired. Please start again with '{self._identity_name()} analyze this'.",
+            )
             del image_data_url  # Clean up on error
             return False
         
@@ -384,7 +400,7 @@ class ImageAnalyzerAgent(BaseAgent):
         
         # Ask for question
         question_msg = TextMessage(
-            text="⚡ Image received! What is thy question about this image?\n\n"
+            text="⚡ Image received! What would you like to know about this image?\n\n"
                  "(You have 60 seconds to ask)\n\n"
                  "ได้รับภาพแล้ว! มีคำถามอะไรเกี่ยวกับภาพนี้?",
             quickReply=None,
@@ -501,9 +517,9 @@ class ImageAnalyzerAgent(BaseAgent):
         current_year = today.year
         
         system_prompt = (
-            "You are Zeus, the king of the Olympian gods. "
-            "You speak with measured wisdom and authority, but with warmth befitting a benevolent ruler. "
-            "When analyzing images, provide helpful, practical answers to mortal questions. "
+            "You are Ms. Green, a polite and observant assistant. "
+            "You speak with calm clarity and practical warmth. "
+            "When analyzing images, provide helpful, practical answers. "
             "Be direct and insightful. Keep responses concise but complete. "
             "For menus, signs, or text: translate and explain if in another language. "
             "For products or items: describe what you see and provide recommendations if asked.\n\n"
@@ -542,7 +558,7 @@ class ImageAnalyzerAgent(BaseAgent):
 
     def _format_response(self, analysis: str) -> str:
         """Format the analysis response for LINE (strip date detection section)."""
-        header = "⚡ ZEUS OBSERVES ⚡\n"
+        header = "⚡ MS. GREEN OBSERVES ⚡\n"
         header += "━" * 20 + "\n\n"
         
         # Strip date detection section from user-visible response
@@ -711,12 +727,12 @@ class ImageAnalyzerAgent(BaseAgent):
                 # Get user's display name for personalized quirky response
                 display_name = await self._get_user_display_name(user_id or "", line_bot_api) if user_id else "mortal"
                 
-                # Quirky Zeus-style rejection message
+                identity_name = self._identity_name()
                 quirky_responses = [
                     f"⚡ Alas, {display_name}... are we friends?\n\n"
-                    f"Calendar powers are reserved for those who have befriended Zeus!\n"
+                    f"Calendar powers are reserved for those who have befriended {identity_name}!\n"
                     f"Add me as a LINE friend to unlock this divine feature.\n\n"
-                    f"📱 เพิ่มเพื่อนกับ Zeus ก่อนนะ!",
+                    f"📱 เพิ่มเพื่อนกับ {identity_name} ก่อนนะ!",
                     
                     f"🤔 Hmm, {display_name}... I sense we are not yet friends.\n\n"
                     f"Only friends of the Olympian king may access the sacred calendar!\n"
@@ -725,8 +741,8 @@ class ImageAnalyzerAgent(BaseAgent):
                     
                     f"⚡ Hold, {display_name}!\n\n"
                     f"The calendar is a gift I bestow only upon my mortal friends.\n"
-                    f"Add Zeus as a friend to receive this blessing!\n\n"
-                    f"📱 เป็นเพื่อนกับ Zeus สิ!",
+                    f"Add {identity_name} as a friend to receive this blessing!\n\n"
+                    f"📱 เป็นเพื่อนกับ {identity_name} สิ!",
                 ]
                 
                 import random
@@ -809,7 +825,7 @@ class ImageAnalyzerAgent(BaseAgent):
                     msg = TextMessage(
                         text=(
                             "❌ I couldn't parse any dates to add to calendar.\n\n"
-                            "Please try again or use 'zeus add [date] [title]'."
+                            f"Please try again or use '{self._identity_name()} add [date] [title]'."
                         ),
                         quickReply=None,
                         quoteToken=None,

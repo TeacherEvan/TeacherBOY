@@ -418,7 +418,7 @@ class AddFlow(CalendarFlowBase):
         
         Patterns detected:
         - Multiple lines with dates
-        - "ZEUS OBSERVES" AI analysis output
+        - Image analysis output headers
         - Multiple date patterns in one message
         """
         lines = text.strip().split('\n')
@@ -427,8 +427,9 @@ class AddFlow(CalendarFlowBase):
         if len(lines) >= 3:
             return True
 
-        # Check for Zeus analysis output
-        if "ZEUS OBSERVES" in text.upper() or "DETECTED DATES" in text.upper():
+        # Check for image analysis output
+        upper_text = text.upper()
+        if "ZEUS OBSERVES" in upper_text or "MS. GREEN OBSERVES" in upper_text or "DETECTED DATES" in upper_text:
             return True
 
         # Count date-like patterns

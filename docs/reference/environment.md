@@ -1,6 +1,6 @@
 # Environment variables
 
-Zeus reads configuration from `.env` (local) and environment variables (production).
+Ms. Green reads configuration from `.env` (local) and environment variables (production).
 
 Start from `.env.example`.
 
@@ -11,7 +11,8 @@ Start from `.env.example`.
 
 ## Recommended
 
-- `GOOGLE_TRANSLATE_API_KEY` (higher-quality translations)
+- `GITHUB_MODELS_PAT` (preferred AI provider for translation and vision)
+- `OPENROUTER_API_KEY` (fallback AI provider)
 
 ## Admin
 
@@ -43,7 +44,7 @@ Notes:
 ## Tracing
 
 - `ENABLE_TRACING` (default: `False`)
-- `OTEL_SERVICE_NAME` (default: `Zeus`)
+- `OTEL_SERVICE_NAME` (default: `Ms. Green`)
 - `OTEL_EXPORTER_OTLP_ENDPOINT` (default: `http://localhost:4318`)
 
 ## Server
@@ -52,10 +53,12 @@ Notes:
 - `PORT` (default: `8000`)
 - `DEBUG` (default: `False`)
 
-## Translation (fallback)
+## AI Translation
 
-- `LIBRETRANSLATE_API_URL`
-- `LIBRETRANSLATE_API_KEY`
+- Translation uses the shared AI translation service.
+- Configure at least one provider:
+	- `GITHUB_MODELS_PAT`
+	- `OPENROUTER_API_KEY`
 
 ## LLM (OpenRouter)
 

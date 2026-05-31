@@ -30,6 +30,7 @@ from src.services.profiler_session_manager import profiler_session_manager
 from src.services.rate_limiter import RateLimiter
 from src.services.metrics_service import metrics_service
 from src.services.privilege_service import privilege_service
+from src.services.bot_identity_service import get_bot_identity_service
 from src.config import settings
 from src.utils.tracing import get_tracer
 from src.prompts.builders.vision_builder import VisionPromptBuilder
@@ -123,23 +124,25 @@ class ProfilerAgent(BaseAgent):
         # Case 1: Text message with profiling trigger
         if message_type == 'text' and text:
             text_lower = text.lower().strip()
+            prefix, rest = get_bot_identity_service().split_command_prefix(text)
+            rest_lower = rest.lower().strip() if prefix else ""
+
+            if prefix and rest_lower in {"profile", "read face", "face"}:
+                return True
             
             # Profiling trigger phrases - FACE-SPECIFIC ONLY
             # Note: "analyze" triggers go to ImageAnalyzerAgent for general Q&A
             # Profiling is specifically for facial/psychological analysis
             triggers = [
                 # Profile keywords
-                "zeus profile",
                 "profile this",
                 "profile image",
                 "profile photo",
                 "profile face",
                 "profile person",
                 # Face-specific keywords (FaceLLaVA-style)
-                "zeus read face",
                 "read this face",
                 "read face",
-                "zeus face",
                 "face analysis",
                 "facial analysis",
                 "read expression",
@@ -424,7 +427,7 @@ class ProfilerAgent(BaseAgent):
         """Send a message indicating analysis is in progress."""
         analyzing_msg = TextMessage(
             text="🔬 Analyzing image... Please wait.\n\n"
-                 "⚡ Zeus Psychological Profiler is scanning:\n"
+                 "⚡ Ms. Green Face Profiler is scanning:\n"
                  "• Facial expressions (Ekman FACS)\n"
                  "• Body language (Navarro FBI methods)\n"
                  "• Environmental context\n"

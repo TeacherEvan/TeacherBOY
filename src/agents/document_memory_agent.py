@@ -16,6 +16,7 @@ from linebot.v3.messaging import (
 
 from .base_agent import BaseAgent
 from src.config import settings
+from src.services.bot_identity_service import get_bot_identity_service
 if TYPE_CHECKING:
     from src.services.document_memory_service import DocumentMemoryService
 
@@ -43,8 +44,8 @@ class DocumentMemoryAgent(BaseAgent):
             return True
 
         if isinstance(event.message, TextMessageContent):
-            text_lower = text.strip().lower()
-            return text_lower.startswith("zeus doc") or text_lower.startswith("zeus docs")
+            prefix, rest = get_bot_identity_service().split_command_prefix(text)
+            return prefix is not None and rest.strip().lower().startswith("doc")
 
         return False
 
@@ -127,7 +128,8 @@ class DocumentMemoryAgent(BaseAgent):
             f"✅ Stored document: {metadata.get('file_name')}\n"
             f"ID: {doc_id}\n"
             f"Extracted text: {text_chars} chars\n\n"
-            "Use: 'Zeus docs' to list, 'Zeus doc <ID>' to view."
+            f"Use: '{get_bot_identity_service().get_profile().display_name} docs' to list, "
+            f"'{get_bot_identity_service().get_profile().display_name} doc <ID>' to view."
         )
         if settings.is_document_memory_configured():
             reply += "\n\n📦 HF Hub persistence enabled (safe across restarts)."
@@ -140,10 +142,17 @@ class DocumentMemoryAgent(BaseAgent):
     async def _handle_command(
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi
     ) -> bool:
-        text_lower = text.strip().lower()
         chat_id = self._get_chat_id(event)
+        display_name = get_bot_identity_service().get_profile().display_name
+        prefix, rest = get_bot_identity_service().split_command_prefix(text)
 
-        if text_lower in ("zeus docs", "zeus docs list", "zeus doc list"):
+        if not prefix:
+            return False
+
+        rest = rest.strip()
+        rest_lower = rest.lower()
+
+        if rest_lower in ("docs", "docs list", "doc list"):
             docs = self._document_service.list_documents(chat_id)
             if not docs:
                 await self._send_reply(event, line_bot_api, "📄 No documents stored yet.")
@@ -159,8 +168,8 @@ class DocumentMemoryAgent(BaseAgent):
             await self._send_reply(event, line_bot_api, "\n".join(lines))
             return True
 
-        if text_lower.startswith("zeus doc search "):
-            query = text[len("zeus doc search ") :].strip()
+        if rest_lower.startswith("doc search "):
+            query = rest[len("doc search ") :].strip()
             if not query:
                 await self._send_reply(event, line_bot_api, "⚠️ Provide a search query.")
                 return True
@@ -178,7 +187,7 @@ class DocumentMemoryAgent(BaseAgent):
             await self._send_reply(event, line_bot_api, "\n".join(lines))
             return True
 
-        if text_lower in ("zeus doc clear", "zeus docs clear"):
+        if rest_lower in ("doc clear", "docs clear"):
             cleared = self._document_service.clear_documents(chat_id)
             if cleared:
                 await self._send_reply(event, line_bot_api, "🧹 Document memory cleared for this chat.")
@@ -186,8 +195,8 @@ class DocumentMemoryAgent(BaseAgent):
                 await self._send_reply(event, line_bot_api, "📄 No documents to clear.")
             return True
 
-        if text_lower.startswith("zeus doc delete "):
-            doc_id = text[len("zeus doc delete ") :].strip()
+        if rest_lower.startswith("doc delete "):
+            doc_id = rest[len("doc delete ") :].strip()
             if not doc_id:
                 await self._send_reply(event, line_bot_api, "⚠️ Provide a document ID.")
                 return True
@@ -198,8 +207,8 @@ class DocumentMemoryAgent(BaseAgent):
                 await self._send_reply(event, line_bot_api, "❌ Document not found.")
             return True
 
-        if text_lower.startswith("zeus doc "):
-            doc_id = text[len("zeus doc ") :].strip()
+        if rest_lower.startswith("doc "):
+            doc_id = rest[len("doc ") :].strip()
             if not doc_id:
                 await self._send_reply(event, line_bot_api, "⚠️ Provide a document ID.")
                 return True
@@ -228,11 +237,11 @@ class DocumentMemoryAgent(BaseAgent):
             event,
             line_bot_api,
             "📄 Document commands:\n"
-            "• Zeus docs\n"
-            "• Zeus doc <ID>\n"
-            "• Zeus doc search <query>\n"
-            "• Zeus doc delete <ID>\n"
-            "• Zeus doc clear",
+            f"• {display_name} docs\n"
+            f"• {display_name} doc <ID>\n"
+            f"• {display_name} doc search <query>\n"
+            f"• {display_name} doc delete <ID>\n"
+            f"• {display_name} doc clear",
         )
         return True
 

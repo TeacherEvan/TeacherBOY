@@ -32,6 +32,7 @@ from src.services.message_buffer_service import message_buffer_service
 from src.services.rate_limiter import RateLimiter
 from src.services.metrics_service import metrics_service
 from src.services.privilege_service import privilege_service
+from src.services.bot_identity_service import get_bot_identity_service
 from src.config import settings
 from src.utils.tracing import get_tracer
 
@@ -119,11 +120,12 @@ class HannibalProfileAgent(BaseAgent):
             return False
         
         text_lower = text.lower().strip()
+        prefix, rest = get_bot_identity_service().split_command_prefix(text)
+        rest_lower = rest.lower().strip() if prefix else ""
         
         # Hannibal profile triggers
         triggers = [
             "hannibal profile",
-            "zeus hannibal",
             "profile messages",
             "analyze chat",
             "read chat",
@@ -131,6 +133,9 @@ class HannibalProfileAgent(BaseAgent):
             "analyze writing",
             "writing analysis",
         ]
+
+        if prefix and rest_lower == "hannibal":
+            return True
         
         return any(trigger in text_lower for trigger in triggers)
 

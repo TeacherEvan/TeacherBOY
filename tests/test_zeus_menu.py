@@ -1,4 +1,4 @@
-"""Tests for Zeus interactive menu feature."""
+"""Tests for the interactive menu feature."""
 
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
@@ -7,7 +7,7 @@ from src.agents.llm_agent import LLMAgent
 
 
 class TestZeusMenu:
-    """Test Zeus interactive menu when user says just 'Zeus'."""
+    """Test the interactive menu when user says just 'Ms. Green'."""
 
     @pytest.fixture
     def agent(self):
@@ -15,8 +15,8 @@ class TestZeusMenu:
         return LLMAgent()
 
     @pytest.mark.asyncio
-    async def test_standalone_zeus_triggers_menu(self, agent):
-        """Test that saying just 'Zeus' triggers the interactive menu."""
+    async def test_standalone_ms_green_triggers_menu(self, agent):
+        """Test that saying just 'Ms. Green' triggers the interactive menu."""
         event = MagicMock()
         event.source = MagicMock()
         event.source.user_id = "U123456"
@@ -24,18 +24,17 @@ class TestZeusMenu:
         event.source.room_id = None
         event.reply_token = "reply_token"
 
-        # Test should_handle for standalone "Zeus"
-        should_handle = await agent.should_handle(event, "Zeus")
+        should_handle = await agent.should_handle(event, "Ms. Green")
         assert should_handle is True
 
-        # Test variations
-        assert await agent.should_handle(event, "zeus") is True
-        assert await agent.should_handle(event, "ZEUS") is True
-        assert await agent.should_handle(event, "  zeus  ") is True
+        assert await agent.should_handle(event, "ms. green") is True
+        assert await agent.should_handle(event, "MS. GREEN") is True
+        assert await agent.should_handle(event, "  ms green  ") is True
+        assert await agent.should_handle(event, "Zeus") is False
 
     @pytest.mark.asyncio
-    async def test_zeus_with_query_does_not_trigger_menu(self, agent):
-        """Test that 'Zeus <query>' doesn't trigger menu (goes to LLM)."""
+    async def test_ms_green_with_query_does_not_trigger_menu(self, agent):
+        """Test that 'Ms. Green <query>' doesn't trigger menu (goes to LLM)."""
         event = MagicMock()
         event.source = MagicMock()
         event.source.user_id = "U123456"
@@ -43,8 +42,8 @@ class TestZeusMenu:
         # Mock LLM configuration
         with patch.object(agent, '_is_any_llm_configured', return_value=True):
             # These should be handled but NOT as menu commands
-            assert await agent.should_handle(event, "Zeus what is the weather") is True
-            assert await agent.should_handle(event, "Zeus search something") is False  # Reserved for SearchAgent
+            assert await agent.should_handle(event, "Ms. Green what is the weather") is True
+            assert await agent.should_handle(event, "Ms. Green search something") is False  # Reserved for SearchAgent
 
     @pytest.mark.asyncio
     async def test_menu_shows_all_features(self, agent):
@@ -59,7 +58,7 @@ class TestZeusMenu:
         line_api = AsyncMock()
         
         # Handle menu command
-        result = await agent.handle(event, "Zeus", line_api)
+        result = await agent.handle(event, "Ms. Green", line_api)
         assert result is True
 
         # Verify reply_message was called with menu
@@ -71,7 +70,7 @@ class TestZeusMenu:
         message = request.messages[0]
         
         # Verify message content includes features
-        assert "Command Center" in message.text
+        assert "Ms. Green Command Center" in message.text
         assert "Scrape" in message.text
         assert "Add Event" in message.text
         assert "Analyze Image" in message.text
@@ -99,7 +98,7 @@ class TestZeusMenu:
         
         # Mock admin check
         with patch('src.agents.llm_agent.privilege_service.is_admin', return_value=True):
-            result = await agent.handle(event, "Zeus", line_api)
+            result = await agent.handle(event, "Ms. Green", line_api)
             assert result is True
 
             # Verify admin button exists
@@ -126,7 +125,7 @@ class TestZeusMenu:
         
         # Mock non-admin check
         with patch('src.agents.llm_agent.privilege_service.is_admin', return_value=False):
-            result = await agent.handle(event, "Zeus", line_api)
+            result = await agent.handle(event, "Ms. Green", line_api)
             assert result is True
 
             # Verify no admin button

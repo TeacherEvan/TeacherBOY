@@ -26,6 +26,14 @@ In the same **Messaging API** tab:
 
    - `https://<your-host>/webhook`
 
+   For Hugging Face Spaces, use the live Space host:
+
+   - `https://<your-space-host>.hf.space/webhook`
+
+   Do not use the Hugging Face page URL:
+
+   - `https://huggingface.co/spaces/<owner>/<space>`
+
 3. Click **Verify** and confirm success.
 
 ## 4) Disable competing responders (recommended)
@@ -45,3 +53,4 @@ This avoids conflicts where LINE responds instead of your bot.
 
 - Invalid signature: your `LINE_CHANNEL_SECRET` is wrong, or the request is being modified by a proxy.
 - Verify fails: your URL isn’t reachable publicly over HTTPS, or your app isn’t running.
+- Verify returns `404 Not Found`: you are likely using the Hugging Face page URL instead of the `hf.space` app host.

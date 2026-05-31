@@ -36,9 +36,12 @@ class SearchAgent(BaseAgent):
     def get_priority(self) -> int:
         """
         Priority 8: Runs before LLMAgent (9) and TranslationAgent (10).
-        Ensures 'Zeus search' is handled here, not by LLMAgent.
+        Ensures prefixed search commands are handled here, not by LLMAgent.
         """
         return 8
+
+    def _identity_name(self) -> str:
+        return get_bot_identity_service().get_profile().display_name
 
     def _is_private_chat(self, event: MessageEvent) -> bool:
         """Check if chat is private (1-on-1)."""
@@ -54,7 +57,7 @@ class SearchAgent(BaseAgent):
     def _parse_search_command(self, text: str) -> Optional[str]:
         """
         Parse search command.
-        Trigger: 'Zeus search <query>'
+        Trigger: '<bot name> search <query>'
         Returns query string or None.
         """
         prefix, rest = get_bot_identity_service().split_command_prefix(text)
@@ -70,7 +73,7 @@ class SearchAgent(BaseAgent):
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
         Handle if:
-        1. Text starts with 'Zeus search'
+        1. Text starts with the runtime identity prefix + 'search'
         """
         if not self._parse_search_command(text):
             return False
@@ -99,7 +102,8 @@ class SearchAgent(BaseAgent):
 
         user_id = getattr(event.source, "user_id", None)
         is_private = self._is_private_chat(event)
-        logger.info(f"🔍 Zeus search from {user_id} ({'DM' if is_private else 'group'}): {query[:50]}...")
+        identity_name = self._identity_name()
+        logger.info(f"🔍 {identity_name} search from {user_id} ({'DM' if is_private else 'group'}): {query[:50]}...")
 
         # Access control: admins anywhere; private chats always; group/room per Zeus rules.
         if not privilege_service.is_admin(user_id) and not is_private:
@@ -108,7 +112,7 @@ class SearchAgent(BaseAgent):
                 group_id, room_id, user_is_admin=False
             ):
                 logger.info(
-                    f"🔒 Zeus search denied for non-admin user_id={user_id} in group chat"
+                    f"🔒 {identity_name} search denied for non-admin user_id={user_id} in group chat"
                 )
                 await asyncio.to_thread(
                     line_bot_api.reply_message,
@@ -116,7 +120,7 @@ class SearchAgent(BaseAgent):
                         replyToken=event.reply_token,
                         messages=[
                             TextMessage(
-                                text=("🔒 Zeus search is not enabled in this group."),
+                                text=(f"🔒 {identity_name} search is not enabled in this group."),
                                 quickReply=None,
                                 quoteToken=None,
                             )
@@ -134,7 +138,7 @@ class SearchAgent(BaseAgent):
                     await self._send_error(
                         event,
                         line_bot_api,
-                        "🔒 Zeus search is not configured. Set BRAVE_SEARCH_API_KEY to enable web search.",
+                        f"🔒 {identity_name} search is not configured. Set BRAVE_SEARCH_API_KEY to enable web search.",
                     )
                     return True
 
