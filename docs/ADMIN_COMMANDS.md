@@ -16,7 +16,7 @@ Ms. Green supports **two levels of privileged access**:
 
 - **Access:** All `/admin` commands for bot management
 - **News:** Direct news access (bypass translation, unlimited requests)
-- **Rate Limits:** Bypass all rate limits
+- **Rate Limits:** Bypass standard translation/news limits, but destructive admin requests are limited to 3 per 10 minutes per admin
 - **Use Cases:** Bot owners, system administrators
 
 ### 👥 Moderator Users (News Access Only)
@@ -34,7 +34,8 @@ Ms. Green supports **two levels of privileged access**:
 ✅ **Highest Priority**: Admin commands are processed before all other agents (Priority 5)  
 ✅ **In-Chat Management**: Control the bot directly from LINE chats  
 ✅ **Session Monitoring**: View active sessions and sleeping chats  
-✅ **Remote Control**: Wake/sleep chats and reset sessions remotely
+✅ **Safe Destructive Flow**: Leave, purge, and reset require a private preview before execution
+✅ **Destructive Request Guardrail**: Admin destructive requests are limited to 3 per 10 minutes per admin
 
 ## Configuration
 
@@ -220,7 +221,9 @@ The bot is now ready to translate.
 
 #### `/admin reset [chat_id]`
 
-Reset a chat to fresh state (ends session, clears history, wakes if sleeping).
+Request a chat reset to fresh state. Ms. Green sends a confirmation preview,
+and the reset executes only after `/admin confirm <token>` is run in a private
+chat.
 
 **Parameters:**
 
@@ -233,7 +236,35 @@ Reset a chat to fresh state (ends session, clears history, wakes if sleeping).
 /admin reset group_C789012
 ```
 
-**Output:**
+**Request reply in a private chat:**
+
+```text
+✅ Private preview sent. Review it in this chat and confirm when ready.
+```
+
+**Request reply in a group or room:**
+
+```text
+✅ Private preview sent. Review it in your private chat to continue.
+```
+
+**Private preview:**
+
+```text
+🔐 Admin destructive action preview
+━━━━━━━━━━━━━━━━
+
+Action: reset
+Target: group_C789012
+Effect: This will reset bot session state, message history, and sleep state for group_C789012.
+Token: <token>
+Expires: 12:34:56 UTC
+
+/admin confirm <token>
+/admin cancel <token>
+```
+
+**After private confirmation:**
 
 ```text
 🔄 Chat Reset Complete
@@ -246,6 +277,69 @@ Chat ID: user_U1234567890abcdef
 🧹 History: Cleared
 
 The chat is now in fresh state!
+```
+
+#### `/admin purge [chat_id]`
+
+Request a purge of the bot's internal state for a chat. This clears session
+state, message history, sleep state, and related flow state for that target.
+The public reply stays neutral, and the token is only sent in the admin's
+private preview.
+
+**Examples:**
+
+```text
+/admin purge
+/admin purge user_U123456
+```
+
+**Private preview effect summary:**
+
+```text
+Effect: This will clear bot session state, message history, sleep state, and related flow state for user_U123456.
+```
+
+#### `/admin leave [chat_id]`
+
+Request that the bot leave a group or room. This also uses the same private
+preview flow and does not leave immediately.
+
+**Examples:**
+
+```text
+/admin leave
+/admin leave group_C789012
+/admin leave room_R789012
+```
+
+**Private preview effect summary:**
+
+```text
+Effect: The bot will leave group C789012.
+```
+
+#### `/admin confirm <token>`
+
+Execute a pending destructive action from a private chat with Ms. Green.
+Confirmation is rejected in groups or rooms, and tokens only work for the
+admin who requested them.
+
+**Examples:**
+
+```text
+/admin confirm abc123
+```
+
+#### `/admin cancel <token>`
+
+Cancel a pending destructive action from a private chat with Ms. Green.
+Cancellation is also rejected in groups or rooms, and tokens cannot be used by
+other admins.
+
+**Examples:**
+
+```text
+/admin cancel abc123
 ```
 
 ### 💡 Help
@@ -338,7 +432,21 @@ Example:
 
 🔄 Session Control:
   /admin reset [chat_id]
-    → Reset chat session & history
+    → Request reset of chat session & history
+      (private confirmation required)
+
+  /admin purge [chat_id]
+    → Request clearing bot internal history/state for a chat
+      (private confirmation required)
+
+🚪 Leave Chats:
+  /admin leave [chat_id]
+    → Request leaving a group/room
+      (private confirmation required)
+
+✅ Confirmations (private chat only):
+  /admin confirm <token>
+  /admin cancel <token>
 
 💡 Tips:
 • [chat_id] is optional - defaults to current chat
@@ -368,7 +476,7 @@ If a user reports the bot isn't responding:
 
 ```text
 /admin status user_U123456     # Check if sleeping or active
-/admin reset user_U123456      # Reset to fresh state
+/admin reset user_U123456      # Sends a private preview; confirm or cancel from DM
 ```
 
 ### Emergency Stop for a Chat
@@ -398,7 +506,7 @@ Users can put the bot to sleep with "amen". To override:
 When testing new features:
 
 ```text
-/admin reset              # Fresh state in current chat
+/admin reset              # Sends a private preview; confirm or cancel from DM
 ```
 
 ## Security
@@ -451,7 +559,8 @@ A comprehensive test suite (`tests/test_admin_agent.py`) covers:
 - ✅ Command parsing and validation
 - ✅ Status monitoring (active, inactive, sleeping)
 - ✅ Sleep/wake functionality
-- ✅ Session reset operations
+- ✅ Destructive preview and confirmation flow (leave, purge, reset)
+- ✅ Confirmation rejection paths (group-only requests, wrong admin, expired token)
 - ✅ Chat ID extraction (user, group, room)
 - ✅ Priority system validation
 
@@ -510,7 +619,7 @@ For issues or questions:
 
 1. Check this documentation
 2. Review server logs for error messages
-3. Test with a fresh session (`/admin reset`)
+3. Test with a fresh session (`/admin reset`, then confirm in private chat)
 4. Check GitHub issues for known problems
 
 ---

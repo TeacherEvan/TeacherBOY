@@ -75,7 +75,7 @@ For the full variable reference and mounted-volume examples, see [Environment va
 - **👋 Welcome Message:** Sends "Welcome friend / ยินดีต้อนรับเพื่อน" when added as friend
 - **🎯 Session Management:** Independent sessions per chat
 - **📋 Parentheses Preservation:** Names and notes in (parentheses) are never translated
-- **⏱️ Rate Limiting:** 10 requests per minute (admins unlimited)
+- **⏱️ Rate Limiting:** 10 requests per minute for normal translation traffic; destructive admin requests are limited to 3 per 10 minutes per admin
 
 ### News Agent **NEW!**
 
@@ -274,7 +274,7 @@ For bot management and privileged access, Ms. Green supports two levels:
 **Admin Users (Full Control):**
 
 - `/admin` commands for bot management (status, sleep, wake, reset, etc.)
-- Unlimited API access (bypass rate limits)
+- Bypass standard translation/news rate limits; destructive admin requests are limited to 3 per 10 minutes per admin
 - Direct news access without translation
 
 **Moderator Users (News Access):**

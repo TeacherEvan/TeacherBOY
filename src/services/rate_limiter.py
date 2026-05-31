@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from threading import Lock
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -45,6 +46,13 @@ class RateLimiter:
         self.calendar_chat_limit = 30  # 30 operations per minute per chat
         self.calendar_chat_window = timedelta(minutes=1)
 
+        # Destructive admin request limiting
+        self._admin_destructive_history: Dict[str, List[datetime]] = defaultdict(list)
+        self._admin_destructive_targets: Dict[str, Dict[str, datetime | str]] = {}
+        self._admin_destructive_lock = Lock()
+        self.admin_destructive_limit = 3  # 3 destructive requests per 10 minutes per admin
+        self.admin_destructive_window = timedelta(minutes=10)
+
         # User-based rate limiting for authenticated users
         # Dictionary: {user_id: {"daily": [timestamps], "burst": [timestamps]}}
         self._user_limits: Dict[str, Dict[str, List[datetime]]] = defaultdict(
@@ -65,6 +73,9 @@ class RateLimiter:
             f"✅ Rate limiter initialized: {max_requests} requests per {time_window_seconds}s (chat-based), "
             f"{self.daily_limit} daily/{self.burst_limit} per {self.burst_window.seconds}s (user-based)"
         )
+
+    def _admin_utcnow(self) -> datetime:
+        return datetime.utcnow()
 
     def is_allowed(self, chat_id: str, user_id: Optional[str] = None) -> bool:
         """
@@ -296,6 +307,9 @@ class RateLimiter:
         for chat_id in calendar_chats_to_remove:
             del self._calendar_chat_limits[chat_id]
 
+        with self._admin_destructive_lock:
+            self._cleanup_admin_destructive_limits(self._admin_utcnow())
+
         total_cleaned = len(chats_to_remove) + len(users_to_remove) + len(calendar_users_to_remove) + len(calendar_chats_to_remove)
         if total_cleaned > 0:
             logger.debug(
@@ -384,6 +398,136 @@ class RateLimiter:
         self._calendar_chat_limits[chat_id].append(now)
         
         return True
+
+    def _cleanup_admin_destructive_limits(
+        self,
+        now: Optional[datetime] = None,
+    ) -> None:
+        current_time = now or self._admin_utcnow()
+        user_cutoff = current_time - self.admin_destructive_window
+
+        users_to_remove = []
+        for user_id, timestamps in self._admin_destructive_history.items():
+            valid = [ts for ts in timestamps if ts > user_cutoff]
+            if valid:
+                self._admin_destructive_history[user_id] = valid
+            else:
+                users_to_remove.append(user_id)
+
+        for user_id in users_to_remove:
+            del self._admin_destructive_history[user_id]
+
+        targets_to_remove = []
+        for target_chat_id, reservation in self._admin_destructive_targets.items():
+            expires_at = reservation.get("expires_at")
+            if isinstance(expires_at, datetime) and expires_at <= current_time:
+                targets_to_remove.append(target_chat_id)
+
+        for target_chat_id in targets_to_remove:
+            self._admin_destructive_targets.pop(target_chat_id, None)
+
+    def reserve_admin_destructive_request(
+        self,
+        *,
+        user_id: str,
+        target_chat_id: str,
+        token: str,
+        expires_at: datetime,
+    ) -> tuple[bool, str | None]:
+        now = self._admin_utcnow()
+        with self._admin_destructive_lock:
+            self._cleanup_admin_destructive_limits(now)
+
+            user_requests = self._admin_destructive_history[user_id]
+            if len(user_requests) >= self.admin_destructive_limit:
+                logger.warning(
+                    "⚠️ Destructive admin rate limit exceeded for %s: %s/%s",
+                    user_id,
+                    len(user_requests),
+                    self.admin_destructive_limit,
+                )
+                return (
+                    False,
+                    "⚠️ Too many destructive admin requests. Please wait a few minutes and try again.",
+                )
+
+            if target_chat_id in self._admin_destructive_targets:
+                logger.warning(
+                    "⚠️ Destructive admin target already reserved for %s",
+                    target_chat_id,
+                )
+                return (
+                    False,
+                    "⚠️ A destructive admin action is already pending for this chat.",
+                )
+
+            user_requests.append(now)
+            self._admin_destructive_targets[target_chat_id] = {
+                "token": token,
+                "expires_at": expires_at,
+                "user_id": user_id,
+                "reserved_at": now,
+            }
+            return True, None
+
+    def _rollback_admin_destructive_history(
+        self,
+        reservation: Dict[str, datetime | str] | None,
+    ) -> None:
+        if reservation is None:
+            return
+
+        user_id = reservation.get("user_id")
+        reserved_at = reservation.get("reserved_at")
+        if not isinstance(user_id, str) or not isinstance(reserved_at, datetime):
+            return
+
+        user_requests = self._admin_destructive_history.get(user_id)
+        if not user_requests:
+            return
+
+        for index, timestamp in enumerate(user_requests):
+            if timestamp == reserved_at:
+                user_requests.pop(index)
+                break
+
+        if not user_requests:
+            self._admin_destructive_history.pop(user_id, None)
+
+    def release_admin_destructive_request(
+        self,
+        *,
+        token: str | None = None,
+        target_chat_id: str | None = None,
+        rollback_history: bool = False,
+    ) -> None:
+        with self._admin_destructive_lock:
+            self._cleanup_admin_destructive_limits(self._admin_utcnow())
+
+            if target_chat_id:
+                reservation = self._admin_destructive_targets.get(target_chat_id)
+                if reservation is None:
+                    return
+                if token is None or reservation.get("token") == token:
+                    removed = self._admin_destructive_targets.pop(target_chat_id, None)
+                    if rollback_history:
+                        self._rollback_admin_destructive_history(removed)
+                return
+
+            if not token:
+                return
+
+            for reserved_target, reservation in list(self._admin_destructive_targets.items()):
+                if reservation.get("token") == token:
+                    removed = self._admin_destructive_targets.pop(reserved_target, None)
+                    if rollback_history:
+                        self._rollback_admin_destructive_history(removed)
+                    break
+
+    def reset_admin_destructive_limits_for_testing(self) -> None:
+        with self._admin_destructive_lock:
+            self._admin_destructive_history.clear()
+            self._admin_destructive_targets.clear()
 
 
 # Singleton instance

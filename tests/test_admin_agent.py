@@ -1,10 +1,13 @@
 """Tests for admin agent functionality."""
 
+import asyncio
+import threading
 import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from src.agents.admin_agent import AdminAgent
 from src.services.session_manager import SessionManager
 from src.services.admin_confirmation_service import AdminConfirmationService
+from src.services.rate_limiter import rate_limiter
 from src.services.privilege_service import privilege_service
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.messaging import MessagingApi
@@ -17,8 +20,10 @@ def admin_agent():
 
     # Reset privilege_service cache before each test
     privilege_service._reset_for_testing()
+    if hasattr(rate_limiter, "reset_admin_destructive_limits_for_testing"):
+        rate_limiter.reset_admin_destructive_limits_for_testing()
 
-    with patch("src.config.settings") as mock_settings:
+    with patch("src.agents.admin_agent.settings") as mock_settings:
         mock_settings.get_admin_user_ids.return_value = [
             "U1234567890abcdef",
             "U9876543210fedcba",
@@ -32,6 +37,8 @@ def admin_agent():
         
     # Reset after test
     privilege_service._reset_for_testing()
+    if hasattr(rate_limiter, "reset_admin_destructive_limits_for_testing"):
+        rate_limiter.reset_admin_destructive_limits_for_testing()
 
 
 @pytest.fixture
@@ -41,6 +48,7 @@ def mock_event():
     event.source = Mock()
     event.source.user_id = "U1234567890abcdef"  # Authorized admin
     event.source.group_id = None
+    event.source.room_id = None
     event.reply_token = "test_reply_token"
     return event
 
@@ -58,6 +66,24 @@ def mock_line_bot_api():
     return api
 
 
+def _reply_text(api: MessagingApi) -> str:
+    return api.reply_message.call_args[0][0].messages[0].text
+
+
+def _last_reply_text(api: MessagingApi) -> str:
+    return api.reply_message.call_args_list[-1][0][0].messages[0].text
+
+
+def _push_text(api: MessagingApi) -> str:
+    return api.push_message.call_args[0][0].messages[0].text
+
+
+def _fresh_confirmation_service(token: str = "tok123") -> AdminConfirmationService:
+    confirm_service = AdminConfirmationService()
+    confirm_service._generate_token = lambda: token  # type: ignore[method-assign]
+    return confirm_service
+
+
 class TestAdminAgent:
     """Test suite for AdminAgent."""
 
@@ -68,13 +94,13 @@ class TestAdminAgent:
 
     def test_is_admin_authorized_user(self, admin_agent):
         """Test that authorized users are recognized as admin."""
-        assert privilege_service.is_admin("U1234567890abcdef") is True
-        assert privilege_service.is_admin("U9876543210fedcba") is True
+        assert admin_agent._is_admin("U1234567890abcdef") is True
+        assert admin_agent._is_admin("U9876543210fedcba") is True
 
     def test_is_admin_unauthorized_user(self, admin_agent):
         """Test that unauthorized users are not recognized as admin."""
-        assert privilege_service.is_admin("U0000000000000000") is False
-        assert privilege_service.is_admin("random_user") is False
+        assert admin_agent._is_admin("U0000000000000000") is False
+        assert admin_agent._is_admin("random_user") is False
 
     def test_is_admin_command_valid(self, admin_agent):
         """Test admin command detection with valid commands."""
@@ -135,6 +161,37 @@ class TestAdminAgent:
         assert "wake" in message_text.lower()
         assert "sleep" in message_text.lower()
         assert "reset" in message_text.lower()
+        assert "request resetting chat session & history" in message_text.lower()
+        assert "private confirmation required" in message_text.lower()
+        assert "dear ms. green admin <command>" in message_text.lower()
+        assert "dear zeus" not in message_text.lower()
+        assert "purge" in message_text.lower()
+        assert message_text.lower().count("private confirmation required") >= 2
+        assert "3 destructive requests per 10 minutes" in message_text.lower()
+
+    @pytest.mark.asyncio
+    async def test_handle_status_command_via_ms_green_alias(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        """Smoke test the natural-language admin alias through central dispatch."""
+        with patch("src.agents.admin_agent.session_manager") as mock_session_mgr:
+            mock_session_mgr.is_session_active.return_value = False
+            mock_session_mgr.is_sleeping.return_value = False
+            mock_session_mgr.get_sleep_remaining.return_value = 0
+            mock_session_mgr.get_session_info.return_value = {}
+
+            result = await admin_agent.handle(
+                mock_event,
+                "Dear Ms. Green admin status",
+                mock_line_bot_api,
+            )
+
+            assert result is True
+            mock_line_bot_api.reply_message.assert_called_once()
+
+            message_text = _reply_text(mock_line_bot_api)
+            assert "status" in message_text.lower()
+            assert "chat id" in message_text.lower()
 
     @pytest.mark.asyncio
     async def test_handle_status_command(
@@ -203,7 +260,11 @@ class TestAdminAgent:
         self, admin_agent, mock_event, mock_line_bot_api
     ):
         """Test /admin reset command."""
-        with patch("src.agents.admin_agent.session_manager") as mock_session_mgr:
+        confirm_service = _fresh_confirmation_service("reset-command-123")
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ), patch("src.agents.admin_agent.session_manager") as mock_session_mgr:
             mock_session_mgr.end_session.return_value = True
             mock_session_mgr.wake_chat.return_value = False
 
@@ -212,9 +273,36 @@ class TestAdminAgent:
             )
 
             assert result is True
-            mock_session_mgr.end_session.assert_called_once()
-            mock_session_mgr.clear_message_history.assert_called_once()
-            mock_session_mgr.wake_chat.assert_called_once()
+            mock_session_mgr.end_session.assert_not_called()
+            mock_session_mgr.clear_message_history.assert_not_called()
+            mock_session_mgr.wake_chat.assert_not_called()
+            mock_line_bot_api.push_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reset_requests_private_confirmation_instead_of_executing_immediately(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = _fresh_confirmation_service("reset123")
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ), patch("src.agents.admin_agent.session_manager") as mock_session_mgr:
+            ok = await admin_agent.handle(
+                mock_event, "/admin reset", mock_line_bot_api
+            )
+
+        assert ok is True
+        mock_session_mgr.end_session.assert_not_called()
+        mock_session_mgr.clear_message_history.assert_not_called()
+        mock_session_mgr.wake_chat.assert_not_called()
+        assert confirm_service.count_pending() == 1
+        mock_line_bot_api.push_message.assert_called_once()
+        assert "private" in _reply_text(mock_line_bot_api).lower()
+
+        preview_text = _push_text(mock_line_bot_api)
+        assert "user_U1234567890abcdef" in preview_text
+        assert "reset" in preview_text.lower()
+        assert "history" in preview_text.lower()
 
     @pytest.mark.asyncio
     async def test_handle_sessions_command(
@@ -290,6 +378,30 @@ class TestAdminAgent:
         mock_line_bot_api.leave_group.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_group_leave_request_replies_neutrally_and_sends_preview_to_dm(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        mock_event.source.group_id = "C123456"
+        mock_event.source.room_id = None
+
+        confirm_service = _fresh_confirmation_service("leave123")
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            ok = await admin_agent.handle(mock_event, "/admin leave", mock_line_bot_api)
+
+        assert ok is True
+        group_reply = _reply_text(mock_line_bot_api)
+        assert "leave123" not in group_reply
+        assert "/admin confirm" not in group_reply.lower()
+        assert "C123456" not in group_reply
+
+        preview_text = _push_text(mock_line_bot_api)
+        assert "C123456" in preview_text
+        assert "leave" in preview_text.lower()
+        assert "group" in preview_text.lower()
+
+    @pytest.mark.asyncio
     async def test_handle_leave_specific_group_chat_id(
         self, admin_agent, mock_event, mock_line_bot_api
     ):
@@ -359,6 +471,424 @@ class TestAdminAgent:
             mock_line_bot_api.leave_group.assert_called_once_with("C999")
 
     @pytest.mark.asyncio
+    async def test_group_purge_request_does_not_echo_token_or_target_in_group_reply(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        mock_event.source.group_id = "C123456"
+        mock_event.source.room_id = None
+
+        confirm_service = _fresh_confirmation_service("purge123")
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            ok = await admin_agent.handle(mock_event, "/admin purge", mock_line_bot_api)
+
+        assert ok is True
+        group_reply = _reply_text(mock_line_bot_api)
+        assert "purge123" not in group_reply
+        assert "/admin confirm" not in group_reply.lower()
+        assert "group_C123456" not in group_reply
+        assert "C123456" not in group_reply
+
+        preview_text = _push_text(mock_line_bot_api)
+        assert "group_C123456" in preview_text
+        assert "history" in preview_text.lower()
+
+    @pytest.mark.asyncio
+    async def test_push_failure_does_not_arm_destructive_action(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = _fresh_confirmation_service("fail123")
+        mock_line_bot_api.push_message.side_effect = RuntimeError("push failed")
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            ok = await admin_agent.handle(mock_event, "/admin purge", mock_line_bot_api)
+
+        assert ok is True
+        reply_text = _reply_text(mock_line_bot_api)
+        assert "private preview" in reply_text.lower()
+        assert "fail123" not in reply_text
+        assert "/admin confirm" not in reply_text.lower()
+        assert confirm_service.count_pending() == 0
+
+    @pytest.mark.asyncio
+    async def test_confirm_in_group_is_rejected_and_does_not_execute(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = _fresh_confirmation_service("groupconfirm123")
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            ok = await admin_agent.handle(
+                mock_event, "/admin leave group_C999", mock_line_bot_api
+            )
+            assert ok is True
+
+            mock_line_bot_api.reply_message.reset_mock()
+            mock_line_bot_api.push_message.reset_mock()
+
+            mock_event.source.group_id = "C123456"
+            confirm_ok = await admin_agent.handle(
+                mock_event, "/admin confirm groupconfirm123", mock_line_bot_api
+            )
+
+        assert confirm_ok is True
+        assert "private chat" in _reply_text(mock_line_bot_api).lower()
+        mock_line_bot_api.leave_group.assert_not_called()
+        assert confirm_service.count_pending() == 1
+
+    @pytest.mark.asyncio
+    async def test_confirm_with_other_admins_token_is_rejected(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = _fresh_confirmation_service("otheradmin123")
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            first_ok = await admin_agent.handle(
+                mock_event,
+                "/admin leave group_C999",
+                mock_line_bot_api,
+            )
+            assert first_ok is True
+
+            mock_line_bot_api.reply_message.reset_mock()
+            mock_line_bot_api.push_message.reset_mock()
+
+            other_admin_event = Mock(spec=MessageEvent)
+            other_admin_event.source = Mock()
+            other_admin_event.source.user_id = "U9876543210fedcba"
+            other_admin_event.source.group_id = None
+            other_admin_event.source.room_id = None
+            other_admin_event.reply_token = "other_admin_reply_token"
+
+            confirm_ok = await admin_agent.handle(
+                other_admin_event,
+                "/admin confirm otheradmin123",
+                mock_line_bot_api,
+            )
+
+        assert confirm_ok is True
+        assert "another admin" in _reply_text(mock_line_bot_api).lower()
+        mock_line_bot_api.leave_group.assert_not_called()
+        assert confirm_service.count_pending() == 1
+
+    @pytest.mark.asyncio
+    async def test_confirm_rejects_unknown_or_expired_token(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = _fresh_confirmation_service("expired123")
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            request_ok = await admin_agent.handle(
+                mock_event,
+                "/admin reset",
+                mock_line_bot_api,
+            )
+            assert request_ok is True
+            assert confirm_service.count_pending() == 1
+
+            confirm_service.cancel("expired123", mock_event.source.user_id)
+            mock_line_bot_api.reply_message.reset_mock()
+            mock_line_bot_api.push_message.reset_mock()
+
+            confirm_ok = await admin_agent.handle(
+                mock_event,
+                "/admin confirm expired123",
+                mock_line_bot_api,
+            )
+
+        assert confirm_ok is True
+        assert "unknown or expired" in _reply_text(mock_line_bot_api).lower()
+        assert confirm_service.count_pending() == 0
+
+    @pytest.mark.asyncio
+    async def test_cancel_in_group_is_rejected_and_does_not_cancel(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = _fresh_confirmation_service("groupcancel123")
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            request_ok = await admin_agent.handle(
+                mock_event,
+                "/admin leave group_C999",
+                mock_line_bot_api,
+            )
+            assert request_ok is True
+            assert confirm_service.count_pending() == 1
+
+            mock_line_bot_api.reply_message.reset_mock()
+            mock_line_bot_api.push_message.reset_mock()
+            mock_event.source.group_id = "C123456"
+
+            cancel_ok = await admin_agent.handle(
+                mock_event,
+                "/admin cancel groupcancel123",
+                mock_line_bot_api,
+            )
+
+        assert cancel_ok is True
+        assert "private chat" in _reply_text(mock_line_bot_api).lower()
+        assert confirm_service.count_pending() == 1
+
+    @pytest.mark.asyncio
+    async def test_confirm_in_private_chat_executes_matching_reset_action(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = _fresh_confirmation_service("resetconfirm123")
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ), patch("src.agents.admin_agent.session_manager") as mock_session_mgr:
+            mock_session_mgr.end_session.return_value = True
+            mock_session_mgr.wake_chat.return_value = False
+
+            ok = await admin_agent.handle(
+                mock_event, "/admin reset", mock_line_bot_api
+            )
+            assert ok is True
+
+            mock_line_bot_api.reply_message.reset_mock()
+            mock_line_bot_api.push_message.reset_mock()
+
+            confirm_ok = await admin_agent.handle(
+                mock_event, "/admin confirm resetconfirm123", mock_line_bot_api
+            )
+
+        assert confirm_ok is True
+        mock_session_mgr.end_session.assert_called_once_with("user_U1234567890abcdef")
+        mock_session_mgr.clear_message_history.assert_called_once_with(
+            "user_U1234567890abcdef"
+        )
+        mock_session_mgr.wake_chat.assert_called_once_with("user_U1234567890abcdef")
+        assert "reset complete" in _reply_text(mock_line_bot_api).lower()
+
+    @pytest.mark.asyncio
+    async def test_second_destructive_request_for_same_target_is_blocked_by_reservation(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = AdminConfirmationService()
+        tokens = iter(["first123", "second123"])
+        confirm_service._generate_token = lambda: next(tokens)  # type: ignore[method-assign]
+        mock_event.source.group_id = "C123456"
+        mock_event.source.room_id = None
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            first_ok = await admin_agent.handle(
+                mock_event, "/admin purge", mock_line_bot_api
+            )
+            assert first_ok is True
+
+            mock_line_bot_api.reply_message.reset_mock()
+            mock_line_bot_api.push_message.reset_mock()
+
+            second_ok = await admin_agent.handle(
+                mock_event, "/admin reset", mock_line_bot_api
+            )
+
+        assert second_ok is True
+        assert "already pending" in _reply_text(mock_line_bot_api).lower()
+        assert "too many destructive admin requests" not in _reply_text(
+            mock_line_bot_api
+        ).lower()
+        mock_line_bot_api.push_message.assert_not_called()
+        assert confirm_service.count_pending() == 1
+
+    @pytest.mark.asyncio
+    async def test_same_target_is_reserved_before_preview_push_returns(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = AdminConfirmationService()
+        tokens = iter(["flight123", "flight456"])
+        confirm_service._generate_token = lambda: next(tokens)  # type: ignore[method-assign]
+        preview_started = threading.Event()
+        release_preview = threading.Event()
+        push_calls = 0
+
+        def block_first_preview(*args, **kwargs):
+            nonlocal push_calls
+            push_calls += 1
+            if push_calls == 1:
+                preview_started.set()
+                release_preview.wait(timeout=2)
+
+        mock_event.source.group_id = None
+        mock_event.source.room_id = None
+        mock_line_bot_api.push_message.side_effect = block_first_preview
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            first_request = asyncio.create_task(
+                admin_agent.handle(
+                    mock_event,
+                    "/admin leave group_C999",
+                    mock_line_bot_api,
+                )
+            )
+
+            assert await asyncio.to_thread(preview_started.wait, 1.0) is True
+
+            second_ok = await admin_agent.handle(
+                mock_event,
+                "/admin leave group_C999",
+                mock_line_bot_api,
+            )
+            second_reply = _last_reply_text(mock_line_bot_api)
+
+            release_preview.set()
+            first_ok = await first_request
+
+        assert first_ok is True
+        assert second_ok is True
+        assert "already pending" in second_reply.lower()
+        assert confirm_service.count_pending() == 1
+
+    @pytest.mark.asyncio
+    async def test_same_target_can_be_rearmed_after_cancel(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = AdminConfirmationService()
+        tokens = iter(["cancel123", "cancel456"])
+        confirm_service._generate_token = lambda: next(tokens)  # type: ignore[method-assign]
+        mock_event.source.group_id = None
+        mock_event.source.room_id = None
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            first_ok = await admin_agent.handle(
+                mock_event,
+                "/admin leave group_C999",
+                mock_line_bot_api,
+            )
+            assert first_ok is True
+            assert confirm_service.count_pending() == 1
+
+            mock_line_bot_api.reply_message.reset_mock()
+            mock_line_bot_api.push_message.reset_mock()
+
+            cancel_ok = await admin_agent.handle(
+                mock_event,
+                "/admin cancel cancel123",
+                mock_line_bot_api,
+            )
+
+            assert cancel_ok is True
+            assert "cancelled" in _reply_text(mock_line_bot_api).lower()
+            assert confirm_service.count_pending() == 0
+
+            mock_line_bot_api.reply_message.reset_mock()
+            mock_line_bot_api.push_message.reset_mock()
+
+            second_ok = await admin_agent.handle(
+                mock_event,
+                "/admin leave group_C999",
+                mock_line_bot_api,
+            )
+
+        assert second_ok is True
+        assert "private preview sent" in _reply_text(mock_line_bot_api).lower()
+        mock_line_bot_api.push_message.assert_called_once()
+        assert confirm_service.count_pending() == 1
+
+    @pytest.mark.asyncio
+    async def test_same_target_can_be_rearmed_after_confirm(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = AdminConfirmationService()
+        tokens = iter(["confirm123", "confirm456"])
+        confirm_service._generate_token = lambda: next(tokens)  # type: ignore[method-assign]
+        mock_event.source.group_id = None
+        mock_event.source.room_id = None
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            first_ok = await admin_agent.handle(
+                mock_event,
+                "/admin leave group_C999",
+                mock_line_bot_api,
+            )
+            assert first_ok is True
+
+            mock_line_bot_api.reply_message.reset_mock()
+            mock_line_bot_api.push_message.reset_mock()
+
+            confirm_ok = await admin_agent.handle(
+                mock_event,
+                "/admin confirm confirm123",
+                mock_line_bot_api,
+            )
+
+            assert confirm_ok is True
+            assert "left group c999" in _reply_text(mock_line_bot_api).lower()
+            assert confirm_service.count_pending() == 0
+
+            mock_line_bot_api.reply_message.reset_mock()
+            mock_line_bot_api.push_message.reset_mock()
+
+            second_ok = await admin_agent.handle(
+                mock_event,
+                "/admin leave group_C999",
+                mock_line_bot_api,
+            )
+
+        assert second_ok is True
+        assert "private preview sent" in _reply_text(mock_line_bot_api).lower()
+        mock_line_bot_api.push_message.assert_called_once()
+        mock_line_bot_api.leave_group.assert_called_once_with("C999")
+        assert confirm_service.count_pending() == 1
+
+    @pytest.mark.asyncio
+    async def test_admin_destructive_quota_blocks_fourth_distinct_target(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = AdminConfirmationService()
+        tokens = iter(["quota1", "quota2", "quota3", "quota4"])
+        confirm_service._generate_token = lambda: next(tokens)  # type: ignore[method-assign]
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            for target_chat_id in ("group_C100", "group_C101", "group_C102"):
+                ok = await admin_agent.handle(
+                    mock_event,
+                    f"/admin leave {target_chat_id}",
+                    mock_line_bot_api,
+                )
+
+                assert ok is True
+                assert "private preview sent" in _last_reply_text(mock_line_bot_api).lower()
+
+                mock_line_bot_api.reply_message.reset_mock()
+                mock_line_bot_api.push_message.reset_mock()
+
+            fourth_ok = await admin_agent.handle(
+                mock_event,
+                "/admin leave group_C103",
+                mock_line_bot_api,
+            )
+
+        assert fourth_ok is True
+        assert "too many destructive admin requests" in _reply_text(
+            mock_line_bot_api
+        ).lower()
+        assert "already pending" not in _reply_text(mock_line_bot_api).lower()
+        mock_line_bot_api.push_message.assert_not_called()
+        assert confirm_service.count_pending() == 3
+
+    @pytest.mark.asyncio
     async def test_stats_command(self, admin_agent, mock_event, mock_line_bot_api):
         """Test /admin stats returns enhanced dashboard response."""
         with patch("src.agents.admin_agent.session_manager") as mock_session_mgr, patch(
@@ -417,14 +947,12 @@ class TestAdminAgent:
         confirm_service._generate_token = lambda: "tok123"  # type: ignore[method-assign]
         with patch(
             "src.agents.admin_agent.admin_confirmation_service", confirm_service
-        ), patch("src.agents.admin_agent.session_manager") as mock_session_mgr, patch(
-            "src.agents.admin_agent.rate_limiter"
-        ) as mock_rate_limiter:
+        ), patch("src.agents.admin_agent.session_manager") as mock_session_mgr:
             ok = await admin_agent.handle(mock_event, "/admin purge", mock_line_bot_api)
             assert ok is True
             mock_line_bot_api.push_message.assert_called_once()
             mock_session_mgr.end_session.assert_not_called()
-            mock_rate_limiter.reset_chat.assert_not_called()
+            assert confirm_service.count_pending() == 1
 
     def test_priority_higher_than_translation(self, admin_agent):
         """Test that admin agent has higher priority than translation agent."""
