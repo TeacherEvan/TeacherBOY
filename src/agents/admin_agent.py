@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from src.services.news_data_service import NewsDataService
 
 from .base_agent import BaseAgent
+from .admin.destructive_action_flow import DestructiveActionFlow
 from src.services.session_manager import session_manager
 from src.services.rate_limiter import rate_limiter
 from src.services.metrics_service import metrics_service
@@ -54,6 +55,7 @@ class AdminAgent(BaseAgent):
             else None
         )
         self._claimed_admin_user_id: str | None = None
+        self._destructive_action_flow: DestructiveActionFlow | None = None
 
         if self._admin_user_ids:
             logger.info(
@@ -88,13 +90,20 @@ class AdminAgent(BaseAgent):
         escaped = [re.escape(alias) for alias in aliases]
         return "|".join(sorted(escaped, key=len, reverse=True))
 
+    def _is_admin(self, user_id: str | None) -> bool:
+        if not user_id:
+            return False
+        if privilege_service.is_claimed_admin(user_id):
+            return True
+        return user_id in self._admin_user_ids
+
     def _parse_admin_command(self, text: str) -> tuple[str | None, str | None]:
         """Parse an admin command into (cmd, args).
 
         Supported formats:
         - /admin <cmd> [args...]
         - !admin <cmd> [args...]
-        - Dear Zeus admin <cmd> [args...]
+        - Dear Ms. Green admin <cmd> [args...]
         - Assistant add =<user_id>
         """
         raw = text.strip()
@@ -149,7 +158,7 @@ class AdminAgent(BaseAgent):
         if cmd == "claim" and self._admin_setup_key:
             return True
 
-        return privilege_service.is_admin(user_id)
+        return self._is_admin(user_id)
 
     async def handle(
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi
@@ -210,11 +219,14 @@ class AdminAgent(BaseAgent):
                     alias, _ = self._parse_alias_and_rest(arg)
                     response = await self._admin_send_weather_named(line_bot_api, alias)
                 elif command == "confirm":
-                    response = await self._confirm_action(
-                        chat_id, user_id, arg, line_bot_api
+                    response = await self.destructive_action_flow.confirm(
+                        chat_id=chat_id,
+                        user_id=user_id,
+                        token=arg,
+                        line_bot_api=line_bot_api,
                     )
                 elif command == "cancel":
-                    response = self._cancel_action(chat_id, user_id, arg)
+                    response = await self._cancel_action(chat_id, user_id, arg)
                 elif command == "status":
                     response = self._get_status_message(chat_id, arg)
                 elif command == "wake":
@@ -222,7 +234,13 @@ class AdminAgent(BaseAgent):
                 elif command == "sleep":
                     response = self._sleep_chat(chat_id, arg)
                 elif command == "reset":
-                    response = self._reset_chat(chat_id, arg)
+                    response = await self._request_destructive_action(
+                        action="reset",
+                        line_bot_api=line_bot_api,
+                        current_chat_id=chat_id,
+                        user_id=user_id,
+                        arg=arg,
+                    )
                 elif command == "purge":
                     response = await self._request_confirm_purge(
                         event, line_bot_api, chat_id, user_id, arg
@@ -236,7 +254,7 @@ class AdminAgent(BaseAgent):
                 else:
                     response = (
                         f"❌ Unknown command: {command}\n\n"
-                        "Use Dear Zeus admin help (or /admin help) for available commands."
+                        "Use Dear Ms. Green admin help (or /admin help) for available commands."
                     )
 
             # Send response
@@ -329,7 +347,7 @@ class AdminAgent(BaseAgent):
             "🔧 Admin Commands\n"
             "━━━━━━━━━━━━━━━━\n\n"
             "You can run commands as:\n"
-            "  Dear Zeus admin <command>\n"
+            "  Dear Ms. Green admin <command>\n"
             "  /admin <command>\n\n"
             "━━━━━━━━━━━━━━━━\n"
             "📊 Status & Info:\n"
@@ -357,9 +375,9 @@ class AdminAgent(BaseAgent):
             "🚪 Leave Chats:\n"
             "━━━━━━━━━━━━━━━━\n"
             "  /admin leave\n"
-            "    → Request leaving current group/room (confirmation required)\n\n"
+            "    → Request leaving current group/room (private confirmation required)\n\n"
             "  /admin leave <chat_id>\n"
-            "    → Request leaving a specific group/room (confirmation required)\n\n"
+            "    → Request leaving a specific group/room (private confirmation required)\n\n"
             "  /admin leave group <group_id>\n"
             "  /admin leave room <room_id>\n\n"
             "━━━━━━━━━━━━━━━━\n"
@@ -373,10 +391,12 @@ class AdminAgent(BaseAgent):
             "🔄 Session Control:\n"
             "━━━━━━━━━━━━━━━━\n"
             "  /admin reset [chat_id]\n"
-            "    → Reset chat session & history\n\n"
+            "    → Request resetting chat session & history\n"
+            "      (private confirmation required)\n\n"
             "  /admin purge [chat_id]\n"
             "    → Request clearing bot internal history/state for a chat\n"
-            "      (Note: LINE does not support deleting/unsending chat messages via API)\n\n"
+            "      (private confirmation required; LINE does not support deleting/unsending\n"
+            "       chat messages via API)\n\n"
             "━━━━━━━━━━━━━━━━\n"
             "✅ Confirmations (private chat only):\n"
             "━━━━━━━━━━━━━━━━\n"
@@ -387,11 +407,25 @@ class AdminAgent(BaseAgent):
             "━━━━━━━━━━━━━━━━\n"
             "• [chat_id] is optional - defaults to current chat\n"
             "• Chat IDs format: user_U123..., group_C123...\n"
+            "• Destructive admin requests are limited to 3 destructive requests per 10 minutes per admin\n"
             "• Use 'sessions' to see active chat IDs"
         )
 
     def _is_private_chat(self, chat_id: str) -> bool:
         return chat_id.startswith("user_")
+
+    @property
+    def destructive_action_flow(self) -> DestructiveActionFlow:
+        if self._destructive_action_flow is None:
+            self._destructive_action_flow = DestructiveActionFlow(
+                confirmation_service=admin_confirmation_service,
+                rate_limiter=rate_limiter,
+                parse_leave_target=self._parse_leave_target,
+                push_preview=self._push_to_admin,
+                execute_action=self._execute_destructive_action,
+                agent_name=self.name,
+            )
+        return self._destructive_action_flow
 
     def _mask_user_id(self, user_id: str | None) -> str:
         if not user_id:
@@ -589,7 +623,7 @@ class AdminAgent(BaseAgent):
             privilege_service.is_claimed_admin(user_id) if user_id else False
         )
         is_env_admin = bool(user_id and user_id in (self._admin_user_ids or []))
-        is_admin = is_claimed or is_env_admin
+        is_admin = self._is_admin(user_id)
 
         lines: list[str] = []
         lines.append("🆔 Identity")
@@ -625,41 +659,12 @@ class AdminAgent(BaseAgent):
         user_id: str | None,
         arg: str | None,
     ) -> str:
-        if not user_id:
-            return "❌ Could not determine your LINE user ID."
-
-        kind, target_id, error = self._parse_leave_target(current_chat_id, arg)
-        if error or not kind or not target_id:
-            return error or "❌ Could not determine leave target."
-
-        pending = admin_confirmation_service.create(
+        return await self._request_destructive_action(
             action="leave",
-            requested_by_user_id=user_id,
-            requested_from_chat_id=current_chat_id,
-            payload={"kind": kind, "target_id": target_id},
-        )
-
-        confirm_text = (
-            "🔐 Confirm admin action\n"
-            "━━━━━━━━━━━━━━━━\n\n"
-            f"Action: leave {kind} {target_id}\n"
-            f"Token: {pending.token}\n"
-            f"Expires: {pending.expires_at.strftime('%H:%M:%S')} UTC\n\n"
-            f"Confirm: /admin confirm {pending.token}\n"
-            f"Cancel: /admin cancel {pending.token}"
-        )
-
-        pushed = await asyncio.to_thread(
-            self._push_to_admin, line_bot_api, user_id, confirm_text
-        )
-        if pushed:
-            return "✅ Confirmation sent to your private chat."
-
-        # Fallback when push isn't available.
-        return (
-            "⚠️ Could not push a private confirmation message.\n\n"
-            f"Confirm here (preferred in private chat): /admin confirm {pending.token}\n"
-            f"Cancel: /admin cancel {pending.token}"
+            line_bot_api=line_bot_api,
+            current_chat_id=current_chat_id,
+            user_id=user_id,
+            arg=arg,
         )
 
     async def _request_confirm_purge(
@@ -670,64 +675,52 @@ class AdminAgent(BaseAgent):
         user_id: str | None,
         arg: str | None,
     ) -> str:
-        if not user_id:
-            return "❌ Could not determine your LINE user ID."
-
-        target_chat_id = (arg or "").strip() or current_chat_id
-        pending = admin_confirmation_service.create(
+        return await self._request_destructive_action(
             action="purge",
-            requested_by_user_id=user_id,
-            requested_from_chat_id=current_chat_id,
-            payload={"chat_id": target_chat_id},
+            line_bot_api=line_bot_api,
+            current_chat_id=current_chat_id,
+            user_id=user_id,
+            arg=arg,
         )
 
-        confirm_text = (
-            "🔐 Confirm admin action\n"
-            "━━━━━━━━━━━━━━━━\n\n"
-            f"Action: purge {target_chat_id}\n"
-            f"Token: {pending.token}\n"
-            f"Expires: {pending.expires_at.strftime('%H:%M:%S')} UTC\n\n"
-            f"Confirm: /admin confirm {pending.token}\n"
-            f"Cancel: /admin cancel {pending.token}"
+    async def _request_destructive_action(
+        self,
+        *,
+        action: str,
+        line_bot_api: MessagingApi,
+        current_chat_id: str,
+        user_id: str | None,
+        arg: str | None,
+    ) -> str:
+        return await self.destructive_action_flow.request(
+            action=action,
+            current_chat_id=current_chat_id,
+            user_id=user_id,
+            arg=arg,
+            line_bot_api=line_bot_api,
         )
 
-        pushed = await asyncio.to_thread(
-            self._push_to_admin, line_bot_api, user_id, confirm_text
-        )
-        if pushed:
-            return "✅ Confirmation sent to your private chat."
-
-        return (
-            "⚠️ Could not push a private confirmation message.\n\n"
-            f"Confirm here (preferred in private chat): /admin confirm {pending.token}\n"
-            f"Cancel: /admin cancel {pending.token}"
-        )
-
-    async def _confirm_action(
+    async def _cancel_action(
         self,
         chat_id: str,
         user_id: str | None,
         arg: str | None,
-        line_bot_api: MessagingApi,
     ) -> str:
-        if not user_id:
-            return "❌ Could not determine your LINE user ID."
+        return await self.destructive_action_flow.cancel(
+            chat_id=chat_id,
+            user_id=user_id,
+            token=arg,
+        )
 
-        token = (arg or "").strip()
-        if not token:
-            return "Usage: /admin confirm <token>"
-
-        # Enforce private-chat confirmation.
-        if not self._is_private_chat(chat_id):
-            return "❌ Please confirm in your private chat with the bot."
-
-        pending, msg = admin_confirmation_service.confirm(token, user_id)
-        if not pending:
-            return msg
-
-        if pending.action == "leave":
-            kind = str(pending.payload.get("kind"))
-            target_id = str(pending.payload.get("target_id"))
+    async def _execute_destructive_action(
+        self,
+        action: str,
+        line_bot_api: MessagingApi,
+        payload: dict[str, object],
+    ) -> str:
+        if action == "leave":
+            kind = str(payload.get("kind"))
+            target_id = str(payload.get("target_id"))
             try:
                 if kind == "group":
                     await asyncio.to_thread(line_bot_api.leave_group, target_id)
@@ -740,27 +733,21 @@ class AdminAgent(BaseAgent):
                 )
                 return f"❌ Failed to leave {kind} {target_id}."
 
-        if pending.action == "purge":
-            target_chat_id = str(pending.payload.get("chat_id"))
+        if action == "purge":
+            target_chat_id = str(payload.get("chat_id"))
             return self._purge_chat(
-                current_chat_id=chat_id, target_chat_id=target_chat_id
+                current_chat_id=target_chat_id,
+                target_chat_id=target_chat_id,
+            )
+
+        if action == "reset":
+            target_chat_id = str(payload.get("chat_id"))
+            return self._reset_chat(
+                current_chat_id=target_chat_id,
+                target_chat_id=target_chat_id,
             )
 
         return "❌ Unknown pending action type."
-
-    def _cancel_action(self, chat_id: str, user_id: str | None, arg: str | None) -> str:
-        if not user_id:
-            return "❌ Could not determine your LINE user ID."
-
-        token = (arg or "").strip()
-        if not token:
-            return "Usage: /admin cancel <token>"
-
-        if not self._is_private_chat(chat_id):
-            return "❌ Please cancel in your private chat with the bot."
-
-        ok, msg = admin_confirmation_service.cancel(token, user_id)
-        return msg
 
     async def _get_stats_message(self, line_bot_api: MessagingApi) -> FlexMessage:
         """

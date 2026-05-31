@@ -8,9 +8,11 @@ This is a 5-minute quick start guide to get admin commands working.
 2. Send any message to the bot (e.g., "test")
 3. Check your server logs (Docker or terminal)
 4. Look for a line like:
-   ```
+
+   ```text
    👤 User ID: U1234567890abcdef
    ```
+
 5. Copy this user ID
 
 ## Step 2: Configure Admin Access (1 minute)
@@ -38,7 +40,7 @@ uvicorn src.main:app --reload
 
 Look for this in the logs:
 
-```
+```text
 ✅ AdminAgent initialized with 1 authorized admin(s)
 🔧 Admin Agent registered with 1 authorized admin(s)
 ```
@@ -47,7 +49,7 @@ Look for this in the logs:
 
 Send these messages to your bot on LINE:
 
-```
+```text
 /admin help
 ```
 
@@ -55,9 +57,38 @@ You should see the admin commands menu! 🎉
 
 Try other commands:
 
-```
+```text
 /admin status
 /admin sessions
+```
+
+Sensitive commands use a private-preview flow. Start from a chat where you want
+the action to apply, or pass an explicit chat ID:
+
+```text
+/admin reset
+/admin purge
+/admin leave
+```
+
+If you requested the action in a private chat with Ms. Green, the reply is:
+
+```text
+✅ Private preview sent. Review it in this chat and confirm when ready.
+```
+
+If you requested it from a group or room, the public reply stays neutral:
+
+```text
+✅ Private preview sent. Review it in your private chat to continue.
+```
+
+The private preview includes the token plus the exact commands to finish or
+abort the action:
+
+```text
+/admin confirm <token>
+/admin cancel <token>
 ```
 
 ## Common Commands
@@ -75,8 +106,14 @@ Try other commands:
 # Wake the bot
 /admin wake
 
-# Reset chat to fresh state
+# Request destructive actions; review the private preview before acting
 /admin reset
+/admin purge
+/admin leave
+
+# Complete or abort the pending action from a private chat with Ms. Green
+/admin confirm <token>
+/admin cancel <token>
 
 # Get help anytime
 /admin help
@@ -105,7 +142,8 @@ Try other commands:
 
 ## Security Note
 
-🔒 Only users in `ADMIN_USER_IDS` can execute admin commands. Unauthorized users will see no response (silent failure for security).
+🔒 Only users in `ADMIN_USER_IDS` can execute admin commands.
+Unauthorized users will see no response (silent failure for security).
 
 ---
 
