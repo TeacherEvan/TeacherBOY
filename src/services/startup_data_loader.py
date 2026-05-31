@@ -27,6 +27,11 @@ class StartupDataLoader:
     """Ensures all persistent data is loaded before app serves traffic."""
 
     def __init__(self):
+        self._load_completed = False
+        self._calendar_required = False
+        self._memory_required = False
+        self._documents_required = False
+        self._logs_required = False
         self._calendar_loaded = False
         self._memory_loaded = False
         self._documents_loaded = False
@@ -59,37 +64,55 @@ class StartupDataLoader:
         logger.info("🔄 Starting synchronous data load from HF Hub...")
         start_time = time.time()
 
+        self._calendar_required = bool(
+            calendar_service and hasattr(calendar_service, "_hf_enabled") and calendar_service._hf_enabled
+        )
+        self._memory_required = bool(
+            memory_service and hasattr(memory_service, "_hf_enabled") and memory_service._hf_enabled
+        )
+        self._documents_required = bool(
+            document_service and hasattr(document_service, "_hf_enabled") and document_service._hf_enabled
+        )
+        self._logs_required = bool(
+            history_log and hasattr(history_log, "_hf_enabled") and history_log._hf_enabled
+        )
+
+        self._calendar_loaded = not self._calendar_required
+        self._memory_loaded = not self._memory_required
+        self._documents_loaded = not self._documents_required
+        self._logs_loaded = not self._logs_required
+
         results = {
-            "calendar": False,
-            "memory": False,
-            "documents": False,
-            "logs": False,
+            "calendar": not self._calendar_required,
+            "memory": not self._memory_required,
+            "documents": not self._documents_required,
+            "logs": not self._logs_required,
             "backup_created": False,
         }
 
         # Load calendar data
-        if calendar_service and hasattr(calendar_service, "_hf_enabled") and calendar_service._hf_enabled:
+        if self._calendar_required:
             results["calendar"] = await self._load_calendar_with_retry(
                 calendar_service, max_retries, retry_delay_seconds
             )
             self._calendar_loaded = results["calendar"]
 
         # Load conversation memory
-        if memory_service and hasattr(memory_service, "_hf_enabled") and memory_service._hf_enabled:
+        if self._memory_required:
             results["memory"] = await self._load_memory_with_retry(
                 memory_service, max_retries, retry_delay_seconds
             )
             self._memory_loaded = results["memory"]
 
         # Load document memory
-        if document_service and hasattr(document_service, "_hf_enabled") and document_service._hf_enabled:
+        if self._documents_required:
             results["documents"] = await self._load_documents_with_retry(
                 document_service, max_retries, retry_delay_seconds
             )
             self._documents_loaded = results["documents"]
 
         # Load history logs
-        if history_log and hasattr(history_log, "_hf_enabled") and history_log._hf_enabled:
+        if self._logs_required:
             results["logs"] = await self._load_logs_with_retry(
                 history_log, max_retries, retry_delay_seconds
             )
@@ -99,6 +122,8 @@ class StartupDataLoader:
         if calendar_service:
             results["backup_created"] = await self._create_llm_backup(calendar_service)
             self._backup_created = results["backup_created"]
+
+        self._load_completed = True
 
         elapsed = time.time() - start_time
         logger.info(f"✅ Data load complete in {elapsed:.2f}s: {results}")
@@ -310,9 +335,19 @@ that were successfully loaded from HF Hub.
         Returns:
             True if app is ready to serve traffic
         """
-        # App is ready if calendar is loaded (most critical)
-        # Memory and logs are less critical (can start empty)
-        return self._calendar_loaded or self._backup_created
+        if not self._load_completed:
+            return False
+
+        if self._calendar_required and not self._calendar_loaded:
+            return False
+        if self._memory_required and not self._memory_loaded:
+            return False
+        if self._documents_required and not self._documents_loaded:
+            return False
+        if self._logs_required and not self._logs_loaded:
+            return False
+
+        return True
 
 
 # Singleton instance

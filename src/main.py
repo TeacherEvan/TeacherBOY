@@ -10,7 +10,7 @@ import logging
 import httpx
 from datetime import datetime
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any, Optional
@@ -588,90 +588,42 @@ async def root() -> Dict[str, Any]:
 @app.get("/health", tags=["Health"])
 async def health_check() -> Dict[str, Any]:
     """
-    Kubernetes-style health check endpoint.
+    Liveness-only health check endpoint.
 
-    Returns HTTP 200 if the service is healthy and ready to serve traffic.
-    Includes checks for critical external dependencies AND data restoration status.
+    Returns a cheap process-level status without probing external services.
     """
-    health_status = {
+    agents_registered = len(agent_router.list_agents())
+
+    return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "checks": {},
+        "checks": {
+            "process": "alive",
+            "startup_data": "ready" if startup_loader.is_ready() else "loading",
+            "agents_registered": agents_registered,
+        },
     }
-
-    # Check if startup data load completed
-    health_status["checks"]["data_loaded"] = "ready" if startup_loader.is_ready() else "loading"
-    if settings.is_calendar_configured():
-        health_status["checks"]["calendar_events"] = len(calendar_service._events)
-
-    # Check LINE Bot API connectivity
-    try:
-        with ApiClient(configuration) as api_client:
-            line_bot_api = MessagingApi(api_client)
-            # Simple check - get bot info (already cached in bot_user_id)
-            if bot_user_id:
-                health_status["checks"]["line_api"] = "healthy"
-            else:
-                health_status["checks"]["line_api"] = "degraded"
-    except Exception as e:
-        logger.warning(f"LINE API health check failed: {e}")
-        health_status["checks"]["line_api"] = "unhealthy"
-
-    # Check Google Translate API if configured (best-effort)
-    if settings.is_google_translate_configured():
-        try:
-            # Simple test translation
-            test_result = await google_translation_service.translate("Hello", "en", "th")
-            if test_result:
-                health_status["checks"]["google_translate"] = "healthy"
-            else:
-                health_status["checks"]["google_translate"] = "degraded"
-        except Exception as e:
-            logger.warning(f"Google Translate health check failed: {e}")
-            health_status["checks"]["google_translate"] = "unhealthy"
-
-    # Check LibreTranslate API (best-effort)
-    try:
-        test_result = await translation_service.translate("Hello", "en", "th")
-        if test_result:
-            health_status["checks"]["libretranslate"] = "healthy"
-        else:
-            health_status["checks"]["libretranslate"] = "unhealthy"
-    except Exception as e:
-        logger.warning(f"LibreTranslate health check failed: {e}")
-        health_status["checks"]["libretranslate"] = "unhealthy"
-
-    # Check OpenRouter if configured
-    if settings.is_openrouter_configured():
-        try:
-            # Simple connectivity check (don't make expensive LLM call)
-            health_status["checks"]["openrouter"] = "configured"
-        except Exception as e:
-            logger.warning(f"OpenRouter health check failed: {e}")
-            health_status["checks"]["openrouter"] = "unhealthy"
-
-    # Check agent registration
-    agents_count = len(agent_router.list_agents())
-    health_status["checks"]["agents_registered"] = agents_count
-    if agents_count == 0:
-        # In unit tests the lifespan may not register agents.
-        pass
-
-    return health_status
 
 
 @app.get("/readiness", tags=["Health"])
-async def readiness_check() -> Dict[str, Any]:
+async def readiness_check(response: Response) -> Dict[str, Any]:
     """
     Readiness probe for orchestration systems.
 
     Returns detailed status of critical dependencies.
     """
-    agents_status = agent_router.list_agents()
+    agents_registered = len(agent_router.list_agents())
+    startup_ready = startup_loader.is_ready()
+    ready = startup_ready and agents_registered > 0
+
+    response.status_code = 200 if ready else 503
 
     return {
-        "ready": True,
-        "agents_registered": len(agents_status),
+        "ready": ready,
+        "checks": {
+            "startup_data": "ready" if startup_ready else "loading",
+            "agents_registered": agents_registered,
+        },
         "google_translate_enabled": settings.is_google_translate_configured(),
     }
 
@@ -701,14 +653,15 @@ async def webhook(request: Request) -> JSONResponse:
     Raises:
         HTTPException: If signature validation fails
     """
-    # Extract signature and body
+    # Extract signature up front; raw body decoding stays inside the protected path.
     signature = request.headers.get("X-Line-Signature", "")
-    body = await request.body()
-    body_text = body.decode("utf-8")
-
-    logger.info(f"📨 Received webhook request ({len(body_text)} bytes)")
 
     try:
+        body = await request.body()
+        body_text = body.decode("utf-8")
+
+        logger.info(f"📨 Received webhook request ({len(body_text)} bytes)")
+
         # Parse and validate events using LINE SDK v3
         events = webhook_parser.parse(body_text, signature)  # type: ignore[union-attr]
 
@@ -837,7 +790,8 @@ async def webhook(request: Request) -> JSONResponse:
     except Exception as e:
         logger.error(f"❌ Webhook processing error: {str(e)}", exc_info=True)
         return JSONResponse(
-            content={"status": "error", "detail": str(e)}, status_code=500
+            content={"status": "error", "detail": "Internal server error"},
+            status_code=500,
         )
 
 
