@@ -51,6 +51,7 @@ class ConversationMemoryService:
         hf_repo_id: Optional[str] = None,
         max_messages: int = MAX_MESSAGES_PER_SESSION,
         session_ttl_hours: int = SESSION_TTL_HOURS,
+        storage_path: str = "./data/conversations",
     ):
         """
         Initialize conversation memory service.
@@ -60,11 +61,13 @@ class ConversationMemoryService:
             hf_repo_id: HF dataset repo ID (e.g., "username/zeus-memory")
             max_messages: Maximum messages to retain per session
             session_ttl_hours: Hours before session expires
+            storage_path: Local directory for conversation memory persistence
         """
         self.hf_token = hf_token
         self.hf_repo_id = hf_repo_id
         self.max_messages = max_messages
         self.session_ttl = timedelta(hours=session_ttl_hours)
+        self.local_storage_path = Path(storage_path)
         
         # In-memory conversation store
         # Format: {hashed_chat_id: {"messages": [...], "summary": str, "last_activity": datetime, "metadata": {...}}}
@@ -110,7 +113,7 @@ class ConversationMemoryService:
             self._hf_api = hf_api
             
             # Create local storage directory for CommitScheduler
-            self._local_storage_path = Path("./data/conversations")
+            self._local_storage_path = self.local_storage_path
             self._local_storage_path.mkdir(parents=True, exist_ok=True)
             
             # Ensure the dataset repo exists
@@ -570,6 +573,7 @@ def get_conversation_memory() -> Optional[ConversationMemoryService]:
 def init_conversation_memory(
     hf_token: Optional[str] = None,
     hf_repo_id: Optional[str] = None,
+    storage_path: Optional[str] = None,
 ) -> ConversationMemoryService:
     """
     Initialize the conversation memory service.
@@ -579,6 +583,7 @@ def init_conversation_memory(
     Args:
         hf_token: Hugging Face API token
         hf_repo_id: HF dataset repo ID for persistence
+        storage_path: Local directory for conversation memory persistence
         
     Returns:
         Configured ConversationMemoryService instance
@@ -588,6 +593,7 @@ def init_conversation_memory(
     conversation_memory_service = ConversationMemoryService(
         hf_token=hf_token,
         hf_repo_id=hf_repo_id,
+        storage_path=storage_path or settings.conversation_storage_path,
     )
     
     return conversation_memory_service

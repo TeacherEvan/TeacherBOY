@@ -43,6 +43,16 @@
       ],
       "impact": "low",
       "resolution": "Verify file paths are correct (they appear to be); may be VSCode/Copilot configuration issue"
+    },
+    {
+      "file": "/home/ewaldt/.copilot/installed-plugins/superpowers-marketplace/superpowers/agents/code-reviewer.md",
+      "type": "warning",
+      "description": "External installed-plugin markdown lint warning reported by get_errors",
+      "details": [
+        "MD041/first-line-heading/first-line-h1: First line in a file should be a top-level heading"
+      ],
+      "impact": "low",
+      "resolution": "Ignore in this repo. The file is outside the workspace and belongs to an installed Copilot plugin, not TeacherBOY source."
     }
   ]
 }

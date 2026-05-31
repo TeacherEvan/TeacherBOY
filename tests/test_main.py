@@ -1,5 +1,6 @@
 """Tests for main application."""
 
+from pathlib import Path
 from contextlib import ExitStack
 from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -15,6 +16,7 @@ def mock_settings():
         mock.line_channel_secret = "test_secret"
         mock.line_channel_access_token = "test_token"
         mock.debug = False
+        mock.staff_memory_storage_path = "./data/staff_memory/staff_memory.json"
         yield mock
 
 
@@ -213,6 +215,7 @@ def readiness_lifespan_environment(mock_settings):
         stack.enter_context(patch.dict("sys.modules", fake_modules))
         stack.enter_context(patch("src.main.ApiClient", _FakeApiClient))
         stack.enter_context(patch("src.main.MessagingApi", _FakeMessagingApi))
+        stack.enter_context(patch("src.main.StaffMemoryService", _FakeService))
         stack.enter_context(patch("src.main.setup_tracing"))
         stack.enter_context(patch("src.main.openrouter_service.set_client"))
         stack.enter_context(patch("src.main.brave_search_service.set_client"))
@@ -341,6 +344,42 @@ def test_readiness_returns_200_after_healthy_lifespan_startup(
     assert data["checks"]["startup_data"] == "ready"
     assert data["checks"]["agents_registered"] > 0
     stop_scheduler_mock.assert_called_once_with(scheduler_service)
+
+
+def test_staff_memory_storage_path_is_wired_from_settings(
+    readiness_lifespan_environment, mock_settings
+):
+    """Startup should build staff memory using the configured storage path."""
+    app, startup_loader, _, _, _ = readiness_lifespan_environment
+    mock_settings.staff_memory_storage_path = "./data/custom/staff-memory.json"
+
+    async def healthy_ensure_data_loaded(*args, **kwargs):
+        startup_loader._calendar_required = False
+        startup_loader._calendar_loaded = False
+        startup_loader._memory_required = True
+        startup_loader._memory_loaded = True
+        startup_loader._documents_required = False
+        startup_loader._documents_loaded = False
+        startup_loader._logs_required = False
+        startup_loader._logs_loaded = False
+        startup_loader._backup_created = True
+        return {
+            "calendar": True,
+            "memory": True,
+            "documents": True,
+            "logs": True,
+            "backup_created": True,
+        }
+
+    with patch(
+        "src.main.startup_loader.ensure_data_loaded", healthy_ensure_data_loaded
+    ), patch("src.main.StaffMemoryService", create=True) as staff_memory_service_cls:
+        with TestClient(app):
+            pass
+
+    staff_memory_service_cls.assert_called_once_with(
+        Path(mock_settings.staff_memory_storage_path)
+    )
 
 
 def test_root_endpoint(client):

@@ -228,6 +228,18 @@ class Settings(BaseSettings):
         le=168,
         description="Hours before conversation session expires (1-168, default: 24).",
     )
+    conversation_storage_path: str = Field(
+        default="./data/conversations",
+        description="Local directory for conversation memory persistence and HF sync cache.",
+    )
+
+    # ============================================================================
+    # Review Agent Configuration
+    # ============================================================================
+    staff_memory_storage_path: str = Field(
+        default="./data/staff_memory/staff_memory.json",
+        description="Local JSON storage for review-agent staff memory.",
+    )
 
     # ==========================================================================
     # Document Memory Configuration (PDF/DOCX persistence)

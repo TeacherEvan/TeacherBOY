@@ -52,7 +52,7 @@ These are the active maintainability rules already enforced by project guidance:
 
 - Remove or fix broken internal links.
 - Ensure examples match current runtime behavior.
-- Prefer the current project name `Zeus`, with `TeacherBOY` used only when needed for compatibility or history.
+- Prefer `Ms. Green` for the public product name. Use `TeacherBOY` only for repository, deployment, or historical references.
 - If architecture changed, update both overview and agent routing docs.
 - Update [docs/architecture/overview.md](../architecture/overview.md).
 - Update [docs/architecture/agents.md](../architecture/agents.md).

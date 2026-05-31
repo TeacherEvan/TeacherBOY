@@ -2,11 +2,15 @@
 
 ## Overview
 
-The Admin Agent provides powerful in-chat control commands for authorized administrators to manage TeacherBOY's behavior, monitor sessions, and troubleshoot issues without needing access to the server.
+The Admin Agent provides in-chat control commands for authorized
+administrators to manage Ms. Green, monitor sessions, and troubleshoot
+issues without server access.
+
+For first-time setup, start with [ADMIN_QUICK_START.md](ADMIN_QUICK_START.md).
 
 ## 👑 Privileged Access Levels
 
-TeacherBOY supports **two levels of privileged access**:
+Ms. Green supports **two levels of privileged access**:
 
 ### 🔐 Admin Users (Full Control)
 
@@ -36,9 +40,10 @@ TeacherBOY supports **two levels of privileged access**:
 
 ### Step 1: Get Your LINE User ID
 
-Your LINE user ID is automatically logged when you send a message to the bot. To find it: 2. Check the server logs for a line like:
+Your LINE user ID is automatically logged when you send a message to the bot.
+Check the server logs for a line like:
 
-```
+```text
 User ID: U1234567890abcdef
 ```
 
@@ -82,19 +87,20 @@ uvicorn src.main:app --reload
 
 You should see in the logs:
 
-```
+```text
 ✅ AdminAgent initialized with 2 authorized admin(s)
 🔧 Admin Agent registered with 2 authorized admin(s)
 ```
 
-### Zeus-trigger equivalents (admins)
+### Direct-command equivalents (admins)
 
-If you prefer using the Zeus trigger instead of `/admin ...`, these are supported:
+`/admin ...` remains the clearest admin interface. For outbound messaging,
+admins can also use the direct Ms. Green command forms:
 
-- `Zeus send <alias> <text>`
-- `Zeus llm_send <alias> <prompt>`
-- `Zeus send_weather <alias>`
-- `Zeus send the weather to my <alias>`
+- `Ms. Green send <alias> <text>`
+- `Ms. Green llm_send <alias> <prompt>`
+- `Ms. Green send_weather <alias>`
+- `Ms. Green send the weather to my <alias>`
 
 ## Available Commands
 
@@ -108,7 +114,7 @@ Get current status of a chat.
 
 **Examples:**
 
-```
+```text
 /admin status
 /admin status user_U123456
 /admin status group_C789012
@@ -116,7 +122,7 @@ Get current status of a chat.
 
 **Output:**
 
-```
+```text
 📊 Chat Status
 ━━━━━━━━━━━━━━━━
 
@@ -134,13 +140,13 @@ List all active translation sessions and sleeping chats.
 
 **Example:**
 
-```
+```text
 /admin sessions
 ```
 
 **Output:**
 
-```
+```text
 📊 Active Sessions
 ━━━━━━━━━━━━━━━━
 
@@ -173,7 +179,7 @@ Put a chat to sleep (bot ignores all messages).
 
 **Examples:**
 
-```
+```text
 /admin sleep                    # Sleep current chat for 24h
 /admin sleep 12                # Sleep current chat for 12h
 /admin sleep user_U123456 48  # Sleep specific chat for 48h
@@ -181,7 +187,7 @@ Put a chat to sleep (bot ignores all messages).
 
 **Output:**
 
-```
+```text
 😴 Chat user_U1234567890abcdef is now sleeping for 12 hour(s).
 
 Use '/admin wake' to wake early.
@@ -197,14 +203,14 @@ Wake a sleeping chat (bot starts responding again).
 
 **Examples:**
 
-```
+```text
 /admin wake
 /admin wake user_U123456
 ```
 
 **Output:**
 
-```
+```text
 ☀️ Chat user_U1234567890abcdef has been woken up!
 
 The bot is now ready to translate.
@@ -222,14 +228,14 @@ Reset a chat to fresh state (ends session, clears history, wakes if sleeping).
 
 **Examples:**
 
-```
+```text
 /admin reset
 /admin reset group_C789012
 ```
 
 **Output:**
 
-```
+```text
 🔄 Chat Reset Complete
 ━━━━━━━━━━━━━━━━
 
@@ -252,7 +258,8 @@ Show help message with all available commands.
 
 ## 📨 Outbound Messaging (Admin)
 
-TeacherBOY can **push** messages to specific people (1-on-1 users) _only_ if you whitelist them via environment variables.
+Ms. Green can **push** messages to specific people (1-on-1 users) _only_ if
+you whitelist them via environment variables.
 
 ### Step 1: Add named recipients
 
@@ -304,14 +311,14 @@ Example:
 
 **Example:**
 
-```
+```text
 /admin
 /admin help
 ```
 
 **Output:**
 
-```
+```text
 🔧 Admin Commands
 ━━━━━━━━━━━━━━━━
 
@@ -341,7 +348,7 @@ Example:
 
 ## Chat ID Format
 
-TeacherBOY uses the following chat ID formats:
+Ms. Green uses the following chat ID formats:
 
 - **1-on-1 chats**: `user_U1234567890abcdef`
 - **Group chats**: `group_C1234567890abcdef`
@@ -359,7 +366,7 @@ You can see chat IDs in:
 
 If a user reports the bot isn't responding:
 
-```
+```text
 /admin status user_U123456     # Check if sleeping or active
 /admin reset user_U123456      # Reset to fresh state
 ```
@@ -368,13 +375,13 @@ If a user reports the bot isn't responding:
 
 If the bot is misbehaving in a specific chat:
 
-```
+```text
 /admin sleep group_C789012 168  # Sleep for 1 week (max)
 ```
 
 ### Monitor Bot Activity
 
-```
+```text
 /admin sessions  # See all active chats and their message counts
 ```
 
@@ -382,7 +389,7 @@ If the bot is misbehaving in a specific chat:
 
 Users can put the bot to sleep with "amen". To override:
 
-```
+```text
 /admin wake user_U123456
 ```
 
@@ -390,7 +397,7 @@ Users can put the bot to sleep with "amen". To override:
 
 When testing new features:
 
-```
+```text
 /admin reset              # Fresh state in current chat
 ```
 
@@ -406,7 +413,7 @@ When testing new features:
 
 All admin commands are logged for audit purposes:
 
-```
+```text
 🔧 Admin command executed by U1234567890abcdef in chat user_U9999: /admin reset
 ```
 
@@ -421,7 +428,7 @@ All admin commands are logged for audit purposes:
 
 Admin commands have the **highest priority (5)** in the agent routing system:
 
-```
+```text
 Priority 5:  AdminAgent (highest - processed first)
 Priority 10: TranslationAgent
 Priority 20: CalendarAgent
@@ -469,16 +476,9 @@ pytest tests/test_admin_agent.py -v
    - Check logs for your user ID
    - Compare with ADMIN_USER_IDS
 
-3. **Check bot logs for errors**:
+3. **Check bot logs for errors**: `docker compose logs | grep -i admin`
 
-   ```bash
-   docker logs teacherboy-app-1 | grep -i admin
-   ```
-
-4. **Restart the bot** after changing .env:
-   ```bash
-   docker-compose restart
-   ```
+4. **Restart the bot** after changing `.env`: `docker-compose restart`
 
 ### Not seeing any response?
 

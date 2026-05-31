@@ -161,14 +161,11 @@ CALENDAR_HF_REPO_ID=username/ms-green-calendar
 CALENDAR_SYNC_INTERVAL_SECONDS=300
 ```
 
-### HF Hub Persistence
+### Persistence Notes
 
-To enable cloud backup of calendar data:
-
-1. Set `HF_MEMORY_TOKEN` (same token as conversation memory)
-2. Set `CALENDAR_HF_REPO_ID` to your dataset repo
-
-The calendar data syncs automatically every 5 minutes (configurable).
+- `CALENDAR_DATA_PATH` controls the local filesystem path for calendar data.
+- `CALENDAR_HF_REPO_ID` remains the separate optional HF dataset for calendar backup.
+- For the shared storage contract and mounted-volume examples, see [Environment variables](reference/environment.md).
 
 ## Technical Details
 

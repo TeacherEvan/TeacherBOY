@@ -1,5 +1,6 @@
 """Tests for conversation memory service."""
 
+import sys
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -131,6 +132,92 @@ class TestConversationMemoryService:
 
 class TestConversationMemorySingleton:
     """Tests for singleton pattern."""
+
+    def test_service_uses_explicit_storage_path(self, tmp_path):
+        """Test that the service stores an explicit local storage path."""
+        storage_path = tmp_path / "conversations"
+
+        service = ConversationMemoryService(
+            storage_path=str(storage_path),
+            max_messages=10,
+            session_ttl_hours=24,
+        )
+
+        assert service.local_storage_path == storage_path
+
+    def test_init_conversation_memory_accepts_storage_path(self, tmp_path):
+        """Test that the singleton initializer forwards an explicit storage path."""
+        storage_path = tmp_path / "conversation-cache"
+
+        service = init_conversation_memory(storage_path=str(storage_path))
+
+        assert service.local_storage_path == storage_path
+
+    def test_init_conversation_memory_uses_configured_default_storage_path(
+        self, tmp_path, monkeypatch
+    ):
+        """Test that initialization uses settings.conversation_storage_path by default."""
+        storage_path = tmp_path / "configured-conversations"
+
+        monkeypatch.setattr(
+            "src.services.conversation_memory_service.settings.conversation_storage_path",
+            str(storage_path),
+        )
+
+        service = init_conversation_memory()
+
+        assert service.local_storage_path == storage_path
+
+    def test_init_conversation_memory_hf_uses_configured_storage_path(
+        self, tmp_path, monkeypatch
+    ):
+        """Test HF initialization uses the configured storage path for local sync cache."""
+
+        class FakeHfApi:
+            def __init__(self, token):
+                self.token = token
+
+            def create_repo(self, **kwargs):
+                return None
+
+        class FakeCommitScheduler:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def stop(self):
+                return None
+
+        fake_module = MagicMock()
+        fake_module.HfApi = FakeHfApi
+        fake_module.CommitScheduler = FakeCommitScheduler
+
+        storage_path = tmp_path / "hf-conversations"
+        created_tasks = []
+
+        def fake_create_task(coro):
+            created_tasks.append(coro)
+            coro.close()
+            return MagicMock()
+
+        monkeypatch.setattr(
+            "src.services.conversation_memory_service.settings.conversation_storage_path",
+            str(storage_path),
+        )
+        monkeypatch.setattr(
+            "src.services.conversation_memory_service.asyncio.create_task",
+            fake_create_task,
+        )
+        monkeypatch.setitem(sys.modules, "huggingface_hub", fake_module)
+
+        service = init_conversation_memory(
+            hf_token="hf_token_1234567890",
+            hf_repo_id="user/test-conversations",
+        )
+
+        assert service._hf_enabled is True
+        assert service._local_storage_path == storage_path
+        assert service._commit_scheduler.kwargs["folder_path"] == str(storage_path)
+        assert created_tasks
 
     def test_init_without_hf_creates_inmemory(self):
         """Test initialization without HF credentials uses in-memory storage."""

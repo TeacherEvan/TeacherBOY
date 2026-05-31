@@ -1,6 +1,6 @@
 # Tracing
 
-Zeus supports optional OpenTelemetry tracing for runtime debugging and performance inspection.
+Ms. Green supports optional OpenTelemetry tracing for runtime debugging and performance inspection.
 
 ## Enable tracing
 
@@ -8,7 +8,7 @@ Set these environment variables:
 
 ```env
 ENABLE_TRACING=True
-OTEL_SERVICE_NAME=TeacherBOY
+OTEL_SERVICE_NAME=Ms. Green
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 ```
 
@@ -22,7 +22,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 ## Local workflow
 
 1. Start an OTLP-compatible collector or tracing backend.
-2. Run Zeus normally.
+2. Run Ms. Green normally.
 3. In VS Code, use `AI Toolkit: Open Tracing` if you have the AI Toolkit extension configured.
 
 ## Notes

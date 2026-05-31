@@ -1,6 +1,6 @@
 # Google Calendar Integration Guide
 
-TeacherBOY now supports **Google Calendar** as the backend for calendar events and reminders. This provides:
+Ms. Green supports **Google Calendar** as an optional backend for calendar events and reminders. This provides:
 
 - ✅ **Native mobile reminders** - Get notifications on your phone
 - ✅ **Cross-device sync** - Access events from any device
@@ -20,14 +20,14 @@ TeacherBOY now supports **Google Calendar** as the backend for calendar events a
 4. Create OAuth 2.0 credentials:
    - Go to "Credentials" → "Create Credentials" → "OAuth client ID"
    - Application type: **Desktop app**
-   - Name: "TeacherBOY Calendar"
+   - Name: "Ms. Green Calendar"
    - Download the JSON file
 
 ### 2. Save Credentials
 
 Save the downloaded JSON as:
 
-```
+```text
 data/google_credentials.json
 ```
 
@@ -50,7 +50,7 @@ Add to your `.env` file:
 GOOGLE_CALENDAR_ENABLED=true
 ```
 
-### 5. Restart TeacherBOY
+### 5. Restart Ms. Green
 
 ```bash
 # Docker
@@ -75,22 +75,22 @@ uvicorn src.main:app --reload
 
 All existing calendar commands work the same:
 
-| Command                          | Description                |
-| -------------------------------- | -------------------------- |
-| `zeus calendar`                  | View upcoming events       |
-| `zeus add event`                 | Start add flow             |
-| `zeus add tomorrow Team meeting` | Quick inline add           |
-| `zeus scrape`                    | AI-extract dates from chat |
-| `zeus remove event`              | Remove events              |
+| Command                               | Description                |
+| ------------------------------------- | -------------------------- |
+| `Ms. Green calendar`                  | View upcoming events       |
+| `Ms. Green add event`                 | Start add flow             |
+| `Ms. Green add tomorrow Team meeting` | Quick inline add           |
+| `Ms. Green scrape`                    | AI-extract dates from chat |
+| `Ms. Green remove event`              | Remove events              |
 
 ### New: Natural Language Events
 
 With Google Calendar, you can use more natural language:
 
-```
-zeus add Meeting with John tomorrow at 2pm
-zeus add Dentist appointment next Tuesday 10am
-zeus add Mom's birthday party on Jan 15 at 6pm
+```text
+Ms. Green add Meeting with John tomorrow at 2pm
+Ms. Green add Dentist appointment next Tuesday 10am
+Ms. Green add Mom's birthday party on Jan 15 at 6pm
 ```
 
 ### Native Reminders
@@ -104,7 +104,7 @@ You can customize reminders in Google Calendar's web/mobile app.
 
 ## Architecture
 
-```
+```text
 ┌──────────────────────────────────────────────────────┐
 │                    CalendarAgent                      │
 │  (same interface, same commands)                      │
@@ -130,15 +130,16 @@ You can customize reminders in Google Calendar's web/mobile app.
 
 ## Fallback Behavior
 
-If Google Calendar fails to initialize (missing credentials, network error), TeacherBOY automatically falls back to local JSON storage. Check logs for:
+If Google Calendar fails to initialize (missing credentials, network error),
+Ms. Green automatically falls back to local JSON storage. Check logs for:
 
-```
+```text
 ✅ Calendar adapter initialized with Google Calendar backend
 ```
 
 or
 
-```
+```text
 📁 Calendar adapter initialized with local storage backend
 ```
 
@@ -170,12 +171,13 @@ Download OAuth credentials from Google Cloud Console and save to `data/google_cr
 
 If you have existing events in local JSON storage:
 
-1. View your current events: `zeus calendar`
+1. View your current events: `Ms. Green calendar`
 2. Note down important events
 3. Enable Google Calendar
 4. Re-add events (they'll sync to Google)
 
-> **Note:** Automatic migration from local JSON to Google Calendar is not implemented. This ensures you don't accidentally duplicate events.
+> **Note:** Automatic migration from local JSON to Google Calendar is not
+> implemented. This avoids accidental event duplication.
 
 ## Security
 

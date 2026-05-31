@@ -78,6 +78,7 @@ from src.services.history_log_service import (
     LogLevel,
 )
 from src.services.startup_data_loader import startup_loader
+from src.services.staff_memory_service import StaffMemoryService
 from src.utils.tracing import setup_tracing
 
 # ============================================================================
@@ -321,7 +322,6 @@ async def lifespan(app: FastAPI):
     from src.agents.special_news_agent import SpecialNewsAgent
     from src.services.news_data_service import NewsDataService
     from src.services.special_news_service import SpecialNewsService
-    from src.services.staff_memory_service import StaffMemoryService
 
     # Register Help Agent (Priority: 5 - Highest)
     help_agent = HelpAgent()
@@ -366,7 +366,7 @@ async def lifespan(app: FastAPI):
         logger.info("📅 Calendar Agent not registered (calendar disabled)")
 
     staff_memory_service = StaffMemoryService(
-        Path("./data/staff_memory/staff_memory.json")
+        Path(settings.staff_memory_storage_path)
     )
     review_agent = ReviewAgent(
         staff_memory_service=staff_memory_service,
