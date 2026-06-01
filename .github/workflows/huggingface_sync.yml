@@ -64,10 +64,16 @@ jobs:
                       exit 1
                   fi
 
-                  if git ls-remote --exit-code --heads hf main >/dev/null 2>&1; then
-                      git fetch hf main
+                  remote_sha="$(git ls-remote hf refs/heads/main | awk '{print $1}')"
+
+                  if [ -n "${remote_sha}" ] && ! printf '%s' "${remote_sha}" | grep -Eq '^[0-9a-f]{40}$'; then
+                      echo "Unexpected SHA for Hugging Face main: ${remote_sha}"
+                      exit 1
+                  fi
+
+                  if [ -n "${remote_sha}" ]; then
                       echo "Publishing GitHub main to Hugging Face Space main (repo-authoritative deploy)."
-                      git push --force-with-lease hf HEAD:main
+                      git push --force-with-lease=refs/heads/main:${remote_sha} hf HEAD:main
                   else
                       echo "Hugging Face branch 'main' does not exist yet; creating it from GitHub main."
                       git push hf HEAD:main
