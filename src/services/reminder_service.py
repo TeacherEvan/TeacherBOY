@@ -118,6 +118,14 @@ class ReminderService:
             finally:
                 self._scheduler_job_id = None
 
+    def stop(self, scheduler_service: Optional[Any] = None) -> None:
+        """Backward-compatible shutdown wrapper for legacy callers."""
+        if scheduler_service is not None:
+            self.stop_scheduler(scheduler_service)
+            return
+
+        self._scheduler_job_id = None
+
     async def _check_and_send_reminders(self) -> None:
         """
         Check all events for reminders due today and send notifications.

@@ -39,6 +39,18 @@ def test_is_convex_primary_backend_uses_local_default() -> None:
     assert settings.is_convex_primary_backend() is False
 
 
+def test_google_translate_config_compatibility_surface() -> None:
+    configured = Settings(
+        _env_file=None,
+        google_translate_api_key="google-api-key-123",
+    )
+    missing_key = Settings(_env_file=None, google_translate_api_key=None)
+
+    assert configured.google_translate_api_key == "google-api-key-123"
+    assert configured.is_google_translate_configured() is True
+    assert missing_key.is_google_translate_configured() is False
+
+
 @pytest.mark.parametrize("value", ["", "remote", " convex-local "])
 def test_persistence_backend_rejects_invalid_values(value: str) -> None:
     with pytest.raises(ValidationError, match="persistence_backend"):

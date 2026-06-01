@@ -1135,6 +1135,12 @@ class TestReminderService:
         assert "📅" in message or "⏰" in message  # Calendar indicator
         assert "7" in message or "days" in message
 
+    def test_stop_is_backward_compatible_without_scheduler(self, reminder_service):
+        """Shutdown should tolerate legacy callers that invoke stop() directly."""
+        reminder_service.stop()
+
+        assert reminder_service._scheduler_job_id is None
+
 
 class TestDateParsing:
     """Tests for date parsing in calendar flows."""

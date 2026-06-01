@@ -81,6 +81,10 @@ class Settings(BaseSettings):
     # ============================================================================
     # Translation Service Configuration
     # ============================================================================
+    google_translate_api_key: Optional[str] = Field(
+        default=None,
+        description="Google Translate API key retained for startup compatibility.",
+    )
 
     # Translation Performance Optimization
     # NOTE: Caching implementation is planned for future release
@@ -679,6 +683,12 @@ class Settings(BaseSettings):
     def is_news_api_configured(self) -> bool:
         """Check if NewsAPI.org is properly configured."""
         return bool(self.news_api_key and len(self.news_api_key) > 10)
+
+    def is_google_translate_configured(self) -> bool:
+        """Check if the legacy Google Translate configuration is available."""
+        return bool(
+            self.google_translate_api_key and len(self.google_translate_api_key) > 10
+        )
 
     def is_openrouter_configured(self) -> bool:
         """Check if OpenRouter is properly configured."""
