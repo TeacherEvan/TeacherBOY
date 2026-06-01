@@ -5,6 +5,7 @@ Ms. Green now includes a comprehensive calendar and reminder system that allows 
 - Add events with automatic reminders
 - View their upcoming events
 - Remove events (with multi-select support)
+- Scan recent chat messages for dates and add selected events in one batch
 - Extract dates from images and add them to the calendar
 
 ## Quick Start
@@ -22,6 +23,13 @@ my reminders
 ```text
 Ms. Green add event
 Ms. Green remind me
+```
+
+### Scan Recent Messages
+
+```text
+Ms. Green scrape
+Ms. Green scan
 ```
 
 ### Remove Events
@@ -116,6 +124,15 @@ message.
 | `Ms. Green delete event`    | Same as above           |
 | `Ms. Green calendar remove` | Same as above           |
 
+### Scrape Commands
+
+| Command                  | Description                               |
+| ------------------------ | ----------------------------------------- |
+| `Ms. Green scrape`       | Scan recent chat messages for date events |
+| `Ms. Green scan`         | Same as above                             |
+| `Ms. Green scrape 20`    | Scan the last 20 messages                 |
+| `Ms. Green scan 5`       | Scan the last 5 messages                  |
+
 ## Add Event Flow
 
 1. **Trigger**: Send `Ms. Green add event`
@@ -142,6 +159,22 @@ message.
 **Note**: Calendar visibility is chat-scoped. In group and room chats you can view
 events shared in that chat, but you can only remove events that you created.
 Inputs that mix unsupported words and numbers are rejected instead of guessed.
+
+## Scrape Recent Messages Flow
+
+1. **Trigger**: Send `Ms. Green scrape` or `Ms. Green scan`
+2. **Select**: Review the numbered candidates and toggle selections with numbers like `1,3`
+3. **Shortcuts**: Use `all`, `none`, `done`, or `cancel`
+4. **Preview**: `done` shows the exact selected titles and dates only
+5. **Shared reminders**: Choose one reminder profile and apply it to the selected batch
+
+Important scrape behavior:
+
+- Selection starts empty for safety; nothing is added until you explicitly choose candidates.
+- `done` is rejected when nothing is selected.
+- Only the selected events are added after the reminder choice.
+- The reminder choice is shared across the whole selected batch.
+- Stale, expired, or non-owner follow-up replies are rejected instead of guessed.
 
 ## Configuration
 
@@ -241,7 +274,7 @@ class CalendarState(Enum):
     AWAITING_REMOVAL_SELECTION = "awaiting_removal_selection"
     CONFIRMING_REMOVAL = "confirming_removal"
     SCRAPE_PROCESSING = "scrape_processing"
-    SCRAPE_REVIEWING = "scrape_reviewing"
+    SCRAPE_SELECTING = "scrape_selecting"
     SCRAPE_REMINDER_DAYS = "scrape_reminder_days"
 ```
 

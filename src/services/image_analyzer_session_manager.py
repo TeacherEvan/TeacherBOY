@@ -36,6 +36,7 @@ class ImageAnalyzerSession:
     def __init__(self, user_id: str):
         self.user_id = user_id
         self.state = AnalyzerState.WAITING_FOR_IMAGE
+        self.mode = "standard"
         self.image_data: Optional[str] = None  # Base64 encoded image
         self.question: Optional[str] = None
         self.detected_dates: List[Dict[str, str]] = []  # Dates found in image
@@ -75,16 +76,18 @@ class ImageAnalyzerSessionManager:
         self._cleanup_task: Optional[asyncio.Task] = None
         self._cleanup_interval_seconds = 30  # Cleanup every 30 seconds
 
-    def start_session(self, chat_id: str, user_id: Optional[str] = None) -> None:
+    def start_session(self, chat_id: str, user_id: Optional[str] = None, analysis_mode: str = "standard") -> None:
         """
         Start a new image analysis session.
 
         Args:
             chat_id: Chat identifier
             user_id: Optional user identifier
+            analysis_mode: Prompt mode to use when the image arrives
         """
         self._sessions[chat_id] = ImageAnalyzerSession(user_id or "unknown")
-        logger.info(f"🖼️ Image analysis session started for chat {chat_id}")
+        self._sessions[chat_id].mode = analysis_mode
+        logger.info(f"🖼️ Image analysis session started for chat {chat_id} (mode={analysis_mode})")
 
     def get_session(self, chat_id: str) -> Optional[ImageAnalyzerSession]:
         """
@@ -172,7 +175,7 @@ class ImageAnalyzerSessionManager:
         logger.info(f"🖼️ Image stored for chat {chat_id}, waiting for question")
         return True
 
-    def get_image_and_question(self, chat_id: str, question: str) -> Tuple[Optional[str], Optional[str]]:
+    def get_image_and_question(self, chat_id: str, question: str) -> Tuple[Optional[str], Optional[str], str]:
         """
         Get stored image and set question, then clear session.
 
@@ -181,20 +184,21 @@ class ImageAnalyzerSessionManager:
             question: User's question about the image
 
         Returns:
-            Tuple of (image_data, question) or (None, None) if session invalid
+            Tuple of (image_data, question, analysis_mode) or (None, None, "standard") if session invalid
         """
         session = self.get_session(chat_id)
         if not session or not session.image_data:
-            return None, None
-        
+            return None, None, "standard"
+
         session.set_question(question)
         image_data = session.image_data
-        
+        analysis_mode = getattr(session, "mode", "standard")
+
         # Clear session after retrieving data
         del self._sessions[chat_id]
         logger.info(f"🖼️ Image analysis session completed for chat {chat_id}")
-        
-        return image_data, question
+
+        return image_data, question, analysis_mode
 
     def clear_session(self, chat_id: str) -> None:
         """

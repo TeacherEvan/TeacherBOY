@@ -229,7 +229,9 @@ class CalendarAgent(BaseAgent):
 
     def _is_cancel_command(self, text: str) -> bool:
         """Check if text is a cancel command."""
-        text_lower = text.lower().strip()
+        normalized = (text or "").strip()
+        prefix, rest = get_bot_identity_service().split_command_prefix(normalized)
+        text_lower = rest.lower().strip() if prefix else normalized.lower().strip()
         return text_lower in CANCEL_KEYWORDS
 
     def _is_remove_selection_command(self, text: str) -> bool:
@@ -311,6 +313,26 @@ class CalendarAgent(BaseAgent):
             or ("," in text_lower and bool(REMOVE_SELECTION_PATTERN.fullmatch(text_lower)))
             or self._looks_like_remove_selection_attempt(text)
         )
+    
+    def _is_stale_scrape_followup(self, text: str) -> bool:
+        """Catch explicit scrape follow-ups after expiry without hijacking ordinary chatter."""
+        normalized = (text or "").strip()
+        prefix, rest = get_bot_identity_service().split_command_prefix(normalized)
+        text_lower = rest.lower().strip() if prefix else normalized.lower().strip()
+        return (
+            text_lower in {"all", "none", "done", "cancel", "7", "3", "1", "7 days", "3 days", "1 day"}
+            or bool(re.fullmatch(r"\d+(?:\s*,\s*\d+)*", text_lower))
+        )
+
+    def _is_scrape_session_input(self, text: str, state: CalendarState) -> bool:
+        """Limit active scrape sessions to explicit scrape commands only."""
+        if state == CalendarState.SCRAPE_SELECTING:
+            return self.scrape_flow._is_explicit_scrape_selection_followup(text)
+
+        if state == CalendarState.SCRAPE_REMINDER_DAYS:
+            return self._is_cancel_command(text) or self.scrape_flow._is_explicit_scrape_reminder_followup(text)
+
+        return False
 
     def _looks_like_bulk_dates(self, text: str) -> bool:
         """Detect if text contains bulk date input (should trigger scrape flow)."""
@@ -448,20 +470,29 @@ class CalendarAgent(BaseAgent):
 
         text_lower = text.lower().strip()
         chat_id = self._get_chat_id(event)
+        user_id = getattr(getattr(event, "source", None), "user_id", None)
+        active_chat_id = calendar_session_manager.resolve_discrete_scrape_chat_id(chat_id, user_id)
 
         # Check for active calendar session
-        session = calendar_session_manager.get_session(chat_id)
+        session = calendar_session_manager.get_session(active_chat_id)
         if session and session.state != CalendarState.IDLE:
             if session.state in {
                 CalendarState.AWAITING_REMOVAL_SELECTION,
                 CalendarState.CONFIRMING_REMOVAL,
             }:
                 return self._is_trigger(text, TRIGGERS_REMOVE) or self._is_remove_session_input(text, session.state)
+            if session.state == CalendarState.SCRAPE_SELECTING:
+                return self._is_scrape_session_input(text, session.state)
+            if session.state == CalendarState.SCRAPE_REMINDER_DAYS:
+                return self._is_scrape_session_input(text, session.state)
             return True
 
-        if calendar_session_manager.had_recent_remove_flow(chat_id, getattr(getattr(event, "source", None), "user_id", None)) and (
+        if calendar_session_manager.had_recent_remove_flow(chat_id, user_id) and (
             REMOVE_DELETE_PATTERN.fullmatch(text_lower) or self._is_stale_remove_followup(text)
         ):
+            return True
+
+        if calendar_session_manager.had_recent_scrape_flow(chat_id, user_id) and self._is_stale_scrape_followup(text):
             return True
 
         # Check for explicit triggers (must START the message to avoid instructional text)
@@ -496,12 +527,13 @@ class CalendarAgent(BaseAgent):
         """
         chat_id = self._get_chat_id(event)
         user_id = getattr(event.source, "user_id", None) if event.source else None
-        session = calendar_session_manager.get_session(chat_id)
+        active_chat_id = calendar_session_manager.resolve_discrete_scrape_chat_id(chat_id, user_id)
+        session = calendar_session_manager.get_session(active_chat_id)
         if session and session.state == CalendarState.IDLE:
             session = None
 
         # Session ownership check (in groups, only session owner can interact)
-        if session and not calendar_session_manager.is_session_owner(chat_id, user_id):
+        if session and not calendar_session_manager.is_session_owner(active_chat_id, user_id):
             logger.debug(
                 f"📅 User {user_id} tried to interact with calendar session owned by {session.user_id}"
             )
@@ -514,6 +546,18 @@ class CalendarAgent(BaseAgent):
                         event,
                         line_bot_api,
                         "❌ Only the person who started this removal flow can change or confirm it.",
+                    )
+                    return True
+                return False
+            if session.state in {
+                CalendarState.SCRAPE_SELECTING,
+                CalendarState.SCRAPE_REMINDER_DAYS,
+            }:
+                if self._is_scrape_session_input(text, session.state):
+                    await self.scrape_flow.send_message(
+                        event,
+                        line_bot_api,
+                        "❌ Only the person who started this scrape flow can change or confirm it.",
                     )
                     return True
                 return False
@@ -533,12 +577,24 @@ class CalendarAgent(BaseAgent):
                     CalendarState.CONFIRMING_REMOVAL,
                 } and self._is_cancel_command(text):
                     return await self.remove_flow.handle_removal_confirmation(
-                        event, text, line_bot_api, chat_id, user_id
+                        event, text, line_bot_api, active_chat_id, user_id
                     )
+
+                if session and session.state in {
+                    CalendarState.SCRAPE_PROCESSING,
+                    CalendarState.SCRAPE_SELECTING,
+                    CalendarState.SCRAPE_REMINDER_DAYS,
+                } and self._is_cancel_command(text):
+                    calendar_session_manager.end_session(active_chat_id)
+                    await self.add_flow.send_message(
+                        event, line_bot_api,
+                        "❌ Calendar operation cancelled.\n\nยกเลิกแล้วค่ะ"
+                    )
+                    return True
 
                 # Check for cancel command
                 if self._is_cancel_command(text):
-                    if calendar_session_manager.cancel_flow(chat_id):
+                    if calendar_session_manager.cancel_flow(active_chat_id):
                         await self.add_flow.send_message(
                             event, line_bot_api,
                             "❌ Calendar operation cancelled.\n\nยกเลิกแล้วค่ะ"
@@ -570,6 +626,14 @@ class CalendarAgent(BaseAgent):
                         event,
                         line_bot_api,
                         "❌ This remove flow is stale or expired. Start the remove flow again.",
+                    )
+                    return True
+                
+                if not session and calendar_session_manager.had_recent_scrape_flow(chat_id, user_id) and self._is_stale_scrape_followup(text):
+                    await self.scrape_flow.send_message(
+                        event,
+                        line_bot_api,
+                        "❌ This scrape flow is stale or expired. Start 'zeus scrape' again.",
                     )
                     return True
 
@@ -624,18 +688,18 @@ class CalendarAgent(BaseAgent):
                 if state == CalendarState.AWAITING_REMOVAL_SELECTION:
                     if self._is_remove_confirmation_command(text):
                         return await self.remove_flow.handle_removal_confirmation(
-                            event, text, line_bot_api, chat_id, user_id
+                            event, text, line_bot_api, active_chat_id, user_id
                         )
                     if not self._is_remove_session_input(text, state):
                         return False
                     return await self.remove_flow.handle_removal_selection(
-                        event, text, line_bot_api, chat_id, user_id
+                        event, text, line_bot_api, active_chat_id, user_id
                     )
                 
                 if state == CalendarState.CONFIRMING_REMOVAL:
                     if self._is_remove_reselection_command(text) or self._looks_like_remove_selection_attempt(text):
                         return await self.remove_flow.handle_removal_selection(
-                            event, text, line_bot_api, chat_id, user_id
+                            event, text, line_bot_api, active_chat_id, user_id
                         )
                     if not (
                         self._is_remove_confirmation_command(text)
@@ -643,55 +707,62 @@ class CalendarAgent(BaseAgent):
                     ):
                         return False
                     return await self.remove_flow.handle_removal_confirmation(
-                        event, text, line_bot_api, chat_id, user_id
+                        event, text, line_bot_api, active_chat_id, user_id
                     )
 
                 # InlineAddFlow states
                 if state == CalendarState.INLINE_ADD_REMINDER_DAYS:
                     return await self.inline_add_flow.handle_reminder_response(
-                        event, text, line_bot_api, chat_id, user_id
+                        event, text, line_bot_api, active_chat_id, user_id
                     )
                 
                 if state == CalendarState.INLINE_ADD_CONFIRMING:
                     return await self.inline_add_flow.handle_confirmation(
-                        event, text, line_bot_api, chat_id, user_id
+                        event, text, line_bot_api, active_chat_id, user_id
                     )
 
                 # AddFlow states
                 if state == CalendarState.AWAITING_DATE:
                     return await self.add_flow.handle_date_input(
-                        event, text, line_bot_api, chat_id, user_id
+                        event, text, line_bot_api, active_chat_id, user_id
                     )
                 
                 if state == CalendarState.AWAITING_TITLE:
                     return await self.add_flow.handle_title_input(
-                        event, text, line_bot_api, chat_id, user_id
+                        event, text, line_bot_api, active_chat_id, user_id
                     )
                 
                 if state == CalendarState.AWAITING_DESCRIPTION:
                     return await self.add_flow.handle_description_input(
-                        event, text, line_bot_api, chat_id, user_id
+                        event, text, line_bot_api, active_chat_id, user_id
                     )
                 
                 if state == CalendarState.AWAITING_REMINDER_DAYS:
                     return await self.add_flow.handle_reminder_days_input(
-                        event, text, line_bot_api, chat_id, user_id
+                        event, text, line_bot_api, active_chat_id, user_id
                     )
                 
                 if state == CalendarState.CONFIRMING_ADD:
                     return await self.add_flow.handle_add_confirmation(
-                        event, text, line_bot_api, chat_id, user_id
+                        event, text, line_bot_api, active_chat_id, user_id
                     )
 
                 # ScrapeFlow states
-                if state == CalendarState.SCRAPE_REVIEWING:
+                if state == CalendarState.SCRAPE_SELECTING:
+                    if not self.scrape_flow._is_explicit_scrape_selection_followup(text):
+                        return False
                     return await self.scrape_flow.handle_scrape_review_response(
-                        event, text, line_bot_api, chat_id, user_id
+                        event, text, line_bot_api, active_chat_id, user_id
                     )
                 
                 if state == CalendarState.SCRAPE_REMINDER_DAYS:
+                    if not (
+                        self._is_cancel_command(text)
+                        or self.scrape_flow._is_explicit_scrape_reminder_followup(text)
+                    ):
+                        return False
                     return await self.scrape_flow.handle_scrape_reminder_response(
-                        event, text, line_bot_api, chat_id, user_id
+                        event, text, line_bot_api, active_chat_id, user_id
                     )
 
                 # Unknown state
@@ -743,16 +814,23 @@ class CalendarAgent(BaseAgent):
             )
             return True
 
-        # Acknowledge request in group (briefly)
+        is_friend = await self._check_is_friend(event, line_bot_api)
+        if not is_friend:
+            await self.add_flow.send_message(
+                event,
+                line_bot_api,
+                "I can't continue in DM yet, so I'll continue here instead.",
+            )
+            return await self.scrape_flow.handle_scrape_trigger(
+                event, text, line_bot_api, chat_id, user_id, discrete_mode=False
+            )
+
+        # Acknowledge request in group only after DM delivery is plausibly available.
         await self.add_flow.send_message(
             event, line_bot_api,
-            "I'll continue in your DM."
+            "I'll try to continue in your DM. If that fails, I'll continue here."
         )
 
-        # Now run the normal scrape flow, but store user_id for DM delivery
-        # We'll use the scrape flow but override the delivery target
-        calendar_session_manager.set_discrete_scrape_target(chat_id, user_id)
-        
         # Delegate to scrape flow (which will check for discrete mode)
         return await self.scrape_flow.handle_scrape_trigger(
             event, text, line_bot_api, chat_id, user_id, discrete_mode=True

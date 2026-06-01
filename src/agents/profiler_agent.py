@@ -31,6 +31,7 @@ from src.services.rate_limiter import RateLimiter
 from src.services.metrics_service import metrics_service
 from src.services.privilege_service import privilege_service
 from src.services.bot_identity_service import get_bot_identity_service
+from src.services.image_consent_service import image_consent_service
 from src.config import settings
 from src.utils.tracing import get_tracer
 from src.prompts.builders.vision_builder import VisionPromptBuilder
@@ -180,7 +181,12 @@ class ProfilerAgent(BaseAgent):
 
         # Handle text trigger - set session and wait for image
         if message_type == 'text' and text:
-            profiler_session_manager.request_profiling(chat_id, user_id)
+            literal_mode = image_consent_service.should_use_literal_mode(user_id, True)
+            profiler_session_manager.request_profiling(
+                chat_id,
+                user_id,
+                analysis_mode="literal" if literal_mode else "standard",
+            )
             
             confirmation_msg = TextMessage(
                 text="🔬 Face Profiler Ready!\n\n"

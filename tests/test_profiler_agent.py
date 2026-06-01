@@ -206,6 +206,35 @@ class TestProfilerAgentShouldHandle:
             result = await agent.should_handle(mock_event, "")
             assert result is False
 
+    @pytest.mark.asyncio
+    async def test_handle_routes_consented_ai_generated_trigger_to_literal_mode(
+        self, mock_text_event, mock_line_api, mock_settings
+    ):
+        """AI-generated content declared by a consented owner should use literal mode immediately."""
+        mock_text_event.message.text = "Ms. Green profile this AI-generated image"
+        mock_text_event.source.user_id = "admin123"
+
+        with patch("src.agents.profiler_agent.settings", mock_settings), \
+             patch("src.agents.profiler_agent.github_models_service") as mock_gms, \
+             patch("src.agents.profiler_agent.image_consent_service") as mock_consent, \
+             patch("src.agents.profiler_agent.profiler_session_manager") as mock_session, \
+             patch("src.agents.profiler_agent.asyncio.to_thread"):
+            mock_gms.is_configured.return_value = True
+            mock_consent.should_use_literal_mode.return_value = True
+
+            from src.agents.profiler_agent import ProfilerAgent
+
+            agent = ProfilerAgent()
+            agent._download_image = AsyncMock(return_value=b"image-bytes")
+            agent._send_analyzing_message = AsyncMock()
+            agent._send_error_message = AsyncMock()
+
+            await agent.handle(mock_text_event, mock_text_event.message.text, mock_line_api)
+
+            mock_consent.should_use_literal_mode.assert_called_once_with("admin123", True)
+            mock_session.request_profiling.assert_called_once()
+            assert mock_session.request_profiling.call_args.kwargs.get("analysis_mode") == "literal"
+
 
 class TestProfilerAgentPriority:
     """Tests for ProfilerAgent priority."""

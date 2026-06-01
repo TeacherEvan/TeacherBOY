@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -13,22 +13,39 @@ class ProfilerSessionManager:
 
     def __init__(self):
         """Initialize profiler session manager."""
-        # {chat_id: (user_id, timestamp)}
-        self._waiting_for_image: Dict[str, tuple[str, datetime]] = {}
+        # {chat_id: (user_id, timestamp, analysis_mode)}
+        self._waiting_for_image: Dict[str, tuple[str, datetime, str]] = {}
         self._session_ttl_seconds = 60  # Expire after 60 seconds
         self._cleanup_task: Optional[asyncio.Task] = None
         self._cleanup_interval_seconds = 60  # Run cleanup every 60 seconds
 
-    def request_profiling(self, chat_id: str, user_id: Optional[str] = None) -> None:
+    def request_profiling(
+        self,
+        chat_id: str,
+        user_id: Optional[str] = None,
+        analysis_mode: str = "standard",
+    ) -> None:
         """
         Mark that user is waiting to send an image for profiling.
 
         Args:
             chat_id: Chat identifier
             user_id: Optional user identifier
+            analysis_mode: Prompt mode to use when the image arrives
         """
-        self._waiting_for_image[chat_id] = (user_id or "unknown", datetime.now())
-        logger.info(f"🔬 Profiling requested for chat {chat_id}")
+        self._waiting_for_image[chat_id] = (
+            user_id or "unknown",
+            datetime.now(),
+            analysis_mode,
+        )
+        logger.info(f"🔬 Profiling requested for chat {chat_id} (mode={analysis_mode})")
+
+    def get_analysis_mode(self, chat_id: str) -> str:
+        """Return the requested analysis mode for the current session."""
+        session = self._waiting_for_image.get(chat_id)
+        if not session:
+            return "standard"
+        return session[2]
 
     def is_waiting_for_image(self, chat_id: str, user_id: Optional[str] = None) -> bool:
         """
@@ -44,7 +61,7 @@ class ProfilerSessionManager:
         if chat_id not in self._waiting_for_image:
             return False
 
-        stored_user_id, timestamp = self._waiting_for_image[chat_id]
+        stored_user_id, timestamp, _analysis_mode = self._waiting_for_image[chat_id]
 
         # Check expiration
         age = (datetime.now() - timestamp).total_seconds()
@@ -79,7 +96,7 @@ class ProfilerSessionManager:
         now = datetime.now()
         expired = [
             chat_id
-            for chat_id, (_, timestamp) in self._waiting_for_image.items()
+            for chat_id, (_, timestamp, _) in self._waiting_for_image.items()
             if (now - timestamp).total_seconds() > self._session_ttl_seconds
         ]
 
@@ -91,7 +108,9 @@ class ProfilerSessionManager:
 
     async def _cleanup_loop(self) -> None:
         """Background task to periodically clean up expired sessions."""
-        logger.info(f"🔬 Starting profiler session cleanup loop (every {self._cleanup_interval_seconds}s)")
+        logger.info(
+            f"🔬 Starting profiler session cleanup loop (every {self._cleanup_interval_seconds}s)"
+        )
         try:
             while True:
                 await asyncio.sleep(self._cleanup_interval_seconds)

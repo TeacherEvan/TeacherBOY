@@ -56,6 +56,7 @@ from src.services.privilege_service import privilege_service
 from src.services.bot_identity_service import get_bot_identity_service
 from src.config import settings
 from src.utils.tracing import get_tracer
+from src.prompts.builders.debrief_builder import build_debrief_prompt
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -79,6 +80,7 @@ class ImageAnalyzerAgent(BaseAgent):
         "analyze",
         "examine",
         "look at",
+        "debrief",
     ]
 
     GENERIC_TRIGGERS = [
@@ -87,6 +89,9 @@ class ImageAnalyzerAgent(BaseAgent):
         "examine this",
         "examine image",
         "look at this",
+        "debrief this",
+        "assistantbot debrief this",
+        "ms. green debrief this",
     ]
 
     def __init__(self, http_client=None):
@@ -213,6 +218,14 @@ class ImageAnalyzerAgent(BaseAgent):
         if any(keyword in text_lower for keyword in profiler_keywords):
             return False
 
+        # Debrief is a first-class trigger path.
+        if "debrief" in text_lower and (
+            text_lower.startswith("debrief")
+            or "assistantbot debrief" in text_lower
+            or "ms. green debrief" in text_lower
+        ):
+            return True
+
         prefix, rest = get_bot_identity_service().split_command_prefix(text)
         if prefix:
             rest_lower = rest.lower().strip()
@@ -329,12 +342,18 @@ class ImageAnalyzerAgent(BaseAgent):
             logger.info(f"🔓 Admin {user_id} bypassed image analyzer rate limit")
         
         # Start session
-        image_analyzer_session_manager.start_session(chat_id, user_id)
+        analysis_mode = "debrief" if "debrief" in text.lower() else "standard"
+        image_analyzer_session_manager.start_session(chat_id, user_id, analysis_mode=analysis_mode)
         
+        prompt_text = (
+            "🖼️ Please send the image you'd like me to analyze.\n\n"
+            if analysis_mode != "debrief"
+            else "🖼️ Please send the image you'd like me to debrief.\n\n"
+        )
         prompt_msg = TextMessage(
-            text="🖼️ Please send the image you'd like me to analyze.\n\n"
-                 "(You have 60 seconds to send an image)\n\n"
-                 "ส่งภาพที่ต้องการให้วิเคราะห์ (60 วินาที)",
+            text=prompt_text
+                 + "(You have 60 seconds to send an image)\n\n"
+                 + ("ส่งภาพที่ต้องการให้วิเคราะห์ (60 วินาที)" if analysis_mode != "debrief" else "ส่งภาพที่ต้องการให้สรุปเชิงวิเคราะห์ (60 วินาที)"),
             quickReply=None,
             quoteToken=None,
         )
@@ -420,6 +439,17 @@ class ImageAnalyzerAgent(BaseAgent):
         logger.info(f"🖼️ Image stored for chat {chat_id}, waiting for question")
         return True
 
+    def _is_low_risk_scene_question(self, question: str) -> bool:
+        """Return True when the user is asking about a neutral everyday scene."""
+        question_lower = (question or "").lower().strip()
+        neutral_scene_terms = [
+            "baby", "newborn", "breastfeed", "breast feeding", "breastfeeding",
+            "family", "mother", "father", "child", "medical", "hospital",
+            "food", "menu", "sign", "document", "receipt", "package",
+            "product", "pet", "home", "household", "room", "care",
+        ]
+        return any(term in question_lower for term in neutral_scene_terms)
+
     async def _handle_question(
         self,
         event: MessageEvent,
@@ -432,7 +462,7 @@ class ImageAnalyzerAgent(BaseAgent):
         """Handle question - analyze image and respond."""
         
         # Get stored image and question
-        image_data, _ = image_analyzer_session_manager.get_image_and_question(chat_id, question)
+        image_data, _, analysis_mode = image_analyzer_session_manager.get_image_and_question(chat_id, question)
         
         if not image_data:
             await self._send_error_message(event, line_bot_api, "Session expired or image not found. Please start again.")
@@ -444,10 +474,21 @@ class ImageAnalyzerAgent(BaseAgent):
         await self._send_analyzing_message(event, line_bot_api)
         
         low_risk_scene = self._is_low_risk_scene_question(question)
-        scene_mode = "literal" if low_risk_scene else "standard"
+        scene_mode = "literal" if low_risk_scene or analysis_mode == "debrief" else "standard"
         
         # Build vision message
-        messages = self._build_vision_message(image_data, question, scene_mode=scene_mode)
+        if analysis_mode == "debrief":
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": build_debrief_prompt()},
+                        {"type": "image_url", "image_url": {"url": image_data}},
+                    ],
+                }
+            ]
+        else:
+            messages = self._build_vision_message(image_data, question, scene_mode=scene_mode)
         
         # Call GPT-4o vision
         logger.info(f"🖼️ Analyzing image with question: {question[:50]}...")

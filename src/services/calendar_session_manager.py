@@ -126,6 +126,7 @@ class CalendarSession:
         self.scrape_selection_revision = 0
         self.scrape_preview_revision = 0
         self.scraped_source_messages = []
+        self.discrete_scrape_target = None
 
         # Reset live bulk-add flow data
         self.live_events = []
@@ -145,6 +146,7 @@ class CalendarSessionManager:
         """Initialize calendar session manager."""
         self._sessions: Dict[str, CalendarSession] = {}
         self._recently_expired_remove_flows: Dict[str, Dict[str, datetime]] = {}
+        self._recently_expired_scrape_flows: Dict[str, Dict[str, datetime]] = {}
         self._session_ttl_seconds = 120  # 2 minutes per step
         self._cleanup_task: Optional[asyncio.Task] = None
         self._cleanup_interval_seconds = 60
@@ -172,6 +174,12 @@ class CalendarSessionManager:
                 CalendarState.CONFIRMING_REMOVAL,
             }:
                 self._recently_expired_remove_flows.setdefault(chat_id, {})[session.user_id] = datetime.now()
+            elif session.state in {
+                CalendarState.SCRAPE_PROCESSING,
+                CalendarState.SCRAPE_SELECTING,
+                CalendarState.SCRAPE_REMINDER_DAYS,
+            }:
+                self._mark_recent_scrape_followup(session)
             del self._sessions[chat_id]
             return None
         
@@ -707,6 +715,8 @@ class CalendarSessionManager:
             CalendarSession in SCRAPE_PROCESSING state
         """
         session = self.get_or_create_session(chat_id, user_id)
+        self._clear_recent_scrape_marker(chat_id, user_id)
+        self._clear_recent_scrape_marker(f"user_{user_id}", user_id)
         session.reset()
         session.state = CalendarState.SCRAPE_PROCESSING
         session.scraped_source_messages = source_messages
@@ -740,9 +750,39 @@ class CalendarSessionManager:
             return False
         
         session.discrete_scrape_target = target_user_id
+        self._clear_recent_scrape_marker(f"user_{target_user_id}", session.user_id)
         session.update()
         logger.info(f"🔒 Set discrete scrape target for {chat_id} -> user {target_user_id}")
         return True
+
+    def resolve_discrete_scrape_chat_id(
+        self,
+        chat_id: str,
+        user_id: Optional[str],
+    ) -> str:
+        """Resolve DM replies back to the owning discrete scrape session when one exists."""
+        if not user_id or chat_id in self._sessions:
+            return chat_id
+
+        for candidate_chat_id, candidate in list(self._sessions.items()):
+            if candidate.user_id != user_id:
+                continue
+            if candidate.discrete_scrape_target != user_id:
+                continue
+            if candidate.state not in {
+                CalendarState.SCRAPE_PROCESSING,
+                CalendarState.SCRAPE_SELECTING,
+                CalendarState.SCRAPE_REMINDER_DAYS,
+            }:
+                continue
+
+            live_session = self.get_session(candidate_chat_id)
+            if not live_session:
+                continue
+            if live_session.user_id == user_id and live_session.discrete_scrape_target == user_id:
+                return candidate_chat_id
+
+        return chat_id
     
     def get_discrete_scrape_target(self, chat_id: str) -> Optional[str]:
         """
@@ -1133,6 +1173,12 @@ class CalendarSessionManager:
                 CalendarState.CONFIRMING_REMOVAL,
             }:
                 self._recently_expired_remove_flows.setdefault(chat_id, {})[session.user_id] = datetime.now()
+            elif session.state in {
+                CalendarState.SCRAPE_PROCESSING,
+                CalendarState.SCRAPE_SELECTING,
+                CalendarState.SCRAPE_REMINDER_DAYS,
+            }:
+                self._mark_recent_scrape_followup(session)
             else:
                 self._clear_recent_remove_marker(chat_id, session.user_id)
         else:
@@ -1159,6 +1205,56 @@ class CalendarSessionManager:
                 del self._recently_expired_remove_flows[chat_id]
             return False
         return True
+
+    def had_recent_scrape_flow(
+        self,
+        chat_id: str,
+        user_id: Optional[str],
+        grace_seconds: int = 90,
+    ) -> bool:
+        """Return whether a scrape flow expired recently enough to explain an explicit follow-up."""
+        if not user_id:
+            return False
+        chat_markers = self._recently_expired_scrape_flows.get(chat_id)
+        if chat_markers is None:
+            return False
+        expired_at = chat_markers.get(user_id)
+        if expired_at is None:
+            return False
+        if (datetime.now() - expired_at).total_seconds() > grace_seconds:
+            del chat_markers[user_id]
+            if not chat_markers:
+                del self._recently_expired_scrape_flows[chat_id]
+            return False
+        return True
+
+    def _mark_recent_scrape_followup(self, session: CalendarSession) -> None:
+        """Remember expired scrape sessions briefly so explicit follow-ups fail closed."""
+        if not session.user_id:
+            return
+
+        keys = {session.chat_id}
+        if session.discrete_scrape_target:
+            keys.add(f"user_{session.discrete_scrape_target}")
+
+        now = datetime.now()
+        for key in keys:
+            self._recently_expired_scrape_flows.setdefault(key, {})[session.user_id] = now
+
+    def _clear_recent_scrape_marker(
+        self,
+        chat_id: str,
+        user_id: Optional[str],
+    ) -> None:
+        """Clear scrape-expiry markers once a new scrape flow starts."""
+        if not user_id:
+            return
+        chat_markers = self._recently_expired_scrape_flows.get(chat_id)
+        if not chat_markers:
+            return
+        chat_markers.pop(user_id, None)
+        if not chat_markers:
+            self._recently_expired_scrape_flows.pop(chat_id, None)
 
     def cancel_flow(self, chat_id: str) -> bool:
         """
@@ -1213,6 +1309,12 @@ class CalendarSessionManager:
                 CalendarState.CONFIRMING_REMOVAL,
             }:
                 self._recently_expired_remove_flows.setdefault(chat_id, {})[session.user_id] = datetime.now()
+            elif session.state in {
+                CalendarState.SCRAPE_PROCESSING,
+                CalendarState.SCRAPE_SELECTING,
+                CalendarState.SCRAPE_REMINDER_DAYS,
+            }:
+                self._mark_recent_scrape_followup(session)
             del self._sessions[chat_id]
 
         self._prune_recent_remove_flow_markers()

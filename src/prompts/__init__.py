@@ -13,7 +13,10 @@ Design goals:
 """
 
 from .builders.vision_builder import VisionPromptBuilder
+from .builders.debrief_builder import DebriefPromptBuilder, build_debrief_prompt
 
 __all__ = [
     "VisionPromptBuilder",
+    "DebriefPromptBuilder",
+    "build_debrief_prompt",
 ]

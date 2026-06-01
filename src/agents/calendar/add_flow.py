@@ -142,12 +142,12 @@ class AddFlow(CalendarFlowBase):
                 from .scrape_flow import get_scrape_flow
                 scrape_flow = get_scrape_flow()
 
-                first_event = calendar_session_manager.get_current_scraped_event(chat_id)
-                if first_event:
-                    await scrape_flow.prompt_scraped_event(
-                        event, line_bot_api, first_event, 1, len(events_data),
-                        header=f"✨ I extracted {len(events_data)} event(s) from your input!\n\n"
-                    )
+                await scrape_flow.prompt_scrape_selection(
+                    event,
+                    line_bot_api,
+                    chat_id,
+                    header=f"✨ I extracted {len(events_data)} event(s) from your input!\n\n",
+                )
                 return True
 
             except Exception as e:

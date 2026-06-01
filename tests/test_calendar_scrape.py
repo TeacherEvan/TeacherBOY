@@ -64,10 +64,10 @@ def _scraped_events():
 
 @pytest.fixture(autouse=True)
 def cleanup_scrape_sessions():
-    for chat_id in ("scrape_chat", "group_scrape_chat", "group_G1"):
+    for chat_id in ("scrape_chat", "group_scrape_chat", "group_G1", "user_U_SCRAPE"):
         calendar_session_manager.end_session(chat_id)
     yield
-    for chat_id in ("scrape_chat", "group_scrape_chat", "group_G1"):
+    for chat_id in ("scrape_chat", "group_scrape_chat", "group_G1", "user_U_SCRAPE"):
         calendar_session_manager.end_session(chat_id)
 
 
@@ -311,12 +311,310 @@ async def test_scrape_flow_pushes_review_to_requester_dm_when_run_from_group():
     pushed_message = push_request.messages[0]
     assert "Select events to add" in pushed_message.text
     assert "1. Exam papers due" in pushed_message.text
-    assert [item.action.label for item in pushed_message.quickReply.items] == [
+    assert [item.action.label for item in pushed_message.quick_reply.items] == [
         "All",
         "None",
         "Done",
         "Cancel",
     ]
+
+
+@pytest.mark.asyncio
+async def test_discrete_group_scrape_can_be_completed_from_requester_dm():
+    flow = ScrapeFlow(calendar_service=MagicMock())
+    flow.send_message = AsyncMock()
+    flow.send_message_with_quick_reply = AsyncMock()
+    flow._calendar_service.add_event_async = AsyncMock()
+
+    start_event = MagicMock()
+    start_event.reply_token = "group-reply"
+    start_event.source = MagicMock()
+    start_event.source.user_id = "U_REQ"
+    start_event.source.group_id = "G1"
+    start_event.source.type = "group"
+
+    dm_event = MagicMock()
+    dm_event.reply_token = "dm-reply"
+    dm_event.source = MagicMock()
+    dm_event.source.user_id = "U_REQ"
+    dm_event.source.type = "user"
+
+    line_api = MagicMock()
+    line_api.push_message = MagicMock()
+    line_api.reply_message = MagicMock()
+
+    messages = [
+        "Exam papers due on 2026-06-05",
+        "Science fair on 2026-06-06",
+    ]
+    extracted_events = [
+        ExtractedEvent(
+            event_date=date(2026, 6, 5),
+            title="Exam papers due",
+            description="",
+            source_text=messages[0],
+            confidence="high",
+        ),
+        ExtractedEvent(
+            event_date=date(2026, 6, 6),
+            title="Science fair",
+            description="",
+            source_text=messages[1],
+            confidence="high",
+        ),
+    ]
+
+    with patch("src.agents.calendar.scrape_flow.message_buffer_service.get_message_texts", return_value=messages), patch(
+        "src.services.date_extraction_service.date_extraction_service.extract_events_from_messages",
+        AsyncMock(return_value=extracted_events),
+    ):
+        handled = await flow.handle_scrape_trigger(
+            start_event,
+            "zeus scrape",
+            line_api,
+            "group_G1",
+            "U_REQ",
+            discrete_mode=True,
+        )
+
+    assert handled is True
+
+    handled = await flow.handle_scrape_review_response(
+        dm_event,
+        "all",
+        line_api,
+        "user_U_REQ",
+        "U_REQ",
+    )
+
+    assert handled is True
+    selection_prompt = flow.send_message_with_quick_reply.await_args.args[2]
+    assert "Selected: 1, 2" in selection_prompt
+
+    handled = await flow.handle_scrape_review_response(
+        dm_event,
+        "done",
+        line_api,
+        "user_U_REQ",
+        "U_REQ",
+    )
+
+    assert handled is True
+    preview_text = flow.send_message_with_quick_reply.await_args.args[2]
+    assert "Exam papers due" in preview_text
+    assert "Science fair" in preview_text
+
+    handled = await flow.handle_scrape_reminder_response(
+        dm_event,
+        "all",
+        line_api,
+        "user_U_REQ",
+        "U_REQ",
+        calendar_service=flow._calendar_service,
+    )
+
+    assert handled is True
+    assert flow._calendar_service.add_event_async.await_count == 2
+    for call in flow._calendar_service.add_event_async.await_args_list:
+        assert call.kwargs["chat_id"] == "group_G1"
+        assert call.kwargs["notification_target_user_id"] == "U_REQ"
+
+
+@pytest.mark.asyncio
+async def test_calendar_agent_routes_discrete_dm_scrape_followups():
+    agent = CalendarAgent()
+    agent.scrape_flow.handle_scrape_review_response = AsyncMock(return_value=True)
+
+    calendar_session_manager.start_scrape_flow(
+        "group_G1",
+        "U_REQ",
+        [item["source_text"] for item in _scraped_events()],
+        is_friend=True,
+    )
+    calendar_session_manager.set_discrete_scrape_target("group_G1", "U_REQ")
+    calendar_session_manager.set_scraped_events("group_G1", _scraped_events())
+
+    dm_event = MagicMock()
+    dm_event.reply_token = "reply"
+    dm_event.source = MagicMock()
+    dm_event.source.user_id = "U_REQ"
+    dm_event.source.group_id = None
+    dm_event.source.room_id = None
+    dm_event.source.type = "user"
+
+    should_handle = await agent.should_handle(dm_event, "done")
+
+    assert should_handle is True
+
+    handled = await agent.handle(dm_event, "done", MagicMock())
+
+    assert handled is True
+    agent.scrape_flow.handle_scrape_review_response.assert_awaited_once()
+    assert agent.scrape_flow.handle_scrape_review_response.await_args.args[3] == "group_G1"
+
+
+@pytest.mark.asyncio
+async def test_calendar_agent_does_not_hijack_unrelated_chat_during_discrete_scrape():
+    agent = CalendarAgent()
+    agent._scrape_flow = ScrapeFlow(calendar_service=MagicMock())
+    agent.scrape_flow.send_message = AsyncMock()
+
+    calendar_session_manager.start_scrape_flow(
+        "group_G1",
+        "U_REQ",
+        [item["source_text"] for item in _scraped_events()],
+        is_friend=True,
+    )
+    calendar_session_manager.set_discrete_scrape_target("group_G1", "U_REQ")
+    calendar_session_manager.set_scraped_events("group_G1", _scraped_events())
+
+    owner_group_event = MagicMock()
+    owner_group_event.source = MagicMock()
+    owner_group_event.source.user_id = "U_REQ"
+    owner_group_event.source.group_id = "G1"
+    owner_group_event.source.room_id = None
+    owner_group_event.source.type = "group"
+
+    other_group_event = MagicMock()
+    other_group_event.source = MagicMock()
+    other_group_event.source.user_id = "U_OTHER"
+    other_group_event.source.group_id = "G1"
+    other_group_event.source.room_id = None
+    other_group_event.source.type = "group"
+
+    assert await agent.should_handle(owner_group_event, "hello everyone") is False
+    assert await agent.should_handle(other_group_event, "all") is True
+    handled = await agent.handle(other_group_event, "all", MagicMock())
+    assert handled is True
+    assert "only the person who started this scrape flow" in agent.scrape_flow.send_message.await_args.args[2].lower()
+    assert await agent.should_handle(other_group_event, "hello everyone") is False
+
+
+@pytest.mark.asyncio
+async def test_non_owner_scrape_reminder_followup_is_rejected_explicitly():
+    agent = CalendarAgent()
+    agent._scrape_flow = ScrapeFlow(calendar_service=MagicMock())
+    agent.scrape_flow.send_message = AsyncMock()
+
+    calendar_session_manager.start_scrape_flow(
+        "group_G1",
+        "U_REQ",
+        [item["source_text"] for item in _scraped_events()],
+        is_friend=True,
+    )
+    calendar_session_manager.set_discrete_scrape_target("group_G1", "U_REQ")
+    calendar_session_manager.set_scraped_events("group_G1", _scraped_events())
+    calendar_session_manager.apply_scrape_selection("group_G1", "1,3")
+    calendar_session_manager.finalize_scrape_selection("group_G1")
+
+    other_group_event = MagicMock()
+    other_group_event.reply_token = "reply"
+    other_group_event.source = MagicMock()
+    other_group_event.source.user_id = "U_OTHER"
+    other_group_event.source.group_id = "G1"
+    other_group_event.source.room_id = None
+    other_group_event.source.type = "group"
+
+    should_handle = await agent.should_handle(other_group_event, "3")
+
+    assert should_handle is True
+
+    handled = await agent.handle(other_group_event, "3", MagicMock())
+
+    assert handled is True
+    assert "only the person who started this scrape flow" in agent.scrape_flow.send_message.await_args.args[2].lower()
+
+
+@pytest.mark.asyncio
+async def test_scrape_flow_respects_runtime_alias_scan_depth():
+    flow = ScrapeFlow()
+    line_api = MagicMock()
+    event = MagicMock()
+    event.reply_token = "reply"
+    event.source = MagicMock()
+    event.source.user_id = "U_REQ"
+    event.source.group_id = None
+    event.source.room_id = None
+    event.source.type = "user"
+
+    messages = [f"Message {index}" for index in range(25)]
+
+    with patch("src.agents.calendar.scrape_flow.message_buffer_service.get_message_texts", return_value=messages) as get_texts, patch(
+        "src.services.date_extraction_service.date_extraction_service.extract_events_from_messages",
+        AsyncMock(return_value=[]),
+    ):
+        handled = await flow.handle_scrape_trigger(
+            event,
+            "Ms. Green scrape 20",
+            line_api,
+            "user_U_REQ",
+            "U_REQ",
+        )
+
+    assert handled is True
+    get_texts.assert_called_once_with("user_U_REQ", limit=20)
+
+
+@pytest.mark.asyncio
+async def test_discrete_scrape_falls_back_in_chat_when_dm_not_available():
+    agent = CalendarAgent()
+    agent._check_is_friend = AsyncMock(return_value=False)
+    agent.scrape_flow.handle_scrape_trigger = AsyncMock(return_value=True)
+    agent.add_flow.send_message = AsyncMock()
+
+    event = MagicMock()
+    event.reply_token = "reply"
+    event.source = MagicMock()
+    event.source.user_id = "U_REQ"
+    event.source.group_id = "G1"
+    event.source.room_id = None
+    event.source.type = "group"
+
+    handled = await agent._handle_discrete_scrape(
+        event,
+        "Ms. Green scrape",
+        MagicMock(),
+        "group_G1",
+        "U_REQ",
+    )
+
+    assert handled is True
+    agent.add_flow.send_message.assert_awaited_once()
+    assert "continue here" in agent.add_flow.send_message.await_args.args[2].lower()
+    agent.scrape_flow.handle_scrape_trigger.assert_awaited_once()
+    assert agent.scrape_flow.handle_scrape_trigger.await_args.kwargs["discrete_mode"] is False
+
+
+@pytest.mark.asyncio
+async def test_prompt_scrape_selection_falls_back_when_dm_push_fails():
+    flow = ScrapeFlow()
+    flow.send_message_with_quick_reply = AsyncMock()
+    event = MagicMock()
+    event.reply_token = "reply"
+    event.source = MagicMock()
+    event.source.user_id = "U_REQ"
+    event.source.group_id = "G1"
+    event.source.type = "group"
+    line_api = MagicMock()
+    line_api.push_message.side_effect = RuntimeError("push failed")
+
+    calendar_session_manager.start_scrape_flow(
+        "group_G1",
+        "U_REQ",
+        [item["source_text"] for item in _scraped_events()],
+        is_friend=True,
+    )
+    calendar_session_manager.set_discrete_scrape_target("group_G1", "U_REQ")
+    calendar_session_manager.set_scraped_events("group_G1", _scraped_events())
+
+    await flow.prompt_scrape_selection(
+        event,
+        line_api,
+        "group_G1",
+        discrete_target_user_id="U_REQ",
+    )
+
+    flow.send_message_with_quick_reply.assert_awaited_once()
 
 
 def test_calendar_event_persists_notification_target_user_id():
@@ -398,6 +696,20 @@ class TestSCRAPE_SELECTINGCalendarSessionManagerScrape:
 
         assert session is not None
         assert session.selected_scraped_indices == []
+
+    def test_cleanup_expired_scrape_sessions_mark_recent_followup(self):
+        self.manager.start_scrape_flow("chat1", "user1", [], is_friend=True)
+        self.manager.set_scraped_events("chat1", _scraped_events())
+        session = self.manager.get_session("chat1")
+
+        assert session is not None
+
+        session.updated_at = datetime.now() - timedelta(seconds=self.manager._session_ttl_seconds + 5)
+
+        self.manager._cleanup_expired_sessions()
+
+        assert self.manager.get_session("chat1") is None
+        assert self.manager.had_recent_scrape_flow("chat1", "user1") is True
 
 
 class TestSCRAPE_SELECTINGScrapeFlowBatch:
@@ -514,7 +826,40 @@ class TestSCRAPE_SELECTINGScrapeFlowBatch:
         assert handled is True
         added_titles = [call.kwargs["title"] for call in scrape_flow._calendar_service.add_event_async.await_args_list]
         assert added_titles == ["Exam papers due", "Science fair"]
+        added_reminder_days = [call.kwargs["reminder_days"] for call in scrape_flow._calendar_service.add_event_async.await_args_list]
+        assert added_reminder_days == [[7, 3, 1, 0], [7, 3, 1, 0]]
         assert calendar_session_manager.get_session("scrape_chat") is None
+
+    @pytest.mark.asyncio
+    async def test_shared_reminder_choice_uses_selected_profile_only(
+        self,
+        scrape_flow,
+        mock_event,
+        mock_line_api,
+    ):
+        self._start_selected_batch()
+        await scrape_flow.handle_scrape_review_response(
+            mock_event,
+            "done",
+            mock_line_api,
+            "scrape_chat",
+            "U_SCRAPE",
+        )
+
+        scrape_flow._calendar_service.add_event_async = AsyncMock()
+
+        handled = await scrape_flow.handle_scrape_reminder_response(
+            mock_event,
+            "3",
+            mock_line_api,
+            "scrape_chat",
+            "U_SCRAPE",
+            calendar_service=scrape_flow._calendar_service,
+        )
+
+        assert handled is True
+        added_reminder_days = [call.kwargs["reminder_days"] for call in scrape_flow._calendar_service.add_event_async.await_args_list]
+        assert added_reminder_days == [[3, 0], [3, 0]]
 
     @pytest.mark.asyncio
     async def test_stale_or_non_owner_scrape_session_cannot_confirm_batch_add(
@@ -563,6 +908,285 @@ class TestSCRAPE_SELECTINGScrapeFlowBatch:
         assert handled is True
         assert scrape_flow._calendar_service.add_event_async.await_count == 0
         assert "stale" in scrape_flow.send_message.await_args.args[2].lower() or "expired" in scrape_flow.send_message.await_args.args[2].lower()
+
+    @pytest.mark.asyncio
+    async def test_expired_scrape_selection_followups_are_rejected_explicitly(
+        self,
+        scrape_flow,
+        mock_event,
+        mock_line_api,
+    ):
+        calendar_session_manager.start_scrape_flow(
+            "scrape_chat",
+            "U_SCRAPE",
+            [item["source_text"] for item in _scraped_events()],
+            is_friend=True,
+        )
+        calendar_session_manager.set_scraped_events("scrape_chat", _scraped_events())
+        session = calendar_session_manager.get_session("scrape_chat")
+        assert session is not None
+        session.updated_at = datetime.now() - timedelta(seconds=calendar_session_manager._session_ttl_seconds + 5)
+
+        handled = await scrape_flow.handle_scrape_review_response(
+            mock_event,
+            "done",
+            mock_line_api,
+            "scrape_chat",
+            "U_SCRAPE",
+        )
+
+        assert handled is True
+        assert "expired" in scrape_flow.send_message.await_args.args[2].lower() or "stale" in scrape_flow.send_message.await_args.args[2].lower()
+
+    @pytest.mark.asyncio
+    async def test_expired_scrape_reminder_followups_are_rejected_explicitly(
+        self,
+        scrape_flow,
+        mock_event,
+        mock_line_api,
+    ):
+        self._start_selected_batch()
+        await scrape_flow.handle_scrape_review_response(
+            mock_event,
+            "done",
+            mock_line_api,
+            "scrape_chat",
+            "U_SCRAPE",
+        )
+        scrape_flow.send_message.reset_mock()
+        scrape_flow._calendar_service.add_event_async = AsyncMock()
+        session = calendar_session_manager.get_session("scrape_chat")
+        assert session is not None
+        session.updated_at = datetime.now() - timedelta(seconds=calendar_session_manager._session_ttl_seconds + 5)
+
+        handled = await scrape_flow.handle_scrape_reminder_response(
+            mock_event,
+            "all",
+            mock_line_api,
+            "scrape_chat",
+            "U_SCRAPE",
+            calendar_service=scrape_flow._calendar_service,
+        )
+
+        assert handled is True
+        assert scrape_flow._calendar_service.add_event_async.await_count == 0
+        assert "expired" in scrape_flow.send_message.await_args.args[2].lower() or "stale" in scrape_flow.send_message.await_args.args[2].lower()
+
+    @pytest.mark.asyncio
+    async def test_agent_rejects_expired_scrape_followup_explicitly(self):
+        agent = CalendarAgent()
+        agent.scrape_flow.send_message = AsyncMock()
+
+        event = MagicMock()
+        event.reply_token = "reply-token"
+        event.source = MagicMock()
+        event.source.user_id = "U_SCRAPE"
+        event.source.group_id = None
+        event.source.room_id = None
+        event.source.type = "user"
+
+        calendar_session_manager.start_scrape_flow(
+            "user_U_SCRAPE",
+            "U_SCRAPE",
+            [item["source_text"] for item in _scraped_events()],
+            is_friend=True,
+        )
+        calendar_session_manager.set_scraped_events("user_U_SCRAPE", _scraped_events())
+        session = calendar_session_manager.get_session("user_U_SCRAPE")
+        assert session is not None
+        session.updated_at = datetime.now() - timedelta(seconds=calendar_session_manager._session_ttl_seconds + 5)
+        assert calendar_session_manager.get_session("user_U_SCRAPE") is None
+
+        should_handle = await agent.should_handle(event, "done")
+
+        assert should_handle is True
+
+        handled = await agent.handle(event, "done", MagicMock())
+
+        assert handled is True
+        agent.scrape_flow.send_message.assert_awaited_once()
+        assert "expired" in agent.scrape_flow.send_message.await_args.args[2].lower() or "stale" in agent.scrape_flow.send_message.await_args.args[2].lower()
+
+
+@pytest.mark.asyncio
+async def test_agent_rejects_followup_after_scrape_cancel_explicitly():
+    agent = CalendarAgent()
+    agent._scrape_flow = ScrapeFlow(calendar_service=MagicMock())
+    agent.scrape_flow.send_message = AsyncMock()
+
+    event = MagicMock()
+    event.reply_token = "reply-token"
+    event.source = MagicMock()
+    event.source.user_id = "U_SCRAPE"
+    event.source.group_id = None
+    event.source.room_id = None
+    event.source.type = "user"
+
+    calendar_session_manager.start_scrape_flow(
+        "user_U_SCRAPE",
+        "U_SCRAPE",
+        [item["source_text"] for item in _scraped_events()],
+        is_friend=True,
+    )
+    calendar_session_manager.set_scraped_events("user_U_SCRAPE", _scraped_events())
+
+    cancelled = await agent.handle(event, "cancel", MagicMock())
+
+    assert cancelled is True
+    assert calendar_session_manager.get_session("user_U_SCRAPE") is None
+
+    should_handle = await agent.should_handle(event, "done")
+
+    assert should_handle is True
+
+    handled = await agent.handle(event, "done", MagicMock())
+
+    assert handled is True
+    assert "expired" in agent.scrape_flow.send_message.await_args.args[2].lower() or "stale" in agent.scrape_flow.send_message.await_args.args[2].lower()
+
+
+@pytest.mark.asyncio
+async def test_agent_rejects_followup_after_scrape_completion_explicitly():
+    agent = CalendarAgent()
+    agent._scrape_flow = ScrapeFlow(calendar_service=MagicMock())
+    agent.scrape_flow.send_message = AsyncMock()
+    agent.scrape_flow.send_message_with_quick_reply = AsyncMock()
+    agent.scrape_flow._calendar_service.add_event_async = AsyncMock()
+
+    event = MagicMock()
+    event.reply_token = "reply-token"
+    event.source = MagicMock()
+    event.source.user_id = "U_SCRAPE"
+    event.source.group_id = None
+    event.source.room_id = None
+    event.source.type = "user"
+
+    calendar_session_manager.start_scrape_flow(
+        "user_U_SCRAPE",
+        "U_SCRAPE",
+        [item["source_text"] for item in _scraped_events()],
+        is_friend=True,
+    )
+    calendar_session_manager.set_scraped_events("user_U_SCRAPE", _scraped_events())
+    calendar_session_manager.apply_scrape_selection("user_U_SCRAPE", "1,3")
+
+    reviewed = await agent.handle(event, "done", MagicMock())
+
+    assert reviewed is True
+    assert calendar_session_manager.get_session("user_U_SCRAPE").state == CalendarState.SCRAPE_REMINDER_DAYS
+
+    completed = await agent.handle(event, "all", MagicMock())
+
+    assert completed is True
+    assert calendar_session_manager.get_session("user_U_SCRAPE") is None
+
+    should_handle = await agent.should_handle(event, "1,3")
+
+    assert should_handle is True
+
+    handled = await agent.handle(event, "1,3", MagicMock())
+
+    assert handled is True
+    assert "expired" in agent.scrape_flow.send_message.await_args.args[2].lower() or "stale" in agent.scrape_flow.send_message.await_args.args[2].lower()
+
+
+@pytest.mark.asyncio
+async def test_agent_accepts_prefixed_scrape_selection_followup():
+    agent = CalendarAgent()
+    agent._scrape_flow = ScrapeFlow(calendar_service=MagicMock())
+
+    event = MagicMock()
+    event.reply_token = "reply-token"
+    event.source = MagicMock()
+    event.source.user_id = "U_SCRAPE"
+    event.source.group_id = None
+    event.source.room_id = None
+    event.source.type = "user"
+
+    calendar_session_manager.start_scrape_flow(
+        "user_U_SCRAPE",
+        "U_SCRAPE",
+        [item["source_text"] for item in _scraped_events()],
+        is_friend=True,
+    )
+    calendar_session_manager.set_scraped_events("user_U_SCRAPE", _scraped_events())
+
+    should_handle = await agent.should_handle(event, "Ms. Green all")
+
+    assert should_handle is True
+
+    handled = await agent.handle(event, "Ms. Green all", MagicMock())
+
+    assert handled is True
+    session = calendar_session_manager.get_session("user_U_SCRAPE")
+    assert session is not None
+    assert session.selected_scraped_indices == [0, 1, 2]
+
+
+@pytest.mark.asyncio
+async def test_agent_accepts_prefixed_scrape_reminder_followup():
+    agent = CalendarAgent()
+    agent._scrape_flow = ScrapeFlow(calendar_service=MagicMock())
+    agent.scrape_flow._calendar_service.add_event_async = AsyncMock()
+
+    event = MagicMock()
+    event.reply_token = "reply-token"
+    event.source = MagicMock()
+    event.source.user_id = "U_SCRAPE"
+    event.source.group_id = None
+    event.source.room_id = None
+    event.source.type = "user"
+
+    calendar_session_manager.start_scrape_flow(
+        "user_U_SCRAPE",
+        "U_SCRAPE",
+        [item["source_text"] for item in _scraped_events()],
+        is_friend=True,
+    )
+    calendar_session_manager.set_scraped_events("user_U_SCRAPE", _scraped_events())
+    calendar_session_manager.apply_scrape_selection("user_U_SCRAPE", "1,3")
+    await agent.handle(event, "done", MagicMock())
+
+    should_handle = await agent.should_handle(event, "Ms. Green 3")
+
+    assert should_handle is True
+
+    handled = await agent.handle(event, "Ms. Green 3", MagicMock())
+
+    assert handled is True
+    added_reminder_days = [call.kwargs["reminder_days"] for call in agent.scrape_flow._calendar_service.add_event_async.await_args_list]
+    assert added_reminder_days == [[3, 0], [3, 0]]
+
+
+@pytest.mark.asyncio
+async def test_agent_accepts_prefixed_scrape_cancel_followup():
+    agent = CalendarAgent()
+    agent._scrape_flow = ScrapeFlow(calendar_service=MagicMock())
+
+    event = MagicMock()
+    event.reply_token = "reply-token"
+    event.source = MagicMock()
+    event.source.user_id = "U_SCRAPE"
+    event.source.group_id = None
+    event.source.room_id = None
+    event.source.type = "user"
+
+    calendar_session_manager.start_scrape_flow(
+        "user_U_SCRAPE",
+        "U_SCRAPE",
+        [item["source_text"] for item in _scraped_events()],
+        is_friend=True,
+    )
+    calendar_session_manager.set_scraped_events("user_U_SCRAPE", _scraped_events())
+
+    should_handle = await agent.should_handle(event, "Ms. Green cancel")
+
+    assert should_handle is True
+
+    handled = await agent.handle(event, "Ms. Green cancel", MagicMock())
+
+    assert handled is True
+    assert calendar_session_manager.get_session("user_U_SCRAPE") is None
 
 
 # ============================================================================
