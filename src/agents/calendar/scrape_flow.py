@@ -315,6 +315,7 @@ class ScrapeFlow(CalendarFlowBase):
                 logger.info(f"📨 Sent discrete scrape selection prompt to user {discrete_target_user_id}")
             except Exception as e:
                 logger.error(f"❌ Failed to send discrete scrape selection push message: {e}", exc_info=True)
+                calendar_session_manager.clear_discrete_scrape_target(chat_id)
                 await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
         else:
             await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)

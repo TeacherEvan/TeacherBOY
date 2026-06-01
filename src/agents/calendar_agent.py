@@ -334,6 +334,27 @@ class CalendarAgent(BaseAgent):
 
         return False
 
+    def _is_group_discrete_scrape_followup(
+        self,
+        chat_id: str,
+        active_chat_id: str,
+        session: Any,
+        user_id: Optional[str],
+    ) -> bool:
+        """Keep discrete scrape follow-ups in DM once the flow has been handed off there."""
+        if not session or session.state not in {
+            CalendarState.SCRAPE_PROCESSING,
+            CalendarState.SCRAPE_SELECTING,
+            CalendarState.SCRAPE_REMINDER_DAYS,
+        }:
+            return False
+        return (
+            bool(user_id)
+            and session.discrete_scrape_target == user_id
+            and chat_id == active_chat_id
+            and active_chat_id != f"user_{user_id}"
+        )
+
     def _looks_like_bulk_dates(self, text: str) -> bool:
         """Detect if text contains bulk date input (should trigger scrape flow)."""
         if not text or len(text) < 50:
@@ -562,6 +583,16 @@ class CalendarAgent(BaseAgent):
                     return True
                 return False
             return True
+
+        if session and self._is_group_discrete_scrape_followup(chat_id, active_chat_id, session, user_id):
+            if self._is_scrape_session_input(text, session.state):
+                await self.scrape_flow.send_message(
+                    event,
+                    line_bot_api,
+                    "❌ Continue this scrape in DM to keep it private.",
+                )
+                return True
+            return False
 
         with tracer.start_as_current_span("calendar_agent.handle") as span:
             span.set_attribute("chat.id", chat_id)
@@ -809,7 +840,7 @@ class CalendarAgent(BaseAgent):
             )
             return True
 
-        is_friend = await self._check_is_friend(event, line_bot_api)
+        is_friend = await self._is_friend(event, line_bot_api)
         if not is_friend:
             await self.add_flow.send_message(
                 event,

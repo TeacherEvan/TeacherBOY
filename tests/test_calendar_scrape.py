@@ -64,10 +64,10 @@ def _scraped_events():
 
 @pytest.fixture(autouse=True)
 def cleanup_scrape_sessions():
-    for chat_id in ("scrape_chat", "group_scrape_chat", "group_G1", "user_U_SCRAPE"):
+    for chat_id in ("scrape_chat", "group_scrape_chat", "group_G1", "group_G2", "user_U_SCRAPE", "user_U_REQ"):
         calendar_session_manager.end_session(chat_id)
     yield
-    for chat_id in ("scrape_chat", "group_scrape_chat", "group_G1", "user_U_SCRAPE"):
+    for chat_id in ("scrape_chat", "group_scrape_chat", "group_G1", "group_G2", "user_U_SCRAPE", "user_U_REQ"):
         calendar_session_manager.end_session(chat_id)
 
 
@@ -526,6 +526,39 @@ async def test_non_owner_scrape_reminder_followup_is_rejected_explicitly():
 
 
 @pytest.mark.asyncio
+async def test_owner_group_scrape_followup_is_redirected_to_dm():
+    agent = CalendarAgent()
+    agent._scrape_flow = ScrapeFlow(calendar_service=MagicMock())
+    agent.scrape_flow.send_message = AsyncMock()
+
+    calendar_session_manager.start_scrape_flow(
+        "group_G1",
+        "U_REQ",
+        [item["source_text"] for item in _scraped_events()],
+        is_friend=True,
+    )
+    calendar_session_manager.set_discrete_scrape_target("group_G1", "U_REQ")
+    calendar_session_manager.set_scraped_events("group_G1", _scraped_events())
+
+    owner_group_event = MagicMock()
+    owner_group_event.reply_token = "reply"
+    owner_group_event.source = MagicMock()
+    owner_group_event.source.user_id = "U_REQ"
+    owner_group_event.source.group_id = "G1"
+    owner_group_event.source.room_id = None
+    owner_group_event.source.type = "group"
+
+    should_handle = await agent.should_handle(owner_group_event, "all")
+
+    assert should_handle is True
+
+    handled = await agent.handle(owner_group_event, "all", MagicMock())
+
+    assert handled is True
+    assert "continue this scrape in dm" in agent.scrape_flow.send_message.await_args.args[2].lower()
+
+
+@pytest.mark.asyncio
 async def test_scrape_flow_respects_runtime_alias_scan_depth():
     flow = ScrapeFlow()
     line_api = MagicMock()
@@ -558,7 +591,7 @@ async def test_scrape_flow_respects_runtime_alias_scan_depth():
 @pytest.mark.asyncio
 async def test_discrete_scrape_falls_back_in_chat_when_dm_not_available():
     agent = CalendarAgent()
-    agent._check_is_friend = AsyncMock(return_value=False)
+    agent._is_friend = AsyncMock(return_value=False)
     agent.scrape_flow.handle_scrape_trigger = AsyncMock(return_value=True)
     agent.add_flow.send_message = AsyncMock()
 
@@ -581,6 +614,29 @@ async def test_discrete_scrape_falls_back_in_chat_when_dm_not_available():
     assert handled is True
     agent.add_flow.send_message.assert_awaited_once()
     assert "continue here" in agent.add_flow.send_message.await_args.args[2].lower()
+    agent.scrape_flow.handle_scrape_trigger.assert_awaited_once()
+    assert agent.scrape_flow.handle_scrape_trigger.await_args.kwargs["discrete_mode"] is False
+
+
+@pytest.mark.asyncio
+async def test_calendar_agent_handles_group_scrape_trigger_via_discrete_flow():
+    agent = CalendarAgent()
+    agent._is_friend = AsyncMock(return_value=False)
+    agent.scrape_flow.handle_scrape_trigger = AsyncMock(return_value=True)
+    agent.add_flow.send_message = AsyncMock()
+
+    event = MagicMock()
+    event.reply_token = "reply"
+    event.source = MagicMock()
+    event.source.user_id = "U_REQ"
+    event.source.group_id = "G1"
+    event.source.room_id = None
+    event.source.type = "group"
+
+    handled = await agent.handle(event, "Ms. Green scrape", MagicMock())
+
+    assert handled is True
+    agent.add_flow.send_message.assert_awaited_once()
     agent.scrape_flow.handle_scrape_trigger.assert_awaited_once()
     assert agent.scrape_flow.handle_scrape_trigger.await_args.kwargs["discrete_mode"] is False
 
@@ -615,6 +671,52 @@ async def test_prompt_scrape_selection_falls_back_when_dm_push_fails():
     )
 
     flow.send_message_with_quick_reply.assert_awaited_once()
+    assert calendar_session_manager.get_discrete_scrape_target("group_G1") is None
+
+
+@pytest.mark.asyncio
+async def test_group_followup_continues_in_chat_after_dm_push_fallback():
+    flow = ScrapeFlow()
+    flow.send_message_with_quick_reply = AsyncMock()
+    event = MagicMock()
+    event.reply_token = "reply"
+    event.source = MagicMock()
+    event.source.user_id = "U_REQ"
+    event.source.group_id = "G1"
+    event.source.room_id = None
+    event.source.type = "group"
+    line_api = MagicMock()
+    line_api.push_message.side_effect = RuntimeError("push failed")
+
+    calendar_session_manager.start_scrape_flow(
+        "group_G1",
+        "U_REQ",
+        [item["source_text"] for item in _scraped_events()],
+        is_friend=True,
+    )
+    calendar_session_manager.set_discrete_scrape_target("group_G1", "U_REQ")
+    calendar_session_manager.set_scraped_events("group_G1", _scraped_events())
+
+    await flow.prompt_scrape_selection(
+        event,
+        line_api,
+        "group_G1",
+        discrete_target_user_id="U_REQ",
+    )
+
+    agent = CalendarAgent()
+    agent._scrape_flow = ScrapeFlow(calendar_service=MagicMock())
+
+    should_handle = await agent.should_handle(event, "all")
+
+    assert should_handle is True
+
+    handled = await agent.handle(event, "all", MagicMock())
+
+    assert handled is True
+    session = calendar_session_manager.get_session("group_G1")
+    assert session is not None
+    assert session.selected_scraped_indices == [0, 1, 2]
 
 
 def test_calendar_event_persists_notification_target_user_id():
@@ -710,6 +812,27 @@ class TestSCRAPE_SELECTINGCalendarSessionManagerScrape:
 
         assert self.manager.get_session("chat1") is None
         assert self.manager.had_recent_scrape_flow("chat1", "user1") is True
+
+    def test_set_discrete_scrape_target_clears_other_discrete_scrapes_for_same_user(self):
+        self.manager.start_scrape_flow("group_g1", "user1", [], is_friend=True)
+        self.manager.set_discrete_scrape_target("group_g1", "user1")
+
+        self.manager.start_scrape_flow("group_g2", "user1", [], is_friend=True)
+        self.manager.set_discrete_scrape_target("group_g2", "user1")
+
+        assert self.manager.get_session("group_g1") is None
+        assert self.manager.get_session("group_g2") is not None
+        assert self.manager.resolve_discrete_scrape_chat_id("user_user1", "user1") == "group_g2"
+
+    def test_set_discrete_scrape_target_clears_conflicting_dm_session(self):
+        self.manager.start_add_mode_selection("user_user1", "user1", is_friend=True)
+        assert self.manager.get_session("user_user1") is not None
+
+        self.manager.start_scrape_flow("group_g1", "user1", [], is_friend=True)
+        self.manager.set_discrete_scrape_target("group_g1", "user1")
+
+        assert self.manager.get_session("user_user1") is None
+        assert self.manager.resolve_discrete_scrape_chat_id("user_user1", "user1") == "group_g1"
 
 
 class TestSCRAPE_SELECTINGScrapeFlowBatch:
@@ -1162,6 +1285,7 @@ async def test_agent_accepts_prefixed_scrape_reminder_followup():
 async def test_agent_accepts_prefixed_scrape_cancel_followup():
     agent = CalendarAgent()
     agent._scrape_flow = ScrapeFlow(calendar_service=MagicMock())
+    agent.scrape_flow.send_message = AsyncMock()
 
     event = MagicMock()
     event.reply_token = "reply-token"
@@ -1187,6 +1311,7 @@ async def test_agent_accepts_prefixed_scrape_cancel_followup():
 
     assert handled is True
     assert calendar_session_manager.get_session("user_U_SCRAPE") is None
+    assert "scrape session canceled" in agent.scrape_flow.send_message.await_args.args[2].lower()
 
 
 # ============================================================================

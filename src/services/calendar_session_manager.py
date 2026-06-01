@@ -821,6 +821,14 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         return session.discrete_scrape_target if session else None
 
+    def clear_discrete_scrape_target(self, chat_id: str) -> None:
+        """Drop discrete DM routing so the scrape flow can continue in the current chat."""
+        session = self.get_session(chat_id)
+        if not session or session.discrete_scrape_target is None:
+            return
+        session.discrete_scrape_target = None
+        session.update()
+
     # =========================================================================
     # Live Bulk Add Flow ("zeus add event") - Enhanced with Smart Mode Selection
     # =========================================================================
