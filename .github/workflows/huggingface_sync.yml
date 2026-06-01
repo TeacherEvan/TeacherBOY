@@ -72,3 +72,13 @@ jobs:
                       echo "Hugging Face branch 'main' does not exist yet; creating it from GitHub main."
                       git push hf HEAD:main
                   fi
+
+            - name: Verify remote main commit
+              env:
+                  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  remote_sha="$(git ls-remote https://TeacherEvan:${HF_TOKEN}@huggingface.co/spaces/EvilEvan/TeacherBOY refs/heads/main | awk '{print $1}')"
+                  head_sha="$(git rev-parse HEAD)"
+                  echo "HF main commit: ${remote_sha}"
+                  test "${remote_sha}" = "${head_sha}"
