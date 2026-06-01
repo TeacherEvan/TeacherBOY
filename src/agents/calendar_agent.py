@@ -580,20 +580,15 @@ class CalendarAgent(BaseAgent):
                         event, text, line_bot_api, active_chat_id, user_id
                     )
 
-                if session and session.state in {
-                    CalendarState.SCRAPE_PROCESSING,
-                    CalendarState.SCRAPE_SELECTING,
-                    CalendarState.SCRAPE_REMINDER_DAYS,
-                } and self._is_cancel_command(text):
-                    calendar_session_manager.end_session(active_chat_id)
-                    await self.add_flow.send_message(
-                        event, line_bot_api,
-                        "❌ Calendar operation cancelled.\n\nยกเลิกแล้วค่ะ"
-                    )
-                    return True
-
                 # Check for cancel command
-                if self._is_cancel_command(text):
+                if self._is_cancel_command(text) and (
+                    not session
+                    or session.state not in {
+                        CalendarState.SCRAPE_PROCESSING,
+                        CalendarState.SCRAPE_SELECTING,
+                        CalendarState.SCRAPE_REMINDER_DAYS,
+                    }
+                ):
                     if calendar_session_manager.cancel_flow(active_chat_id):
                         await self.add_flow.send_message(
                             event, line_bot_api,

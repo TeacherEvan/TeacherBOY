@@ -465,6 +465,15 @@ class ScrapeFlow(CalendarFlowBase):
         active_chat_id = calendar_session_manager.resolve_discrete_scrape_chat_id(chat_id, user_id)
         calendar_service = calendar_service or self._calendar_service
 
+        if text_lower == "cancel":
+            calendar_session_manager.end_session(active_chat_id)
+            await self.send_message(
+                event,
+                line_bot_api,
+                "✅ Scrape session canceled.\n\nยกเลิกการสแกนแล้ว",
+            )
+            return True
+
         # Parse reminder days
         if text_lower == "all":
             reminder_days = [7, 3, 1, 0]

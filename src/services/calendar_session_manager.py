@@ -749,11 +749,38 @@ class CalendarSessionManager:
             logger.warning(f"⚠️ No session found for discrete scrape target: {chat_id}")
             return False
         
+        self._clear_conflicting_discrete_sessions(chat_id, target_user_id)
         session.discrete_scrape_target = target_user_id
         self._clear_recent_scrape_marker(f"user_{target_user_id}", session.user_id)
         session.update()
         logger.info(f"🔒 Set discrete scrape target for {chat_id} -> user {target_user_id}")
         return True
+
+    def _clear_conflicting_discrete_sessions(self, chat_id: str, target_user_id: str) -> None:
+        """Keep DM scrape replies unambiguous by allowing one DM/discrete session per user."""
+        conflicting_chat_ids: List[str] = []
+        user_chat_id = f"user_{target_user_id}"
+
+        for candidate_chat_id, candidate in list(self._sessions.items()):
+            if candidate_chat_id == chat_id:
+                continue
+            if candidate_chat_id == user_chat_id and candidate.state != CalendarState.IDLE:
+                conflicting_chat_ids.append(candidate_chat_id)
+                continue
+            if candidate.user_id != target_user_id:
+                continue
+            if candidate.discrete_scrape_target != target_user_id:
+                continue
+            if candidate.state not in {
+                CalendarState.SCRAPE_PROCESSING,
+                CalendarState.SCRAPE_SELECTING,
+                CalendarState.SCRAPE_REMINDER_DAYS,
+            }:
+                continue
+            conflicting_chat_ids.append(candidate_chat_id)
+
+        for conflicting_chat_id in conflicting_chat_ids:
+            self.end_session(conflicting_chat_id)
 
     def resolve_discrete_scrape_chat_id(
         self,
