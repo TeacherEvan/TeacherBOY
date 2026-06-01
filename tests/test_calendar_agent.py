@@ -7,6 +7,8 @@ import tempfile
 import os
 import json
 
+from src.services.calendar_session_manager import CalendarState, calendar_session_manager
+
 # Test CalendarService
 class TestCalendarService:
     """Tests for CalendarService CRUD operations."""
@@ -254,6 +256,9 @@ class TestCalendarAgent:
     def calendar_agent(self):
         """Create CalendarAgent instance."""
         from src.agents.calendar_agent import CalendarAgent
+        import src.agents.calendar.remove_flow as remove_flow_module
+
+        remove_flow_module._remove_flow_instance = None
         return CalendarAgent()
 
     @pytest.fixture
@@ -273,6 +278,14 @@ class TestCalendarAgent:
     def mock_line_api(self):
         """Create mock LINE MessagingApi."""
         return MagicMock()
+
+    @pytest.fixture(autouse=True)
+    def cleanup_calendar_chat(self):
+        calendar_session_manager.end_session("user_U123456")
+        calendar_session_manager.end_session("group_G123")
+        yield
+        calendar_session_manager.end_session("user_U123456")
+        calendar_session_manager.end_session("group_G123")
 
     @pytest.mark.asyncio
     async def test_should_handle_view_trigger(self, calendar_agent, mock_event):
@@ -351,6 +364,616 @@ class TestCalendarAgent:
             assert result is False, f"Should NOT handle instructional text: {text}"
 
     @pytest.mark.asyncio
+    async def test_routes_remove_selection_and_preview_with_done(self, calendar_agent, mock_event, mock_line_api):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [
+                {"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"},
+                {"event_id": "evt-2", "title": "Parent Meeting", "date": "Jun 12"},
+            ],
+        )
+        calendar_agent.remove_flow.send_message = AsyncMock()
+        calendar_agent.remove_flow.send_message_with_quick_reply = AsyncMock()
+
+        handled = await calendar_agent.handle(mock_event, "1", mock_line_api)
+        assert handled is True
+
+        handled = await calendar_agent.handle(mock_event, "done", mock_line_api)
+
+        assert handled is True
+        session = calendar_session_manager.get_session("user_U123456")
+        assert session is not None
+        assert session.state == CalendarState.CONFIRMING_REMOVAL
+
+    @pytest.mark.asyncio
+    async def test_mixed_remove_selection_is_rejected_through_agent_routing(
+        self,
+        calendar_agent,
+        mock_event,
+        mock_line_api,
+    ):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [
+                {"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"},
+                {"event_id": "evt-2", "title": "Parent Meeting", "date": "Jun 12"},
+            ],
+        )
+
+        should_handle = await calendar_agent.should_handle(mock_event, "1,done")
+
+        assert should_handle is True
+
+        handled = await calendar_agent.handle(mock_event, "1,done", mock_line_api)
+
+        assert handled is True
+        mock_line_api.reply_message.assert_called_once()
+        reply_text = mock_line_api.reply_message.call_args[0][0].messages[0].text.lower()
+        assert "invalid selection" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_unrelated_comma_text_is_not_hijacked_during_remove_session(
+        self,
+        calendar_agent,
+        mock_event,
+        mock_line_api,
+    ):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [
+                {"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"},
+                {"event_id": "evt-2", "title": "Parent Meeting", "date": "Jun 12"},
+            ],
+        )
+
+        should_handle = await calendar_agent.should_handle(mock_event, "1,000 students attended")
+
+        assert should_handle is False
+
+        handled = await calendar_agent.handle(mock_event, "1,000 students attended", mock_line_api)
+
+        assert handled is False
+        mock_line_api.reply_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_keyword_prefixed_mixed_remove_input_is_rejected_during_remove_session(
+        self,
+        calendar_agent,
+        mock_event,
+        mock_line_api,
+    ):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [
+                {"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"},
+                {"event_id": "evt-2", "title": "Parent Meeting", "date": "Jun 12"},
+            ],
+        )
+
+        should_handle = await calendar_agent.should_handle(mock_event, "1, done please")
+
+        assert should_handle is True
+
+        handled = await calendar_agent.handle(mock_event, "1, done please", mock_line_api)
+
+        assert handled is True
+        mock_line_api.reply_message.assert_called_once()
+        reply_text = mock_line_api.reply_message.call_args[0][0].messages[0].text.lower()
+        assert "invalid selection" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_stale_delete_code_is_rejected_after_session_is_gone(
+        self,
+        calendar_agent,
+        mock_event,
+        mock_line_api,
+    ):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        session = calendar_session_manager.get_session("user_U123456")
+        assert session is not None
+        session.updated_at = datetime.now() - timedelta(seconds=121)
+        assert calendar_session_manager.get_session("user_U123456") is None
+
+        should_handle = await calendar_agent.should_handle(mock_event, "delete deadbeef")
+
+        assert should_handle is True
+
+        handled = await calendar_agent.handle(mock_event, "delete deadbeef", mock_line_api)
+
+        assert handled is True
+        mock_line_api.reply_message.assert_called_once()
+        reply_text = mock_line_api.reply_message.call_args[0][0].messages[0].text.lower()
+        assert "stale or expired" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_delete_code_without_remove_context_falls_through(self, calendar_agent, mock_event):
+        should_handle = await calendar_agent.should_handle(mock_event, "delete deadbeef")
+
+        assert should_handle is False
+
+    @pytest.mark.asyncio
+    async def test_stale_remove_selection_followup_is_rejected_after_session_is_gone(
+        self,
+        calendar_agent,
+        mock_event,
+        mock_line_api,
+    ):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        session = calendar_session_manager.get_session("user_U123456")
+        assert session is not None
+        session.updated_at = datetime.now() - timedelta(seconds=121)
+        assert calendar_session_manager.get_session("user_U123456") is None
+
+        should_handle = await calendar_agent.should_handle(mock_event, "1,3")
+
+        assert should_handle is True
+
+        handled = await calendar_agent.handle(mock_event, "1,3", mock_line_api)
+
+        assert handled is True
+        mock_line_api.reply_message.assert_called_once()
+        reply_text = mock_line_api.reply_message.call_args[0][0].messages[0].text.lower()
+        assert "stale or expired" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_done_without_remove_context_still_falls_through(self, calendar_agent, mock_event):
+        should_handle = await calendar_agent.should_handle(mock_event, "done")
+
+        assert should_handle is False
+
+    @pytest.mark.asyncio
+    async def test_recent_remove_expiry_does_not_hijack_other_user(self, calendar_agent, mock_event):
+        mock_event.source.group_id = "G123"
+        mock_event.source.user_id = "U_OWNER"
+        calendar_session_manager.start_removal_flow(
+            "group_G123",
+            "U_OWNER",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        session = calendar_session_manager.get_session("group_G123")
+        assert session is not None
+        session.updated_at = datetime.now() - timedelta(seconds=121)
+        assert calendar_session_manager.get_session("group_G123") is None
+
+        mock_event.source.user_id = "U_OTHER"
+
+        should_handle = await calendar_agent.should_handle(mock_event, "done")
+
+        assert should_handle is False
+
+    @pytest.mark.asyncio
+    async def test_cancel_does_not_get_hijacked_after_recent_remove_expiry(self, calendar_agent, mock_event):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        session = calendar_session_manager.get_session("user_U123456")
+        assert session is not None
+        session.updated_at = datetime.now() - timedelta(seconds=121)
+        assert calendar_session_manager.get_session("user_U123456") is None
+
+        should_handle = await calendar_agent.should_handle(mock_event, "cancel")
+
+        assert should_handle is False
+
+    @pytest.mark.asyncio
+    async def test_starting_and_canceling_add_flow_clears_recent_remove_marker(self, calendar_agent, mock_event):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        session = calendar_session_manager.get_session("user_U123456")
+        assert session is not None
+        session.updated_at = datetime.now() - timedelta(seconds=121)
+        assert calendar_session_manager.get_session("user_U123456") is None
+
+        calendar_session_manager.start_add_flow("user_U123456", "U123456")
+        assert calendar_session_manager.cancel_flow("user_U123456") is True
+
+        should_handle = await calendar_agent.should_handle(mock_event, "done")
+
+        assert should_handle is False
+
+    @pytest.mark.asyncio
+    async def test_other_user_new_flow_does_not_clear_expired_owner_remove_context(
+        self,
+        calendar_agent,
+        mock_event,
+        mock_line_api,
+    ):
+        calendar_agent.remove_flow.send_message = AsyncMock()
+        mock_event.source.group_id = "G123"
+        mock_event.source.user_id = "U_OWNER"
+        calendar_session_manager.start_removal_flow(
+            "group_G123",
+            "U_OWNER",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        session = calendar_session_manager.get_session("group_G123")
+        assert session is not None
+        session.updated_at = datetime.now() - timedelta(seconds=121)
+        assert calendar_session_manager.get_session("group_G123") is None
+
+        calendar_session_manager.start_add_flow("group_G123", "U_OTHER")
+        assert calendar_session_manager.cancel_flow("group_G123") is True
+
+        mock_event.source.user_id = "U_OWNER"
+
+        should_handle = await calendar_agent.should_handle(mock_event, "done")
+
+        assert should_handle is True
+
+        handled = await calendar_agent.handle(mock_event, "done", mock_line_api)
+
+        assert handled is True
+        calendar_agent.remove_flow.send_message.assert_awaited_once()
+        reply_text = calendar_agent.remove_flow.send_message.await_args.args[2].lower()
+        assert "stale or expired" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_preview_yes_gets_explicit_delete_or_cancel_guidance(
+        self,
+        calendar_agent,
+        mock_event,
+        mock_line_api,
+    ):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        calendar_session_manager.apply_remove_selection("user_U123456", "1")
+        calendar_session_manager.finalize_remove_selection("user_U123456")
+
+        should_handle = await calendar_agent.should_handle(mock_event, "yes")
+
+        assert should_handle is True
+
+        handled = await calendar_agent.handle(mock_event, "yes", mock_line_api)
+
+        assert handled is True
+        mock_line_api.reply_message.assert_called_once()
+        reply_text = mock_line_api.reply_message.call_args[0][0].messages[0].text.lower()
+        assert "delete <code>" in reply_text
+        assert "cancel" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_preview_done_gets_explicit_delete_or_cancel_guidance(
+        self,
+        calendar_agent,
+        mock_event,
+        mock_line_api,
+    ):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        calendar_session_manager.apply_remove_selection("user_U123456", "1")
+        calendar_session_manager.finalize_remove_selection("user_U123456")
+
+        handled = await calendar_agent.handle(mock_event, "done", mock_line_api)
+
+        assert handled is True
+        mock_line_api.reply_message.assert_called_once()
+        reply_text = mock_line_api.reply_message.call_args[0][0].messages[0].text.lower()
+        assert "delete <code>" in reply_text
+        assert "cancel" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_preview_cancel_alias_ends_remove_flow(self, calendar_agent, mock_event, mock_line_api):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        calendar_session_manager.apply_remove_selection("user_U123456", "1")
+        calendar_session_manager.finalize_remove_selection("user_U123456")
+
+        handled = await calendar_agent.handle(mock_event, "quit", mock_line_api)
+
+        assert handled is True
+        assert calendar_session_manager.get_session("user_U123456") is None
+        mock_line_api.reply_message.assert_called_once()
+        reply_text = mock_line_api.reply_message.call_args[0][0].messages[0].text.lower()
+        assert "no events were removed" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_done_after_remove_cancel_gets_stale_response(self, calendar_agent, mock_event, mock_line_api):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        calendar_session_manager.apply_remove_selection("user_U123456", "1")
+        calendar_session_manager.finalize_remove_selection("user_U123456")
+
+        handled = await calendar_agent.handle(mock_event, "quit", mock_line_api)
+
+        assert handled is True
+        assert calendar_session_manager.get_session("user_U123456") is None
+
+        mock_line_api.reset_mock()
+
+        should_handle = await calendar_agent.should_handle(mock_event, "done")
+
+        assert should_handle is True
+
+        handled = await calendar_agent.handle(mock_event, "done", mock_line_api)
+
+        assert handled is True
+        mock_line_api.reply_message.assert_called_once()
+        reply_text = mock_line_api.reply_message.call_args[0][0].messages[0].text.lower()
+        assert "stale or expired" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_all_and_none_after_remove_cancel_get_stale_response(self, calendar_agent, mock_event, mock_line_api):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        calendar_session_manager.apply_remove_selection("user_U123456", "1")
+        calendar_session_manager.finalize_remove_selection("user_U123456")
+
+        handled = await calendar_agent.handle(mock_event, "quit", mock_line_api)
+
+        assert handled is True
+        assert calendar_session_manager.get_session("user_U123456") is None
+
+        for text in ("all", "none"):
+            mock_line_api.reset_mock()
+            should_handle = await calendar_agent.should_handle(mock_event, text)
+            assert should_handle is True
+
+            handled = await calendar_agent.handle(mock_event, text, mock_line_api)
+
+            assert handled is True
+            mock_line_api.reply_message.assert_called_once()
+            reply_text = mock_line_api.reply_message.call_args[0][0].messages[0].text.lower()
+            assert "stale or expired" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_plain_yes_after_remove_cancel_falls_through(self, calendar_agent, mock_event, mock_line_api):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        calendar_session_manager.apply_remove_selection("user_U123456", "1")
+        calendar_session_manager.finalize_remove_selection("user_U123456")
+
+        handled = await calendar_agent.handle(mock_event, "quit", mock_line_api)
+
+        assert handled is True
+        assert calendar_session_manager.get_session("user_U123456") is None
+
+        for text in ("yes", "no", "ใช่", "ไม่"):
+            should_handle = await calendar_agent.should_handle(mock_event, text)
+            assert should_handle is False
+
+    @pytest.mark.asyncio
+    async def test_plain_numeric_reply_after_remove_cancel_falls_through(self, calendar_agent, mock_event, mock_line_api):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        calendar_session_manager.apply_remove_selection("user_U123456", "1")
+        calendar_session_manager.finalize_remove_selection("user_U123456")
+
+        handled = await calendar_agent.handle(mock_event, "quit", mock_line_api)
+
+        assert handled is True
+        assert calendar_session_manager.get_session("user_U123456") is None
+
+        should_handle = await calendar_agent.should_handle(mock_event, "1")
+
+        assert should_handle is False
+
+    @pytest.mark.asyncio
+    async def test_delete_code_after_remove_success_gets_stale_response(
+        self,
+        calendar_agent,
+        mock_event,
+        mock_line_api,
+    ):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        calendar_session_manager.apply_remove_selection("user_U123456", "1")
+        preview = calendar_session_manager.finalize_remove_selection("user_U123456")
+        assert preview is not None
+        calendar_agent._calendar_service = MagicMock()
+        calendar_agent.remove_flow._calendar_service.remove_events_by_ids_async = AsyncMock(return_value=(1, 0))
+
+        handled = await calendar_agent.handle(mock_event, f"delete {preview['code']}", mock_line_api)
+
+        assert handled is True
+        assert calendar_session_manager.get_session("user_U123456") is None
+
+        mock_line_api.reset_mock()
+
+        should_handle = await calendar_agent.should_handle(mock_event, f"delete {preview['code']}")
+
+        assert should_handle is True
+
+        handled = await calendar_agent.handle(mock_event, f"delete {preview['code']}", mock_line_api)
+
+        assert handled is True
+        mock_line_api.reply_message.assert_called_once()
+        reply_text = mock_line_api.reply_message.call_args[0][0].messages[0].text.lower()
+        assert "stale or expired" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_non_owner_cannot_confirm_remove_preview(self, calendar_agent, mock_event, mock_line_api):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U_OWNER",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        calendar_session_manager.apply_remove_selection("user_U123456", "1")
+        preview = calendar_session_manager.finalize_remove_selection("user_U123456")
+        calendar_agent._calendar_service = MagicMock()
+        calendar_agent.remove_flow._calendar_service.remove_events_by_ids_async = AsyncMock(return_value=(1, 0))
+
+        assert preview is not None
+        handled = await calendar_agent.handle(mock_event, f"delete {preview['code']}", mock_line_api)
+
+        assert handled is True
+        calendar_agent.remove_flow._calendar_service.remove_events_by_ids_async.assert_not_awaited()
+        mock_line_api.reply_message.assert_called_once()
+        reply_text = mock_line_api.reply_message.call_args[0][0].messages[0].text.lower()
+        assert "only the person who started this removal flow" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_stale_remove_preview_returns_explicit_error(self, calendar_agent, mock_event, mock_line_api):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        calendar_session_manager.apply_remove_selection("user_U123456", "1")
+        preview = calendar_session_manager.finalize_remove_selection("user_U123456")
+        calendar_agent._calendar_service = MagicMock()
+        calendar_agent.remove_flow._calendar_service.remove_events_by_ids_async = AsyncMock(return_value=(1, 0))
+
+        assert preview is not None
+        handled = await calendar_agent.handle(mock_event, "delete deadbeef", mock_line_api)
+
+        assert handled is True
+        calendar_agent.remove_flow._calendar_service.remove_events_by_ids_async.assert_not_awaited()
+        mock_line_api.reply_message.assert_called_once()
+        reply_text = mock_line_api.reply_message.call_args[0][0].messages[0].text.lower()
+        assert "stale or expired" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_old_delete_code_is_rejected_after_reselection(self, calendar_agent, mock_event, mock_line_api):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [
+                {"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"},
+                {"event_id": "evt-2", "title": "Parent Meeting", "date": "Jun 12"},
+            ],
+        )
+        calendar_agent._calendar_service = MagicMock()
+        calendar_agent.remove_flow._calendar_service = calendar_agent._calendar_service
+        calendar_agent.remove_flow._calendar_service.remove_events_by_ids_async = AsyncMock(return_value=(1, 0))
+
+        calendar_session_manager.apply_remove_selection("user_U123456", "1")
+        preview = calendar_session_manager.finalize_remove_selection("user_U123456")
+        assert preview is not None
+
+        calendar_session_manager.apply_remove_selection("user_U123456", "2")
+
+        handled = await calendar_agent.handle(mock_event, f"delete {preview['code']}", mock_line_api)
+
+        assert handled is True
+        calendar_agent.remove_flow._calendar_service.remove_events_by_ids_async.assert_not_awaited()
+        mock_line_api.reply_message.assert_called_once()
+        reply_text = mock_line_api.reply_message.call_args[0][0].messages[0].text.lower()
+        assert "stale or expired" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_unrelated_group_text_is_ignored_during_remove_session(
+        self,
+        calendar_agent,
+        mock_event,
+        mock_line_api,
+    ):
+        mock_event.source.group_id = "G123"
+        calendar_session_manager.start_removal_flow(
+            "group_G123",
+            "U_OWNER",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+
+        should_handle = await calendar_agent.should_handle(mock_event, "hello everyone")
+
+        assert should_handle is False
+
+        handled = await calendar_agent.handle(mock_event, "hello everyone", mock_line_api)
+
+        assert handled is False
+        mock_line_api.reply_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_remove_trigger_restarts_active_remove_session(
+        self,
+        calendar_agent,
+        mock_event,
+        mock_line_api,
+    ):
+        calendar_session_manager.start_removal_flow(
+            "user_U123456",
+            "U123456",
+            [{"event_id": "evt-1", "title": "Math Quiz", "date": "Jun 10"}],
+        )
+        calendar_session_manager.apply_remove_selection("user_U123456", "1")
+        calendar_session_manager.finalize_remove_selection("user_U123456")
+        calendar_agent.remove_flow.start_remove_flow = AsyncMock(return_value=True)
+
+        should_handle = await calendar_agent.should_handle(mock_event, "Ms. Green remove event")
+
+        assert should_handle is True
+
+        handled = await calendar_agent.handle(mock_event, "Ms. Green remove event", mock_line_api)
+
+        assert handled is True
+        calendar_agent.remove_flow.start_remove_flow.assert_awaited_once_with(
+            mock_event,
+            mock_line_api,
+            "user_U123456",
+            "U123456",
+        )
+
+    @pytest.mark.asyncio
+    async def test_inline_add_bulk_fallback_routes_to_scrape_flow_with_text_first(
+        self,
+        calendar_agent,
+        mock_event,
+        mock_line_api,
+    ):
+        calendar_agent.scrape_flow.handle_scrape_trigger = AsyncMock(return_value=True)
+
+        with patch.object(calendar_agent, "_parse_inline_add", return_value=None), patch.object(
+            calendar_agent,
+            "_looks_like_bulk_dates",
+            return_value=True,
+        ):
+            handled = await calendar_agent.handle(
+                mock_event,
+                "Ms. Green add tomorrow\n1. June 20 science fair\n2. June 21 parent meeting",
+                mock_line_api,
+            )
+
+        assert handled is True
+        calendar_agent.scrape_flow.handle_scrape_trigger.assert_awaited_once_with(
+            mock_event,
+            "Ms. Green add tomorrow\n1. June 20 science fair\n2. June 21 parent meeting",
+            mock_line_api,
+            "user_U123456",
+            "U123456",
+        )
+
+    @pytest.mark.asyncio
     async def test_calendar_agent_accepts_configured_alias_prefix(self, calendar_agent, mock_event):
         result = await calendar_agent.should_handle(mock_event, "Ms. Green scrape")
         assert result is True
@@ -378,7 +1001,7 @@ class TestCalendarDeleteAndLiveBulkAdd:
         event.source.room_id = None
         event.reply_token = "reply"
         event.message = MagicMock()
-        event.message.text = "yes"
+        event.message.text = "delete deadbeef"
 
         line_api = MagicMock()
 
@@ -387,10 +1010,16 @@ class TestCalendarDeleteAndLiveBulkAdd:
         session = calendar_session_manager.get_or_create_session(chat_id, "U123456")
         session.reset()
         session.state = CalendarState.CONFIRMING_REMOVAL
+        session.events_for_removal = [
+            {"event_id": "e1", "title": "Event 1", "date": "Jun 10"},
+            {"event_id": "e2", "title": "Event 2", "date": "Jun 11"},
+        ]
         session.selected_event_ids = ["e1", "e2"]
+        session.removal_revision = 3
+        session.removal_confirmation_code = "deadbeef"
         session.update()
 
-        await agent.handle(event, "yes", line_api)
+        await agent.handle(event, "delete deadbeef", line_api)
 
         agent._calendar_service.remove_events_by_ids_async.assert_awaited_once_with(["e1", "e2"], "U123456")
 

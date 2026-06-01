@@ -68,6 +68,7 @@ TRIGGERS_ADD = [
 TRIGGERS_REMOVE = [
     "zeus remove event",
     "zeus delete event",
+    "zeus calendar remove",
     "zeus remove reminder",
     "zeus delete reminder",
     "remove event",
@@ -89,6 +90,8 @@ TRIGGERS_DISCRETE_SCRAPE = [
 
 # Cancel keywords
 CANCEL_KEYWORDS = ["cancel", "nevermind", "never mind", "ยกเลิก", "exit", "quit"]
+REMOVE_SELECTION_PATTERN = re.compile(r"^\d+(?:\s*,\s*\d+)*$")
+REMOVE_DELETE_PATTERN = re.compile(r"^delete\s+[a-z0-9]{8,32}$")
 
 
 class CalendarAgent(BaseAgent):
@@ -150,6 +153,7 @@ class CalendarAgent(BaseAgent):
         """Lazy-load RemoveFlow instance."""
         if self._remove_flow is None:
             self._remove_flow = get_remove_flow(self._calendar_service)
+        self._remove_flow._calendar_service = self._calendar_service
         return self._remove_flow
 
     @property
@@ -227,6 +231,86 @@ class CalendarAgent(BaseAgent):
         """Check if text is a cancel command."""
         text_lower = text.lower().strip()
         return text_lower in CANCEL_KEYWORDS
+
+    def _is_remove_selection_command(self, text: str) -> bool:
+        """Check whether text is a supported remove-selection command."""
+        text_lower = text.lower().strip()
+        return text_lower in {"all", "none", "done"} or bool(
+            REMOVE_SELECTION_PATTERN.fullmatch(text_lower)
+        )
+
+    def _is_remove_confirmation_command(self, text: str) -> bool:
+        """Check whether text is a supported remove-confirmation command."""
+        text_lower = text.lower().strip()
+        return self._is_cancel_command(text) or bool(REMOVE_DELETE_PATTERN.fullmatch(text_lower))
+
+    def _is_remove_preview_followup(self, text: str) -> bool:
+        """Accept legacy preview replies so the flow can reject them explicitly."""
+        return text.lower().strip() in {
+            "yes",
+            "y",
+            "no",
+            "n",
+            "confirm",
+            "keep",
+            "ใช่",
+            "ไม่",
+            "done",
+        }
+
+    def _is_remove_reselection_command(self, text: str) -> bool:
+        """Commands that intentionally change the selected items from preview state."""
+        text_lower = text.lower().strip()
+        return text_lower in {"all", "none"} or bool(REMOVE_SELECTION_PATTERN.fullmatch(text_lower))
+
+    def _looks_like_remove_selection_attempt(self, text: str) -> bool:
+        """Catch mixed comma-separated selection attempts so they get explicit rejection."""
+        normalized = text.lower().strip()
+        if "," not in normalized:
+            return False
+        parts = [part.strip() for part in normalized.split(",") if part.strip()]
+        if not parts or not any(part.isdigit() for part in parts):
+            return False
+        keyword_starters = {"all", "none", "done", "cancel", "delete", "yes", "no", "confirm", "keep"}
+        for part in parts:
+            if part.isdigit():
+                continue
+            if re.fullmatch(r"[a-z0-9]+", part):
+                return True
+            leading_word = re.match(r"([a-z]+)", part)
+            if leading_word and leading_word.group(1) in keyword_starters:
+                return True
+        return False
+
+    def _is_remove_session_input(self, text: str, state: CalendarState) -> bool:
+        """Limit active remove sessions to explicit remove commands only."""
+        if state == CalendarState.AWAITING_REMOVAL_SELECTION:
+            return (
+                self._is_cancel_command(text)
+                or self._is_remove_selection_command(text)
+                or self._is_remove_confirmation_command(text)
+                or self._looks_like_remove_selection_attempt(text)
+            )
+
+        if state == CalendarState.CONFIRMING_REMOVAL:
+            return (
+                self._is_remove_reselection_command(text)
+                or self._is_remove_confirmation_command(text)
+                or self._is_remove_preview_followup(text)
+                or self._looks_like_remove_selection_attempt(text)
+            )
+
+        return False
+
+    def _is_stale_remove_followup(self, text: str) -> bool:
+        """Catch expired remove-flow follow-ups so they get an explicit expiry message."""
+        text_lower = text.lower().strip()
+        return (
+            text_lower in {"all", "none", "done"}
+            or bool(REMOVE_DELETE_PATTERN.fullmatch(text_lower))
+            or ("," in text_lower and bool(REMOVE_SELECTION_PATTERN.fullmatch(text_lower)))
+            or self._looks_like_remove_selection_attempt(text)
+        )
 
     def _looks_like_bulk_dates(self, text: str) -> bool:
         """Detect if text contains bulk date input (should trigger scrape flow)."""
@@ -368,6 +452,16 @@ class CalendarAgent(BaseAgent):
         # Check for active calendar session
         session = calendar_session_manager.get_session(chat_id)
         if session and session.state != CalendarState.IDLE:
+            if session.state in {
+                CalendarState.AWAITING_REMOVAL_SELECTION,
+                CalendarState.CONFIRMING_REMOVAL,
+            }:
+                return self._is_trigger(text, TRIGGERS_REMOVE) or self._is_remove_session_input(text, session.state)
+            return True
+
+        if calendar_session_manager.had_recent_remove_flow(chat_id, getattr(getattr(event, "source", None), "user_id", None)) and (
+            REMOVE_DELETE_PATTERN.fullmatch(text_lower) or self._is_stale_remove_followup(text)
+        ):
             return True
 
         # Check for explicit triggers (must START the message to avoid instructional text)
@@ -403,12 +497,26 @@ class CalendarAgent(BaseAgent):
         chat_id = self._get_chat_id(event)
         user_id = getattr(event.source, "user_id", None) if event.source else None
         session = calendar_session_manager.get_session(chat_id)
+        if session and session.state == CalendarState.IDLE:
+            session = None
 
         # Session ownership check (in groups, only session owner can interact)
         if session and not calendar_session_manager.is_session_owner(chat_id, user_id):
             logger.debug(
                 f"📅 User {user_id} tried to interact with calendar session owned by {session.user_id}"
             )
+            if session.state in {
+                CalendarState.AWAITING_REMOVAL_SELECTION,
+                CalendarState.CONFIRMING_REMOVAL,
+            }:
+                if self._is_trigger(text, TRIGGERS_REMOVE) or self._is_remove_session_input(text, session.state):
+                    await self.remove_flow.send_message(
+                        event,
+                        line_bot_api,
+                        "❌ Only the person who started this removal flow can change or confirm it.",
+                    )
+                    return True
+                return False
             return True
 
         with tracer.start_as_current_span("calendar_agent.handle") as span:
@@ -418,6 +526,15 @@ class CalendarAgent(BaseAgent):
                 # Store message in buffer (for potential scraping later)
                 if user_id and text and not self._has_identity_prefix(text):
                     self._store_message_in_buffer(chat_id, user_id, text)
+
+                # Let RemoveFlow own explicit cancel in remove states so it fully ends the session.
+                if session and session.state in {
+                    CalendarState.AWAITING_REMOVAL_SELECTION,
+                    CalendarState.CONFIRMING_REMOVAL,
+                } and self._is_cancel_command(text):
+                    return await self.remove_flow.handle_removal_confirmation(
+                        event, text, line_bot_api, chat_id, user_id
+                    )
 
                 # Check for cancel command
                 if self._is_cancel_command(text):
@@ -444,6 +561,17 @@ class CalendarAgent(BaseAgent):
                     return await self.remove_flow.start_remove_flow(
                         event, line_bot_api, chat_id, user_id
                     )
+
+                if not session and calendar_session_manager.had_recent_remove_flow(chat_id, user_id) and (
+                    REMOVE_DELETE_PATTERN.fullmatch(text.lower().strip())
+                    or self._is_stale_remove_followup(text)
+                ):
+                    await self.remove_flow.send_message(
+                        event,
+                        line_bot_api,
+                        "❌ This remove flow is stale or expired. Start the remove flow again.",
+                    )
+                    return True
 
                 # DISCRETE SCRAPE TRIGGER (friend-only, DM delivery)
                 if self._is_trigger(text, TRIGGERS_DISCRETE_SCRAPE):
@@ -472,7 +600,7 @@ class CalendarAgent(BaseAgent):
                     # If parsing failed, fallback to bulk detection
                     if self._looks_like_bulk_dates(text):
                         return await self.scrape_flow.handle_scrape_trigger(
-                            event, line_bot_api, chat_id, user_id, text
+                            event, text, line_bot_api, chat_id, user_id
                         )
 
                 # INTERACTIVE ADD TRIGGER
@@ -494,11 +622,26 @@ class CalendarAgent(BaseAgent):
 
                 # RemoveFlow states
                 if state == CalendarState.AWAITING_REMOVAL_SELECTION:
+                    if self._is_remove_confirmation_command(text):
+                        return await self.remove_flow.handle_removal_confirmation(
+                            event, text, line_bot_api, chat_id, user_id
+                        )
+                    if not self._is_remove_session_input(text, state):
+                        return False
                     return await self.remove_flow.handle_removal_selection(
                         event, text, line_bot_api, chat_id, user_id
                     )
                 
                 if state == CalendarState.CONFIRMING_REMOVAL:
+                    if self._is_remove_reselection_command(text) or self._looks_like_remove_selection_attempt(text):
+                        return await self.remove_flow.handle_removal_selection(
+                            event, text, line_bot_api, chat_id, user_id
+                        )
+                    if not (
+                        self._is_remove_confirmation_command(text)
+                        or self._is_remove_preview_followup(text)
+                    ):
+                        return False
                     return await self.remove_flow.handle_removal_confirmation(
                         event, text, line_bot_api, chat_id, user_id
                     )

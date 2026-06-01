@@ -33,6 +33,20 @@ BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 class RemoveFlow(CalendarFlowBase):
     """Handler for removing calendar events (privacy-isolated by chat)."""
 
+    _DELETE_COMMAND_PATTERN = re.compile(r"^delete\s+([a-z0-9]{8,32})$")
+    _CANCEL_ALIASES = {"cancel", "nevermind", "never mind", "ยกเลิก", "exit", "quit"}
+    _LEGACY_PREVIEW_RESPONSES = {
+        "yes",
+        "y",
+        "no",
+        "n",
+        "confirm",
+        "keep",
+        "ใช่",
+        "ไม่",
+        "done",
+    }
+
     async def start_remove_flow(
         self,
         event: MessageEvent,
@@ -86,14 +100,26 @@ class RemoveFlow(CalendarFlowBase):
             chat_id, requesting_user_id=user_id
         )
 
-        if not events:
+        removable_events = [
+            evt for evt in events if getattr(evt, "user_id", None) == user_id
+        ]
+
+        if not removable_events:
             is_group = chat_id.startswith("group_") or chat_id.startswith("room_")
-            context = "this group" if is_group else "your calendar"
+            if is_group:
+                message = (
+                    "📅 No events you can remove in this group.\n\n"
+                    "คุณไม่มีกิจกรรมของตัวเองในกลุ่มนี้ให้ลบ"
+                )
+            else:
+                message = (
+                    "📅 No events in your calendar to remove.\n\n"
+                    "คุณไม่มีกิจกรรมที่จะลบ"
+                )
 
             await self.send_message(
                 event, line_bot_api,
-                f"📅 No events in {context} to remove.\n\n"
-                "คุณไม่มีกิจกรรมที่จะลบ"
+                message,
             )
             return True
 
@@ -104,7 +130,7 @@ class RemoveFlow(CalendarFlowBase):
                 "title": evt.title,
                 "date": evt.event_date.strftime("%b %d"),
             }
-            for evt in events[:10]  # Max 10 for removal
+            for evt in removable_events[:10]  # Max 10 for removal
         ]
 
         calendar_session_manager.start_removal_flow(chat_id, user_id, events_data)
@@ -120,6 +146,7 @@ class RemoveFlow(CalendarFlowBase):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
+        user_id: Optional[str],
     ) -> bool:
         """
         Handle event selection for removal.
@@ -137,35 +164,50 @@ class RemoveFlow(CalendarFlowBase):
         if not session:
             return False
 
-        events_for_removal = session.events_for_removal
-        text_lower = text.lower().strip()
-
-        selected_ids = self._parse_selection(text_lower, events_for_removal)
-
-        if not selected_ids:
+        if not calendar_session_manager.is_session_owner(chat_id, user_id):
             await self.send_message(
-                event, line_bot_api,
-                "❌ Invalid selection. Enter numbers (e.g., 1,3) or 'all'.\n\n"
-                "กรุณาใส่ตัวเลข (เช่น 1,3) หรือ 'all'"
+                event,
+                line_bot_api,
+                "❌ Only the person who started this removal flow can change it.",
             )
             return True
 
-        calendar_session_manager.set_removal_selection(chat_id, selected_ids)
+        text_lower = text.lower().strip()
 
-        # Show confirmation
-        count = len(selected_ids)
+        if text_lower == "done":
+            preview = calendar_session_manager.finalize_remove_selection(chat_id)
+            if not preview:
+                await self.send_message(
+                    event,
+                    line_bot_api,
+                    "❌ Select at least one event before using 'done'.",
+                )
+                return True
+
+            msg = self._format_removal_preview(preview["items"])
+            actions = [
+                {"label": "🗑️ Delete selected", "text": f"delete {preview['code']}"},
+                {"label": "❌ Cancel", "text": "cancel"},
+            ]
+            await self.send_message_with_quick_reply(event, line_bot_api, msg, actions)
+            return True
+
+        updated_session = calendar_session_manager.apply_remove_selection(chat_id, text_lower)
+        if updated_session is None:
+            await self.send_message(
+                event, line_bot_api,
+                "❌ Invalid selection. Use exact commands: all, none, done, cancel, or numbers like 1,3.\n\n"
+                "กรุณาใช้คำสั่งที่รองรับเท่านั้น เช่น all, none, done, cancel หรือ 1,3"
+            )
+            return True
+
+        count = len(updated_session.selected_event_ids)
         msg = (
-            f"⚠️ Remove {count} event{'s' if count > 1 else ''}?\n\n"
-            "This cannot be undone!\n\n"
-            "Are you sure? (yes/no)\n\n"
-            f"ต้องการลบ {count} กิจกรรม? (yes/no)"
+            f"🗂️ Selected {count} event{'s' if count != 1 else ''}.\n\n"
+            + self._format_selected_items(updated_session)
+            + "\n\nUse all, none, numbers like 1,3, done, or cancel."
         )
-
-        actions = [
-            {"label": "✅ Yes, delete", "text": "yes"},
-            {"label": "❌ No, keep", "text": "no"},
-        ]
-        await self.send_message_with_quick_reply(event, line_bot_api, msg, actions)
+        await self.send_message(event, line_bot_api, msg)
         return True
 
     async def handle_removal_confirmation(
@@ -191,46 +233,72 @@ class RemoveFlow(CalendarFlowBase):
         """
         text_lower = text.lower().strip()
 
-        if text_lower in ["yes", "y", "ใช่", "delete", "confirm"]:
-            event_ids = calendar_session_manager.get_removal_event_ids(chat_id)
-            if not event_ids or not self._calendar_service or not user_id:
-                await self.send_message(
-                    event, line_bot_api,
-                    "❌ Something went wrong. Please try again."
-                )
-                calendar_session_manager.end_session(chat_id)
-                return True
-
-            # Remove events
-            removed_count, failed_count = await self._calendar_service.remove_events_by_ids_async(
-                event_ids, user_id
-            )
-
-            calendar_session_manager.end_session(chat_id)
-
-            msg = (
-                f"✅ Removed {removed_count} event{'s' if removed_count != 1 else ''}!"
-                + ("" if failed_count == 0 else f" (Failed: {failed_count})")
-                + "\n\n"
-                f"ลบ {removed_count} กิจกรรมเรียบร้อยแล้ว"
-            )
-
-            await self.send_message(event, line_bot_api, msg)
-            return True
-
-        elif text_lower in ["no", "n", "ไม่", "keep"]:
+        if text_lower in self._CANCEL_ALIASES:
             calendar_session_manager.end_session(chat_id)
             await self.send_message(
                 event, line_bot_api,
                 "✅ No events were removed.\n\nไม่มีกิจกรรมถูกลบ"
             )
             return True
-        else:
+
+        if text_lower in self._LEGACY_PREVIEW_RESPONSES:
             await self.send_message(
-                event, line_bot_api,
-                "Please answer yes or no.\n\nกรุณาตอบ yes หรือ no"
+                event,
+                line_bot_api,
+                "Reply with the preview action 'delete <code>' to confirm, or 'cancel' to stop."
             )
             return True
+
+        match = self._DELETE_COMMAND_PATTERN.fullmatch(text_lower)
+        if not match:
+            await self.send_message(
+                event, line_bot_api,
+                "Reply with the preview action 'delete <code>' or 'cancel'."
+            )
+            return True
+
+        confirmation = calendar_session_manager.validate_remove_confirmation(
+            chat_id,
+            user_id,
+            match.group(1),
+        )
+        if not confirmation.get("ok"):
+            reason = confirmation.get("reason")
+            if reason == "wrong_owner":
+                message = "❌ Only the person who started this removal flow can confirm it."
+            elif reason in {"stale_revision", "invalid_state"}:
+                message = "❌ This delete preview is stale or expired. Use the latest preview or start the remove flow again."
+            else:
+                message = "❌ This removal session is no longer valid. Start the remove flow again."
+                calendar_session_manager.end_session(chat_id)
+            await self.send_message(event, line_bot_api, message)
+            return True
+
+        if not self._calendar_service or not user_id:
+            await self.send_message(
+                event,
+                line_bot_api,
+                "❌ Something went wrong. Please try again.",
+            )
+            calendar_session_manager.end_session(chat_id)
+            return True
+
+        removed_count, failed_count = await self._calendar_service.remove_events_by_ids_async(
+            confirmation["event_ids"],
+            user_id,
+        )
+
+        calendar_session_manager.end_session(chat_id)
+
+        msg = (
+            f"✅ Removed {removed_count} event{'s' if removed_count != 1 else ''}!"
+            + ("" if failed_count == 0 else f" (Failed: {failed_count})")
+            + "\n\n"
+            f"ลบ {removed_count} กิจกรรมเรียบร้อยแล้ว"
+        )
+
+        await self.send_message(event, line_bot_api, msg)
+        return True
 
     # =========================================================================
     # Private Helpers
@@ -264,47 +332,42 @@ class RemoveFlow(CalendarFlowBase):
 
         msg_lines.extend([
             "",
-            "Enter numbers separated by commas (e.g., 1,3,5)",
-            "Or say 'all' to remove everything.",
+            "Use numbers like 1,3 to select events.",
+            "Commands: all, none, done, cancel.",
             "",
-            "พิมพ์เลขที่ต้องการลบ คั่นด้วยเครื่องหมาย ,",
-            "หรือพิมพ์ 'all' เพื่อลบทั้งหมด",
+            "พิมพ์เลขที่ต้องการลบ เช่น 1,3",
+            "คำสั่งที่รองรับ: all, none, done, cancel",
             "",
             "💡 Say 'cancel' to stop"
         ])
 
         return "\n".join(msg_lines)
 
-    def _parse_selection(
-        self,
-        text: str,
-        events_for_removal: List[Dict[str, Any]],
-    ) -> List[str]:
-        """
-        Parse user's selection input.
+    def _format_selected_items(self, session: Any) -> str:
+        selected = {
+            event_id for event_id in session.selected_event_ids
+        }
+        if not selected:
+            return "No events selected yet."
 
-        Args:
-            text: Lowercased, stripped user input
-            events_for_removal: List of event dicts with event_id
+        lines = ["Selected:"]
+        for index, event in enumerate(session.events_for_removal, start=1):
+            if event["event_id"] in selected:
+                lines.append(f"{index}. {event['title']} ({event['date']})")
+        return "\n".join(lines)
 
-        Returns:
-            List of selected event IDs
-        """
-        if text == "all":
-            return [e["event_id"] for e in events_for_removal]
-
-        selected_ids = []
-        try:
-            parts = re.split(r"[,\s]+", text)
-            for part in parts:
-                if part.isdigit():
-                    idx = int(part) - 1  # Convert to 0-based
-                    if 0 <= idx < len(events_for_removal):
-                        selected_ids.append(events_for_removal[idx]["event_id"])
-        except Exception:
-            pass
-
-        return selected_ids
+    def _format_removal_preview(self, items: List[Dict[str, Any]]) -> str:
+        lines = [
+            f"⚠️ Review the {len(items)} event{'s' if len(items) != 1 else ''} selected for deletion:",
+            "",
+        ]
+        for index, item in enumerate(items, start=1):
+            lines.append(f"{index}. {item['title']} ({item['date']})")
+        lines.extend([
+            "",
+            "Reply with the Delete button to remove exactly these events, or Cancel to keep them.",
+        ])
+        return "\n".join(lines)
 
 
 # Lazy loader for on-demand instantiation

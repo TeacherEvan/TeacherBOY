@@ -28,11 +28,47 @@ from src.services.calendar_session_manager import (
     CalendarSessionManager,
     CalendarSession,
     CalendarState,
+    calendar_session_manager,
 )
 from src.agents.calendar_agent import CalendarAgent
 from src.agents.calendar.scrape_flow import ScrapeFlow
 
 BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
+
+
+def _scraped_events():
+    return [
+        {
+            "date": date(2026, 6, 5),
+            "title": "Exam papers due",
+            "description": "",
+            "source_text": "Exam papers due on 2026-06-05",
+            "confidence": "high",
+        },
+        {
+            "date": date(2026, 6, 8),
+            "title": "Parent meeting",
+            "description": "",
+            "source_text": "Parent meeting on 2026-06-08",
+            "confidence": "medium",
+        },
+        {
+            "date": date(2026, 6, 12),
+            "title": "Science fair",
+            "description": "",
+            "source_text": "Science fair happens on 2026-06-12",
+            "confidence": "low",
+        },
+    ]
+
+
+@pytest.fixture(autouse=True)
+def cleanup_scrape_sessions():
+    for chat_id in ("scrape_chat", "group_scrape_chat", "group_G1"):
+        calendar_session_manager.end_session(chat_id)
+    yield
+    for chat_id in ("scrape_chat", "group_scrape_chat", "group_G1"):
+        calendar_session_manager.end_session(chat_id)
 
 
 # ============================================================================
@@ -271,6 +307,16 @@ async def test_scrape_flow_pushes_review_to_requester_dm_when_run_from_group():
 
     assert handled is True
     assert line_api.push_message.called
+    push_request = line_api.push_message.call_args.args[0]
+    pushed_message = push_request.messages[0]
+    assert "Select events to add" in pushed_message.text
+    assert "1. Exam papers due" in pushed_message.text
+    assert [item.action.label for item in pushed_message.quickReply.items] == [
+        "All",
+        "None",
+        "Done",
+        "Cancel",
+    ]
 
 
 def test_calendar_event_persists_notification_target_user_id():
@@ -292,105 +338,231 @@ def test_calendar_event_persists_notification_target_user_id():
 # CalendarSessionManager Scrape Flow Tests
 # ============================================================================
 
-class TestCalendarSessionManagerScrape:
-    """Tests for CalendarSessionManager scrape flow methods."""
-    
+class TestSCRAPE_SELECTINGCalendarSessionManagerScrape:
+    """Tests for batch scrape session state and selection behavior."""
+
     def setup_method(self):
-        """Create fresh manager for each test."""
         self.manager = CalendarSessionManager()
-    
+
     def test_start_scrape_flow(self):
         """Test starting a scrape flow."""
         messages = ["Message 1", "Message 2"]
         self.manager.start_scrape_flow("chat1", "user1", messages, is_friend=True)
-        
+
         session = self.manager.get_session("chat1")
         assert session is not None
         assert session.state == CalendarState.SCRAPE_PROCESSING
         assert session.scraped_source_messages == messages
         assert session.pending_is_friend is True
-    
-    def test_set_scraped_events(self):
-        """Test setting scraped events."""
+
+    def test_set_scraped_events_enters_selecting_state_with_empty_selection(self):
         self.manager.start_scrape_flow("chat1", "user1", [], is_friend=False)
-        
-        events = [
-            {"date": date(2025, 6, 15), "title": "Event 1"},
-            {"date": date(2025, 6, 16), "title": "Event 2"},
-        ]
-        self.manager.set_scraped_events("chat1", events)
-        
-        session = self.manager.get_session("chat1")
-        assert session.state == CalendarState.SCRAPE_REVIEWING
-        assert len(session.scraped_events) == 2
-        assert session.current_scrape_index == 0
-    
-    def test_get_current_scraped_event(self):
-        """Test getting current scraped event."""
+
+        session = self.manager.set_scraped_events("chat1", _scraped_events())
+
+        assert session is not None
+        assert session.state == CalendarState.SCRAPE_SELECTING
+        assert len(session.scraped_events) == 3
+        assert session.selected_scraped_indices == []
+
+    def test_toggle_scraped_candidates_by_number(self):
         self.manager.start_scrape_flow("chat1", "user1", [], is_friend=True)
-        
-        events = [
-            {"date": date(2025, 6, 15), "title": "Event 1"},
-            {"date": date(2025, 6, 16), "title": "Event 2"},
-        ]
-        self.manager.set_scraped_events("chat1", events)
-        
-        current = self.manager.get_current_scraped_event("chat1")
-        assert current["title"] == "Event 1"
-    
-    def test_accept_scraped_event(self):
-        """Test accepting a scraped event."""
+        self.manager.set_scraped_events("chat1", _scraped_events())
+
+        session = self.manager.apply_scrape_selection("chat1", "1,3")
+
+        assert session is not None
+        assert session.selected_scraped_indices == [0, 2]
+        assert session.state == CalendarState.SCRAPE_SELECTING
+
+        session = self.manager.apply_scrape_selection("chat1", "3")
+
+        assert session is not None
+        assert session.selected_scraped_indices == [0]
+
+    def test_scrape_all_selects_every_candidate(self):
         self.manager.start_scrape_flow("chat1", "user1", [], is_friend=True)
-        events = [{"date": date(2025, 6, 15), "title": "Event 1"}]
-        self.manager.set_scraped_events("chat1", events)
-        
-        self.manager.accept_scraped_event("chat1")
-        
-        session = self.manager.get_session("chat1")
-        assert session.state == CalendarState.SCRAPE_REMINDER_DAYS
-    
-    def test_skip_scraped_event(self):
-        """Test skipping a scraped event."""
+        self.manager.set_scraped_events("chat1", _scraped_events())
+
+        session = self.manager.apply_scrape_selection("chat1", "all")
+
+        assert session is not None
+        assert session.selected_scraped_indices == [0, 1, 2]
+
+    def test_scrape_none_clears_selection(self):
         self.manager.start_scrape_flow("chat1", "user1", [], is_friend=True)
-        events = [
-            {"date": date(2025, 6, 15), "title": "Event 1"},
-            {"date": date(2025, 6, 16), "title": "Event 2"},
-        ]
-        self.manager.set_scraped_events("chat1", events)
-        
-        has_more = self.manager.skip_scraped_event("chat1")
-        
-        assert has_more is True
-        session = self.manager.get_session("chat1")
-        assert session.current_scrape_index == 1
-    
-    def test_skip_last_scraped_event(self):
-        """Test skipping the last scraped event."""
-        self.manager.start_scrape_flow("chat1", "user1", [], is_friend=True)
-        events = [{"date": date(2025, 6, 15), "title": "Event 1"}]
-        self.manager.set_scraped_events("chat1", events)
-        
-        has_more = self.manager.skip_scraped_event("chat1")
-        
-        assert has_more is False
-    
-    def test_get_scrape_progress(self):
-        """Test getting scrape progress."""
-        self.manager.start_scrape_flow("chat1", "user1", [], is_friend=True)
-        events = [
-            {"date": date(2025, 6, 15), "title": "Event 1"},
-            {"date": date(2025, 6, 16), "title": "Event 2"},
-            {"date": date(2025, 6, 17), "title": "Event 3"},
-        ]
-        self.manager.set_scraped_events("chat1", events)
-        
-        current, total = self.manager.get_scrape_progress("chat1")
-        assert current == 1  # 1-indexed
-        assert total == 3
-        
-        self.manager.skip_scraped_event("chat1")
-        current, total = self.manager.get_scrape_progress("chat1")
-        assert current == 2
+        self.manager.set_scraped_events("chat1", _scraped_events())
+        self.manager.apply_scrape_selection("chat1", "all")
+
+        session = self.manager.apply_scrape_selection("chat1", "none")
+
+        assert session is not None
+        assert session.selected_scraped_indices == []
+
+
+class TestSCRAPE_SELECTINGScrapeFlowBatch:
+    @pytest.fixture
+    def scrape_flow(self):
+        flow = ScrapeFlow(calendar_service=MagicMock())
+        flow.send_message = AsyncMock()
+        flow.send_message_with_quick_reply = AsyncMock()
+        return flow
+
+    @pytest.fixture
+    def mock_event(self):
+        event = MagicMock()
+        event.reply_token = "reply-token"
+        event.source = MagicMock()
+        event.source.user_id = "U_SCRAPE"
+        event.source.group_id = "G1"
+        event.source.room_id = None
+        return event
+
+    @pytest.fixture
+    def mock_line_api(self):
+        return MagicMock()
+
+    def _start_selected_batch(self):
+        calendar_session_manager.start_scrape_flow(
+            "scrape_chat",
+            "U_SCRAPE",
+            [item["source_text"] for item in _scraped_events()],
+            is_friend=True,
+        )
+        calendar_session_manager.set_scraped_events("scrape_chat", _scraped_events())
+        calendar_session_manager.apply_scrape_selection("scrape_chat", "1,3")
+
+    @pytest.mark.asyncio
+    async def test_scrape_done_without_selection_is_rejected(
+        self,
+        scrape_flow,
+        mock_event,
+        mock_line_api,
+    ):
+        calendar_session_manager.start_scrape_flow(
+            "scrape_chat",
+            "U_SCRAPE",
+            [item["source_text"] for item in _scraped_events()],
+            is_friend=True,
+        )
+        calendar_session_manager.set_scraped_events("scrape_chat", _scraped_events())
+
+        handled = await scrape_flow.handle_scrape_review_response(
+            mock_event,
+            "done",
+            mock_line_api,
+            "scrape_chat",
+            "U_SCRAPE",
+        )
+
+        assert handled is True
+        assert "select at least one" in scrape_flow.send_message.await_args.args[2].lower()
+        assert calendar_session_manager.get_session("scrape_chat").state == CalendarState.SCRAPE_SELECTING
+
+    @pytest.mark.asyncio
+    async def test_scrape_done_shows_exact_preview_of_selected_events(
+        self,
+        scrape_flow,
+        mock_event,
+        mock_line_api,
+    ):
+        self._start_selected_batch()
+
+        handled = await scrape_flow.handle_scrape_review_response(
+            mock_event,
+            "done",
+            mock_line_api,
+            "scrape_chat",
+            "U_SCRAPE",
+        )
+
+        assert handled is True
+        preview_text = scrape_flow.send_message_with_quick_reply.await_args.args[2]
+        assert "Exam papers due" in preview_text
+        assert "Science fair" in preview_text
+        assert "Parent meeting" not in preview_text
+        assert "When should I remind you" in preview_text
+        assert calendar_session_manager.get_session("scrape_chat").state == CalendarState.SCRAPE_REMINDER_DAYS
+
+    @pytest.mark.asyncio
+    async def test_shared_reminder_choice_adds_only_selected_events(
+        self,
+        scrape_flow,
+        mock_event,
+        mock_line_api,
+    ):
+        self._start_selected_batch()
+        await scrape_flow.handle_scrape_review_response(
+            mock_event,
+            "done",
+            mock_line_api,
+            "scrape_chat",
+            "U_SCRAPE",
+        )
+
+        scrape_flow._calendar_service.add_event_async = AsyncMock()
+
+        handled = await scrape_flow.handle_scrape_reminder_response(
+            mock_event,
+            "all",
+            mock_line_api,
+            "scrape_chat",
+            "U_SCRAPE",
+            calendar_service=scrape_flow._calendar_service,
+        )
+
+        assert handled is True
+        added_titles = [call.kwargs["title"] for call in scrape_flow._calendar_service.add_event_async.await_args_list]
+        assert added_titles == ["Exam papers due", "Science fair"]
+        assert calendar_session_manager.get_session("scrape_chat") is None
+
+    @pytest.mark.asyncio
+    async def test_stale_or_non_owner_scrape_session_cannot_confirm_batch_add(
+        self,
+        scrape_flow,
+        mock_event,
+        mock_line_api,
+    ):
+        self._start_selected_batch()
+        await scrape_flow.handle_scrape_review_response(
+            mock_event,
+            "done",
+            mock_line_api,
+            "scrape_chat",
+            "U_SCRAPE",
+        )
+        scrape_flow._calendar_service.add_event_async = AsyncMock()
+
+        handled = await scrape_flow.handle_scrape_reminder_response(
+            mock_event,
+            "all",
+            mock_line_api,
+            "scrape_chat",
+            "U_OTHER",
+            calendar_service=scrape_flow._calendar_service,
+        )
+
+        assert handled is True
+        assert scrape_flow._calendar_service.add_event_async.await_count == 0
+        assert "started this scrape flow" in scrape_flow.send_message.await_args.args[2].lower()
+
+        scrape_flow.send_message.reset_mock()
+        session = calendar_session_manager.get_session("scrape_chat")
+        assert session is not None
+        session.scrape_preview_revision += 1
+
+        handled = await scrape_flow.handle_scrape_reminder_response(
+            mock_event,
+            "all",
+            mock_line_api,
+            "scrape_chat",
+            "U_SCRAPE",
+            calendar_service=scrape_flow._calendar_service,
+        )
+
+        assert handled is True
+        assert scrape_flow._calendar_service.add_event_async.await_count == 0
+        assert "stale" in scrape_flow.send_message.await_args.args[2].lower() or "expired" in scrape_flow.send_message.await_args.args[2].lower()
 
 
 # ============================================================================

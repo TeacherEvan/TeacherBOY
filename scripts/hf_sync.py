@@ -209,6 +209,15 @@ def main() -> None:
             )
         folder = root / "data" / "logs" / "hf_sync"
         _ensure_folder(folder)
+
+        # Mirror any newly written daily log files into the HF sync folder so
+        # one-shot syncs do not depend on the background CommitScheduler timing.
+        source_logs_dir = root / "data" / "logs"
+        for source in source_logs_dir.glob("zeus_log_*.jsonl"):
+            target = folder / source.name
+            if not target.exists() or source.stat().st_mtime > target.stat().st_mtime:
+                target.write_bytes(source.read_bytes())
+
         _ensure_nonempty(folder, marker_name=".hf_sync_marker.txt")
         _sync_folder(
             token=token,

@@ -135,10 +135,13 @@ message.
 ## Remove Event Flow
 
 1. **Trigger**: Send `Ms. Green remove event`
-2. **Select**: Choose events by number (multi-select: `1,3,5`)
-3. **Confirm**: Confirm deletion
+2. **Select**: Choose events with numbers like `1,3,5`, or use `all` / `none`
+3. **Preview**: Send `done` to review the exact titles and dates queued for deletion
+4. **Confirm**: Use the explicit `delete` action from the preview, or `cancel`
 
-**Note**: You can only view and remove your own events.
+**Note**: Calendar visibility is chat-scoped. In group and room chats you can view
+events shared in that chat, but you can only remove events that you created.
+Inputs that mix unsupported words and numbers are rejected instead of guessed.
 
 ## Configuration
 
@@ -230,15 +233,16 @@ class CalendarEvent:
 ```python
 class CalendarState(Enum):
     IDLE = "idle"
-    VIEWING_EVENTS = "viewing"
-    ADDING_TITLE = "adding_title"
-    ADDING_DATE = "adding_date"
-    ADDING_DESCRIPTION = "adding_description"
-    SELECTING_REMINDERS = "selecting_reminders"
+    AWAITING_DATE = "awaiting_date"
+    AWAITING_TITLE = "awaiting_title"
+    AWAITING_DESCRIPTION = "awaiting_description"
+    AWAITING_REMINDER_DAYS = "awaiting_reminder_days"
     CONFIRMING_ADD = "confirming_add"
-    SELECTING_REMOVE = "selecting_remove"
-    CONFIRMING_REMOVE = "confirming_remove"
-    PROCESSING_EXTRACTED_DATES = "processing_extracted"
+    AWAITING_REMOVAL_SELECTION = "awaiting_removal_selection"
+    CONFIRMING_REMOVAL = "confirming_removal"
+    SCRAPE_PROCESSING = "scrape_processing"
+    SCRAPE_REVIEWING = "scrape_reviewing"
+    SCRAPE_REMINDER_DAYS = "scrape_reminder_days"
 ```
 
 ## Privacy and Security
@@ -298,10 +302,15 @@ User: Ms. Green remove event
 Ms. Green: Your events:
       1. Team standup - Jun 16
       2. Doctor visit - Jun 20
-      Select numbers to remove:
+    Use numbers like 2, commands all / none / done / cancel
 User: 2
-Ms. Green: Remove "Doctor visit"?
-User: yes
+Ms. Green: Selected 1 event.
+    Use all, none, numbers like 1,3, done, or cancel.
+User: done
+Ms. Green: Review the events to delete:
+    1. Doctor visit - Jun 20
+    Use delete a1b2c3d4 to confirm (where a1b2c3d4 is the preview code, not the event number)
+User: delete a1b2c3d4
 Ms. Green: ✅ Removed 1 event
 ```
 

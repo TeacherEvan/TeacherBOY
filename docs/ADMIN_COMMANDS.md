@@ -34,6 +34,7 @@ Ms. Green supports **two levels of privileged access**:
 ✅ **Highest Priority**: Admin commands are processed before all other agents (Priority 5)  
 ✅ **In-Chat Management**: Control the bot directly from LINE chats  
 ✅ **Session Monitoring**: View active sessions and sleeping chats  
+✅ **DM-First Dashboard**: `/admin dashboard` opens a private Flex control panel with safe buttons and preview-only destructive launchers
 ✅ **Safe Destructive Flow**: Leave, purge, and reset require a private preview before execution
 ✅ **Destructive Request Guardrail**: Admin destructive requests are limited to 3 per 10 minutes per admin
 
@@ -165,6 +166,34 @@ List all active translation sessions and sleeping chats.
 
 • user_U5555555555555555
   ⏰ Wake in: 18h
+```
+
+#### `/admin dashboard`
+
+Open the DM-first admin dashboard.
+
+- In a private chat, Ms. Green replies with a Flex dashboard.
+- In a group or room, Ms. Green pushes the dashboard to your DM and replies in-group with a neutral handoff message.
+- If private delivery fails, Ms. Green reports that the dashboard could not be delivered and does not post the dashboard publicly.
+- Safe buttons send direct admin commands for status, sleep or wake, confirmations, and sessions.
+- Risky buttons only launch the existing destructive preview flow for reset, purge, and leave.
+- The dashboard shows the current persistence backend mode for visibility only. It does not support live backend switching.
+
+**Examples:**
+
+```text
+/admin dashboard
+/admin dashboard   # from a group or room sends the panel to your DM
+```
+
+#### `/admin confirmations`
+
+List your currently pending destructive previews, including token, target chat, and expiry. This command is private-chat only and is the safe landing point used by the dashboard's "Open confirmations" button.
+
+**Example:**
+
+```text
+/admin confirmations
 ```
 
 ### 😴 Sleep Management
@@ -420,8 +449,14 @@ Example:
   /admin status [chat_id]
     → Show current chat status
 
+  /admin dashboard
+    → Open the DM-first admin dashboard
+
   /admin sessions
     → List all active sessions
+
+  /admin confirmations
+    → List your pending destructive previews
 
 😴 Sleep Management:
   /admin sleep [chat_id] [hours]

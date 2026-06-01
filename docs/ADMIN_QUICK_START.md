@@ -58,9 +58,17 @@ You should see the admin commands menu! 🎉
 Try other commands:
 
 ```text
+/admin dashboard
 /admin status
 /admin sessions
 ```
+
+The dashboard is DM-first:
+
+- In a private chat, it replies with a Flex panel.
+- In a group or room, it pushes the panel to your DM and only posts a neutral handoff message in the group.
+- The panel includes direct buttons for status, sleep or wake, confirmations, and sessions.
+- Reset, purge, and leave stay preview-only from the panel and still require private confirmation.
 
 Sensitive commands use a private-preview flow. Start from a chat where you want
 the action to apply, or pass an explicit chat ID:
@@ -97,8 +105,14 @@ abort the action:
 # Check bot status for current chat
 /admin status
 
+# Open the DM-first admin dashboard
+/admin dashboard
+
 # View all active sessions
 /admin sessions
+
+# Review your pending destructive previews
+/admin confirmations  # private chat only
 
 # Put bot to sleep for 12 hours
 /admin sleep 12

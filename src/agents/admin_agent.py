@@ -20,6 +20,11 @@ if TYPE_CHECKING:
     from src.services.news_data_service import NewsDataService
 
 from .base_agent import BaseAgent
+from .admin.dashboard_builder import (
+    build_admin_dashboard,
+    build_dashboard_delivery_failure_message,
+    build_dashboard_handoff_message,
+)
 from .admin.destructive_action_flow import DestructiveActionFlow
 from src.services.session_manager import session_manager
 from src.services.rate_limiter import rate_limiter
@@ -209,6 +214,20 @@ class AdminAgent(BaseAgent):
                     metrics_service.record_admin_command()
                     logger.info(f"🔧 Admin stats executed by {user_id} in chat {chat_id}")
                     return True
+                elif command == "dashboard":
+                    dashboard_handled = await self._handle_dashboard_command(
+                        event=event,
+                        chat_id=chat_id,
+                        user_id=user_id,
+                        line_bot_api=line_bot_api,
+                    )
+                    if dashboard_handled:
+                        metrics_service.record_admin_command()
+                        logger.info(
+                            f"🔧 Admin dashboard executed by {user_id} in chat {chat_id}"
+                        )
+                        return True
+                    return False
                 elif command == "send":
                     alias, rest = self._parse_alias_and_rest(arg)
                     response = await self._admin_send_named(line_bot_api, alias, rest)
@@ -229,6 +248,8 @@ class AdminAgent(BaseAgent):
                     response = await self._cancel_action(chat_id, user_id, arg)
                 elif command == "status":
                     response = self._get_status_message(chat_id, arg)
+                elif command == "confirmations":
+                    response = self._list_pending_confirmations(chat_id, user_id)
                 elif command == "wake":
                     response = self._wake_chat(chat_id, arg)
                 elif command == "sleep":
@@ -356,8 +377,12 @@ class AdminAgent(BaseAgent):
             "    → Show current chat status\n\n"
             "  /admin stats\n"
             "    → Show service stats dashboard\n\n"
+            "  /admin dashboard\n"
+            "    → Open the DM-first admin dashboard\n\n"
             "  /admin sessions\n"
             "    → List all active sessions\n\n"
+            "  /admin confirmations\n"
+            "    → List your pending destructive previews (private chat only)\n\n"
 
             "  /admin whoami\n"
             "    → Show your LINE user_id + admin detection (debug)\n\n"
@@ -610,6 +635,119 @@ class AdminAgent(BaseAgent):
 
         except Exception:
             return False
+
+    def _push_flex_to_user(
+        self,
+        line_bot_api: MessagingApi,
+        to_user_id: str,
+        message: FlexMessage,
+    ) -> bool:
+        try:
+            if not hasattr(line_bot_api, "push_message"):
+                return False
+            line_bot_api.push_message(
+                PushMessageRequest(
+                    to=to_user_id,
+                    messages=[message],
+                    notificationDisabled=False,
+                    customAggregationUnits=None,
+                )
+            )
+            return True
+        except Exception:
+            return False
+
+    def _build_dashboard(self, target_chat_id: str, user_id: str | None) -> FlexMessage:
+        pending_confirmations = (
+            len(admin_confirmation_service.list_pending_for_user(user_id))
+            if user_id
+            else 0
+        )
+        return build_admin_dashboard(
+            target_chat_id=target_chat_id,
+            persistence_backend=settings.persistence_backend,
+            is_sleeping=bool(session_manager.is_sleeping(target_chat_id)),
+            pending_confirmations=pending_confirmations,
+        )
+
+    async def _handle_dashboard_command(
+        self,
+        *,
+        event: MessageEvent,
+        chat_id: str,
+        user_id: str | None,
+        line_bot_api: MessagingApi,
+    ) -> bool:
+        if not user_id:
+            return False
+
+        dashboard = self._build_dashboard(chat_id, user_id)
+        if self._is_private_chat(chat_id):
+            if not event.reply_token:
+                return False
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[dashboard],
+                    notificationDisabled=False,
+                ),
+            )
+            return True
+
+        pushed = await asyncio.to_thread(
+            self._push_flex_to_user,
+            line_bot_api,
+            user_id,
+            dashboard,
+        )
+        response_text = (
+            build_dashboard_handoff_message()
+            if pushed
+            else build_dashboard_delivery_failure_message()
+        )
+
+        if not event.reply_token:
+            return pushed
+
+        await asyncio.to_thread(
+            line_bot_api.reply_message,
+            ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text=response_text, quickReply=None, quoteToken=None)],
+                notificationDisabled=False,
+            ),
+        )
+        return True
+
+    def _list_pending_confirmations(self, chat_id: str, user_id: str | None) -> str:
+        if not user_id:
+            return "❌ Could not determine your LINE user ID."
+
+        if not self._is_private_chat(chat_id):
+            return "❌ Please open confirmations in your private chat with the bot."
+
+        pending_items = admin_confirmation_service.list_pending_for_user(user_id)
+        if not pending_items:
+            return "✅ No pending destructive previews for your account."
+
+        lines = ["🔐 Pending destructive previews"]
+        for pending in pending_items:
+            target_chat_id = pending.preview_fields.get("target_chat_id") or pending.payload.get(
+                "chat_id"
+            )
+            effect_summary = pending.preview_fields.get("effect_summary") or pending.preview_text
+            expires_at = pending.expires_at.strftime("%Y-%m-%d %H:%M UTC")
+            lines.extend(
+                [
+                    "",
+                    f"• {pending.action.upper()} → {target_chat_id}",
+                    f"  Token: {pending.token}",
+                    f"  Summary: {effect_summary}",
+                    f"  Expires: {expires_at}",
+                ]
+            )
+        return "\n".join(lines)
 
     def _whoami(self, event: MessageEvent) -> str:
         """Return basic identity info for debugging admin ID issues."""
@@ -1345,6 +1483,23 @@ class AdminAgent(BaseAgent):
         was_sleeping = session_manager.wake_chat(chat_id)
         rate_limiter.reset_chat(chat_id)
 
+        ended_calendar = False
+        try:
+            from src.services.calendar_session_manager import calendar_session_manager
+
+            ended_calendar = calendar_session_manager.get_session(chat_id) is not None
+            calendar_session_manager.end_session(chat_id)
+        except Exception:
+            ended_calendar = False
+
+        cleared_buffer_messages = 0
+        try:
+            from src.services.message_buffer_service import message_buffer_service
+
+            cleared_buffer_messages = message_buffer_service.clear_chat_buffer(chat_id)
+        except Exception:
+            cleared_buffer_messages = 0
+
         # News flow state (import locally to avoid import cycles)
         ended_news = False
         try:
@@ -1369,6 +1524,8 @@ class AdminAgent(BaseAgent):
         status += f"{'✅' if had_session else '⏸️'} Session: {'Ended' if had_session else 'Was inactive'}\n"
         status += f"{'☀️' if was_sleeping else '⏸️'} Sleep: {'Woken up' if was_sleeping else 'Was awake'}\n"
         status += "🧹 History: Cleared\n"
+        status += f"{'📅' if ended_calendar else '⏸️'} Calendar flow: {'Ended' if ended_calendar else 'Was inactive'}\n"
+        status += f"{'📝' if cleared_buffer_messages else '⏸️'} Message buffer: Cleared {cleared_buffer_messages} message(s)\n"
         status += f"{'📰' if ended_news else '⏸️'} News flow: {'Ended' if ended_news else 'Was inactive'}\n\n"
         status += "Note: Bots cannot delete/unsend existing LINE chat messages via API."
         return status

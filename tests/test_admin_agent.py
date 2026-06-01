@@ -10,7 +10,7 @@ from src.services.admin_confirmation_service import AdminConfirmationService
 from src.services.rate_limiter import rate_limiter
 from src.services.privilege_service import privilege_service
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
-from linebot.v3.messaging import MessagingApi
+from linebot.v3.messaging import FlexMessage, MessagingApi, TextMessage
 
 
 @pytest.fixture
@@ -76,6 +76,39 @@ def _last_reply_text(api: MessagingApi) -> str:
 
 def _push_text(api: MessagingApi) -> str:
     return api.push_message.call_args[0][0].messages[0].text
+
+
+def _reply_message(api: MessagingApi):
+    return api.reply_message.call_args[0][0].messages[0]
+
+
+def _push_message(api: MessagingApi):
+    return api.push_message.call_args[0][0].messages[0]
+
+
+def _collect_button_actions(node):
+    if isinstance(node, dict):
+        actions = []
+        if node.get("type") == "button" and isinstance(node.get("action"), dict):
+            actions.append(node["action"])
+        for value in node.values():
+            actions.extend(_collect_button_actions(value))
+        return actions
+    if isinstance(node, list):
+        actions = []
+        for item in node:
+            actions.extend(_collect_button_actions(item))
+        return actions
+    return []
+
+
+def _flex_action_map(message: FlexMessage) -> dict[str, dict]:
+    payload = message.contents.to_dict()
+    return {
+        action.get("label", ""): action
+        for action in _collect_button_actions(payload)
+        if action.get("label")
+    }
 
 
 def _fresh_confirmation_service(token: str = "tok123") -> AdminConfirmationService:
@@ -380,6 +413,137 @@ class TestAdminAgent:
             mock_line_bot_api.reply_message.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_dashboard_in_private_chat_returns_flex_message(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        ok = await admin_agent.handle(
+            mock_event, "/admin dashboard", mock_line_bot_api
+        )
+
+        assert ok is True
+        mock_line_bot_api.reply_message.assert_called_once()
+        mock_line_bot_api.push_message.assert_not_called()
+
+        message = _reply_message(mock_line_bot_api)
+        assert isinstance(message, FlexMessage)
+        action_map = _flex_action_map(message)
+        assert "View status" in action_map
+        assert "Toggle sleep/wake" in action_map
+        assert "Open confirmations" in action_map
+        assert "View sessions" in action_map
+
+    @pytest.mark.asyncio
+    async def test_dashboard_in_group_pushes_private_dashboard_and_replies_neutrally(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        mock_event.source.group_id = "C123456"
+        mock_event.source.room_id = None
+
+        ok = await admin_agent.handle(
+            mock_event, "/admin dashboard", mock_line_bot_api
+        )
+
+        assert ok is True
+        mock_line_bot_api.reply_message.assert_called_once()
+        mock_line_bot_api.push_message.assert_called_once()
+        assert "sent your admin panel privately" in _reply_text(
+            mock_line_bot_api
+        ).lower()
+        assert isinstance(_push_message(mock_line_bot_api), FlexMessage)
+
+    @pytest.mark.asyncio
+    async def test_dashboard_safe_actions_are_direct_buttons(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        ok = await admin_agent.handle(
+            mock_event, "/admin dashboard", mock_line_bot_api
+        )
+
+        assert ok is True
+        action_map = _flex_action_map(_reply_message(mock_line_bot_api))
+
+        assert action_map["View status"]["type"] == "message"
+        assert action_map["View status"]["text"] == "/admin status user_U1234567890abcdef"
+        assert action_map["Toggle sleep/wake"]["type"] == "message"
+        assert action_map["Toggle sleep/wake"]["text"] == "/admin sleep user_U1234567890abcdef 24"
+        assert action_map["Open confirmations"]["type"] == "message"
+        assert action_map["Open confirmations"]["text"] == "/admin confirmations"
+        assert action_map["View sessions"]["type"] == "message"
+        assert action_map["View sessions"]["text"] == "/admin sessions"
+
+    @pytest.mark.asyncio
+    async def test_dashboard_risky_actions_open_preview_only_commands(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        mock_event.source.group_id = "C123456"
+        mock_event.source.room_id = None
+
+        ok = await admin_agent.handle(
+            mock_event, "/admin dashboard", mock_line_bot_api
+        )
+
+        assert ok is True
+        action_map = _flex_action_map(_push_message(mock_line_bot_api))
+
+        assert action_map["Preview reset"]["type"] == "message"
+        assert action_map["Preview reset"]["text"] == "/admin reset group_C123456"
+        assert action_map["Preview purge"]["type"] == "message"
+        assert action_map["Preview purge"]["text"] == "/admin purge group_C123456"
+        assert action_map["Preview leave"]["type"] == "message"
+        assert action_map["Preview leave"]["text"] == "/admin leave group_C123456"
+
+    @pytest.mark.asyncio
+    async def test_dashboard_displays_current_persistence_backend_without_switch_control(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        with patch("src.agents.admin_agent.settings.persistence_backend", "convex"):
+            ok = await admin_agent.handle(
+                mock_event, "/admin dashboard", mock_line_bot_api
+            )
+
+        assert ok is True
+        message = _reply_message(mock_line_bot_api)
+        payload = message.contents.to_dict()
+        payload_text = str(payload).lower()
+        assert "convex" in payload_text
+        assert "switch backend" not in payload_text
+        assert "/admin backend" not in payload_text
+        assert "persistence backend" in payload_text
+
+    @pytest.mark.asyncio
+    async def test_confirmations_command_is_private_chat_only(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = _fresh_confirmation_service("confirmations123")
+        mock_event.source.group_id = "C123456"
+        mock_event.source.room_id = None
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            request_ok = await admin_agent.handle(
+                mock_event,
+                "/admin purge",
+                mock_line_bot_api,
+            )
+            assert request_ok is True
+
+            mock_line_bot_api.reply_message.reset_mock()
+            mock_line_bot_api.push_message.reset_mock()
+
+            confirmations_ok = await admin_agent.handle(
+                mock_event,
+                "/admin confirmations",
+                mock_line_bot_api,
+            )
+
+        assert confirmations_ok is True
+        reply_text = _reply_text(mock_line_bot_api).lower()
+        assert "private chat" in reply_text
+        assert "confirmations123" not in reply_text
+        assert "group_c123456" not in reply_text
+
+    @pytest.mark.asyncio
     async def test_handle_unknown_command(
         self, admin_agent, mock_event, mock_line_bot_api
     ):
@@ -568,6 +732,7 @@ class TestAdminAgent:
         assert "fail123" not in reply_text
         assert "/admin confirm" not in reply_text.lower()
         assert confirm_service.count_pending() == 0
+        assert rate_limiter._admin_destructive_targets == {}
 
     @pytest.mark.asyncio
     async def test_confirm_in_group_is_rejected_and_does_not_execute(
@@ -801,6 +966,7 @@ class TestAdminAgent:
                 mock_line_bot_api,
             )
             second_reply = _last_reply_text(mock_line_bot_api)
+            assert confirm_service.count_pending() == 0
 
             release_preview.set()
             first_ok = await first_request
@@ -809,6 +975,56 @@ class TestAdminAgent:
         assert second_ok is True
         assert "already pending" in second_reply.lower()
         assert confirm_service.count_pending() == 1
+
+    @pytest.mark.asyncio
+    async def test_invalid_explicit_purge_and_reset_targets_are_rejected(
+        self, admin_agent, mock_event, mock_line_bot_api
+    ):
+        confirm_service = _fresh_confirmation_service("invalid123")
+
+        with patch(
+            "src.agents.admin_agent.admin_confirmation_service", confirm_service
+        ):
+            purge_ok = await admin_agent.handle(
+                mock_event,
+                "/admin purge C999",
+                mock_line_bot_api,
+            )
+
+            reset_ok = await admin_agent.handle(
+                mock_event,
+                "/admin reset foo",
+                mock_line_bot_api,
+            )
+
+        assert purge_ok is True
+        assert reset_ok is True
+        assert "invalid target" in mock_line_bot_api.reply_message.call_args_list[0][0][0].messages[0].text.lower()
+        assert "invalid target" in mock_line_bot_api.reply_message.call_args_list[1][0][0].messages[0].text.lower()
+        mock_line_bot_api.push_message.assert_not_called()
+        assert confirm_service.count_pending() == 0
+
+    def test_purge_clears_calendar_session_and_message_buffer(self, admin_agent):
+        calendar_session_manager = Mock()
+        calendar_session_manager.get_session.return_value = object()
+        message_buffer_service = Mock()
+        message_buffer_service.clear_chat_buffer.return_value = 3
+
+        with patch("src.agents.admin_agent.session_manager") as mock_session_mgr, patch(
+            "src.services.calendar_session_manager.calendar_session_manager",
+            calendar_session_manager,
+        ), patch(
+            "src.services.message_buffer_service.message_buffer_service",
+            message_buffer_service,
+        ):
+            mock_session_mgr.end_session.return_value = True
+            mock_session_mgr.wake_chat.return_value = False
+            result = admin_agent._purge_chat("group_C123", "group_C123")
+
+        calendar_session_manager.end_session.assert_called_once_with("group_C123")
+        message_buffer_service.clear_chat_buffer.assert_called_once_with("group_C123")
+        assert "calendar flow: ended" in result.lower()
+        assert "message buffer: cleared 3 message(s)" in result.lower()
 
     @pytest.mark.asyncio
     async def test_same_target_can_be_rearmed_after_cancel(

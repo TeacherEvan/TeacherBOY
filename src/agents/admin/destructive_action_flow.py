@@ -22,6 +22,8 @@ from src.services.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
+_NORMALIZED_CHAT_ID_PREFIXES = ("user_", "group_", "room_")
+
 ParseLeaveTarget = Callable[[str, str | None], tuple[str | None, str | None, str | None]]
 PushPreview = Callable[[MessagingApi, str, str], bool]
 ExecuteAction = Callable[[str, MessagingApi, Mapping[str, Any]], Awaitable[str]]
@@ -82,42 +84,29 @@ class DestructiveActionFlow:
         if error or request is None:
             return error or "❌ Could not determine destructive action target."
 
+        reservation_token, created_at, expires_at = self._confirmation_service.issue_token()
         with self._reservation_lock:
-            pending = self._confirmation_service.create(
-                action=normalized_action,
-                requested_by_user_id=user_id,
-                requested_from_chat_id=current_chat_id,
-                payload=request.payload,
-                preview_text=request.effect_summary,
-                preview_fields={
-                    "target_chat_id": request.target_chat_id,
-                    "effect_summary": request.effect_summary,
-                },
-            )
             reserved, limit_message = self._rate_limiter.reserve_admin_destructive_request(
                 user_id=user_id,
                 target_chat_id=request.target_chat_id,
-                token=pending.token,
-                expires_at=pending.expires_at,
+                token=reservation_token,
+                expires_at=expires_at,
             )
         if not reserved:
-            with self._reservation_lock:
-                self._confirmation_service.cancel(pending.token, user_id)
             return limit_message or "⚠️ Destructive admin request blocked."
 
         preview_text = self._build_preview_text(
             request,
-            token=pending.token,
-            expires_at=pending.expires_at,
+            token=reservation_token,
+            expires_at=expires_at,
         )
 
         pushed = await asyncio.to_thread(
             self._push_preview, line_bot_api, user_id, preview_text
         )
         if not pushed:
-            self._confirmation_service.cancel(pending.token, user_id)
             self._rate_limiter.release_admin_destructive_request(
-                token=pending.token,
+                token=reservation_token,
                 target_chat_id=request.target_chat_id,
                 rollback_history=True,
             )
@@ -125,6 +114,21 @@ class DestructiveActionFlow:
                 "⚠️ Private preview could not be opened. "
                 "Start a private chat with the bot and try again."
             )
+
+        pending = self._confirmation_service.create(
+            action=normalized_action,
+            requested_by_user_id=user_id,
+            requested_from_chat_id=current_chat_id,
+            payload=request.payload,
+            preview_text=request.effect_summary,
+            preview_fields={
+                "target_chat_id": request.target_chat_id,
+                "effect_summary": request.effect_summary,
+            },
+            token=reservation_token,
+            created_at=created_at,
+            expires_at=expires_at,
+        )
         await self._log_admin_action(
             phase="armed",
             action=normalized_action,
@@ -279,7 +283,17 @@ class DestructiveActionFlow:
                 None,
             )
 
-        target_chat_id = (arg or "").strip() or current_chat_id
+        explicit_target = (arg or "").strip()
+        if explicit_target:
+            target_chat_id = self._normalize_explicit_target(explicit_target)
+            if not target_chat_id:
+                return (
+                    None,
+                    "❌ Invalid target. Use user_<id>, group_<id>, or room_<id>.",
+                )
+        else:
+            target_chat_id = current_chat_id
+
         if action == "purge":
             effect_summary = (
                 "This will clear bot session state, message history, sleep state, "
@@ -300,6 +314,14 @@ class DestructiveActionFlow:
             ),
             None,
         )
+
+    def _normalize_explicit_target(self, raw_target: str) -> str | None:
+        target = raw_target.strip()
+        if target.startswith(_NORMALIZED_CHAT_ID_PREFIXES):
+            prefix, _, suffix = target.partition("_")
+            if suffix:
+                return f"{prefix}_{suffix}"
+        return None
 
     def _build_preview_text(
         self,

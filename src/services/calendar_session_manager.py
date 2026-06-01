@@ -11,6 +11,7 @@ Similar pattern to image_analyzer_session_manager.py and news_session_manager.py
 
 import asyncio
 import logging
+import re
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Optional, Any
 from enum import Enum
@@ -67,6 +68,9 @@ class CalendarSession:
     # For removal flow
     events_for_removal: List[Dict[str, Any]] = field(default_factory=list)
     selected_event_ids: List[str] = field(default_factory=list)
+    removal_revision: int = 0
+    removal_flow_nonce: int = 0
+    removal_confirmation_code: str = ""
     
     # For image date extraction
     extracted_dates: List[Dict[str, Any]] = field(default_factory=list)  # [{date, title, description}]
@@ -75,6 +79,9 @@ class CalendarSession:
     # For "Zeus Scrape" flow
     scraped_events: List[Dict[str, Any]] = field(default_factory=list)  # Events extracted from messages
     current_scrape_index: int = 0  # Which scraped event is being processed
+    selected_scraped_indices: List[int] = field(default_factory=list)
+    scrape_selection_revision: int = 0
+    scrape_preview_revision: int = 0
     scraped_source_messages: List[str] = field(default_factory=list)  # Source messages for context
     discrete_scrape_target: Optional[str] = None  # User ID for discrete scrape DM delivery
 
@@ -107,11 +114,17 @@ class CalendarSession:
         self.pending_reminder_days = None
         self.events_for_removal = []
         self.selected_event_ids = []
+        self.removal_revision = 0
+        self.removal_flow_nonce = 0
+        self.removal_confirmation_code = ""
         self.extracted_dates = []
         self.current_extraction_index = 0
         # Reset scrape flow data
         self.scraped_events = []
         self.current_scrape_index = 0
+        self.selected_scraped_indices = []
+        self.scrape_selection_revision = 0
+        self.scrape_preview_revision = 0
         self.scraped_source_messages = []
 
         # Reset live bulk-add flow data
@@ -125,12 +138,17 @@ class CalendarSession:
 class CalendarSessionManager:
     """Manages multi-step calendar sessions."""
 
+    _REMOVE_NUMBER_SELECTION_PATTERN = re.compile(r"^\d+(?:\s*,\s*\d+)*$")
+    _SCRAPE_NUMBER_SELECTION_PATTERN = re.compile(r"^\d+(?:\s*,\s*\d+)*$")
+
     def __init__(self):
         """Initialize calendar session manager."""
         self._sessions: Dict[str, CalendarSession] = {}
+        self._recently_expired_remove_flows: Dict[str, Dict[str, datetime]] = {}
         self._session_ttl_seconds = 120  # 2 minutes per step
         self._cleanup_task: Optional[asyncio.Task] = None
         self._cleanup_interval_seconds = 60
+        self._remove_flow_nonce_counter = 0
 
     def get_session(self, chat_id: str) -> Optional[CalendarSession]:
         """
@@ -149,6 +167,11 @@ class CalendarSessionManager:
         
         if session.is_expired(self._session_ttl_seconds):
             logger.info(f"📅 Calendar session expired for chat {chat_id}")
+            if session.state in {
+                CalendarState.AWAITING_REMOVAL_SELECTION,
+                CalendarState.CONFIRMING_REMOVAL,
+            }:
+                self._recently_expired_remove_flows.setdefault(chat_id, {})[session.user_id] = datetime.now()
             del self._sessions[chat_id]
             return None
         
@@ -172,6 +195,8 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if session:
             return session
+
+        self._clear_recent_remove_marker(chat_id, user_id)
         
         session = CalendarSession(user_id=user_id, chat_id=chat_id)
         self._sessions[chat_id] = session
@@ -364,6 +389,10 @@ class CalendarSessionManager:
         session.reset()
         session.state = CalendarState.AWAITING_REMOVAL_SELECTION
         session.events_for_removal = events
+        session.removal_revision = 1
+        session.removal_flow_nonce = self._next_remove_flow_nonce()
+        session.removal_confirmation_code = ""
+        self._clear_recent_remove_marker(chat_id, user_id)
         session.update()
         
         logger.info(f"📅 Started removal flow for chat {chat_id} with {len(events)} events")
@@ -389,6 +418,11 @@ class CalendarSessionManager:
             return None
         
         session.selected_event_ids = event_ids
+        if session.removal_flow_nonce == 0:
+            session.removal_flow_nonce = self._next_remove_flow_nonce()
+        session.removal_confirmation_code = (
+            f"{session.removal_flow_nonce:08x}{session.removal_revision:04x}"
+        )
         session.state = CalendarState.CONFIRMING_REMOVAL
         session.update()
         
@@ -406,6 +440,148 @@ class CalendarSessionManager:
             return None
         
         return session.selected_event_ids
+
+    def apply_remove_selection(
+        self,
+        chat_id: str,
+        text: str,
+    ) -> Optional[CalendarSession]:
+        """Apply an explicit remove selection command while staying in selection mode."""
+        session = self.get_session(chat_id)
+        if not session or session.state not in (
+            CalendarState.AWAITING_REMOVAL_SELECTION,
+            CalendarState.CONFIRMING_REMOVAL,
+        ):
+            return None
+
+        normalized = (text or "").strip().lower()
+        event_ids: Optional[List[str]] = None
+
+        if normalized == "all":
+            event_ids = [event["event_id"] for event in session.events_for_removal]
+        elif normalized == "none":
+            event_ids = []
+        elif self._REMOVE_NUMBER_SELECTION_PATTERN.fullmatch(normalized):
+            event_ids = self._parse_remove_number_selection(
+                normalized,
+                session.events_for_removal,
+            )
+
+        if event_ids is None:
+            return None
+
+        session.selected_event_ids = event_ids
+        session.state = CalendarState.AWAITING_REMOVAL_SELECTION
+        session.removal_revision += 1
+        session.removal_confirmation_code = ""
+        session.update()
+        return session
+
+    def finalize_remove_selection(self, chat_id: str) -> Optional[Dict[str, Any]]:
+        """Lock the current remove selection into an explicit delete preview."""
+        session = self.get_session(chat_id)
+        if not session or session.state != CalendarState.AWAITING_REMOVAL_SELECTION:
+            return None
+        if not session.selected_event_ids:
+            return None
+
+        items = self._get_selected_removal_items(session)
+        if len(items) != len(session.selected_event_ids):
+            return None
+
+        session.removal_confirmation_code = (
+            f"{session.removal_flow_nonce:08x}{session.removal_revision:04x}"
+        )
+        session.state = CalendarState.CONFIRMING_REMOVAL
+        session.update()
+        return {
+            "revision": session.removal_revision,
+            "code": session.removal_confirmation_code,
+            "event_ids": list(session.selected_event_ids),
+            "items": items,
+        }
+
+    def validate_remove_confirmation(
+        self,
+        chat_id: str,
+        user_id: Optional[str],
+        code: str,
+    ) -> Dict[str, Any]:
+        """Validate explicit delete confirmation against owner and preview code."""
+        session = self.get_session(chat_id)
+        if not session:
+            return {"ok": False, "reason": "missing_session"}
+        if session.user_id != user_id:
+            return {"ok": False, "reason": "wrong_owner"}
+        if session.state != CalendarState.CONFIRMING_REMOVAL:
+            return {"ok": False, "reason": "invalid_state"}
+        if not session.removal_confirmation_code or session.removal_confirmation_code != code:
+            return {"ok": False, "reason": "stale_revision"}
+        if not session.selected_event_ids:
+            return {"ok": False, "reason": "no_selection"}
+
+        items = self._get_selected_removal_items(session)
+        if len(items) != len(session.selected_event_ids):
+            return {"ok": False, "reason": "stale_revision"}
+
+        return {
+            "ok": True,
+            "revision": session.removal_revision,
+            "code": session.removal_confirmation_code,
+            "event_ids": list(session.selected_event_ids),
+            "items": items,
+        }
+
+    def confirm_remove_selection(
+        self,
+        chat_id: str,
+        user_id: Optional[str],
+        code: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Return confirmed removal payload when the owner and preview code still match."""
+        result = self.validate_remove_confirmation(chat_id, user_id, code)
+        return result if result.get("ok") else None
+
+    def _next_remove_flow_nonce(self) -> int:
+        """Return a process-local monotonic nonce for remove-session uniqueness."""
+        self._remove_flow_nonce_counter += 1
+        return self._remove_flow_nonce_counter
+
+    def _parse_remove_number_selection(
+        self,
+        text: str,
+        events: List[Dict[str, Any]],
+    ) -> Optional[List[str]]:
+        """Parse comma-separated remove indexes without guessing mixed input."""
+        selected_ids: List[str] = []
+        seen_ids = set()
+
+        for part in [piece.strip() for piece in text.split(",")]:
+            index = int(part) - 1
+            if index < 0 or index >= len(events):
+                return None
+            event_id = events[index]["event_id"]
+            if event_id not in seen_ids:
+                selected_ids.append(event_id)
+                seen_ids.add(event_id)
+
+        return selected_ids
+
+    def _get_selected_removal_items(self, session: CalendarSession) -> List[Dict[str, Any]]:
+        """Resolve selected removal items in the same order as the current selection."""
+        events_by_id = {
+            event["event_id"]: event
+            for event in session.events_for_removal
+        }
+        return [
+            {
+                "event_id": event_id,
+                "title": events_by_id[event_id]["title"],
+                "date": events_by_id[event_id]["date"],
+            }
+            for event_id in session.selected_event_ids
+            if event_id in events_by_id
+        ]
 
     # =========================================================================
     # Image Date Extraction Flow
@@ -707,7 +883,7 @@ class CalendarSessionManager:
             events: List of extracted event dicts
 
         Returns:
-            Updated session in SCRAPE_REVIEWING state
+            Updated session in SCRAPE_SELECTING state
         """
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.SCRAPE_PROCESSING:
@@ -715,7 +891,10 @@ class CalendarSessionManager:
         
         session.scraped_events = events
         session.current_scrape_index = 0
-        session.state = CalendarState.SCRAPE_REVIEWING
+        session.selected_scraped_indices = []
+        session.scrape_selection_revision = 1
+        session.scrape_preview_revision = 0
+        session.state = CalendarState.SCRAPE_SELECTING
         session.update()
         
         logger.info(
@@ -723,122 +902,124 @@ class CalendarSessionManager:
         )
         return session
 
-    def get_current_scraped_event(self, chat_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get the current scraped event being reviewed.
-
-        Returns:
-            Dict with event data or None
-        """
-        session = self.get_session(chat_id)
-        if not session or session.state not in (
-            CalendarState.SCRAPE_REVIEWING,
-            CalendarState.SCRAPE_REMINDER_DAYS
-        ):
-            return None
-        
-        if session.current_scrape_index >= len(session.scraped_events):
-            return None
-        
-        return session.scraped_events[session.current_scrape_index]
-
-    def accept_scraped_event(self, chat_id: str) -> Optional[CalendarSession]:
-        """
-        Accept the current scraped event and move to reminder days selection.
-
-        Returns:
-            Updated session in SCRAPE_REMINDER_DAYS state
-        """
-        session = self.get_session(chat_id)
-        if not session or session.state != CalendarState.SCRAPE_REVIEWING:
-            return None
-        
-        session.state = CalendarState.SCRAPE_REMINDER_DAYS
-        session.update()
-        
-        return session
-
-    def skip_scraped_event(self, chat_id: str) -> bool:
-        """
-        Skip the current scraped event and move to the next.
-
-        Returns:
-            True if there are more events, False if done
-        """
-        session = self.get_session(chat_id)
-        if not session or session.state not in (
-            CalendarState.SCRAPE_REVIEWING,
-            CalendarState.SCRAPE_REMINDER_DAYS
-        ):
-            return False
-        
-        session.current_scrape_index += 1
-        session.state = CalendarState.SCRAPE_REVIEWING
-        session.update()
-        
-        return session.current_scrape_index < len(session.scraped_events)
-
-    def set_scrape_reminder_days(
+    def apply_scrape_selection(
         self,
         chat_id: str,
-        reminder_days: List[int]
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Set reminder days for current scraped event.
-
-        Returns:
-            Dict with full event data ready for creation
-        """
+        text: str,
+    ) -> Optional[CalendarSession]:
+        """Apply an explicit scrape-batch selection command while staying in selection mode."""
         session = self.get_session(chat_id)
-        if not session or session.state != CalendarState.SCRAPE_REMINDER_DAYS:
+        if not session or session.state != CalendarState.SCRAPE_SELECTING:
             return None
-        
-        current = self.get_current_scraped_event(chat_id)
-        if not current:
+
+        normalized = (text or "").strip().lower()
+
+        if normalized == "all":
+            session.selected_scraped_indices = list(range(len(session.scraped_events)))
+        elif normalized == "none":
+            session.selected_scraped_indices = []
+        elif self._SCRAPE_NUMBER_SELECTION_PATTERN.fullmatch(normalized):
+            toggled = self._toggle_scrape_number_selection(
+                normalized,
+                session.scraped_events,
+                session.selected_scraped_indices,
+            )
+            if toggled is None:
+                return None
+            session.selected_scraped_indices = toggled
+        else:
             return None
-        
-        # Always include day-of reminder
-        if 0 not in reminder_days:
-            reminder_days.append(0)
-        
+
+        session.scrape_selection_revision += 1
+        session.scrape_preview_revision = 0
+        session.state = CalendarState.SCRAPE_SELECTING
+        session.update()
+        return session
+
+    def get_selected_scraped_events(self, chat_id: str) -> List[Dict[str, Any]]:
+        """Return the currently selected scraped events in numeric order."""
+        session = self.get_session(chat_id)
+        if not session:
+            return []
+
+        selected_events: List[Dict[str, Any]] = []
+        for index in session.selected_scraped_indices:
+            if index < 0 or index >= len(session.scraped_events):
+                return []
+            selected_events.append(session.scraped_events[index])
+        return selected_events
+
+    def finalize_scrape_selection(self, chat_id: str) -> Optional[Dict[str, Any]]:
+        """Lock the current scrape selection and transition to the shared reminder step."""
+        session = self.get_session(chat_id)
+        if not session or session.state != CalendarState.SCRAPE_SELECTING:
+            return None
+        if not session.selected_scraped_indices:
+            return None
+
+        selected_events = self.get_selected_scraped_events(chat_id)
+        if len(selected_events) != len(session.selected_scraped_indices):
+            return None
+
+        session.scrape_preview_revision = session.scrape_selection_revision
+        session.state = CalendarState.SCRAPE_REMINDER_DAYS
+        session.update()
         return {
-            "date": current.get("date") or current.get("event_date"),
-            "title": current.get("title", "Event from chat"),
-            "description": current.get("description", ""),
-            "source_text": current.get("source_text", ""),
-            "reminder_days": reminder_days,
+            "revision": session.scrape_preview_revision,
+            "selected_indices": list(session.selected_scraped_indices),
+            "items": selected_events,
+        }
+
+    def validate_scrape_batch_confirmation(
+        self,
+        chat_id: str,
+        user_id: Optional[str],
+    ) -> Dict[str, Any]:
+        """Validate that the shared reminder choice still matches the preview owner and revision."""
+        session = self.get_session(chat_id)
+        if not session:
+            return {"ok": False, "reason": "missing_session"}
+        if session.user_id != user_id:
+            return {"ok": False, "reason": "wrong_owner"}
+        if session.state != CalendarState.SCRAPE_REMINDER_DAYS:
+            return {"ok": False, "reason": "invalid_state"}
+        if session.scrape_preview_revision == 0:
+            return {"ok": False, "reason": "invalid_state"}
+        if session.scrape_preview_revision != session.scrape_selection_revision:
+            return {"ok": False, "reason": "stale_revision"}
+        if not session.selected_scraped_indices:
+            return {"ok": False, "reason": "no_selection"}
+
+        selected_events = self.get_selected_scraped_events(chat_id)
+        if len(selected_events) != len(session.selected_scraped_indices):
+            return {"ok": False, "reason": "stale_revision"}
+
+        return {
+            "ok": True,
+            "revision": session.scrape_preview_revision,
+            "items": selected_events,
             "is_friend": session.pending_is_friend,
         }
 
-    def advance_scrape_index(self, chat_id: str) -> bool:
-        """
-        Move to the next scraped event after adding current.
+    def _toggle_scrape_number_selection(
+        self,
+        text: str,
+        events: List[Dict[str, Any]],
+        current_selection: List[int],
+    ) -> Optional[List[int]]:
+        """Toggle selected scrape indexes without guessing mixed or out-of-range input."""
+        toggled = set(current_selection)
 
-        Returns:
-            True if there are more events, False if done
-        """
-        session = self.get_session(chat_id)
-        if not session or session.state != CalendarState.SCRAPE_REMINDER_DAYS:
-            return False
-        
-        session.current_scrape_index += 1
-        session.state = CalendarState.SCRAPE_REVIEWING
-        session.update()
-        
-        return session.current_scrape_index < len(session.scraped_events)
+        for part in [piece.strip() for piece in text.split(",")]:
+            index = int(part) - 1
+            if index < 0 or index >= len(events):
+                return None
+            if index in toggled:
+                toggled.remove(index)
+            else:
+                toggled.add(index)
 
-    def get_scrape_progress(self, chat_id: str) -> tuple[int, int]:
-        """
-        Get progress through scraped events.
-
-        Returns:
-            Tuple of (current_index, total_count)
-        """
-        session = self.get_session(chat_id)
-        if not session:
-            return (0, 0)
-        
-        return (session.current_scrape_index + 1, len(session.scraped_events))
+        return sorted(toggled)
 
     # =========================================================================
     # Zeus Add [date] [title] - Inline Add Flow
@@ -942,9 +1123,42 @@ class CalendarSessionManager:
 
     def end_session(self, chat_id: str) -> None:
         """End and remove a session."""
+        session = self._sessions.get(chat_id)
         if chat_id in self._sessions:
             del self._sessions[chat_id]
             logger.info(f"📅 Ended calendar session for chat {chat_id}")
+        if session is not None:
+            if session.state in {
+                CalendarState.AWAITING_REMOVAL_SELECTION,
+                CalendarState.CONFIRMING_REMOVAL,
+            }:
+                self._recently_expired_remove_flows.setdefault(chat_id, {})[session.user_id] = datetime.now()
+            else:
+                self._clear_recent_remove_marker(chat_id, session.user_id)
+        else:
+            self._recently_expired_remove_flows.pop(chat_id, None)
+
+    def had_recent_remove_flow(
+        self,
+        chat_id: str,
+        user_id: Optional[str],
+        grace_seconds: int = 180,
+    ) -> bool:
+        """Return whether a remove flow expired recently enough to explain a stale follow-up."""
+        if not user_id:
+            return False
+        chat_markers = self._recently_expired_remove_flows.get(chat_id)
+        if chat_markers is None:
+            return False
+        expired_at = chat_markers.get(user_id)
+        if expired_at is None:
+            return False
+        if (datetime.now() - expired_at).total_seconds() > grace_seconds:
+            del chat_markers[user_id]
+            if not chat_markers:
+                del self._recently_expired_remove_flows[chat_id]
+            return False
+        return True
 
     def cancel_flow(self, chat_id: str) -> bool:
         """
@@ -988,15 +1202,51 @@ class CalendarSessionManager:
     def _cleanup_expired_sessions(self):
         """Remove expired sessions."""
         expired = [
-            chat_id for chat_id, session in self._sessions.items()
+            (chat_id, session)
+            for chat_id, session in self._sessions.items()
             if session.is_expired(self._session_ttl_seconds)
         ]
-        
-        for chat_id in expired:
+
+        for chat_id, session in expired:
+            if session.state in {
+                CalendarState.AWAITING_REMOVAL_SELECTION,
+                CalendarState.CONFIRMING_REMOVAL,
+            }:
+                self._recently_expired_remove_flows.setdefault(chat_id, {})[session.user_id] = datetime.now()
             del self._sessions[chat_id]
+
+        self._prune_recent_remove_flow_markers()
         
         if expired:
             logger.info(f"📅 Cleaned up {len(expired)} expired calendar sessions")
+
+    def _prune_recent_remove_flow_markers(self, grace_seconds: int = 180) -> None:
+        """Drop expired recent-remove markers without requiring a chat lookup."""
+        now = datetime.now()
+        expired_chat_ids: List[str] = []
+        for chat_id, user_markers in self._recently_expired_remove_flows.items():
+            expired_users = [
+                user_id
+                for user_id, expired_at in user_markers.items()
+                if (now - expired_at).total_seconds() > grace_seconds
+            ]
+            for user_id in expired_users:
+                del user_markers[user_id]
+            if not user_markers:
+                expired_chat_ids.append(chat_id)
+        for chat_id in expired_chat_ids:
+            del self._recently_expired_remove_flows[chat_id]
+
+    def _clear_recent_remove_marker(self, chat_id: str, user_id: Optional[str]) -> None:
+        """Clear the recent remove marker for one user in one chat."""
+        if not user_id:
+            return
+        chat_markers = self._recently_expired_remove_flows.get(chat_id)
+        if not chat_markers:
+            return
+        chat_markers.pop(user_id, None)
+        if not chat_markers:
+            del self._recently_expired_remove_flows[chat_id]
 
 
 # Singleton instance

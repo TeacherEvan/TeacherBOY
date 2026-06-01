@@ -51,6 +51,11 @@ class AdminConfirmationService:
         self._default_ttl_seconds = default_ttl_seconds
         self._pending: dict[str, PendingAdminAction] = {}
 
+    def issue_token(self, ttl_seconds: Optional[int] = None) -> tuple[str, datetime, datetime]:
+        now = datetime.utcnow()
+        ttl = ttl_seconds if ttl_seconds is not None else self._default_ttl_seconds
+        return self._generate_token(), now, now + timedelta(seconds=ttl)
+
     def _generate_token(self) -> str:
         # Short, URL-safe token suitable for typing.
         return secrets.token_urlsafe(6)
@@ -227,6 +232,10 @@ class AdminConfirmationService:
         preview_fields: Optional[dict[str, Any]] = None,
         on_duplicate: str = "allow",
         ttl_seconds: Optional[int] = None,
+        token: Optional[str] = None,
+        created_at: Optional[datetime] = None,
+        expires_at: Optional[datetime] = None,
+        revision: Optional[str] = None,
     ) -> PendingAdminAction:
         on_duplicate = self._validate_on_duplicate(on_duplicate)
         self._cleanup()
@@ -247,9 +256,11 @@ class AdminConfirmationService:
                 for duplicate in duplicates:
                     self._pending.pop(duplicate.token, None)
 
-        now = datetime.utcnow()
-        ttl = ttl_seconds if ttl_seconds is not None else self._default_ttl_seconds
-        token = self._generate_token()
+        now = created_at or datetime.utcnow()
+        if expires_at is None:
+            ttl = ttl_seconds if ttl_seconds is not None else self._default_ttl_seconds
+            expires_at = now + timedelta(seconds=ttl)
+        token = token or self._generate_token()
         pending = PendingAdminAction(
             token=token,
             action=action,
@@ -259,8 +270,8 @@ class AdminConfirmationService:
             preview_text=preview_text,
             preview_fields=frozen_preview_fields,
             created_at=now,
-            expires_at=now + timedelta(seconds=ttl),
-            revision=self._generate_revision(),
+            expires_at=expires_at,
+            revision=revision or self._generate_revision(),
         )
         self._pending[token] = pending
         return self._copy_pending_action(pending)
@@ -281,6 +292,16 @@ class AdminConfirmationService:
         if pending is None:
             return None
         return self._copy_pending_action(pending)
+
+    def list_pending_for_user(self, user_id: str) -> list[PendingAdminAction]:
+        self._cleanup()
+        pending_for_user = [
+            pending
+            for pending in self._pending.values()
+            if pending.requested_by_user_id == user_id
+        ]
+        pending_for_user.sort(key=lambda pending: pending.expires_at)
+        return [self._copy_pending_action(pending) for pending in pending_for_user]
 
     def cancel(self, token: str, user_id: str) -> tuple[bool, str]:
         self._cleanup()
