@@ -3,8 +3,26 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [ main, develop ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
+      - '.github/workflows/ci.yml'
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
@@ -149,6 +167,7 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    needs: [lint, test, build]
     permissions:
       contents: read
       security-events: write

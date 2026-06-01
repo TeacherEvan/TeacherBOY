@@ -95,7 +95,9 @@ def test_help_menu_splits_into_three_cards():
     assert cards[2].quick_reply is None
 
     payloads = [card.dict(by_alias=True) for card in cards]
-    headers = [item["text"] for payload in payloads for item in _walk_text_items(payload)]
+    headers = [
+        item["text"] for payload in payloads for item in _walk_text_items(payload)
+    ]
     assert any("Part 1/3" in text for text in headers)
     assert any("Part 2/3" in text for text in headers)
     assert any("Part 3/3" in text for text in headers)
@@ -114,7 +116,9 @@ def test_topic_help_uses_one_card():
     )
     tips = agent._get_adaptive_tips(is_admin=False, chat_type="private chat")
 
-    cards = agent._create_help_cards(categories, tips, "private chat", topic="Calendar & Reminders")
+    cards = agent._create_help_cards(
+        categories, tips, "private chat", topic="Calendar & Reminders"
+    )
 
     assert len(cards) == 1
     payload = cards[0].dict(by_alias=True)
@@ -160,7 +164,9 @@ async def test_help_should_not_handle_non_privileged_group_user():
     agent = HelpAgent()
     event = _make_group_event()
 
-    with patch("src.agents.help_agent.privilege_service.is_privileged", return_value=False):
+    with patch(
+        "src.agents.help_agent.privilege_service.is_privileged", return_value=False
+    ):
         assert await agent.should_handle(event, "help") is False
 
 
@@ -169,7 +175,9 @@ async def test_help_should_not_handle_non_privileged_room_user():
     agent = HelpAgent()
     event = _make_room_event()
 
-    with patch("src.agents.help_agent.privilege_service.is_privileged", return_value=False):
+    with patch(
+        "src.agents.help_agent.privilege_service.is_privileged", return_value=False
+    ):
         assert await agent.should_handle(event, "help") is False
 
 
@@ -193,6 +201,8 @@ async def test_help_handle_sends_all_cards(line_bot_api):
     payload = msg.contents.to_dict()
     assert payload["type"] == "carousel"
     assert len(payload["contents"]) == 3
+
+
 def test_help_flex_message_adds_quick_reply_shortcuts():
     agent = HelpAgent()
     categories = agent._get_command_categories(

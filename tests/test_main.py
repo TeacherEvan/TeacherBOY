@@ -39,7 +39,10 @@ def test_health_check(client):
     """Test health check endpoint."""
     with (
         patch("src.main.startup_loader.is_ready", return_value=True),
-        patch("src.main.agent_router.list_agents", return_value=[{"name": "TranslationAgent"}]),
+        patch(
+            "src.main.agent_router.list_agents",
+            return_value=[{"name": "TranslationAgent"}],
+        ),
     ):
         response = client.get("/health")
 
@@ -78,7 +81,10 @@ def test_health_check_does_not_call_translation_providers(client, mock_settings)
 
     with (
         patch("src.main.startup_loader.is_ready", return_value=True),
-        patch("src.main.agent_router.list_agents", return_value=[{"name": "TranslationAgent"}]),
+        patch(
+            "src.main.agent_router.list_agents",
+            return_value=[{"name": "TranslationAgent"}],
+        ),
         patch(
             "src.main.google_translation_service.translate",
             new_callable=AsyncMock,

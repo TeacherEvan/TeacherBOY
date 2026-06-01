@@ -3,6 +3,15 @@ name: Sync to Hugging Face Hub
 on:
     push:
         branches: [main]
+        paths:
+            - 'src/**'
+            - 'scripts/**'
+            - 'docs/**'
+            - 'README.md'
+            - 'Dockerfile'
+            - 'requirements.txt'
+            - 'data/**'
+            - '.github/workflows/huggingface_sync.yml'
 
     # to run this workflow manually from the Actions tab
     workflow_dispatch:
@@ -12,7 +21,7 @@ permissions:
 
 concurrency:
     group: huggingface-sync-${{ github.ref }}
-    cancel-in-progress: false
+    cancel-in-progress: true
 
 jobs:
     sync-to-hub:
@@ -24,6 +33,7 @@ jobs:
                   fetch-depth: 0
                   lfs: true
                   persist-credentials: false
+                  submodules: false
                   ref: ${{ github.ref_name }}
             - name: Sync to hub
               env:

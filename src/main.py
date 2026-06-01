@@ -1,4 +1,3 @@
-
 """Zeus - Production-Grade Multi-Agent LINE Translation Bot.
 
 This module implements a FastAPI application with intelligent agent routing,
@@ -228,12 +227,14 @@ async def lifespan(app: FastAPI):
     if settings.is_history_log_configured():
         history_log = init_history_log(
             storage_path=settings.history_log_path,
-            hf_token=settings.hf_memory_token if settings.is_history_log_hf_configured() else None,
+            hf_token=settings.hf_memory_token
+            if settings.is_history_log_hf_configured()
+            else None,
             hf_repo_id=settings.history_log_hf_repo_id,
             encryption_key=settings.history_log_encryption_key,
         )
         logger.info(f"📜 History logging enabled (path: {settings.history_log_path})")
-        
+
         # Log startup event
         await history_log.log(
             event_type=EventType.STARTUP,
@@ -241,9 +242,11 @@ async def lifespan(app: FastAPI):
             level=LogLevel.INFO,
             zeus_style=settings.zeus_error_style,
         )
-        
+
         if settings.is_history_log_hf_configured():
-            logger.info(f"☁️ History log HF sync enabled: {settings.history_log_hf_repo_id}")
+            logger.info(
+                f"☁️ History log HF sync enabled: {settings.history_log_hf_repo_id}"
+            )
         if settings.history_log_encryption_key:
             logger.info("🔐 History log encryption enabled")
     else:
@@ -255,20 +258,24 @@ async def lifespan(app: FastAPI):
     if settings.is_calendar_configured():
         calendar_service.configure(
             storage_path=settings.calendar_data_path,
-            hf_token=settings.hf_memory_token if settings.is_calendar_hf_configured() else None,
+            hf_token=settings.hf_memory_token
+            if settings.is_calendar_hf_configured()
+            else None,
             hf_repo_id=settings.calendar_hf_repo_id,
             sync_interval_seconds=settings.calendar_sync_interval_seconds,
         )
         logger.info(f"📅 Calendar service enabled (path: {settings.calendar_data_path})")
-        
+
         if settings.is_calendar_hf_configured():
             logger.info(f"☁️ Calendar HF sync enabled: {settings.calendar_hf_repo_id}")
-        
+
         # Configure reminder service (will be started later after LINE API is ready)
         reminder_service.configure(
             reminder_hour=settings.calendar_reminder_hour,
         )
-        logger.info(f"⏰ Reminder service configured (daily at {settings.calendar_reminder_hour}:00 Bangkok)")
+        logger.info(
+            f"⏰ Reminder service configured (daily at {settings.calendar_reminder_hour}:00 Bangkok)"
+        )
     else:
         logger.info("📅 Calendar service disabled")
 
@@ -280,9 +287,15 @@ async def lifespan(app: FastAPI):
     # because CommitScheduler downloads async in the background.
     logger.info("🔄 Loading persistent data from HF Hub...")
     load_results = await startup_loader.ensure_data_loaded(
-        calendar_service=calendar_service if settings.is_calendar_configured() else None,
-        memory_service=get_conversation_memory() if settings.conversation_memory_enabled else None,
-        document_service=get_document_memory() if settings.document_memory_enabled else None,
+        calendar_service=calendar_service
+        if settings.is_calendar_configured()
+        else None,
+        memory_service=get_conversation_memory()
+        if settings.conversation_memory_enabled
+        else None,
+        document_service=get_document_memory()
+        if settings.document_memory_enabled
+        else None,
         history_log=get_history_log() if settings.is_history_log_configured() else None,
     )
     if load_results["calendar"]:
@@ -383,11 +396,14 @@ async def lifespan(app: FastAPI):
     # Register Hannibal Profile Agent (Priority: 6 - Psychological profiling from message history)
     if settings.is_github_models_configured():
         from src.agents.hannibal_agent import HannibalProfileAgent
+
         hannibal_agent = HannibalProfileAgent(http_client=http_client_pool)
         agent_router.register_agent(hannibal_agent)
         logger.info("🎭 Hannibal Profile Agent registered (message history analysis)")
     else:
-        logger.info("🎭 Hannibal Profile Agent not registered (GitHub Models not configured)")
+        logger.info(
+            "🎭 Hannibal Profile Agent not registered (GitHub Models not configured)"
+        )
 
     # Register Profiler Agent (Priority: 7 - Handles image messages for psychological profiling)
     if settings.is_profiler_configured():
@@ -403,7 +419,9 @@ async def lifespan(app: FastAPI):
         agent_router.register_agent(image_analyzer_agent)
         logger.info("🖼️ Image Analyzer Agent registered (general image Q&A)")
     else:
-        logger.info("🖼️ Image Analyzer Agent not registered (GitHub Models not configured)")
+        logger.info(
+            "🖼️ Image Analyzer Agent not registered (GitHub Models not configured)"
+        )
 
     # Register Search Agent (Priority: 8)
     search_agent = SearchAgent()
@@ -411,13 +429,17 @@ async def lifespan(app: FastAPI):
     if settings.is_brave_search_configured():
         logger.info("🔍 Search Agent registered (Brave Search enabled)")
     else:
-        logger.info("🔍 Search Agent registered but DISABLED until BRAVE_SEARCH_API_KEY is set")
+        logger.info(
+            "🔍 Search Agent registered but DISABLED until BRAVE_SEARCH_API_KEY is set"
+        )
 
     # Register LLM Agent (Priority: 9)
     llm_agent = LLMAgent()
     agent_router.register_agent(llm_agent)
     if settings.is_openrouter_configured():
-        logger.info(f"🤖 LLM Agent registered (Model: {settings.openrouter_default_model})")
+        logger.info(
+            f"🤖 LLM Agent registered (Model: {settings.openrouter_default_model})"
+        )
     else:
         logger.info("🤖 LLM Agent registered (API key missing - will return errors)")
 
@@ -429,11 +451,13 @@ async def lifespan(app: FastAPI):
     # Register Special News Agent (Priority: 12)
     special_news_service = SpecialNewsService(
         http_client=http_client_pool,
-        cache_ttl_seconds=300  # 5-minute cache for volatile news data
+        cache_ttl_seconds=300,  # 5-minute cache for volatile news data
     )
     special_news_agent = SpecialNewsAgent(news_service=special_news_service)
     agent_router.register_agent(special_news_agent)
-    logger.info("📰 Special News Agent registered (Thailand tourism, sports, international)")
+    logger.info(
+        "📰 Special News Agent registered (Thailand tourism, sports, international)"
+    )
 
     # Register News Agent (Priority: 15)
     news_data_service = NewsDataService(
@@ -677,8 +701,12 @@ async def webhook(request: Request) -> JSONResponse:
             for event in events:
                 try:
                     if isinstance(event, MessageEvent):
-                        user_id = getattr(event.source, "user_id", None) if event.source else None
-                        
+                        user_id = (
+                            getattr(event.source, "user_id", None)
+                            if event.source
+                            else None
+                        )
+
                         if isinstance(event.message, TextMessageContent):
                             # Store message in buffer for "zeus scrape" feature
                             # NOTE: We now store ALL messages including bot's own messages
@@ -691,15 +719,17 @@ async def webhook(request: Request) -> JSONResponse:
                                     chat_id = f"room_{event.source.room_id}"
                                 elif getattr(event.source, "user_id", None):
                                     chat_id = f"user_{event.source.user_id}"
-                            
+
                             if chat_id and user_id:
                                 message_buffer_service.store_message(
                                     chat_id=chat_id,
                                     text=event.message.text,
                                     user_id=user_id,
-                                    message_id=event.message.id if hasattr(event.message, 'id') else None
+                                    message_id=event.message.id
+                                    if hasattr(event.message, "id")
+                                    else None,
                                 )
-                            
+
                             # CRITICAL: Check if message is from bot itself (prevent infinite loop)
                             # Skip agent routing for bot's own messages to prevent responding to itself
                             if bot_user_id and user_id == bot_user_id:
@@ -737,12 +767,14 @@ async def webhook(request: Request) -> JSONResponse:
                                 await asyncio.to_thread(
                                     line_bot_api.push_message,
                                     PushMessageRequest(  # type: ignore[call-arg]
-                                        to=user_id, 
+                                        to=user_id,
                                         messages=[welcome_msg],
                                         customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
                                     ),
                                 )
-                                logger.info(f"✅ Sent welcome message to new friend {user_id}")
+                                logger.info(
+                                    f"✅ Sent welcome message to new friend {user_id}"
+                                )
                             except Exception as e:
                                 logger.error(f"❌ Failed to send welcome message: {e}")
 
