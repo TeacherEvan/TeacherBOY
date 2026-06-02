@@ -2,8 +2,9 @@
 
 import logging
 import hashlib
-from typing import Dict, Set, List, Tuple
+from typing import Dict, Set, List, Tuple, Optional
 from datetime import datetime, timedelta
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ class SessionManager:
         dedup_window_seconds: int = 60,
         max_history_size: int = 50,
         default_sleep_hours: int = 24,
+        echo_window_seconds: int = 2,
     ):
         """
         Initialize session manager.
@@ -24,6 +26,7 @@ class SessionManager:
             dedup_window_seconds: Time window for duplicate detection (default: 60s)
             max_history_size: Maximum messages to track per chat (default: 50)
             default_sleep_hours: Default sleep duration in hours (default: 24)
+            echo_window_seconds: Time window for cross-language echo suppression (default: 2s)
         """
         # Dictionary: {chat_id: {user_id, started_at, message_count}}
         self._active_sessions: Dict[str, dict] = {}
@@ -33,10 +36,13 @@ class SessionManager:
         self._message_history: Dict[str, List[Tuple[str, datetime]]] = {}
         # Sleep mode: {chat_id: wake_at_datetime}
         self._sleeping_chats: Dict[str, datetime] = {}
+        # Recent language messages for echo suppression: {chat_id: (language, timestamp)}
+        self._recent_language_messages: Dict[str, Tuple[str, datetime]] = {}
         # Configuration
         self._max_history_size = max_history_size
         self._dedup_window_seconds = dedup_window_seconds
         self._default_sleep_hours = default_sleep_hours
+        self._echo_window_seconds = echo_window_seconds
 
     def is_session_active(self, chat_id: str) -> bool:
         """Check if translation session is active for a chat (not sleeping)."""
@@ -262,6 +268,39 @@ class SessionManager:
             Dictionary of sleeping chats {chat_id: wake_at_datetime}
         """
         return self._sleeping_chats.copy()
+
+    def _detect_message_language(self, text: str) -> str:
+        # Simple heuristic: detect Thai characters vs others
+        return "th" if bool(re.search(r"[\u0E00-\u0E7F]", text)) else "en"
+
+    def should_ignore_cross_language_echo(
+        self,
+        chat_id: str,
+        text: str,
+        *,
+        now: Optional[datetime] = None,
+        now_offset_seconds: Optional[int] = None,
+    ) -> bool:
+        """Return True if the message should be ignored as a cross-language echo.
+
+        If a message in a different language than the previous message in the same chat
+        arrives within the echo window, treat it as an echo and ignore it.
+        """
+        current_time = now or datetime.now()
+        if now_offset_seconds is not None:
+            current_time = datetime.now() + timedelta(seconds=now_offset_seconds)
+
+        language = self._detect_message_language(text)
+        previous = self._recent_language_messages.get(chat_id)
+        # Record current message language and time
+        self._recent_language_messages[chat_id] = (language, current_time)
+
+        if previous is None:
+            return False
+
+        previous_language, previous_time = previous
+        age_seconds = (current_time - previous_time).total_seconds()
+        return previous_language != language and age_seconds < self._echo_window_seconds
 
 
 # Singleton instance

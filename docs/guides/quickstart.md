@@ -1,6 +1,6 @@
 # Quick Start
 
-Goal: run Zeus locally (Docker) and connect it to LINE.
+Goal: run Ms. Green locally (Docker) and connect it to LINE.
 
 ## Prerequisites
 
@@ -28,8 +28,8 @@ Goal: run Zeus locally (Docker) and connect it to LINE.
 ### Option A: Docker (recommended)
 
 ```bash
-docker build -t zeus .
-docker run --env-file .env -p 8000:8000 zeus
+docker build -t ms-green .
+docker run --env-file .env -p 8000:8000 ms-green
 ```
 
 Health endpoints:
@@ -63,12 +63,14 @@ Follow: [docs/guides/line-setup.md](line-setup.md)
 - Send a Thai message (e.g., `สวัสดีครับ`) to start translation mode.
 - Send English/Thai messages; the bot replies with translations.
 - Stop/sleep: `amen`
-- Wake: `Dear Zeus`
+- Wake: `Dear Ms. Green`
 
 ### Optional: AI + Web Search (DM-only for regular users)
 
-- **AI (OpenRouter):** `Zeus <your question>` (also accepts `/zeus ...`, and typo `Zues ...`)
-- **Web search (Brave Search):** `Zeus search <query>` (also accepts `/zeus search ...`, and typo `Zues search ...`)
+- **AI (OpenRouter):** `Ms. Green <your question>`
+- **Web search (Brave Search):** `Ms. Green search <query>`
+
+Legacy `Zeus ...` commands may still be accepted for backward compatibility.
 
 Access rules:
 

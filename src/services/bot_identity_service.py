@@ -35,6 +35,7 @@ class BotIdentityService:
             default_aliases + [default_name]
         )
         self._profile = self._load()
+        self._cached_recognition_aliases: list[str] | None = None
 
     def _normalize(self, aliases: list[str]) -> list[str]:
         seen: set[str] = set()
@@ -45,6 +46,14 @@ class BotIdentityService:
                 seen.add(cleaned)
                 result.append(cleaned)
         return result
+
+    def _recognition_aliases(self) -> list[str]:
+        """Aliases accepted for command-prefix recognition, including legacy names."""
+        if self._cached_recognition_aliases is None:
+            self._cached_recognition_aliases = self._normalize(
+                [self._profile.display_name, *self._profile.aliases, "zeus"]
+            )
+        return self._cached_recognition_aliases
 
     def _load(self) -> BotIdentityProfile:
         if not self._storage_path.exists():
@@ -79,11 +88,12 @@ class BotIdentityService:
         self._profile = BotIdentityProfile(
             display_name=display_name.strip(), aliases=merged_aliases
         )
+        self._cached_recognition_aliases = None  # Invalidate cache on profile change
         self._save()
         return self._profile
 
     def matches_prefix(self, token: str) -> bool:
-        return (token or "").strip().lower() in self._profile.aliases
+        return (token or "").strip().lower() in self._recognition_aliases()
 
     def split_command_prefix(self, text: str) -> tuple[str | None, str]:
         cleaned = re.sub(r"\s+", " ", (text or "").strip())
@@ -93,7 +103,7 @@ class BotIdentityService:
             return None, ""
 
         lowered = cleaned.lower()
-        for alias in sorted(self._profile.aliases, key=len, reverse=True):
+        for alias in sorted(self._recognition_aliases(), key=len, reverse=True):
             if lowered == alias:
                 return alias, ""
             if lowered.startswith(f"{alias} "):
@@ -102,18 +112,14 @@ class BotIdentityService:
 
     def expand_prefixed_trigger(self, trigger: str) -> list[str]:
         normalized = re.sub(r"\s+", " ", (trigger or "").strip().lower())
-        expansion_aliases = sorted(
-            {self._profile.display_name.lower(), *self._profile.aliases, "zeus"},
-            key=len,
-            reverse=True,
-        )
+        expansion_aliases = sorted(set(self._recognition_aliases()), key=len, reverse=True)
 
         for alias in expansion_aliases:
             if normalized == alias:
-                return self._profile.aliases.copy()
+                return expansion_aliases.copy()
             if normalized.startswith(f"{alias} "):
                 suffix = normalized[len(alias):].lstrip()
-                return [f"{candidate} {suffix}".strip() for candidate in self._profile.aliases]
+                return [f"{candidate} {suffix}".strip() for candidate in expansion_aliases]
 
         return [normalized]
 

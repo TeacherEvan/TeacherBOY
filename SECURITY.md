@@ -35,7 +35,7 @@ We take security seriously and actively maintain security updates for the follow
 ### Scope
 
 This security policy applies to:
-- ✅ The Zeus bot core application
+- ✅ The Ms. Green bot core application
 - ✅ All included services and agents
 - ✅ Official Docker images
 - ✅ Documentation and configuration examples

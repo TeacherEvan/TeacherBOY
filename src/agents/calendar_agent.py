@@ -659,7 +659,7 @@ class CalendarAgent(BaseAgent):
                     await self.scrape_flow.send_message(
                         event,
                         line_bot_api,
-                        "❌ This scrape flow is stale or expired. Start 'zeus scrape' again.",
+                        "❌ This scrape flow is stale or expired. Start 'Ms. Green scrape' again.",
                     )
                     return True
 

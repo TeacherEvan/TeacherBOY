@@ -139,9 +139,9 @@ class ViewHandler(CalendarHandler):
             await self._send_message(
                 event, line_bot_api,
                 f"📅 No events in {context_msg} yet!\n\n"
-                "Say 'zeus add event' to create one.\n\n"
+                "Say 'Ms. Green add event' to create one.\n\n"
                 "คุณยังไม่มีกิจกรรมในปฏิทิน\n"
-                "พิมพ์ 'zeus add event' เพื่อเพิ่มกิจกรรม"
+                "พิมพ์ 'Ms. Green add event' เพื่อเพิ่มกิจกรรม"
             )
             return True
 
@@ -184,7 +184,7 @@ class ViewHandler(CalendarHandler):
             msg_lines.append(f"... and {len(events) - 10} more events")
 
         msg_lines.append("")
-        msg_lines.append("💡 Say 'zeus remove event' to delete events")
+        msg_lines.append("💡 Say 'Ms. Green remove event' to delete events")
 
         await self._send_message(event, line_bot_api, "\n".join(msg_lines))
         

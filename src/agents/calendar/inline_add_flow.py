@@ -194,7 +194,7 @@ class InlineAddFlow(CalendarFlowBase):
             await self.send_message(
                 event, line_bot_api,
                 "❌ Event creation cancelled.\n\n"
-                "Say 'zeus add [date] [title]' to try again.\n\n"
+                "Say 'Ms. Green add [date] [title]' to try again.\n\n"
                 "ยกเลิกแล้ว"
             )
             return True

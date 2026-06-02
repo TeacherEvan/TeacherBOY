@@ -25,6 +25,7 @@ from src.services.rate_limiter import rate_limiter
 from src.services.message_buffer_service import message_buffer_service
 from src.services.date_extraction_service import date_extraction_service
 from src.services.history_log_service import EventType, LogLevel, get_history_log
+from src.services.bot_identity_service import get_bot_identity_service
 
 logger = logging.getLogger(__name__)
 
@@ -540,7 +541,7 @@ class AddHandler(CalendarHandler):
                         event,
                         line_bot_api,
                         "🤔 I see you pasted event details, but I couldn't extract any dates.\n\n"
-                        "Please try using 'zeus scrape' or enter a single date.\n\n"
+                        "Please try using 'Ms. Green scrape' or enter a single date.\n\n"
                         "ฉันเห็นว่าคุณวางรายละเอียดกิจกรรม แต่ไม่สามารถดึงวันที่ได้",
                     )
                     calendar_session_manager.end_session(chat_id)
@@ -575,7 +576,7 @@ class AddHandler(CalendarHandler):
                 await self._send_message(
                     event,
                     line_bot_api,
-                    "❌ Failed to process bulk dates. Please try 'zeus scrape' or enter one date at a time.",
+                    "❌ Failed to process bulk dates. Please try 'Ms. Green scrape' or enter one date at a time.",
                 )
                 calendar_session_manager.end_session(chat_id)
                 return True
@@ -799,8 +800,8 @@ class AddHandler(CalendarHandler):
                 event,
                 line_bot_api,
                 "❌ Event creation cancelled.\n\n"
-                "Say 'zeus add event' to try again.\n\n"
-                "ยกเลิกแล้ว พิมพ์ 'zeus add event' เพื่อลองใหม่",
+                "Say 'Ms. Green add event' to try again.\n\n"
+                "ยกเลิกแล้ว พิมพ์ 'Ms. Green add event' เพื่อลองใหม่",
             )
             return True
 
@@ -881,7 +882,8 @@ class AddHandler(CalendarHandler):
         if not t:
             return False
 
-        if t.startswith("zeus ") or t.startswith("/admin") or t.startswith("/special"):
+        prefix, _ = get_bot_identity_service().split_command_prefix(text or "")
+        if prefix is not None or t.startswith("/admin") or t.startswith("/special"):
             return False
 
         keywords = [

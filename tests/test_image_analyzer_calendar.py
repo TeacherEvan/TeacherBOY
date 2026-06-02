@@ -54,8 +54,8 @@ class TestImageAnalyzerCalendarFriendCheck:
     def test_ms_green_trigger_is_recognized(self, image_analyzer_agent):
         assert image_analyzer_agent._is_trigger("Ms. Green analyze this") is True
 
-    def test_legacy_zeus_trigger_is_rejected(self, image_analyzer_agent):
-        assert image_analyzer_agent._is_trigger("Zeus analyze this") is False
+    def test_legacy_zeus_trigger_is_accepted(self, image_analyzer_agent):
+        assert image_analyzer_agent._is_trigger("Zeus analyze this") is True
 
     @pytest.mark.asyncio
     async def test_non_friend_gets_quirky_rejection(

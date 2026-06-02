@@ -173,7 +173,7 @@ class ScrapeHandler(CalendarHandler):
                 line_bot_api,
                 "📭 No dates or events found in recent messages.\n\n"
                 "ไม่พบวันที่หรือกิจกรรมในข้อความล่าสุด\n\n"
-                "💡 Try 'zeus add [date] [title]' to add directly.",
+                "💡 Try 'Ms. Green add [date] [title]' to add directly.",
             )
             return True
 

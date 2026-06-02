@@ -6,10 +6,12 @@ enabling lazy loading and loose coupling between handlers.
 """
 import asyncio
 import logging
+import re
 from abc import ABC, abstractmethod
 from typing import Optional, List, Any, cast
 from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import MessagingApi
+from src.services.bot_identity_service import get_bot_identity_service
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +89,15 @@ class CalendarHandler(ABC):
         pass
     
     def _is_trigger(self, text: str, triggers: List[str]) -> bool:
-        """Check if text matches any trigger."""
-        text_lower = text.lower().strip()
-        return any(trigger in text_lower for trigger in triggers)
+        """Check if text starts with any trigger, expanding runtime identity aliases."""
+        text_lower = re.sub(r"\s+", " ", text.lower().strip())
+        identity_service = get_bot_identity_service()
+
+        for trigger in triggers:
+            for variant in identity_service.expand_prefixed_trigger(trigger):
+                if text_lower.startswith(variant):
+                    return True
+        return False
     
     async def _send_message(
         self,

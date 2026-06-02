@@ -29,6 +29,7 @@ from src.services.privilege_service import privilege_service
 from src.services.rate_limiter import rate_limiter
 from src.services.history_log_service import EventType, LogLevel, get_history_log
 from src.services.calendar_service import CalendarService
+from src.services.bot_identity_service import get_bot_identity_service
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ class InlineHandler(CalendarHandler):
         self._friend_cache: Dict[str, tuple[bool, datetime]] = {}
 
     def get_triggers(self) -> list:
-        return ["zeus add"]
+        return ["zeus add", "ms. green add", "ms green add"]
 
     async def can_handle(self, event: MessageEvent, text: str) -> bool:
         chat_id = self._get_chat_id(event)
@@ -103,15 +104,18 @@ class InlineHandler(CalendarHandler):
         return False
 
     def _parse_inline_add(self, text: str) -> Optional[Dict[str, Any]]:
-        text_lower = text.lower().strip()
+        normalized = (text or "").strip()
+        prefix, rest = get_bot_identity_service().split_command_prefix(normalized)
+        command_text = rest.strip() if prefix else normalized
+        text_lower = command_text.lower().strip()
 
-        if not text_lower.startswith("zeus add "):
+        if not text_lower.startswith("add "):
             return None
 
         if self._is_trigger(text, TRIGGERS_ADD):
             return None
 
-        remainder = text[9:].strip()
+        remainder = command_text[4:].strip()
         if not remainder:
             return None
 
@@ -477,7 +481,7 @@ class InlineHandler(CalendarHandler):
                 event,
                 line_bot_api,
                 "❌ Event creation cancelled.\n\n"
-                "Say 'zeus add [date] [title]' to try again.\n\n"
+                "Say 'Ms. Green add [date] [title]' to try again.\n\n"
                 "ยกเลิกแล้ว",
             )
             return True

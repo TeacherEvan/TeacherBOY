@@ -126,7 +126,7 @@ class ScrapeFlow(CalendarFlowBase):
                 "📭 No recent messages found to scan.\n\n"
                 "💡 I can only scan messages from the last 24 hours.\n"
                 "ฉันสามารถสแกนเฉพาะข้อความจาก 24 ชั่วโมงที่ผ่านมา\n\n"
-                "Try 'zeus add [date] [title]' to add events directly."
+                "Try 'Ms. Green add [date] [title]' to add events directly."
             )
             return True
 
@@ -161,7 +161,7 @@ class ScrapeFlow(CalendarFlowBase):
                 event, line_bot_api,
                 "📭 No dates or events found in recent messages.\n\n"
                 "ไม่พบวันที่หรือกิจกรรมในข้อความล่าสุด\n\n"
-                "💡 Try 'zeus add [date] [title]' to add directly."
+                "💡 Try 'Ms. Green add [date] [title]' to add directly."
             )
             return True
 
@@ -290,7 +290,7 @@ class ScrapeFlow(CalendarFlowBase):
             await self.send_message(
                 event,
                 line_bot_api,
-                "❌ This scrape session is no longer available. Start 'zeus scrape' again.",
+                "❌ This scrape session is no longer available. Start 'Ms. Green scrape' again.",
             )
             return
 
@@ -389,7 +389,7 @@ class ScrapeFlow(CalendarFlowBase):
                 await self.send_message(
                     event,
                     line_bot_api,
-                    "❌ This scrape flow is stale or expired. Start 'zeus scrape' again.",
+                    "❌ This scrape flow is stale or expired. Start 'Ms. Green scrape' again.",
                 )
                 return True
             return False
@@ -511,7 +511,7 @@ class ScrapeFlow(CalendarFlowBase):
             elif reason == "no_selection":
                 message = "❌ Select at least one event before choosing reminders."
             else:
-                message = "❌ This scrape session is no longer valid. Start 'zeus scrape' again."
+                message = "❌ This scrape session is no longer valid. Start 'Ms. Green scrape' again."
             await self.send_message(event, line_bot_api, message)
             return True
 
