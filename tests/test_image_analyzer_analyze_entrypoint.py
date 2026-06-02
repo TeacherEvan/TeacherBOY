@@ -36,7 +36,7 @@ async def test_analyze_trigger_is_recognized():
 
     agent = ImageAnalyzerAgent()
     assert agent._is_trigger("Ms. Green analyze") is True
-    assert agent._is_trigger("Zeus/Ms. Green analyze") is True
+    assert agent._is_trigger("ms. green analyze") is True
 
 
 @pytest.mark.asyncio
@@ -63,7 +63,7 @@ async def test_analyze_prompt_asks_new_or_last(mock_event, mock_line_bot_api):
         mock_session.start_analysis_choice = MagicMock()
 
         handled = await agent.handle(
-            mock_event, "Zeus/Ms. Green analyze", mock_line_bot_api
+            mock_event, "Ms. Green analyze", mock_line_bot_api
         )
 
     assert handled is True

@@ -30,7 +30,7 @@ class TestZeusMenu:
         assert await agent.should_handle(event, "ms. green") is True
         assert await agent.should_handle(event, "MS. GREEN") is True
         assert await agent.should_handle(event, "  ms green  ") is True
-        assert await agent.should_handle(event, "Zeus") is True
+        assert await agent.should_handle(event, "Zeus") is False
 
     @pytest.mark.asyncio
     async def test_ms_green_with_query_does_not_trigger_menu(self, agent):

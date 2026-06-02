@@ -19,11 +19,11 @@ from src.services.calendar_service import CalendarService
 logger = logging.getLogger(__name__)
 
 TRIGGERS_REMOVE = [
-    "zeus remove event",
-    "zeus delete event",
-    "zeus calendar remove",
-    "zeus remove reminder",
-    "zeus delete reminder",
+    "ms. green remove event",
+    "ms. green delete event",
+    "ms. green calendar remove",
+    "ms. green remove reminder",
+    "ms. green delete reminder",
     "remove event",
     "delete event",
 ]

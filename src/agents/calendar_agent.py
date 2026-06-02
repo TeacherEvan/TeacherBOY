@@ -11,11 +11,11 @@ Supports:
 - Scraping dates from messages (ScrapeFlow)
 
 Triggers:
-- "zeus calendar" / "zeus my calendar" / "my events" -> View events
-- "zeus add event" / "zeus remind me" -> Interactive add flow
-- "zeus add [date] [title]" -> Inline add
-- "zeus remove event" / "zeus delete event" -> Remove events
-- "zeus scrape" / "zeus scan" -> Message scraping
+- "ms. green calendar" / "ms. green my calendar" / "my events" -> View events
+- "ms. green add event" / "ms. green remind me" -> Interactive add flow
+- "ms. green add [date] [title]" -> Inline add
+- "ms. green remove event" / "ms. green delete event" -> Remove events
+- "ms. green scrape" / "ms. green scan" -> Message scraping
 """
 
 import logging
@@ -48,44 +48,44 @@ BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 
 # Trigger patterns
 TRIGGERS_VIEW = [
-    "zeus calendar",
-    "zeus my calendar",
+    "ms. green calendar",
+    "ms. green my calendar",
     "my events",
     "my reminders",
-    "zeus events",
-    "zeus reminders",
+    "ms. green events",
+    "ms. green reminders",
 ]
 
 TRIGGERS_ADD = [
-    "zeus add event",
-    "zeus remind me",
-    "zeus calendar add",
-    "zeus new event",
+    "ms. green add event",
+    "ms. green remind me",
+    "ms. green calendar add",
+    "ms. green new event",
     "add reminder",
     "add event",
 ]
 
 TRIGGERS_REMOVE = [
-    "zeus remove event",
-    "zeus delete event",
-    "zeus calendar remove",
-    "zeus remove reminder",
-    "zeus delete reminder",
+    "ms. green remove event",
+    "ms. green delete event",
+    "ms. green calendar remove",
+    "ms. green remove reminder",
+    "ms. green delete reminder",
     "remove event",
     "delete event",
 ]
 
 TRIGGERS_SCRAPE = [
-    "zeus scrape",
-    "zeus scan",
-    "zeus scan messages",
+    "ms. green scrape",
+    "ms. green scan",
+    "ms. green scan messages",
 ]
 
 TRIGGERS_DISCRETE_SCRAPE = [
-    "zeus scrape discretely",
-    "zeus scrape discreetly",
-    "zeus scan discretely",
-    "zeus scan discreetly",
+    "ms. green scrape discretely",
+    "ms. green scrape discreetly",
+    "ms. green scan discretely",
+    "ms. green scan discreetly",
 ]
 
 # Cancel keywords

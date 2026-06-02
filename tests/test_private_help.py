@@ -71,6 +71,6 @@ async def test_translation_agent_wake_command_uses_ms_green(line_bot_api):
     event = _make_private_event("UUSER")
 
     assert await agent.should_handle(event, "Ms. Green") is True
-    assert await agent.should_handle(event, "Zeus") is True
+    assert await agent.should_handle(event, "Zeus") is False
 
     privilege_service._reset_for_testing()

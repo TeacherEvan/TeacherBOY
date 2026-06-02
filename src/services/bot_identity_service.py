@@ -48,10 +48,10 @@ class BotIdentityService:
         return result
 
     def _recognition_aliases(self) -> list[str]:
-        """Aliases accepted for command-prefix recognition, including legacy names."""
+        """Aliases accepted for command-prefix recognition."""
         if self._cached_recognition_aliases is None:
             self._cached_recognition_aliases = self._normalize(
-                [self._profile.display_name, *self._profile.aliases, "zeus"]
+                [self._profile.display_name, *self._profile.aliases]
             )
         return self._cached_recognition_aliases
 

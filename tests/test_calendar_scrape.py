@@ -1460,8 +1460,8 @@ class TestCalendarAgentTriggers:
         """Test that scrape triggers are detected."""
         from src.agents.calendar_agent import TRIGGERS_SCRAPE
         
-        assert "zeus scrape" in TRIGGERS_SCRAPE
-        assert "zeus scan" in TRIGGERS_SCRAPE
+        assert "ms. green scrape" in TRIGGERS_SCRAPE
+        assert "ms. green scan" in TRIGGERS_SCRAPE
 
 
 # ============================================================================

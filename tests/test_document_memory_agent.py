@@ -36,4 +36,4 @@ async def test_document_memory_agent_rejects_legacy_zeus_prefix(text_event):
         mock_settings.document_memory_enabled = True
         agent = DocumentMemoryAgent(document_service=document_service)
 
-        assert await agent.should_handle(text_event, "Zeus docs") is True
+        assert await agent.should_handle(text_event, "Zeus docs") is False

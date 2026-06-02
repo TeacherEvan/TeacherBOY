@@ -116,7 +116,7 @@ class ImageAnalyzerAgent(BaseAgent):
         identity_service = get_bot_identity_service()
         profile = identity_service.get_profile()
         aliases = sorted(
-            {profile.display_name.lower(), *profile.aliases, "zeus"},
+            {profile.display_name.lower(), *profile.aliases},
             key=len,
             reverse=True,
         )
