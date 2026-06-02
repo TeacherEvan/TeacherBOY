@@ -51,6 +51,14 @@ def test_google_translate_config_compatibility_surface() -> None:
     assert missing_key.is_google_translate_configured() is False
 
 
+def test_llm_prompt_defaults_to_ms_green_persona() -> None:
+    settings = Settings(_env_file=None)
+
+    assert "Ms. Green" in settings.llm_system_prompt
+    assert settings.is_zeus_allowed_in_group("G1", None, False) is True
+    assert settings.is_zeus_allowed_in_group(None, "R1", False) is True
+
+
 @pytest.mark.parametrize("value", ["", "remote", " convex-local "])
 def test_persistence_backend_rejects_invalid_values(value: str) -> None:
     with pytest.raises(ValidationError, match="persistence_backend"):

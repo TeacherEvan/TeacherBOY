@@ -279,28 +279,26 @@ class TestModeratorInGroups:
             assert mock_line_bot_api.reply_message.called
 
     @pytest.mark.asyncio
-    async def test_non_friend_gets_translation_in_group(
+    async def test_non_friend_gets_full_menu_in_group(
         self, news_agent_with_moderators, mock_event, mock_line_bot_api
     ):
-        """Test that non-friends get translation only in groups."""
+        """Test that regular group users now get the same news menu as everyone else."""
         # Set as regular user (non-friend) in group chat
         mock_event.source.user_id = "U_regular_user"
         mock_event.source.group_id = "G_test_group"
         mock_event.source.room_id = None
-        
+
         # Mock as non-friend (get_profile raises exception)
         mock_line_bot_api.get_profile = Mock(side_effect=ApiException(status=400, reason="Not a friend"))
-        
+
         # Handle news trigger
         result = await news_agent_with_moderators.handle(
             mock_event, "news", mock_line_bot_api
         )
-        
+
         assert result is True
-        # Verify API was called
         assert mock_line_bot_api.reply_message.called
-        # Check that the response is translation (news → ข่าว)
         call_args = mock_line_bot_api.reply_message.call_args
         messages = call_args[0][0].messages
         assert len(messages) == 1
-        assert "ข่าว" in messages[0].text
+        assert "📰 Bangkok" in messages[0].text

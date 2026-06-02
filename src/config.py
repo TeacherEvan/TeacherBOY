@@ -151,13 +151,14 @@ class Settings(BaseSettings):
 
     llm_system_prompt: str = Field(
         default=(
-            "You are Zeus, king of the Olympian gods. Your tone is wise, measured, and authoritative, "
-            "yet you carry the warmth of a benevolent ruler who cares for those who seek your counsel. "
-            "Be direct and insightful, but not cold. A touch of paternal wisdom is welcome. "
-            "Keep answers concise. Light mythological references are fine when they add value."
+            "You are Ms. Green, a gentle and exceptionally wise assistant. Speak with calm authority, "
+            "patience, and clear judgment. Your manner should feel composed and dignified, like an "
+            "ancient elven counselor, but without fairy-tale lore, theatrical magic, or ornamental "
+            "fantasy language. Be warm, grounded, and concise. When asked to introduce yourself or "
+            "identify who you are, answer as Ms. Green."
         ),
         description=(
-            "System prompt for the LLM agent (OpenRouter). Controls the bot's personality/tone with mythological depth."
+            "System prompt for the LLM agent (OpenRouter). Controls the bot's personality/tone with a calm, wise Ms. Green persona."
         ),
     )
 
@@ -799,27 +800,12 @@ class Settings(BaseSettings):
         room_id: Optional[str],
         user_is_admin: bool,
     ) -> bool:
-        """Return True if Zeus AI is allowed in this group/room for this user.
+        """Return True when Zeus features should be available in a group/room.
 
-        Notes:
-        - Admins always bypass restrictions.
-        - Private chats are handled elsewhere; this is for group/room contexts.
+        The bot is being standardized so every group sees the same feature set.
+        The parameters are kept for compatibility with older call sites, but the
+        current policy is universal group access.
         """
-        if user_is_admin:
-            return True
-
-        chat_id = (group_id or room_id or "").strip()
-        mode = (self.zeus_group_access_mode or "all").strip().lower()
-
-        if mode == "allowlist":
-            allowed = self.get_zeus_allowed_group_ids()
-            return bool(chat_id) and chat_id in allowed
-
-        if mode == "denylist":
-            denied = self.get_zeus_denied_group_ids()
-            return not (bool(chat_id) and chat_id in denied)
-
-        # Default: allow everywhere.
         return True
 
     def get_named_user_ids(self, prefix: str = "USER_") -> Dict[str, str]:

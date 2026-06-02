@@ -1,5 +1,9 @@
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from src.agents.llm_agent import LLMAgent
 from src.services.bot_identity_service import BotIdentityService
 
 
@@ -60,3 +64,37 @@ def test_split_command_prefix_rejects_legacy_zeus_after_cutover(tmp_path: Path):
 
     assert prefix is None
     assert rest == "Zeus search python"
+
+
+def test_llm_agent_extracts_identity_queries_with_and_without_prefix() -> None:
+    agent = LLMAgent()
+
+    assert agent._extract_identity_query("Who are you?") == "Who are you?"
+    assert (
+        agent._extract_identity_query("Ms. Green what is your name?")
+        == "what is your name?"
+    )
+    assert agent._extract_identity_query("Ms. Green search python") is None
+
+
+@pytest.mark.asyncio
+async def test_llm_agent_replies_with_deterministic_identity_response() -> None:
+    agent = LLMAgent()
+    event = MagicMock()
+    event.source = MagicMock()
+    event.source.type = "user"
+    event.source.user_id = "U1"
+    event.reply_token = "reply-token"
+    line_bot_api = MagicMock()
+
+    agent._send_reply = AsyncMock(return_value=None)
+
+    handled = await agent.handle(event, "Who are you?", line_bot_api)
+
+    assert handled is True
+    agent._send_reply.assert_awaited_once_with(
+        event,
+        line_bot_api,
+        "I am Ms. Green. I speak with calm judgment, gentle strength, and patient clarity. "
+        "I am here to answer carefully and without needless ornament.",
+    )

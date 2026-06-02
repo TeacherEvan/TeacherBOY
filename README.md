@@ -101,7 +101,7 @@ For the full variable reference and mounted-volume examples, see [Environment va
 
 - **🤖 Ask Ms. Green:** `Ms. Green <question>`
 - **🌡️ Warmth (Temperature):** Configure via `LLM_TEMPERATURE` (default: `1.0`)
-- **🧊 Stoic Persona (Default):** Controlled by `LLM_SYSTEM_PROMPT` (optional override)
+- **🧊 Wise Persona (Default):** Controlled by `LLM_SYSTEM_PROMPT` (optional override); calm, gentle, and exceptionally wise, without fairy-tale styling
 - **👥 Group Access Policy:**
   - Admins can use Ms. Green anywhere
   - Non-admins follow `ZEUS_GROUP_ACCESS_MODE`:

@@ -237,29 +237,24 @@ class NewsAgent(BaseAgent):
 
                 # Check if user is privileged (admin or moderator)
                 is_privileged = privilege_service.is_privileged(user_id)
-                
-                # Log privilege check result for group chats
+
+                # Group chats now get the same universal feature set.
+                # We keep the privilege flag only for private-chat behavior and
+                # rate-limit bypasses, not for feature availability inside groups.
                 if self._is_group_chat(event):
                     if is_privileged:
-                        logger.info(f"🔓 Privileged user {user_id} accessing news in group chat {chat_id} - bypassing friend check")
+                        logger.info(
+                            f"🔓 Privileged user {user_id} accessing news in group chat {chat_id}"
+                        )
                     else:
-                        logger.debug(f"📰 Non-privileged user {user_id} in group chat {chat_id} - will check friendship")
-
-                # For non-privileged users in groups: check friendship
-                if not is_privileged:
-                    # Only check friendship in group chats
-                    if self._is_group_chat(event):
-                        is_friend = await self._is_friend(event, line_bot_api)
-                        if not is_friend:
-                            await self._send_trigger_translation(
-                                event, line_bot_api, text
-                            )
-                            return True
-                    # Private chat non-privileged users are already handled above
+                        logger.info(
+                            f"📰 Non-privileged user {user_id} accessing news in group chat {chat_id}"
+                        )
 
                 # Rate limit check (skip for privileged users)
                 if not is_privileged:
-                    # Friends get 1/hour
+                    # Regular group users share the same universal menu, but still
+                    # inherit the standard 1/hour rate limit.
                     limiter = news_rate_limiter_friend
                     max_requests = 1
 

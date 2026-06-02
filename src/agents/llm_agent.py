@@ -292,6 +292,33 @@ class LLMAgent(BaseAgent):
             )
         )
 
+    def _is_identity_question(self, query: str) -> bool:
+        """Return True if the user is asking the bot to identify itself."""
+        q = re.sub(r"\s+", " ", (query or "").strip().lower())
+        return bool(
+            re.match(
+                r"^(?:who\s+are\s+you|what\s+are\s+you|introduce\s+yourself|tell\s+me\s+about\s+yourself|what\s+is\s+your\s+name|who\s+is\s+this)\s*[?!.]*$",
+                q,
+            )
+        )
+
+    def _extract_identity_query(self, text: str) -> str | None:
+        """Return the identity question text if the message is a self-intro request."""
+        if self._is_identity_question(text):
+            return (text or "").strip()
+
+        prefix, remainder = get_bot_identity_service().split_command_prefix(text)
+        if prefix and self._is_identity_question(remainder):
+            return remainder.strip()
+        return None
+
+    def _identity_response(self) -> str:
+        """Deterministic self-introduction for persona queries."""
+        return (
+            "I am Ms. Green. I speak with calm judgment, gentle strength, and patient clarity. "
+            "I am here to answer carefully and without needless ornament."
+        )
+
     def _is_menu_command(self, text: str) -> bool:
         """
         Check if text is standalone 'Zeus' command (show menu).
@@ -423,7 +450,12 @@ class LLMAgent(BaseAgent):
         # Handle standalone "Zeus" command - show interactive menu
         if self._is_menu_command(text):
             return await self._show_interactive_menu(event, line_bot_api)
-        
+
+        identity_query = self._extract_identity_query(text)
+        if identity_query:
+            await self._send_reply(event, line_bot_api, self._identity_response())
+            return True
+
         query = self._parse_command(text)
         if not query:
             return False
