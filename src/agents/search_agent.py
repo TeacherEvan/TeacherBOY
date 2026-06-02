@@ -81,7 +81,7 @@ class SearchAgent(BaseAgent):
         # Access control at routing time:
         # - Admins can search anywhere
         # - Private chats always allowed
-        # - Group/room obeys Zeus group rules (allowlist/denylist)
+        # - Group/room obeys configured group access rules (allowlist/denylist)
         user_id = getattr(event.source, "user_id", None)
         if privilege_service.is_admin(user_id):
             return True
@@ -105,7 +105,7 @@ class SearchAgent(BaseAgent):
         identity_name = self._identity_name()
         logger.info(f"🔍 {identity_name} search from {user_id} ({'DM' if is_private else 'group'}): {query[:50]}...")
 
-        # Access control: admins anywhere; private chats always; group/room per Zeus rules.
+        # Access control: admins anywhere; private chats always; group/room per configured rules.
         if not privilege_service.is_admin(user_id) and not is_private:
             group_id, room_id = self._get_group_room_ids(event)
             if not settings.is_zeus_allowed_in_group(

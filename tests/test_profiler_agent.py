@@ -430,8 +430,8 @@ class TestProfilerService:
         # Should respect LINE character limit
         assert len(formatted) <= 5000
         
-        # Should include header
-        assert "🔬" in formatted or "ZEUS" in formatted.upper()
+        # Should include a visible branded header
+        assert "🔬" in formatted or "MS. GREEN" in formatted.upper()
 
     def test_format_response_short_text(self):
         """Test LINE formatting with short text."""

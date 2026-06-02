@@ -1412,7 +1412,7 @@ class AdminAgent(BaseAgent):
                     {"type": "separator", "color": "#E5E7EB"},
                     {
                         "type": "text",
-                        "text": "⚡ Zeus Multi-Agent System",
+                        "text": f"⚡ {get_bot_identity_service().get_profile().display_name} Multi-Agent System",
                         "size": "xs",
                         "color": "#9CA3AF",
                         "align": "center",

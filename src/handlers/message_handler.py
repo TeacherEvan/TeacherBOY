@@ -219,7 +219,7 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
 
     This handler auto-detects Thai characters and starts translation mode,
     keeps translating continuously until the user says "amen" (sleeping the chat
-    for 24 hours), and can be woken up by sending "Dear Zeus" alone.
+    for 24 hours), and can be woken up by sending "Ms. Green" alone.
 
     Args:
         event: LINE message event containing the incoming text message.

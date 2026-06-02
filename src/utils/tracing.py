@@ -1,4 +1,4 @@
-"""OpenTelemetry tracing setup for Zeus.
+"""OpenTelemetry tracing setup for the assistant service.
 
 This module wires up OpenTelemetry tracing with:
 - FastAPI auto-instrumentation (incoming requests)

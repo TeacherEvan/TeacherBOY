@@ -1,1 +1,1 @@
-"""Utility package for Zeus."""
+"""Utility package for the assistant system."""

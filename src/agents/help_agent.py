@@ -1,4 +1,4 @@
-"""Help Agent - Provides comprehensive, contextual help for Zeus LINE Bot."""
+"""Help Agent - Provides comprehensive, contextual help for the Ms. Green LINE bot."""
 
 import asyncio
 import logging
@@ -561,8 +561,8 @@ class HelpAgent(BaseAgent):
         chat_type = self._get_chat_type(event)
 
         # Availability is contextual.
-        # - Private chats: Zeus AI/search are allowed (if configured)
-        # - Groups/rooms: obey Zeus group rules for non-admins (admins bypass)
+        # - Private chats: AI/search are allowed (if configured)
+        # - Groups/rooms: obey group access rules for non-admins (admins bypass)
         source = getattr(event, "source", None)
         group_id = getattr(source, "group_id", None) if source else None
         room_id = getattr(source, "room_id", None) if source else None

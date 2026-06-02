@@ -524,8 +524,8 @@ Keep response under 300 words. Focus on most significant observable indicators.
         Returns:
             Formatted response string
         """
-        # Add Zeus branding
-        header = "⚡ ZEUS PSYCHOLOGICAL PROFILER ⚡\n"
+        # Add current assistant branding
+        header = "⚡ MS. GREEN PSYCHOLOGICAL PROFILER ⚡\n"
         header += "━" * 28 + "\n\n"
         
         footer = "\n\n" + "━" * 28

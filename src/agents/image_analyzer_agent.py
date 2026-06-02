@@ -1238,9 +1238,10 @@ class ImageAnalyzerAgent(BaseAgent):
                 logger.error(
                     f"❌ Failed to start calendar extraction flow: {e}", exc_info=True
                 )
+                identity_name = self._identity_name()
                 msg = TextMessage(
-                    text="❌ Failed to start calendar flow. Please try 'Zeus add event' manually.\n\n"
-                    "เกิดข้อผิดพลาด กรุณาลอง 'Zeus add event' ด้วยตนเอง",
+                    text=f"❌ Failed to start calendar flow. Please try '{identity_name} add event' manually.\n\n"
+                    f"เกิดข้อผิดพลาด กรุณาลอง '{identity_name} add event' ด้วยตนเอง",
                     quickReply=None,
                     quoteToken=None,
                 )

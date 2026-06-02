@@ -1,4 +1,4 @@
-"""Zeus - Production-Grade Multi-Agent LINE Translation Bot.
+"""Ms. Green - Production-Grade Multi-Agent LINE Translation Bot.
 
 This module implements a FastAPI application with intelligent agent routing,
 high-performance async I/O, and production-ready error handling.
@@ -77,6 +77,7 @@ from src.services.history_log_service import (
     LogLevel,
 )
 from src.services.startup_data_loader import startup_loader
+from src.services.bot_identity_service import get_bot_identity_service
 from src.utils.tracing import setup_tracing
 
 # ============================================================================
@@ -87,6 +88,11 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+def _service_display_name() -> str:
+    """Return the public-facing service name for logs and health endpoints."""
+    return get_bot_identity_service().get_profile().display_name
 
 # ============================================================================
 # LINE Bot SDK Configuration
@@ -145,7 +151,7 @@ async def lifespan(app: FastAPI):
     global bot_user_id
 
     logger.info("=" * 80)
-    logger.info("🚀 Zeus Multi-Agent System - Starting Up")
+    logger.info(f"🚀 {_service_display_name()} Multi-Agent System - Starting Up")
     logger.info("=" * 80)
 
     # Tracing (OpenTelemetry) - optional, controlled by settings.enable_tracing
@@ -238,7 +244,7 @@ async def lifespan(app: FastAPI):
         # Log startup event
         await history_log.log(
             event_type=EventType.STARTUP,
-            message="⚡ Zeus Multi-Agent System starting up!",
+            message=f"⚡ {_service_display_name()} Multi-Agent System starting up!",
             level=LogLevel.INFO,
             zeus_style=settings.zeus_error_style,
         )
@@ -499,7 +505,7 @@ async def lifespan(app: FastAPI):
     logger.info("✅ All cleanup tasks started")
 
     logger.info("=" * 80)
-    logger.info("✅ Zeus is READY to serve! 🎉")
+    logger.info(f"✅ {_service_display_name()} is READY to serve! 🎉")
     logger.info("=" * 80)
 
     yield
@@ -508,7 +514,7 @@ async def lifespan(app: FastAPI):
     # GRACEFUL SHUTDOWN
     # ========================================================================
     logger.info("=" * 80)
-    logger.info("🛑 Zeus - Shutting down gracefully...")
+    logger.info(f"🛑 {_service_display_name()} - Shutting down gracefully...")
     logger.info("=" * 80)
 
     # Stop background cleanup tasks
@@ -534,7 +540,7 @@ async def lifespan(app: FastAPI):
     if history_svc:
         await history_svc.log(
             event_type=EventType.SHUTDOWN,
-            message="🛑 Zeus Multi-Agent System shutting down gracefully",
+            message=f"🛑 {_service_display_name()} Multi-Agent System shutting down gracefully",
             level=LogLevel.INFO,
         )
         history_svc.stop()
@@ -558,7 +564,7 @@ async def lifespan(app: FastAPI):
     await http_client_pool.aclose()
     logger.info("✅ HTTP client pool closed")
 
-    logger.info("👋 Zeus shutdown complete. Goodbye!")
+    logger.info(f"👋 {_service_display_name()} shutdown complete. Goodbye!")
     logger.info("=" * 80)
 
 
@@ -566,7 +572,7 @@ async def lifespan(app: FastAPI):
 # FastAPI Application Initialization
 # ============================================================================
 app = FastAPI(
-    title="Zeus - Multi-Agent Translation Bot",
+    title=f"{_service_display_name()} - Multi-Agent Translation Bot",
     description="Production-grade Thai/English translation bot for LINE with intelligent agent routing",
     version="3.0.0",
     lifespan=lifespan,
@@ -599,7 +605,7 @@ async def root() -> Dict[str, Any]:
     """
     return {
         "status": "operational",
-        "service": "Zeus Multi-Agent Translation Bot",
+        "service": f"{_service_display_name()} Multi-Agent Translation Bot",
         "version": "3.0.0",
         "api_docs": "/docs" if settings.debug else "disabled",
         "features": {
