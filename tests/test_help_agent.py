@@ -79,15 +79,21 @@ def test_help_command_accepts_topic_variants():
 
 def test_help_menu_splits_into_three_cards():
     agent = HelpAgent()
-    categories = agent._get_command_categories(
-        is_admin=False,
-        chat_type="private chat",
-        zeus_available=True,
-        search_available=True,
-    )
-    tips = agent._get_adaptive_tips(is_admin=False, chat_type="private chat")
+    with patch("src.agents.help_agent.settings") as mock_settings:
+        mock_settings.is_calendar_configured.return_value = True
+        mock_settings.is_profiler_configured.return_value = True
+        mock_settings.is_github_models_configured.return_value = True
+        mock_settings.is_brave_search_configured.return_value = True
 
-    cards = agent._create_help_cards(categories, tips, "private chat")
+        categories = agent._get_command_categories(
+            is_admin=False,
+            chat_type="private chat",
+            zeus_available=True,
+            search_available=True,
+        )
+        tips = agent._get_adaptive_tips(is_admin=False, chat_type="private chat")
+
+        cards = agent._create_help_cards(categories, tips, "private chat")
 
     assert len(cards) == 3
     assert cards[0].quick_reply is not None

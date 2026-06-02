@@ -100,10 +100,11 @@ async def test_should_handle_search_in_group_for_admin(search_agent, group_messa
 
 
 @pytest.mark.asyncio
-async def test_should_not_handle_search_in_group_when_allowlist_denies(
+async def test_should_handle_search_in_group_even_when_legacy_allowlist_denies(
     search_agent, group_message_event, monkeypatch
 ):
-    # Switch to allowlist mode and do not include this group.
+    # Legacy allowlist knobs should not disable group search after the
+    # universal group-access policy change.
     from src.agents import search_agent as search_agent_module
 
     monkeypatch.setattr(
@@ -115,7 +116,7 @@ async def test_should_not_handle_search_in_group_when_allowlist_denies(
         "some_other_group",
         raising=False,
     )
-    assert await search_agent.should_handle(group_message_event, "Ms. Green search python") is False
+    assert await search_agent.should_handle(group_message_event, "Ms. Green search python") is True
 
 @pytest.mark.asyncio
 async def test_should_not_handle_other_text(search_agent, message_event):

@@ -145,8 +145,13 @@ class TestThaiHolidays:
     @pytest.mark.asyncio
     async def test_get_thai_holidays_fallback_list_has_major_holidays(self, news_service):
         """Test that fallback list includes major Thai holidays."""
-        # Test holidays library (no API key needed)
-        result = await news_service.get_thai_holidays()
+        with patch("src.services.news_data_service.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2026, 1, 1)
+
+            # Test holidays library (no API key needed) from a deterministic,
+            # early-year date where major holidays should appear in the next
+            # upcoming window.
+            result = await news_service.get_thai_holidays()
         
         # Should have holidays
         assert len(result) > 0
@@ -154,7 +159,10 @@ class TestThaiHolidays:
         # Check for major holidays
         holiday_names = [h.get("name_en", "").lower() for h in result]
         # At least some major holidays should be present
-        assert any("chakri" in name or "songkran" in name or "visakha" in name for name in holiday_names)
+        assert any(
+            "chakri" in name or "songkran" in name or "visakha" in name
+            for name in holiday_names
+        )
 
     @pytest.mark.asyncio
     async def test_get_thai_holidays_caching(self, news_service):
