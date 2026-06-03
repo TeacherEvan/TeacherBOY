@@ -4,8 +4,8 @@ import asyncio
 import json
 import logging
 import re
-from dataclasses import dataclass
-from datetime import date, timedelta
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
@@ -46,6 +46,8 @@ IMPORTANT_THIS_WEEK_COMMANDS = {
     "what's important this week",
     "important this week",
 }
+# Evict pending-review entries after 24 hours to prevent in-process memory leaks.
+_REVIEW_TTL = timedelta(hours=24)
 MEMORY_SAVE_FAILED_MESSAGE = (
     "I couldn't save that to memory right now. Please try again."
 )
@@ -56,6 +58,7 @@ class PendingReview:
     original_text: str
     summary: str
     source_chat_id: str
+    created_at: datetime = field(default_factory=datetime.now)
 
 
 class ReviewAgent(BaseAgent):
@@ -84,6 +87,18 @@ class ReviewAgent(BaseAgent):
 
     def get_priority(self) -> int:
         return 8
+
+    def _prune_pending_reviews(self) -> None:
+        """Evict pending reviews older than 24 hours."""
+        cutoff = datetime.now() - _REVIEW_TTL
+        stale = [
+            uid
+            for uid, review in self._pending_reviews.items()
+            if review.created_at < cutoff
+        ]
+        for uid in stale:
+            logger.info("🗑️ Evicted stale pending review for user %s", uid)
+            self._pending_reviews.pop(uid, None)
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         user_id = getattr(getattr(event, "source", None), "user_id", None)
