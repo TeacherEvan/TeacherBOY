@@ -156,10 +156,10 @@ class Settings(BaseSettings):
     # Fallback / provider priority Configuration (LLM)
     # ============================================================================
     llm_fallback_provider_priority: str = Field(
-        default="github,openrouter,hermes",
+        default="hermes,openrouter,github",
         description=(
             "Comma-separated priority list for LLM providers and fallback chain. "
-            "Options: github, openrouter, hermes. First configured provider is used; "
+            "Options: hermes, openrouter, github. First configured provider is used; "
             "if that fails, the next configured provider is tried."
         ),
     )
@@ -360,10 +360,10 @@ class Settings(BaseSettings):
         ),
     )
     llm_provider_priority: str = Field(
-        default="github,openrouter",
+        default="hermes,openrouter,github",
         description=(
             "Comma-separated priority list for LLM providers. "
-            "Options: 'github', 'openrouter'. First configured provider is used."
+            "Options: 'hermes', 'openrouter', 'github'. First configured provider is used."
         ),
     )
 

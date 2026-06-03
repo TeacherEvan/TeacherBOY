@@ -164,6 +164,10 @@ class TranslationAgent(BaseAgent):
         if self.is_special_news_command(text):
             return False
 
+        # Auto-start translation when Thai text is detected.
+        if self.contains_thai(text):
+            return True
+
         # Auto-translation is disabled. Only explicit wake/help/sleep paths and
         # already-active sessions should be handled here.
         return session_manager.is_session_active(chat_id)
