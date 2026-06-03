@@ -326,6 +326,23 @@ async def lifespan(app: FastAPI):
     logger.info("✅ LibreTranslate configured (FALLBACK)")
 
     # ========================================================================
+    # PHASE 2c: Hermes Fallback Provider Initialization
+    # ========================================================================
+    from src.utils.llm_fallback import hermes_service as _hermes_service
+
+    _hermes_service.configure(
+        base_url=settings.hermes_base_url or "",
+        api_key=settings.hermes_api_key or "",
+        model=settings.hermes_model,
+    )
+    if _hermes_service.is_configured():
+        logger.info(
+            f"🔁 Hermes fallback initialized (model={settings.hermes_model})"
+        )
+    else:
+        logger.info("ℹ️ Hermes fallback not configured (skipped)")
+
+    # ========================================================================
     # PHASE 3: Agent Registration
     # ========================================================================
     logger.info("📋 Registering intelligent agents...")

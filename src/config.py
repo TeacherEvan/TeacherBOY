@@ -137,6 +137,34 @@ class Settings(BaseSettings):
     )
 
     # ============================================================================
+    # Hermes / OpenAI-compatible fallback Configuration
+    # ============================================================================
+    hermes_api_key: Optional[str] = Field(
+        default=None,
+        description="Hermes / OpenAI-compatible provider API key (Bearer token)",
+    )
+    hermes_base_url: Optional[str] = Field(
+        default=None,
+        description="Base URL for Hermes/OpenAI-compatible provider API (e.g., https://your-hermes-host/v1)",
+    )
+    hermes_model: Optional[str] = Field(
+        default=None,
+        description="Fallback Hermes/OpenAI-compatible model identifier",
+    )
+
+    # ============================================================================
+    # Fallback / provider priority Configuration (LLM)
+    # ============================================================================
+    llm_fallback_provider_priority: str = Field(
+        default="github,openrouter,hermes",
+        description=(
+            "Comma-separated priority list for LLM providers and fallback chain. "
+            "Options: github, openrouter, hermes. First configured provider is used; "
+            "if that fails, the next configured provider is tried."
+        ),
+    )
+
+    # ============================================================================
     # OpenRouter Configuration (LLM)
     # ============================================================================
     openrouter_api_key: Optional[str] = Field(
@@ -717,58 +745,47 @@ class Settings(BaseSettings):
         """Check if GitHub Models API is properly configured with a PAT."""
         return bool(self.github_models_pat and len(self.github_models_pat) > 10)
 
-    def is_profiler_configured(self) -> bool:
-        """Check if Psychological Profiler feature is enabled and vision AI is available."""
+    def is_hermes_configured(self) -> bool:
+        """Check if Hermes fallback is configured with base URL and key."""
         return bool(
-            self.profiler_enabled
-            and self.is_github_models_configured()  # Vision requires GitHub Models
+            (self.hermes_base_url or "").strip()
+            and (self.hermes_api_key or "").strip()
+            and len((self.hermes_api_key or "").strip()) > 10
         )
 
-    def is_conversation_memory_configured(self) -> bool:
-        """Check if Hugging Face conversation memory storage is configured."""
-        return bool(
-            self.conversation_memory_enabled
-            and self.hf_memory_token
-            and self.hf_memory_repo_id
-            and len(self.hf_memory_token) > 10
-        )
-
-    def is_document_memory_configured(self) -> bool:
-        """Check if document memory storage is configured."""
-        return bool(
-            self.document_memory_enabled
-            and self.hf_memory_token
-            and self.document_hf_repo_id
-            and len(self.hf_memory_token) > 10
-        )
-
-    def is_history_log_configured(self) -> bool:
-        """Check if history logging is enabled and configured."""
-        return bool(self.history_log_enabled)
-
-    def is_history_log_hf_configured(self) -> bool:
-        """Check if HF Hub backup for history logs is configured."""
-        return bool(
-            self.history_log_enabled
-            and self.hf_memory_token  # Reuse memory token
-            and self.history_log_hf_repo_id
-        )
+    def get_fallback_llm_providers(self) -> list[str]:
+        """
+        Return provider order list with one highest-priority configured provider
+        selected from each configured group: github / openrouter / hermes.
+        """
+        configured: list[str] = []
+        if self.is_github_models_configured() and "github" not in configured:
+            configured.append("github")
+        if self.is_openrouter_configured() and "openrouter" not in configured:
+            configured.append("openrouter")
+        if self.is_hermes_configured() and "hermes" not in configured:
+            configured.append("hermes")
+        return configured or ["github", "openrouter", "hermes"]
 
     def get_llm_provider_priority(self) -> list[str]:
         """
         Get ordered list of LLM providers to try.
-        
+
         Returns:
-            List of provider names in priority order (e.g., ['github', 'openrouter'])
+            List of provider names in priority order (e.g., ['github','openrouter','hermes'])
         """
-        if not self.llm_provider_priority:
-            return ["github", "openrouter"]
-        return [p.strip().lower() for p in self.llm_provider_priority.split(",") if p.strip()]
+        raw = (self.llm_fallback_provider_priority or "github,openrouter,hermes").strip()
+        order = [p.strip().lower() for p in raw.split(",") if p.strip()]
+        seen: list[str] = []
+        for p in order:
+            if p not in seen:
+                seen.append(p)
+        return seen
 
     def get_admin_user_ids(self) -> list[str]:
         """
         Get list of authorized admin user IDs.
-        
+
         Returns:
             List of LINE user IDs authorized as admins, or empty list if none configured.
         """
@@ -779,7 +796,7 @@ class Settings(BaseSettings):
     def get_moderator_user_ids(self) -> list[str]:
         """
         Get list of authorized moderator user IDs.
-        
+
         Returns:
             List of LINE user IDs authorized as moderators, or empty list if none configured.
         """
@@ -883,7 +900,6 @@ class Settings(BaseSettings):
 
     def is_google_calendar_configured(self) -> bool:
         """Check if Google Calendar integration is enabled and configured."""
-        import os
         return bool(
             self.google_calendar_enabled
             and os.path.exists(self.google_calendar_credentials_file)
@@ -896,6 +912,10 @@ class Settings(BaseSettings):
     def is_convex_primary_backend(self) -> bool:
         """Check if Convex is the selected primary persistence backend."""
         return self.persistence_backend == "convex"
+
+    def get_mcp_server_url(self) -> Optional[str]:
+        url = (self.mcp_server_url or "").strip()
+        return url or None
 
     def get_http_client_config(self) -> Dict[str, Any]:
         """

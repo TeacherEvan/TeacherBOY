@@ -25,6 +25,7 @@ from .base_agent import BaseAgent
 from src.services.bot_identity_service import get_bot_identity_service
 from src.services.openrouter_service import openrouter_service
 from src.services.github_models_service import github_models_service
+from src.services.hermes_service import hermes_service
 from src.services.brave_search_service import brave_search_service
 from src.services.conversation_memory_service import get_conversation_memory
 from src.utils.tracing import get_tracer
@@ -134,12 +135,16 @@ class LLMAgent(BaseAgent):
                 return self.github_service, "GitHub Models"
             elif provider == "openrouter" and self.openrouter_service.is_configured():
                 return self.openrouter_service, "OpenRouter"
+            elif provider == "hermes" and hermes_service.is_configured():
+                return hermes_service, "Hermes"
         
         # Fallback: try any configured provider
         if self.github_service.is_configured():
             return self.github_service, "GitHub Models"
         if self.openrouter_service.is_configured():
             return self.openrouter_service, "OpenRouter"
+        if hermes_service.is_configured():
+            return hermes_service, "Hermes"
         
         return None, ""
 
