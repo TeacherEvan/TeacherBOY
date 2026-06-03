@@ -700,41 +700,23 @@ class TranslationAgent(BaseAgent):
 
     def _create_rate_limit_message(self, reset_seconds: int, user_id: Optional[str] = None) -> TextMessage:
         """
-        Create a friendly rate limit notification message with premium upgrade options.
+        Create a friendly rate limit notification message.
 
         Args:
             reset_seconds: Seconds until rate limit resets
-            user_id: User ID to check for premium eligibility
+            user_id: Unused; retained for compatibility
 
         Returns:
             TextMessage with rate limit notification
         """
-        import os
-        user_name = os.getenv("USER_NAME")
-
-        # Check if this is a user-based limit breach
-        is_user_limit = user_id and user_name and user_id == user_name
-
-        if is_user_limit:
-            message_text = (
-                "⚡ Premium User Rate Limit\n"
-                "You've reached your daily interaction limit!\n\n"
-                f"⏳ Reset in: {reset_seconds // 3600}h {(reset_seconds % 3600) // 60}m\n\n"
-                "💎 Upgrade to premium for unlimited access:\n"
-                "• Higher daily limits\n"
-                "• Priority support\n"
-                "• Advanced features\n\n"
-                "Contact admin for premium upgrade options!"
-            )
-        else:
-            message_text = (
-                "⏳ Rate Limit Reached\n"
-                "คุณแปลเร็วเกินไปค่ะ!\n\n"
-                f"Please wait {reset_seconds} seconds\n"
-                "กรุณารอสักครู่นะคะ 😊\n\n"
-                "💡 Limit: 10 translations per minute\n\n"
-                "💎 Premium users get higher limits!"
-            )
+        message_text = (
+            "⏳ Rate Limit Reached\n"
+            "คุณแปลเร็วเกินไปค่ะ!\n\n"
+            f"Please wait {reset_seconds} seconds\n"
+            "กรุณารอสักครู่นะคะ 😊\n\n"
+            "💡 Limit: 10 translations per minute\n\n"
+            "💎 Premium users get higher limits!"
+        )
 
         return TextMessage(text=message_text, quickReply=None, quoteToken=None)
 

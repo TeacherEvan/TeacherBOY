@@ -1,7 +1,7 @@
 """
 Application configuration and settings management.
 
-This module provides type-safe, validated configuration for the Zeus application,
+This module provides type-safe, validated configuration for the TeacherBOY/Ms. Green application,
 following production best practices for environment-based configuration management.
 """
 
@@ -24,17 +24,17 @@ class Settings(BaseSettings):
     """
 
     # ============================================================================
-    # LINE Bot Configuration - Primary Agent (Zeus)
+    # LINE Bot Configuration - Primary Agent (Ms. Green)
     # ============================================================================
-    line_channel_secret: str = Field(
-        default="test_secret_for_testing_only",
+    line_channel_secret: Optional[str] = Field(
+        default=None,
+        min_length=10,
         description="LINE Bot channel secret for webhook signature verification",
-        min_length=10,
     )
-    line_channel_access_token: str = Field(
-        default="test_token_for_testing_only",
-        description="LINE Bot channel access token for API authentication",
+    line_channel_access_token: Optional[str] = Field(
+        default=None,
         min_length=10,
+        description="LINE Bot channel access token for API authentication",
     )
 
     # ============================================================================
@@ -166,29 +166,29 @@ class Settings(BaseSettings):
         default=1.15,
         ge=0.0,
         le=2.0,
-        description="LLM temperature ('warmth') for Zeus responses (0-2). Higher = more creative/warm.",
+        description="LLM temperature ('warmth') for TeacherBOY responses (0-2). Higher = more creative/warm.",
     )
 
-    # Zeus AI access control (group/room). Private chats are always allowed.
+    # AI group access control (group/room). Private chats are always allowed.
     zeus_group_access_mode: str = Field(
         default="all",
         description=(
-            "Group/room access mode for Zeus AI commands. "
+            "Group/room access mode for group command usage. "
             "Options: 'all' (default), 'allowlist', 'denylist'."
         ),
     )
     zeus_allowed_group_ids: Optional[str] = Field(
         default=None,
         description=(
-            "Comma-separated list of allowed group_id/room_id values for Zeus when "
-            "ZEUS_GROUP_ACCESS_MODE=allowlist. Example: 'C123,R456'."
+            "Comma-separated list of allowed group_id/room_id values in allowlist mode. "
+            "Example: 'C123,R456'."
         ),
     )
     zeus_denied_group_ids: Optional[str] = Field(
         default=None,
         description=(
-            "Comma-separated list of denied group_id/room_id values for Zeus when "
-            "ZEUS_GROUP_ACCESS_MODE=denylist. Example: 'C123,R456'."
+            "Comma-separated list of denied group_id/room_id values in denylist mode. "
+            "Example: 'C123,R456'."
         ),
     )
 
@@ -214,7 +214,7 @@ class Settings(BaseSettings):
         default=None,
         description=(
             "Hugging Face dataset repo ID for storing conversation memory. "
-            "Example: 'username/zeus-memory'. Will be created as private if it doesn't exist."
+            "Example: 'username/teacherboy-memory'. Will be created as private if it doesn't exist."
         ),
     )
     conversation_memory_enabled: bool = Field(
@@ -261,7 +261,7 @@ class Settings(BaseSettings):
         default=None,
         description=(
             "Hugging Face dataset repo ID for document storage. "
-            "Example: 'username/zeus-documents'. Will be created as private if it doesn't exist."
+            "Example: 'username/teacherboy-documents'. Will be created as private if it doesn't exist."
         ),
     )
     document_max_file_size_mb: float = Field(
@@ -299,7 +299,7 @@ class Settings(BaseSettings):
         default=None,
         description=(
             "Hugging Face dataset repo ID for cloud log backup. "
-            "Example: 'username/zeus-logs'. Will be created as private if it doesn't exist."
+            "Example: 'username/teacherboy-logs'. Will be created as private if it doesn't exist."
         ),
     )
     history_log_rotation_days: int = Field(
@@ -310,7 +310,7 @@ class Settings(BaseSettings):
     )
     zeus_error_style: bool = Field(
         default=True,
-        description="Format error messages in Zeus's mythological, authoritative style.",
+        description="Format error messages in the bot persona's consistent style.",
     )
 
     # ============================================================================
@@ -464,7 +464,7 @@ class Settings(BaseSettings):
         default=None,
         description=(
             "Hugging Face dataset repo ID for calendar data backup. "
-            "Example: 'username/zeus-calendar'. Uses hf_memory_token for auth."
+            "Example: 'username/teacherboy-calendar'. Uses hf_memory_token for auth."
         ),
     )
     calendar_sync_interval_seconds: int = Field(
@@ -611,6 +611,20 @@ class Settings(BaseSettings):
         case_sensitive = False
         # Allow extra fields for forward compatibility
         extra = "ignore"
+
+    @field_validator("line_channel_secret")
+    @classmethod
+    def reject_placeholder_secret(cls, value: Optional[str]) -> Optional[str]:
+        if isinstance(value, str) and value.startswith("test_"):
+            raise ValueError("LINE channel secret appears to be a placeholder; set a real value in environment config")
+        return value
+
+    @field_validator("line_channel_access_token")
+    @classmethod
+    def reject_placeholder_token(cls, value: Optional[str]) -> Optional[str]:
+        if isinstance(value, str) and value.startswith("test_"):
+            raise ValueError("LINE channel access token appears to be a placeholder; set a real value in environment config")
+        return value
 
     @field_validator("debug", mode='before')
     @classmethod
@@ -781,14 +795,28 @@ class Settings(BaseSettings):
         return [alias.strip().lower() for alias in raw.split(",") if alias.strip()]
 
     def get_zeus_allowed_group_ids(self) -> set[str]:
-        """Return allowed group/room IDs for Zeus AI (allowlist mode)."""
+        """Return allowed group/room IDs for legacy Zeus-style group access."""
+        raw = (self.zeus_allowed_group_ids or "").strip()
+        if not raw:
+            return set()
+        return {part.strip() for part in raw.split(",") if part.strip()}
+
+    def get_allowed_group_ids(self) -> set[str]:
+        """Return allowed group/room IDs for TeacherBOY AI (allowlist mode)."""
         raw = (self.zeus_allowed_group_ids or "").strip()
         if not raw:
             return set()
         return {part.strip() for part in raw.split(",") if part.strip()}
 
     def get_zeus_denied_group_ids(self) -> set[str]:
-        """Return denied group/room IDs for Zeus AI (denylist mode)."""
+        """Return denied group/room IDs for legacy Zeus-style group access."""
+        raw = (self.zeus_denied_group_ids or "").strip()
+        if not raw:
+            return set()
+        return {part.strip() for part in raw.split(",") if part.strip()}
+
+    def get_denied_group_ids(self) -> set[str]:
+        """Return denied group/room IDs for TeacherBOY AI (denylist mode)."""
         raw = (self.zeus_denied_group_ids or "").strip()
         if not raw:
             return set()

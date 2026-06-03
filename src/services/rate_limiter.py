@@ -127,10 +127,7 @@ class RateLimiter:
         return True
 
     def _is_user_in_secrets_group(self, user_id: str) -> bool:
-        """Check if user is in the secrets access group (USER_NAME env var)."""
-        import os
-        user_name = os.getenv("USER_NAME")
-        return user_name is not None and user_id == user_name
+        return False
 
     def _is_user_allowed(self, user_id: str, now: datetime) -> bool:
         """Check user-based rate limits for authenticated users."""
