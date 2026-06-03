@@ -853,7 +853,9 @@ class Settings(BaseSettings):
         """
         return True
 
-    def get_named_user_ids(self, prefix: str = "USER_") -> Dict[str, str]:
+    def is_conversation_memory_configured(self) -> bool:
+        """Check if conversation memory is configured and ready for use."""
+        return bool(self.conversation_memory_enabled)
         """Return a mapping of user aliases to LINE user IDs from environment variables.
 
         This supports admin-safe outbound messaging to known recipients.
