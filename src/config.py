@@ -856,6 +856,26 @@ class Settings(BaseSettings):
     def is_conversation_memory_configured(self) -> bool:
         """Check if conversation memory is configured and ready for use."""
         return bool(self.conversation_memory_enabled)
+
+    def is_document_memory_configured(self) -> bool:
+        """Check if document memory is configured and ready for use."""
+        return bool(self.document_memory_enabled)
+
+    def is_history_log_configured(self) -> bool:
+        """Check if history logging is configured and enabled."""
+        return bool(self.history_log_enabled)
+
+    def is_history_log_hf_configured(self) -> bool:
+        """Check if HF Hub backup for history logs is configured."""
+        return bool(
+            self.history_log_enabled
+            and self.hf_memory_token
+            and self.history_log_hf_repo_id
+        )
+
+    def is_profiler_configured(self) -> bool:
+        """Check if the psychological profiler feature is enabled."""
+        return bool(self.profiler_enabled)
         """Return a mapping of user aliases to LINE user IDs from environment variables.
 
         This supports admin-safe outbound messaging to known recipients.
