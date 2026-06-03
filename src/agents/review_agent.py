@@ -117,6 +117,8 @@ class ReviewAgent(BaseAgent):
         self, event: MessageEvent, text: str, line_bot_api: MessagingApi
     ) -> bool:
         user_id = getattr(getattr(event, "source", None), "user_id", None)
+        self._prune_pending_reviews()
+
         if not user_id:
             return False
 
@@ -383,6 +385,13 @@ class ReviewAgent(BaseAgent):
         return None
 
     def _is_non_english_text(self, text: str) -> bool:
+        """
+        Checks if the given text is likely non-English. This heuristic matches
+        Thai script or any alphabetic character with an ordinal value greater
+        than 127 (e.g., covering Latin extended, Cyrillic, Arabic, etc.).
+        It does not currently cover CJK (Chinese, Japanese, Korean) characters
+        unless they include other matched non-ASCII alphabetic characters.
+        """
         if re.search(r"[\u0E00-\u0E7F]", text):
             return True
         return any(ord(char) > 127 and char.isalpha() for char in text)

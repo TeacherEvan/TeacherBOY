@@ -284,8 +284,52 @@ async def test_review_agent_reports_memory_save_failures_and_keeps_pending_revie
     assert "U_REQ" in agent._pending_reviews
     latest_reply = line_api.reply_message.call_args[0][0]
     assert latest_reply.messages[0].text == (
-        "I couldn't save that to memory right now. Please try again."
+        "I couldn\'t save that to memory right now. Please try again."
     )
+
+
+@pytest.mark.asyncio
+async def test_review_agent_prunes_stale_pending_reviews(tmp_path: Path):
+    line_api = Mock()
+    line_api.push_message = Mock()
+    line_api.reply_message = Mock()
+
+    event = Mock()
+    event.reply_token = "reply"
+    event.source = Mock()
+    event.source.user_id = "U_REQ"
+    event.source.group_id = "G1"
+    event.source.type = "group"
+
+    buffer_service = MessageBufferService()
+    buffer_service.store_message("group_G1", "ข้อความเก่า", "U_OTHER")
+
+    ai_review_service = AsyncMock()
+    ai_review_service.translate_and_summarize.return_value = "Stale summary"
+
+    agent = ReviewAgent(
+        ai_review_service=ai_review_service,
+        message_buffer=buffer_service,
+        staff_memory_service=StaffMemoryService(
+            tmp_path / "staff_memory.json"
+        ),
+    )
+
+    # Manually add a stale pending review
+    stale_time = datetime.now() - timedelta(hours=25)  # Older than 24 hours TTL
+    agent._pending_reviews["U_REQ"] = PendingReview(
+        original_text="stale message",
+        summary="Stale summary",
+        source_chat_id="group_G1",
+        created_at=stale_time,
+    )
+
+    # Trigger handle, which should prune stale reviews
+    await agent.handle(event, "Ms. Green whats important this week?", line_api)
+
+    assert "U_REQ" not in agent._pending_reviews
+    # Ensure no review was generated, as the stale one should have been pruned
+    ai_review_service.translate_and_summarize.assert_not_awaited()
 
 
 @pytest.mark.asyncio
