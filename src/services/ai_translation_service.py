@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import httpx
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
 from src.services.github_models_service import github_models_service
 from src.services.openrouter_service import openrouter_service
+from src.config import settings
+from src.services.hermes_service import hermes_service
+from src.services.nous_service import nous_inference_service
 
 
 logger = logging.getLogger(__name__)
@@ -15,12 +20,139 @@ logger = logging.getLogger(__name__)
 class AITranslationResult:
     text: str
     provider: str
+    reason: Optional[str] = None
+
+
+class LibreTranslateProvider:
+    """Thin wrapper so LibreTranslate can participate in the provider chain."""
+
+    def __init__(self) -> None:
+        self._last_status_code: Optional[int] = None
+        self._last_error: Optional[str] = None
+        self._last_model: Optional[str] = None
+
+    def _base_url(self) -> str:
+        url = getattr(settings, "libretranslate_api_url", None)
+        if not url:
+            return "https://libretranslate.de/translate"
+        return url.rstrip("/")
+
+    def _api_key(self) -> Optional[str]:
+        return getattr(settings, "libretranslate_api_key", None)
+
+    def _headers(self) -> dict:
+        headers = {"Content-Type": "application/json"}
+        api_key = self._api_key()
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        return headers
+
+    def is_configured(self) -> bool:
+        return bool(self._base_url())
+
+    def get_last_error(self) -> Tuple[Optional[int], Optional[str], Optional[str]]:
+        return self._last_status_code, self._last_error, self._last_model
+
+    async def chat_completion(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.2,
+        max_tokens: Optional[int] = None,
+        retry_on_rate_limit: bool = True,
+    ) -> Optional[str]:
+        if not self.is_configured():
+            return None
+
+        user_text = ""
+        for message in messages:
+            if message.get("role") == "user":
+                user_text = message.get("content", "")
+                break
+
+        if not user_text:
+            self._last_error = "No user content"
+            return None
+
+        source_lang = "en"
+        target_lang = "th"
+        for message in messages:
+            if message.get("role") == "user":
+                content = message.get("content", "")
+                if "Translate from th to en:" in content:
+                    source_lang, target_lang = "th", "en"
+                elif "Translate from en to th:" in content:
+                    source_lang, target_lang = "en", "th"
+                break
+
+        payload: dict = {
+            "q": user_text,
+            "source": source_lang,
+            "target": target_lang,
+            "format": "text",
+        }
+        api_key = self._api_key()
+        if api_key:
+            payload["api_key"] = api_key
+
+        url = f"{self._base_url()}"
+        self._last_error = None
+        self._last_status_code = None
+        self._last_model = "libretranslate"
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=30.0,
+                follow_redirects=True,
+            ) as client:
+                response = await client.post(
+                    url,
+                    headers=self._headers(),
+                    json=payload,
+                )
+        except Exception as exc:
+            self._last_error = str(exc)
+            logger.error("❌ LibreTranslate request failed: %s", exc)
+            return None
+
+        self._last_status_code = response.status_code
+
+        if response.status_code != 200:
+            text = (response.text or "").strip()
+            self._last_error = text or f"HTTP {response.status_code}"
+            logger.error("❌ LibreTranslate error %s: %s", response.status_code, text[:1000])
+            return None
+
+        try:
+            data = response.json()
+        except Exception as exc:
+            self._last_error = f"Invalid JSON: {exc}"
+            logger.error("❌ LibreTranslate invalid JSON: %s", exc)
+            return None
+
+        translated = data.get("translatedText") if isinstance(data, dict) else None
+        if not translated:
+            self._last_error = "Missing translatedText"
+            logger.warning("⚠️ LibreTranslate response missing translatedText: %s", data)
+            return None
+
+        return translated
 
 
 class AITranslationService:
-    def __init__(self, github_models=github_models_service, openrouter=openrouter_service):
+    MIN_TEXT_LENGTH = 30
+    def __init__(
+        self,
+        github_models=github_models_service,
+        openrouter=openrouter_service,
+        libre_translate: Optional[LibreTranslateProvider] = None,
+        hermes=hermes_service,
+        nous=nous_inference_service,
+    ):
         self.github_models = github_models
         self.openrouter = openrouter
+        self.libre_translate = libre_translate or LibreTranslateProvider()
+        self.hermes = hermes
+        self.nous = nous
 
     async def translate(
         self,
@@ -29,27 +161,75 @@ class AITranslationService:
         target_lang: str,
     ) -> Optional[AITranslationResult]:
         messages = self._build_messages(text, source_lang, target_lang)
+        attempt = 0
+        max_attempts = 5
+        last_reason = "No provider attempted"
 
-        if self.github_models.is_configured():
-            result = await self.github_models.chat_completion(
-                messages=messages,
-                temperature=0.2,
-            )
-            if result:
-                return AITranslationResult(text=result.strip(), provider="github_models")
+        while attempt < max_attempts:
+            attempt += 1
 
-        if self.openrouter.is_configured():
-            result = await self.openrouter.chat_completion(
-                messages=messages,
-                temperature=0.2,
-            )
-            if result:
-                return AITranslationResult(text=result.strip(), provider="openrouter")
+            g = self.github_models
+            o = self.openrouter
+            libre = self.libre_translate
+            n = self.nous
+            providers = []
+
+            # Nous Portal (free) — PRIMARY
+            if n.is_configured():
+                providers.append(("nous", n, n.chat_completion, messages, {"temperature": 0.2}))
+
+            # GitHub Models
+            if g.is_configured():
+                providers.append(("github_models", g, g.chat_completion, messages, {"temperature": 0.2}))
+
+            # OpenRouter
+            if o.is_configured():
+                providers.append(("openrouter", o, o.chat_completion, messages, {"temperature": 0.2}))
+
+            # LibreTranslate
+            if libre.is_configured():
+                providers.append(("libretranslate", libre, libre.chat_completion, messages, {"temperature": 0.2}))
+
+            # Hermes fallback
+            h = self.hermes
+            if h.is_configured():
+                providers.append(("hermes", h, h.chat_completion, messages, {"temperature": 0.2}))
+
+            for provider_name, provider_obj, fn, msgs, kwargs in providers:
+                try:
+                    result = await fn(msgs, **kwargs)
+                except Exception as exc:
+                    last_reason = f"{provider_name} raised {type(exc).__name__}: {exc}"
+                    logger.error("AI translation provider error (%s): %s", provider_name, exc)
+                    continue
+
+                if result:
+                    result_text = result.strip()
+                    if not result_text:
+                        last_reason = f"{provider_name} returned empty content"
+                        continue
+                    return AITranslationResult(
+                        text=result_text,
+                        provider=provider_name,
+                        reason=f"success after {attempt} attempt(s) - {provider_obj.__class__.__name__}",
+                    )
+
+                status, err, model = provider_obj.get_last_error()
+                last_reason = f"{provider_name} failed ({provider_obj.__class__.__name__})"
+                if status is not None:
+                    last_reason += f" status={status}"
+                if model:
+                    last_reason += f" model={model}"
+                if err:
+                    last_reason += f" error={err}"
+
+            await asyncio.sleep(min(0.5 * (2 ** (attempt - 1)), 2))
 
         logger.warning(
-            "AI translation unavailable for %s -> %s",
+            "AI translation unavailable for %s -> %s: %s",
             source_lang,
             target_lang,
+            last_reason,
         )
         return None
 

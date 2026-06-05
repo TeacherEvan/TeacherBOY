@@ -50,13 +50,24 @@ from src.services.image_analyzer_session_manager import (
     AnalyzerState,
 )
 from src.services.github_models_service import github_models_service
+from src.services.openrouter_service import openrouter_service
+from src.services.hermes_service import hermes_service
 from src.services.rate_limiter import RateLimiter
+from src.utils.llm_fallback import chat_completion_with_vision_fallback
 from src.services.metrics_service import metrics_service
 from src.services.privilege_service import privilege_service
 from src.services.bot_identity_service import get_bot_identity_service
 from src.config import settings
 from src.utils.tracing import get_tracer
 from src.prompts.builders.debrief_builder import build_debrief_prompt
+from src.services.debrief_formatter import DebriefFormatter
+from src.services.debrief_extraction_service import DebriefExtractionService
+from src.utils.llm_fallback import chat_completion_with_vision_fallback
+
+# Instantiate debrief extraction service with the proper vision fallback
+_debrief_extraction_service = DebriefExtractionService(
+    llm_vision_fn=chat_completion_with_vision_fallback
+)
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -87,9 +98,9 @@ class ImageAnalyzerAgent(BaseAgent):
         "examine this",
         "examine image",
         "look at this",
+        "debrief",
         "debrief this",
-        "assistantbot debrief this",
-        "ms. green debrief this",
+        "m",
     ]
 
     def __init__(self, http_client=None):
@@ -259,8 +270,12 @@ class ImageAnalyzerAgent(BaseAgent):
         4. Text message when waiting for analysis choice
         5. Calendar confirmation response (yes/no add to calendar)
         """
-        # Check if GitHub Models is configured (required for vision)
-        if not github_models_service.is_configured():
+        # Check if any vision-capable provider is available
+        if not (
+            hermes_service.is_configured()
+            or openrouter_service.is_configured()
+            or github_models_service.is_configured()
+        ):
             return False
 
         message = getattr(event, "message", None)
@@ -386,6 +401,77 @@ class ImageAnalyzerAgent(BaseAgent):
                 image_analyzer_session_manager.clear_session(chat_id)
                 return False
 
+    async def _process_direct_debrief(
+        self,
+        event: MessageEvent,
+        chat_id: str,
+        user_id: Optional[str],
+        line_bot_api: MessagingApi,
+        image_data: str,
+    ) -> bool:
+        """Process a direct debrief request when an image is already stored."""
+        logger.info(f"📖 Processing direct debrief for chat {chat_id}")
+        
+        await self._send_analyzing_message(event, line_bot_api)
+        
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": build_debrief_prompt()},
+                    {"type": "image_url", "image_url": {"url": image_data}},
+                ],
+            }
+        ]
+        
+        model = getattr(settings, "profiler_model", "openai/gpt-4o")
+        analysis = await chat_completion_with_vision_fallback(
+            messages=messages,
+            model=model,
+            temperature=0.15,
+            max_tokens=500,
+        )
+        
+        if not analysis:
+            await self._send_error_message(event, line_bot_api, "Failed to analyze the image for debrief.")
+            image_analyzer_session_manager.clear_session(chat_id)
+            return False
+            
+        # Parse the JSON response
+        import json, re
+        cleaned = re.sub(r'^```json\s*', '', analysis, flags=re.IGNORECASE)
+        cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.IGNORECASE).strip()
+        
+        try:
+            debrief_data = json.loads(cleaned)
+        except json.JSONDecodeError:
+            debrief_data = {"observations": analysis} # Fallback
+            
+        # Format and send the parent-facing message
+        formatted_msg = DebriefFormatter.format_single_session({
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "timePeriod": debrief_data.get("timePeriod"),
+            "subject": debrief_data.get("subject"),
+            "lesson": debrief_data.get("lesson"),
+            "teacher": debrief_data.get("teacher"),
+            "observations": debrief_data.get("observations", "A wonderful day of learning!"),
+        })
+        
+        response_msg = TextMessage(text=formatted_msg, quickReply=None, quoteToken=None)
+        if event.reply_token:
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[response_msg],
+                    notificationDisabled=False,
+                ),
+            )
+            
+        logger.info(f"✅ Debrief sent for chat {chat_id}")
+        image_analyzer_session_manager.clear_session(chat_id)
+        return True
+
     async def _handle_trigger(
         self,
         event: MessageEvent,
@@ -409,7 +495,15 @@ class ImageAnalyzerAgent(BaseAgent):
             logger.info(f"🔓 Admin {user_id} bypassed image analyzer rate limit")
 
         command_text = self._strip_identity_prefix(text)
-        is_debrief = "debrief" in command_text
+        is_debrief = "debrief" in command_text or command_text.strip().lower() == "m"
+        
+        # If debrief trigger and we already have an image stored, process immediately
+        if is_debrief:
+            session = image_analyzer_session_manager.get_session(chat_id)
+            if session and session.image_data:
+                logger.info(f"📖 Direct debrief trigger detected for chat {chat_id}")
+                return await self._process_direct_debrief(event, chat_id, user_id, line_bot_api, session.image_data)
+        
         bare_analyze = command_text == "analyze"
 
         if bare_analyze:
@@ -642,12 +736,32 @@ class ImageAnalyzerAgent(BaseAgent):
         # Clear data URL reference now that it's stored in session manager
         del image_data_url
 
-        # Ask for question
+        # Present Daily Journal Quick Reply options immediately upon image receipt
+        quick_reply = QuickReply(
+            items=[
+                QuickReplyItem(
+                    type="action",
+                    imageUrl=None,
+                    action=MessageAction(label="🔍 Analyze", text="Analyze this"),
+                ),
+                QuickReplyItem(
+                    type="action",
+                    imageUrl=None,
+                    action=MessageAction(label="📝 Scrape", text="Scrape this"),
+                ),
+                QuickReplyItem(
+                    type="action",
+                    imageUrl=None,
+                    action=MessageAction(label="📖 Generate Debrief", text="M"),
+                ),
+            ]
+        )
+        
         question_msg = TextMessage(
-            text="⚡ Image received! What would you like to know about this image?\n\n"
-            "(You have 60 seconds to ask)\n\n"
-            "ได้รับภาพแล้ว! มีคำถามอะไรเกี่ยวกับภาพนี้?",
-            quickReply=None,
+            text="⚡ Image received! What would you like to do?\\n\\n"
+            "(Tap a button above, or type your question)\\n\\n"
+            "ได้รับภาพแล้ว! ต้องการให้ทำอย่างไร?",
+            quickReply=quick_reply,
             quoteToken=None,
         )
 
@@ -746,11 +860,11 @@ class ImageAnalyzerAgent(BaseAgent):
                 image_data, question, scene_mode=scene_mode
             )
 
-        # Call GPT-4o vision
+        # Call vision via provider-agnostic fallback
         logger.info(f"🖼️ Analyzing image with question: {question[:50]}...")
 
         model = getattr(settings, "profiler_model", "openai/gpt-4o")
-        analysis = await github_models_service.chat_completion_with_vision(
+        analysis = await chat_completion_with_vision_fallback(
             messages=messages,
             model=model,
             temperature=0.15 if low_risk_scene else settings.llm_temperature,
@@ -758,8 +872,14 @@ class ImageAnalyzerAgent(BaseAgent):
         )
 
         if not analysis:
-            status_code, error, model_used = github_models_service.get_last_error()
-            logger.error(f"❌ Vision API failed: {status_code} - {error}")
+            status_code, error_detail, model_used = self._get_vision_error_detail() or (
+                None,
+                None,
+                None,
+            )
+            logger.error(
+                f"❌ Vision API fallback failed: {status_code} - {error_detail}"
+            )
             policy_error_terms = (
                 "policy",
                 "moderation",
@@ -769,8 +889,8 @@ class ImageAnalyzerAgent(BaseAgent):
                 "violation",
             )
             if (
-                error
-                and any(term in error.lower() for term in policy_error_terms)
+                error_detail
+                and any(term in error_detail.lower() for term in policy_error_terms)
                 and not low_risk_scene
             ):
                 logger.info(
@@ -779,7 +899,7 @@ class ImageAnalyzerAgent(BaseAgent):
                 messages = self._build_vision_message(
                     image_data, question, scene_mode="literal"
                 )
-                analysis = await github_models_service.chat_completion_with_vision(
+                analysis = await chat_completion_with_vision_fallback(
                     messages=messages,
                     model=model,
                     temperature=0.1,
@@ -792,10 +912,15 @@ class ImageAnalyzerAgent(BaseAgent):
         del messages  # Clear vision API messages containing image
 
         if not analysis:
-            status_code, error, model_used = github_models_service.get_last_error()
-            logger.error(f"❌ Vision API failed: {status_code} - {error}")
+            status_code, error_detail, model_used = self._get_vision_error_detail() or (
+                None,
+                None,
+                None,
+            )
             await self._send_error_message(
-                event, line_bot_api, f"Analysis failed: {error or 'Unknown error'}"
+                event,
+                line_bot_api,
+                f"Analysis failed: {error_detail or 'Unknown error'}",
             )
             return False
 
@@ -836,6 +961,8 @@ class ImageAnalyzerAgent(BaseAgent):
                 event, line_bot_api, detected_dates, user_id, chat_id
             )
 
+        # Explicitly clear session to prevent memory leaks
+        image_analyzer_session_manager.clear_session(chat_id)
         return True
 
     def _build_vision_message(
@@ -920,6 +1047,17 @@ class ImageAnalyzerAgent(BaseAgent):
                 ],
             },
         ]
+
+    def _get_vision_error_detail(self) -> tuple[Optional[int], Optional[str], Optional[str]]:
+        """Collect the most recent vision API error detail."""
+        for svc in (github_models_service, openrouter_service):
+            try:
+                detail = svc.get_last_error()
+            except AttributeError:
+                continue
+            if detail and detail[1]:
+                return detail
+        return None
 
     def _format_response(self, analysis: str) -> str:
         """Format the analysis response for LINE (strip date detection section)."""

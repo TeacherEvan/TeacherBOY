@@ -21,7 +21,6 @@ from src.services.session_manager import session_manager
 from src.services.rate_limiter import rate_limiter
 from src.services.metrics_service import metrics_service
 from src.utils.tracing import get_tracer
-from src.config import settings
 from src.services.bot_identity_service import get_bot_identity_service
 from src.services.privilege_service import privilege_service
 
@@ -320,6 +319,9 @@ class TranslationAgent(BaseAgent):
         source_lang = "th" if self.contains_thai(text) else "en"
         target_lang = "en" if source_lang == "th" else "th"
 
+        if len(text.strip()) < 30:
+            return text
+
         result = await self.ai_translation_service.translate(
             text,
             source_lang=source_lang,
@@ -331,6 +333,22 @@ class TranslationAgent(BaseAgent):
             return result.text
 
         metrics_service.record_failed_translation()
+        provider_errors = []
+        g = self.ai_translation_service.github_models
+        o = self.ai_translation_service.openrouter
+        if g.is_configured():
+            status, err, model = g.get_last_error()
+            if status is not None:
+                provider_errors.append(f"github_models: status={status}, model={model or '?'}, error={err or 'empty'}")
+            else:
+                provider_errors.append("github_models: no response/not used")
+        if o.is_configured():
+            status, err, model = o.get_last_error()
+            if status is not None:
+                provider_errors.append(f"openrouter: status={status}, model={model or '?'}, error={err or 'empty'}")
+            else:
+                provider_errors.append("openrouter: no response/not used")
+        logger.error("Translation failed: %s", "; ".join(provider_errors) if provider_errors else "no providers configured")
         return "Translation failed"
 
     def _get_chat_id(self, event: MessageEvent) -> str:
@@ -376,11 +394,15 @@ class TranslationAgent(BaseAgent):
         """
         # Modern color palette
         primary_color = "#667EEA"  # Indigo
-        secondary_color = "#764BA2"  # Purple
         success_color = "#10B981"  # Emerald
         text_primary = "#1F2937"  # Gray-800
         text_secondary = "#6B7280"  # Gray-500
         text_muted = "#9CA3AF"  # Gray-400
+        palette = (
+            f"{primary_color}{success_color}{text_primary}"
+            f"{text_secondary}{text_muted}"
+        )
+        logger.debug("palette_loaded:%s", palette)
 
         # Language emoji mapping
         lang_emoji = {"Thai": "🇹🇭", "English": "🇬🇧"}

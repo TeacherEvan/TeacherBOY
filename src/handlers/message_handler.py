@@ -278,6 +278,9 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
     source_lang = "th" if contains_thai(text) else "en"
     target_lang = "en" if source_lang == "th" else "th"
 
+    if len(text.strip()) < 30:
+        return
+
     logger.info("Using shared AI translation service")
     result = await ai_translation_service.translate(
         text,

@@ -104,6 +104,17 @@ class Settings(BaseSettings):
         description="Auto-detect incomplete sentences and append '...' to prevent hallucination",
     )
 
+    libretranslate_api_url: Optional[str] = Field(
+        default=None,
+        description="LibreTranslate API endpoint URL",
+        validation_alias=AliasChoices("LIBRETRANSLATE_API_URL"),
+    )
+    libretranslate_api_key: Optional[str] = Field(
+        default=None,
+        description="LibreTranslate API key",
+        validation_alias=AliasChoices("LIBRETRANSLATE_API_KEY"),
+    )
+
     # ============================================================================
     # News Agent Configuration
     # ============================================================================

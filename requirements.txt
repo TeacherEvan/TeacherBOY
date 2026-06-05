@@ -38,6 +38,10 @@ huggingface-hub==0.23.0
 pypdf==4.2.0
 python-docx==1.1.2
 
+# Job-oriented Daily Journal tools
+easyocr==1.7.1
+reportlab==4.2.0
+
 # Optional Google Calendar integration
 google-api-python-client>=2.100.0
 google-auth-oauthlib>=1.1.0

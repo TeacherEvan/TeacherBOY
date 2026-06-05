@@ -97,4 +97,19 @@ export default defineSchema({
     updatedBy: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
+
+  debriefSessions: defineTable({
+    date: v.string(), // YYYY-MM-DD
+    chatId: v.string(),
+    timePeriod: v.optional(v.string()), // e.g., "9h12 - 10h10, Period 3"
+    subject: v.optional(v.string()), // e.g., "English - foreign languages"
+    lesson: v.optional(v.string()), // e.g., "Phonics"
+    teacher: v.optional(v.string()), // e.g., "Teacher Evan"
+    observations: v.string(), // Rich text summary
+    imageUrlRef: v.optional(v.string()), // Optional: link to stored image
+    validatedByCalendar: v.boolean(), // True if Maton API confirmed details
+    ...timestampFields,
+  })
+    .index("by_date_chat", ["date", "chatId"])
+    .index("by_teacher", ["teacher"]),
 });

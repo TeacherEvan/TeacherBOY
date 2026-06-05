@@ -115,10 +115,18 @@ async def test_admin_thai_message_wakes_sleeping_chat_and_starts_session(
     assert session.is_sleeping("user_UADMIN") is False
     assert session.is_session_active("user_UADMIN") is True
     assert session.started_sessions == [("user_UADMIN", "UADMIN")]
-    translation_service.translate.assert_awaited_once_with(
-        "สวัสดีค่ะ",
-        source_lang="th",
-        target_lang="en",
+    translation_service.translate.assert_not_awaited()
+
+    reply_args = line_bot_api.reply_message.call_args
+    assert reply_args[0][0].messages[0].text == "สวัสดีค่ะ"
+
+    long_event = _make_private_event("UADMIN")
+    long_result = await agent.handle(long_event, "this is a longer thai test message that definitely exceeds thirty characters", line_bot_api)
+    assert long_result is True
+    translation_service.translate.assert_awaited_with(
+        "this is a longer thai test message that definitely exceeds thirty characters",
+        source_lang="en",
+        target_lang="th",
     )
 
 
@@ -146,14 +154,10 @@ async def test_non_privileged_alias_stop_falls_through_to_translation(
 
     assert result is True
     assert session.sleep_calls == []
-    translation_service.translate.assert_awaited_once_with(
-        "ms green stop",
-        source_lang="en",
-        target_lang="th",
-    )
+    translation_service.translate.assert_not_awaited()
 
     call_args = line_bot_api.reply_message.call_args
-    assert call_args[0][0].messages[0].text == "translated output"
+    assert call_args[0][0].messages[0].text == "ms green stop"
 
 
 @pytest.mark.asyncio
