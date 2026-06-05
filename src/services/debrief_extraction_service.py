@@ -135,27 +135,5 @@ class DebriefExtractionService:
 
     async def _validate_with_maton_calendar(self, date_str: str, time_period: Optional[str], chat_id: str) -> Optional[Dict[str, str]]:
         """Queries Maton API to infer teacher/subject from Google Calendar."""
-        maton_key = self._get_maton_key()
-        if not maton_key:
-            return None
-
-        # Note: Maton API endpoint should be configured via settings in a real deployment
-        url = "https://api.maton.ai/v1/calendar/events"
-        headers = {"Authorization": f"Bearer {maton_key}", "Content-Type": "application/json"}
-        
-        params = {"date": date_str, "hint": time_period}
-        
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(url, headers=headers, params=params)
-                if resp.status_code == 200:
-                    events = resp.json().get("events", [])
-                    if events:
-                        return {
-                            "teacher": events[0].get("organizer", {}).get("displayName"),
-                            "subject": events[0].get("summary")
-                        }
-        except Exception as e:
-            logger.warning(f"Maton calendar validation failed: {e}")
-        
+        # CRITICAL: User requested to IGNORE Maton API key. Skipping validation.
         return None
