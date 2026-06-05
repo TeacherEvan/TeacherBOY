@@ -135,5 +135,5 @@ class DebriefExtractionService:
 
     async def _validate_with_maton_calendar(self, date_str: str, time_period: Optional[str], chat_id: str) -> Optional[Dict[str, str]]:
         """Queries Maton API to infer teacher/subject from Google Calendar."""
-        # CRITICAL: User requested to IGNORE Maton API key. Skipping validation.
+        # CRITICAL: TeacherBOY project constraint: Maton AI API key is ignored in this codebase/HF Space.
         return None
