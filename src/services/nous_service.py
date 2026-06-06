@@ -82,7 +82,8 @@ class NousInferenceService:
     ) -> str | None:
         token = self._get_token()
         if not token:
-            self._last_error = "Nous OAuth token not found in ~/.hermes/auth.json"
+            self._last_error = "Nous OAuth token not found. Please run `/bg agent auth` first."
+            self._last_status_code = 401
             logger.warning("⚠️ %s", self._last_error)
             return None
 

@@ -310,9 +310,13 @@ async def lifespan(app: FastAPI):
         google_translation_service.set_client(http_client_pool)
         logger.info("✅ Google Cloud Translation API configured (PRIMARY)")
     else:
-        logger.warning("⚠️  Google Translate API not configured - using LibreTranslate only")
+        logger.warning("⚠️  Google Translate API not configured - using fallback providers")
 
-    logger.info("✅ LibreTranslate configured (FALLBACK)")
+    libre_translate_configured = bool(getattr(settings, "libretranslate_api_url", None)) and bool(getattr(settings, "libretranslate_api_key", None))
+    if libre_translate_configured:
+        logger.info("✅ LibreTranslate configured (FALLBACK)")
+    else:
+        logger.info("ℹ️  LibreTranslate skipped (no configured URL/key)")
 
     # ========================================================================
     # PHASE 2c: Hermes Fallback Provider Initialization
@@ -739,7 +743,15 @@ async def webhook(request: Request) -> JSONResponse:
 
                         # Send welcome message
                         if user_id:
-                            welcome_msg = TextMessage(text="Welcome friend\n\nยินดีต้อนรับเพื่อน")  # type: ignore[call-arg]
+                            welcome_msg = TextMessage(
+                                text=(
+                                    "Welcome!\n\n"
+                                    "I'm Ms. Green — calm, curious, and actually glad you're here.\n\n"
+                                    "You can chat in English or Thai, ask questions, or just say hi. "
+                                    "I translate when it helps and I don't rush.\n\n"
+                                    "If you ever want a quick intro later, just ask who I am."
+                                )
+                            )  # type: ignore[call-arg]
                             try:
                                 await asyncio.to_thread(
                                     line_bot_api.push_message,

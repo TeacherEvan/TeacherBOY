@@ -182,6 +182,10 @@ class Settings(BaseSettings):
         description="Default model to use for OpenRouter (must be a free model)",
         validation_alias=AliasChoices("OPENROUTER_DEFAULT_MODEL", "DEFAULT_MODEL"),
     )
+    openrouter_translation_model: str | None = Field(
+        default=None,
+        description="Optional OpenRouter model override for translation fallback only",
+    )
 
     llm_system_prompt: str = Field(
         default=(

@@ -11,8 +11,7 @@
 
 ## Operating the Bot
 
-- **Admin Quick Start:** [ADMIN_QUICK_START.md](ADMIN_QUICK_START.md) - Fastest path to enable admin access
-- **Admin Commands:** [ADMIN_COMMANDS.md](ADMIN_COMMANDS.md) - Full `/admin` command reference and remote-control flows
+- **Admin Quick Start:** [ADMIN_COMMANDS.md](ADMIN_COMMANDS.md) - Fast setup + full `/admin` command reference
 - **Tracing:** [TRACING.md](TRACING.md) - OpenTelemetry tracing with VS Code AI Toolkit
 
 ## Developer Documentation

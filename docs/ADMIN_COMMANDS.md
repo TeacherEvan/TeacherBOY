@@ -6,6 +6,48 @@ The Admin Agent provides in-chat control commands for authorized
 administrators to manage Ms. Green, monitor sessions, and troubleshoot
 issues without server access.
 
+## Quick Start
+
+1. **Get your LINE user ID** — send any message to the bot and check logs for `User ID: U...`.
+2. **Set access** — add that ID to `.env` as `ADMIN_USER_IDS` or claim it with `/admin claim <ADMIN_SETUP_KEY>`.
+3. **Restart** — `docker-compose restart` or rerun `uvicorn src.main:app --reload`.
+4. **Verify** — logs should show `AdminAgent initialized with ... authorized admin(s)`.
+5. **Try it** — send `/admin help` or `/admin dashboard`.
+
+---
+
+## Configure Access Levels
+
+See also: [Environment reference](../reference/environment.md).
+
+### Static admins
+```bash
+ADMIN_USER_IDS=U1234567890abcdef,U9876543210fedcba
+```
+
+### Bootstrap claim
+1. Set a temporary `ADMIN_SETUP_KEY`.
+2. In LINE: `/admin claim <ADMIN_SETUP_KEY>`.
+3. Add the returned user ID to `ADMIN_USER_IDS`.
+4. Restart and remove `ADMIN_SETUP_KEY`.
+
+---
+
+## Most-used commands
+
+- `/admin status`
+- `/admin sessions`
+- `/admin dashboard`
+- `/admin sleep [chat_id] [hours]`
+- `/admin wake [chat_id]`
+- `/admin reset [chat_id]`
+- `/admin purge [chat_id]`
+- `/admin leave [chat_id]`
+- `/admin confirm <token>`
+- `/admin cancel <token>`
+
+For the full command reference, usage details, and preview/confirmation flows, keep reading below.
+
 For first-time setup, start with [ADMIN_QUICK_START.md](ADMIN_QUICK_START.md).
 
 ## 👑 Privileged Access Levels

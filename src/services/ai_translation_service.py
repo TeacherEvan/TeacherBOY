@@ -22,6 +22,91 @@ class AITranslationResult:
     reason: str | None = None
 
 
+class GoogleTranslateProvider:
+    """Google Cloud Translation API v2 provider."""
+
+    def __init__(self, api_key: str) -> None:
+        self._api_key = api_key
+        self._last_status_code: int | None = None
+        self._last_error: str | None = None
+        self._last_model: str | None = "google_translate"
+
+    def is_configured(self) -> bool:
+        return bool(self._api_key)
+
+    def get_last_error(self) -> tuple[int | None, str | None, str | None]:
+        return self._last_status_code, self._last_error, self._last_model
+
+    async def chat_completion(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.2,
+        max_tokens: int | None = None,
+        retry_on_rate_limit: bool = True,
+    ) -> str | None:
+        if not self.is_configured():
+            return None
+
+        source_lang = "en"
+        target_lang = "th"
+        user_text = ""
+        for message in messages:
+            if message.get("role") == "user":
+                user_text = message.get("content", "")
+                if "Translate from th to en:" in user_text:
+                    source_lang, target_lang = "th", "en"
+                elif "Translate from en to th:" in user_text:
+                    source_lang, target_lang = "en", "th"
+                break
+
+        if not user_text:
+            self._last_error = "No user content"
+            return None
+
+        self._last_error = None
+        self._last_status_code = None
+        url = "https://translation.googleapis.com/language/translate/v2"
+        params: dict[str, str] = {
+            "q": user_text,
+            "source": source_lang if source_lang != "auto" else "auto",
+            "target": target_lang,
+            "format": "text",
+            "key": self._api_key,
+        }
+
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            try:
+                response = await client.post(url, data=params)
+            except Exception as exc:
+                self._last_error = str(exc)
+                logger.error("❌ Google Translate request failed: %s", exc)
+                return None
+
+        self._last_status_code = response.status_code
+        if response.status_code != 200:
+            text = (response.text or "").strip()
+            self._last_error = text or f"HTTP {response.status_code}"
+            logger.error("❌ Google Translate error %s: %s", response.status_code, text[:1000])
+            return None
+
+        try:
+            data = response.json()
+        except Exception as exc:
+            self._last_error = f"Invalid JSON: {exc}"
+            logger.error("❌ Google Translate invalid JSON: %s", exc)
+            return None
+
+        translated = ""
+        try:
+            translated = data["data"]["translations"][0]["translatedText"]
+        except Exception as exc:
+            self._last_error = f"Missing translations: {exc}"
+            logger.error("❌ Google Translate response missing translation: %s", data)
+            return None
+
+        return translated
+
+
 class LibreTranslateProvider:
     """Thin wrapper so LibreTranslate can participate in the provider chain."""
 
@@ -47,7 +132,7 @@ class LibreTranslateProvider:
         return headers
 
     def is_configured(self) -> bool:
-        return bool(self._base_url())
+        return bool(self._base_url()) and bool(self._api_key())
 
     def get_last_error(self) -> tuple[int | None, str | None, str | None]:
         return self._last_status_code, self._last_error, self._last_model
@@ -174,21 +259,20 @@ class AITranslationService:
             n = self.nous
             providers = []
 
-            # Nous Portal (free) — PRIMARY
+            # Google Cloud Translate first when configured (best Thai reliability)
+            google_key = getattr(settings, "google_translate_api_key", None)
+            if google_key:
+                google_provider = GoogleTranslateProvider(api_key=google_key)
+                providers.append(("google_translate", google_provider, google_provider.chat_completion, messages, {"temperature": 0.2}))
+
+            # Nous Portal (free)
             if n.is_configured():
                 providers.append(("nous", n, n.chat_completion, messages, {"temperature": 0.2}))
 
-            # GitHub Models
-            if g.is_configured():
-                providers.append(("github_models", g, g.chat_completion, messages, {"temperature": 0.2}))
-
             # OpenRouter
             if o.is_configured():
-                providers.append(("openrouter", o, o.chat_completion, messages, {"temperature": 0.2}))
-
-            # LibreTranslate
-            if libre.is_configured():
-                providers.append(("libretranslate", libre, libre.chat_completion, messages, {"temperature": 0.2}))
+                openrouter_model = o.model_for_translation() or o.default_model
+                providers.append(("openrouter", o, o.chat_completion, messages, {"temperature": 0.2, "model": openrouter_model}))
 
             # Hermes fallback
             h = self.hermes

@@ -25,6 +25,10 @@ class OpenRouterService:
         self._last_status_code: int | None = None
         self._last_model: str | None = None
 
+    def model_for_translation(self) -> str | None:
+        """Return the OpenRouter model preferred for translation, or None."""
+        return settings.openrouter_translation_model
+
     def get_last_error(self) -> tuple[int | None, str | None, str | None]:
         return self._last_status_code, self._last_error, self._last_model
 

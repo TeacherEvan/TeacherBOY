@@ -307,11 +307,39 @@ class TranslationAgent(BaseAgent):
                 return False
 
     async def _translate_message(self, text: str, chat_id: str | None = None) -> str:
+        if not text or not text.strip():
+            return ""
+
+        source_lang = "th" if self.contains_thai(text) else "en"
+        target_lang = "en" if source_lang == "th" else "th"
+        normalized = text.strip()
+
+        # Always translate Thai, even short messages
+        if source_lang == "th":
+            result = await self.ai_translation_service.translate(
+                normalized,
+                source_lang=source_lang,
+                target_lang=target_lang,
+            )
+            if result:
+                metrics_service.record_translation(result.provider, chat_id)
+                return result.text
+            metrics_service.record_failed_translation()
+            provider = self.ai_translation_service.nous if self.ai_translation_service.nous.is_configured() else None
+            if provider:
+                status, err, model = provider.get_last_error()
+                last = f"(nous: status={status}, model={model or '?'}, error={err or 'empty'})"
+            else:
+                last = "no configured provider"
+            logger.error("Translation failed: %s", last)
+            return f"[Translation failed] {text}"
+
+
         """Translate using the shared AI translation service."""
         source_lang = "th" if self.contains_thai(text) else "en"
         target_lang = "en" if source_lang == "th" else "th"
-
-        if len(text.strip()) < 30:
+        # Only skip short English passthroughs; always translate Thai
+        if source_lang == "en" and len(text.strip()) < 30:
             return text
 
         result = await self.ai_translation_service.translate(
@@ -321,26 +349,31 @@ class TranslationAgent(BaseAgent):
         )
 
         if result:
-            metrics_service.record_translation(result.provider, chat_id)
             return result.text
 
         metrics_service.record_failed_translation()
         provider_errors = []
-        g = self.ai_translation_service.github_models
-        o = self.ai_translation_service.openrouter
-        if g.is_configured():
-            status, err, model = g.get_last_error()
+        for provider_name, provider_obj, _, _, _ in [
+            ("nous", self.ai_translation_service.nous),
+            ("github_models", self.ai_translation_service.github_models),
+            ("openrouter", self.ai_translation_service.openrouter),
+            ("libretranslate", self.ai_translation_service.libre_translate),
+            ("hermes", self.ai_translation_service.hermes),
+        ]:
+            if not provider_obj.is_configured():
+                continue
+            status, err, model = provider_obj.get_last_error()
+            entry = f"{provider_name}: "
             if status is not None:
-                provider_errors.append(f"github_models: status={status}, model={model or '?'}, error={err or 'empty'}")
-            else:
-                provider_errors.append("github_models: no response/not used")
-        if o.is_configured():
-            status, err, model = o.get_last_error()
-            if status is not None:
-                provider_errors.append(f"openrouter: status={status}, model={model or '?'}, error={err or 'empty'}")
-            else:
-                provider_errors.append("openrouter: no response/not used")
-        logger.error("Translation failed: %s", "; ".join(provider_errors) if provider_errors else "no providers configured")
+                entry += f"status={status}, "
+            if model:
+                entry += f"model={model}, "
+            if err:
+                entry += f"error={err}"
+            provider_errors.append(entry.rstrip(", "))
+
+        last = "; ".join(provider_errors) if provider_errors else "no response/not used"
+        logger.error("Translation failed: %s", last)
         return "Translation failed"
 
     def _get_chat_id(self, event: MessageEvent) -> str:

@@ -308,10 +308,10 @@ class LLMAgent(BaseAgent):
         return None
 
     def _identity_response(self) -> str:
-        """Deterministic self-introduction for persona queries."""
+        """Personality-rich self-introduction for persona queries."""
         return (
-            "I am Ms. Green. I speak with calm judgment, gentle strength, and patient clarity. "
-            "I am here to answer carefully and without needless ornament."
+            "I'm Ms. Green. I answer with calm judgment, genuine warmth, and unhurried clarity. "
+            "I don't perform wisdom; I just offer it plainly, with patience and a little lightness when it helps."
         )
 
     def _is_menu_command(self, text: str) -> bool:
