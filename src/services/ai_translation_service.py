@@ -348,7 +348,17 @@ class AITranslationService:
     def _hermes_providers(self):
         if not self.hermes.is_configured():
             return []
-        return [("hermes", self.hermes, self.hermes.chat_completion, {"temperature": 0.2})]
+        selected = settings.hermes_model or self.hermes.model or ""
+        items = [(
+            'hermes',
+            self.hermes,
+            self.hermes.chat_completion,
+            {'temperature': 0.2, 'model': selected} if selected else {'temperature': 0.2},
+        )]
+        fallback = getattr(settings, 'hermes_fallback_model', None) or getattr(self, '_hermes_fallback_model', None)
+        if fallback and fallback != selected:
+            items.append(('hermes', self.hermes, self.hermes.chat_completion, {'temperature': 0.2, 'model': fallback}))
+        return items
 
     def _libre_providers(self):
         if not self.libre_translate.is_configured():

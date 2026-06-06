@@ -157,6 +157,10 @@ class Settings(BaseSettings):
         default=None,
         description="Fallback Hermes/OpenAI-compatible model identifier",
     )
+    hermes_fallback_model: str | None = Field(
+        default=None,
+        description="Optional second Hermes model to try after the primary",
+    )
 
     # ============================================================================
     # Fallback / provider priority Configuration (LLM)
@@ -178,7 +182,7 @@ class Settings(BaseSettings):
         description="OpenRouter API key for LLM access",
     )
     openrouter_default_model: str = Field(
-        default="google/gemma-2-9b-it",
+        default="qwen/qwen3-coder:free",
         description="Default model to use for OpenRouter (must be a free model)",
         validation_alias=AliasChoices("OPENROUTER_DEFAULT_MODEL", "DEFAULT_MODEL"),
     )
