@@ -3,26 +3,27 @@
 import asyncio
 import logging
 import re
-from typing import Optional
-from linebot.v3.webhooks import MessageEvent
+
 from linebot.v3.messaging import (
+    FlexContainer,
+    FlexMessage,
     MessagingApi,
     ReplyMessageRequest,
     TextMessage,
-    FlexMessage,
-    FlexContainer,
 )
+from linebot.v3.webhooks import MessageEvent
 
-from .base_agent import BaseAgent
 from src.services.ai_translation_service import (
     ai_translation_service as default_ai_translation_service,
 )
-from src.services.session_manager import session_manager
-from src.services.rate_limiter import rate_limiter
-from src.services.metrics_service import metrics_service
-from src.utils.tracing import get_tracer
 from src.services.bot_identity_service import get_bot_identity_service
+from src.services.metrics_service import metrics_service
 from src.services.privilege_service import privilege_service
+from src.services.rate_limiter import rate_limiter
+from src.services.session_manager import session_manager
+from src.utils.tracing import get_tracer
+
+from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -54,12 +55,12 @@ class TranslationAgent(BaseAgent):
         Sleep patterns: "ms. green stop", "thank you ms. green", "good night ms. green"
         """
         text_lower = text.lower().strip()
-        
+
         # Build pattern dynamically based on identity
         aliases = get_bot_identity_service().get_profile().aliases
         escaped = [re.escape(alias) for alias in aliases]
         alias_pattern = "|".join(sorted(escaped, key=len, reverse=True))
-        
+
         sleep_pattern = (
             rf"^(good\s*night\s*(?:{alias_pattern})|sleep\s*(?:{alias_pattern})|"
             rf"(?:{alias_pattern})\s*sleep|amen|"
@@ -85,8 +86,6 @@ class TranslationAgent(BaseAgent):
         if event.source and getattr(event.source, "room_id", None):
             return False
         return True
-
-
 
     def is_exit_command(self, text: str) -> bool:
         """Check if text is an exit command (ends session but doesn't sleep)."""
@@ -114,7 +113,6 @@ class TranslationAgent(BaseAgent):
         NOTE: Skip news triggers ("news", "ข่าว") - let NewsAgent handle them.
         """
         chat_id = self._get_chat_id(event)
-
 
         # Always handle wake command (even if not sleeping)
         if self.is_wake_command(text):
@@ -171,9 +169,7 @@ class TranslationAgent(BaseAgent):
         # already-active sessions should be handled here.
         return session_manager.is_session_active(chat_id)
 
-    async def handle(
-        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
-    ) -> bool:
+    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """Process translation request."""
         chat_id = self._get_chat_id(event)
         user_id = getattr(event.source, "user_id", None) if event.source else None
@@ -181,8 +177,6 @@ class TranslationAgent(BaseAgent):
         with tracer.start_as_current_span("translation_agent.handle") as span:
             span.set_attribute("chat.id", chat_id)
             try:
-
-
                 # Handle wake command
                 if self.is_wake_command(text):
                     span.set_attribute("translation.command", "wake")
@@ -275,7 +269,7 @@ class TranslationAgent(BaseAgent):
                         if privilege_service.is_admin(user_id):
                             session_manager.wake_chat(chat_id)
                             logger.info(f"☀️ Chat {chat_id} woken up by Admin sending Thai")
-                    
+
                     if not session_manager.is_session_active(chat_id):
                         session_manager.start_session(chat_id, user_id or "unknown")
                         logger.info(f"🔥 Translation session started for chat {chat_id}")
@@ -287,9 +281,7 @@ class TranslationAgent(BaseAgent):
 
                 if translated_text:
                     # Send simple text message as requested
-                    text_message = TextMessage(
-                        text=translated_text, quickReply=None, quoteToken=None
-                    )
+                    text_message = TextMessage(text=translated_text, quickReply=None, quoteToken=None)
 
                     if event.reply_token:
                         await asyncio.to_thread(
@@ -314,7 +306,7 @@ class TranslationAgent(BaseAgent):
                 span.set_attribute("translation.error", True)
                 return False
 
-    async def _translate_message(self, text: str, chat_id: Optional[str] = None) -> str:
+    async def _translate_message(self, text: str, chat_id: str | None = None) -> str:
         """Translate using the shared AI translation service."""
         source_lang = "th" if self.contains_thai(text) else "en"
         target_lang = "en" if source_lang == "th" else "th"
@@ -398,10 +390,7 @@ class TranslationAgent(BaseAgent):
         text_primary = "#1F2937"  # Gray-800
         text_secondary = "#6B7280"  # Gray-500
         text_muted = "#9CA3AF"  # Gray-400
-        palette = (
-            f"{primary_color}{success_color}{text_primary}"
-            f"{text_secondary}{text_muted}"
-        )
+        palette = f"{primary_color}{success_color}{text_primary}{text_secondary}{text_muted}"
         logger.debug("palette_loaded:%s", palette)
 
         # Language emoji mapping
@@ -724,7 +713,7 @@ class TranslationAgent(BaseAgent):
             quickReply=None,
         )
 
-    def _create_rate_limit_message(self, reset_seconds: int, user_id: Optional[str] = None) -> TextMessage:
+    def _create_rate_limit_message(self, reset_seconds: int, user_id: str | None = None) -> TextMessage:
         """
         Create a friendly rate limit notification message.
 
@@ -756,9 +745,7 @@ class TranslationAgent(BaseAgent):
             TextMessage with sleep notification
         """
         message_text = (
-            "😴 ราตรีสวัสดิ์ Good Night!\n\n"
-            "Ms. Green is sleeping for 24 hours.\n\n"
-            '☀️ Say "Ms. Green" to wake me up anytime!'
+            '😴 ราตรีสวัสดิ์ Good Night!\n\nMs. Green is sleeping for 24 hours.\n\n☀️ Say "Ms. Green" to wake me up anytime!'
         )
 
         return TextMessage(text=message_text, quickReply=None, quoteToken=None)
@@ -772,10 +759,6 @@ class TranslationAgent(BaseAgent):
         Returns:
             TextMessage with wake notification
         """
-        message_text = (
-            "☀️ สวัสดี! Good Morning!\n\n"
-            "Ms. Green is now awake and ready!\n\n"
-            "🚀 Send Thai text to start translating!"
-        )
+        message_text = "☀️ สวัสดี! Good Morning!\n\nMs. Green is now awake and ready!\n\n🚀 Send Thai text to start translating!"
 
         return TextMessage(text=message_text, quickReply=None, quoteToken=None)

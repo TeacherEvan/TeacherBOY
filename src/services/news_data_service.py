@@ -1,13 +1,14 @@
 """News data retrieval service with caching for weather and news APIs."""
 
-import logging
-from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime, timedelta
-import httpx
-import feedparser
-import holidays
 import csv
 import io
+import logging
+from datetime import datetime
+from typing import Any
+
+import feedparser
+import holidays
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class DataCache:
 
     def __init__(self):
         """Initialize cache with TTL settings."""
-        self._cache: Dict[str, Tuple[Any, datetime]] = {}
+        self._cache: dict[str, tuple[Any, datetime]] = {}
         # Keep cache TTLs aligned with config defaults/env overrides.
         try:
             from src.config import settings
@@ -64,7 +65,7 @@ class DataCache:
                 "festivals": 3600,  # 1 hour
             }
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """
         Get cached value if not expired.
 
@@ -105,9 +106,7 @@ class DataCache:
 class NewsDataService:
     """Service for fetching weather, air quality, and news data."""
 
-    def __init__(
-        self, http_client: Optional[httpx.AsyncClient], news_api_key: Optional[str] = None
-    ):
+    def __init__(self, http_client: httpx.AsyncClient | None, news_api_key: str | None = None):
         """
         Initialize news data service.
 
@@ -123,7 +122,7 @@ class NewsDataService:
         self.BANGKOK_LAT = 13.7563
         self.BANGKOK_LON = 100.5018
 
-    async def get_weather_data(self) -> Dict[str, Any]:
+    async def get_weather_data(self) -> dict[str, Any]:
         """
         Fetch current weather data for Bangkok from Open-Meteo.
 
@@ -176,9 +175,7 @@ class NewsDataService:
 
             # Check rain in next 5 hours
             hourly_precip = weather_data.get("hourly", {}).get("precipitation", [])
-            will_rain = (
-                any(p > 0 for p in hourly_precip[:5]) if hourly_precip else False
-            )
+            will_rain = any(p > 0 for p in hourly_precip[:5]) if hourly_precip else False
 
             result = {
                 "temperature": temp_c,
@@ -198,7 +195,7 @@ class NewsDataService:
                 "will_rain": None,
             }
 
-    async def get_news_headlines(self, language: str = "en") -> List[Dict[str, str]]:
+    async def get_news_headlines(self, language: str = "en") -> list[dict[str, str]]:
         """
         Fetch top 5 news headlines for Thailand using RSS feeds.
 
@@ -228,9 +225,9 @@ class NewsDataService:
             logger.error(f"📰 Error fetching {language} news: {e}")
             return []
 
-    async def _fetch_thai_news(self) -> List[Dict[str, str]]:
+    async def _fetch_thai_news(self) -> list[dict[str, str]]:
         """Fetch Thai news from Bangkok Post RSS (Thailand section).
-        
+
         Note: This is an async wrapper for consistency and future extensibility.
         In the future, this could fetch from multiple sources in parallel or apply
         language-specific filtering/translation logic.
@@ -240,9 +237,9 @@ class NewsDataService:
         rss_url = "https://www.bangkokpost.com/rss/data/thailand.xml"
         return await self._parse_rss_feed(rss_url)
 
-    async def _fetch_english_news(self) -> List[Dict[str, str]]:
+    async def _fetch_english_news(self) -> list[dict[str, str]]:
         """Fetch English news from Bangkok Post RSS (Top Stories).
-        
+
         Note: This is an async wrapper for consistency and future extensibility.
         In the future, this could fetch from multiple sources in parallel or apply
         language-specific filtering/translation logic.
@@ -250,7 +247,7 @@ class NewsDataService:
         rss_url = "https://www.bangkokpost.com/rss/data/topstories.xml"
         return await self._parse_rss_feed(rss_url)
 
-    async def _parse_rss_feed(self, url: str) -> List[Dict[str, str]]:
+    async def _parse_rss_feed(self, url: str) -> list[dict[str, str]]:
         """Parse RSS feed and return top 5 items."""
         try:
             # Prefer async HTTP fetch to avoid blocking the event loop.
@@ -264,18 +261,18 @@ class NewsDataService:
                 feed = feedparser.parse(url)
 
             logger.info(f"📰 Parsed RSS feed from {url}: {len(feed.entries)} entries")
-            
+
             articles = []
             for i, entry in enumerate(feed.entries[:5]):
-                title = getattr(entry, 'title', '')
-                link = getattr(entry, 'link', '')
-                
+                title = getattr(entry, "title", "")
+                link = getattr(entry, "link", "")
+
                 if not link or not link.strip():
-                    logger.warning(f"📰 Entry {i+1} '{title[:TITLE_TRUNCATE_LENGTH]}...' has no URL")
-                
+                    logger.warning(f"📰 Entry {i + 1} '{title[:TITLE_TRUNCATE_LENGTH]}...' has no URL")
+
                 articles.append({"title": title, "url": link})
-                logger.debug(f"📰 Entry {i+1}: title='{title[:TITLE_TRUNCATE_LENGTH]}...', url={link}")
-            
+                logger.debug(f"📰 Entry {i + 1}: title='{title[:TITLE_TRUNCATE_LENGTH]}...', url={link}")
+
             return articles
         except Exception as e:
             logger.error(f"📰 RSS parse error for {url}: {e}", exc_info=True)
@@ -284,7 +281,7 @@ class NewsDataService:
                 {"title": "Visit Bangkok Post", "url": "https://www.bangkokpost.com"},
             ]
 
-    async def get_color_of_day(self) -> Dict[str, str]:
+    async def get_color_of_day(self) -> dict[str, str]:
         """
         Get Thai lucky color of the day.
 
@@ -321,9 +318,7 @@ class NewsDataService:
             }
 
             self.cache.set(cache_key, result)
-            logger.info(
-                f"🎨 Color of day: {result['color_name_en']} ({result['color_name_th']})"
-            )
+            logger.info(f"🎨 Color of day: {result['color_name_en']} ({result['color_name_th']})")
             return result
 
         except Exception as e:
@@ -334,7 +329,7 @@ class NewsDataService:
                 "hex_code": "#808080",
             }
 
-    async def get_sunset_sunrise_times(self) -> Dict[str, str]:
+    async def get_sunset_sunrise_times(self) -> dict[str, str]:
         """
         Get sunset and sunrise times for Bangkok.
 
@@ -371,9 +366,7 @@ class NewsDataService:
             data = response.json()
 
             daily = data.get("daily", {})
-            sunrise_full = daily.get("sunrise", [""])[
-                0
-            ]  # ISO format: "2024-12-16T06:30"
+            sunrise_full = daily.get("sunrise", [""])[0]  # ISO format: "2024-12-16T06:30"
             sunset_full = daily.get("sunset", [""])[0]
 
             # Extract HH:MM
@@ -396,7 +389,7 @@ class NewsDataService:
                 "sunset": "18:00",
             }
 
-    async def get_thai_holidays(self) -> List[Dict[str, str]]:
+    async def get_thai_holidays(self) -> list[dict[str, str]]:
         """
         Get major Thai holidays and observances for current year using 'holidays' library.
 
@@ -418,9 +411,7 @@ class NewsDataService:
             # Get Thai names
             th_holidays_th = holidays.country_holidays("TH", years=year, language="th")
             # Get English names
-            th_holidays_en = holidays.country_holidays(
-                "TH", years=year, language="en_US"
-            )
+            th_holidays_en = holidays.country_holidays("TH", years=year, language="en_US")
 
             # Sort by date (use Thai version for dates)
             sorted_holidays = sorted(th_holidays_th.items())
@@ -432,9 +423,7 @@ class NewsDataService:
 
             for date_obj, name_th in sorted_holidays:
                 if date_obj >= today:
-                    name_en = th_holidays_en.get(
-                        date_obj, name_th
-                    )  # Fallback to Thai if English missing
+                    name_en = th_holidays_en.get(date_obj, name_th)  # Fallback to Thai if English missing
                     upcoming.append(
                         {
                             "date": date_obj.strftime("%b %d"),
@@ -445,12 +434,8 @@ class NewsDataService:
 
             # If fewer than 3 upcoming, add next year's
             if len(upcoming) < 3:
-                th_holidays_next_th = holidays.country_holidays(
-                    "TH", years=year + 1, language="th"
-                )
-                th_holidays_next_en = holidays.country_holidays(
-                    "TH", years=year + 1, language="en_US"
-                )
+                th_holidays_next_th = holidays.country_holidays("TH", years=year + 1, language="th")
+                th_holidays_next_en = holidays.country_holidays("TH", years=year + 1, language="en_US")
                 sorted_next = sorted(th_holidays_next_th.items())
                 for date_obj, name_th in sorted_next:
                     name_en = th_holidays_next_en.get(date_obj, name_th)
@@ -480,7 +465,7 @@ class NewsDataService:
                 }
             ]
 
-    async def get_bitcoin_price(self) -> Dict[str, str]:
+    async def get_bitcoin_price(self) -> dict[str, str]:
         """
         Get current Bitcoin price in USD.
 
@@ -504,12 +489,7 @@ class NewsDataService:
             }
 
         try:
-            url = (
-                "https://api.coingecko.com/api/v3/simple/price"
-                "?ids=bitcoin"
-                "&vs_currencies=usd"
-                "&include_24hr_change=true"
-            )
+            url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true"
 
             response = await self.client.get(url, timeout=10.0)
             response.raise_for_status()
@@ -525,9 +505,7 @@ class NewsDataService:
             }
 
             self.cache.set(cache_key, result)
-            logger.info(
-                f"₿ Bitcoin: {result['price_usd']} ({result['change_24h_percent']})"
-            )
+            logger.info(f"₿ Bitcoin: {result['price_usd']} ({result['change_24h_percent']})")
             return result
 
         except Exception as e:
@@ -537,7 +515,7 @@ class NewsDataService:
                 "change_24h_percent": "N/A",
             }
 
-    async def get_exchange_rates(self) -> Dict[str, str]:
+    async def get_exchange_rates(self) -> dict[str, str]:
         """
         Get exchange rates: 1 THB → USD, JPY, ZAR, AUD, GBP, RUB.
 
@@ -564,7 +542,7 @@ class NewsDataService:
             "cny": "0.19",  # 1 THB ≈ 0.19 CNY
         }
 
-        def _with_legacy_keys(rates: Dict[str, str]) -> Dict[str, str]:
+        def _with_legacy_keys(rates: dict[str, str]) -> dict[str, str]:
             """Return rates with both short and legacy thb_* keys."""
             combined = dict(rates)
             for k, v in rates.items():
@@ -616,7 +594,7 @@ class NewsDataService:
             self.cache.set(cache_key, result)
             return result
 
-    async def get_crypto_prices(self) -> Dict[str, Dict[str, str]]:
+    async def get_crypto_prices(self) -> dict[str, dict[str, str]]:
         """
         Get crypto prices (USD): BTC, ETH, USDT.
 
@@ -655,7 +633,7 @@ class NewsDataService:
             response.raise_for_status()
             data = response.json()
 
-            def _fmt(asset: dict) -> Dict[str, str]:
+            def _fmt(asset: dict) -> dict[str, str]:
                 price = asset.get("usd", None)
                 change = asset.get("usd_24h_change", None)
                 if isinstance(price, (int, float)):
@@ -682,7 +660,7 @@ class NewsDataService:
             self.cache.set(cache_key, fallback)
             return fallback
 
-    async def get_market_indices(self) -> Dict[str, str]:
+    async def get_market_indices(self) -> dict[str, str]:
         """
         Get headline market indices (best-effort, no API key).
 
@@ -704,7 +682,7 @@ class NewsDataService:
             "FTSE 100": "^ftse",
         }
 
-        result: Dict[str, str] = {label: "N/A" for label in symbol_map}
+        result: dict[str, str] = {label: "N/A" for label in symbol_map}
 
         if self.client is None:
             logger.warning("📈 HTTP client not available, returning N/A market indices")
@@ -731,16 +709,12 @@ class NewsDataService:
                 open_raw = row.get("Open")
 
                 try:
-                    close_val = (
-                        float(close_raw) if close_raw not in (None, "", "N/A") else None
-                    )
+                    close_val = float(close_raw) if close_raw not in (None, "", "N/A") else None
                 except ValueError:
                     close_val = None
 
                 try:
-                    open_val = (
-                        float(open_raw) if open_raw not in (None, "", "N/A") else None
-                    )
+                    open_val = float(open_raw) if open_raw not in (None, "", "N/A") else None
                 except ValueError:
                     open_val = None
 
@@ -761,7 +735,7 @@ class NewsDataService:
             self.cache.set(cache_key, result)
             return result
 
-    async def get_upcoming_festivals(self) -> List[Dict[str, str]]:
+    async def get_upcoming_festivals(self) -> list[dict[str, str]]:
         """
         Get upcoming major festivals in Bangkok/Pattaya.
 

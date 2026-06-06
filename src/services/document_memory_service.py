@@ -13,9 +13,9 @@ import logging
 import os
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from src.config import settings
 
@@ -38,8 +38,8 @@ class DocumentMemoryService:
 
     def __init__(
         self,
-        hf_token: Optional[str] = None,
-        hf_repo_id: Optional[str] = None,
+        hf_token: str | None = None,
+        hf_repo_id: str | None = None,
         storage_path: str = "./data/documents",
         max_file_size_mb: float = DEFAULT_MAX_FILE_SIZE_MB,
         max_text_chars: int = DEFAULT_MAX_TEXT_CHARS,
@@ -52,11 +52,11 @@ class DocumentMemoryService:
         self.max_file_size_bytes = int(max_file_size_mb * 1024 * 1024)
         self.max_text_chars = max_text_chars
 
-        self._documents: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        self._documents: dict[str, dict[str, dict[str, Any]]] = {}
 
         self._hf_enabled = bool(hf_token and hf_repo_id)
-        self._hf_api: Optional[Any] = None
-        self._commit_scheduler: Optional[Any] = None
+        self._hf_api: Any | None = None
+        self._commit_scheduler: Any | None = None
 
         if self._hf_enabled:
             self._setup_hf_storage()
@@ -75,8 +75,8 @@ class DocumentMemoryService:
             import importlib
 
             hf = importlib.import_module("huggingface_hub")
-            HfApi = getattr(hf, "HfApi")
-            CommitScheduler = getattr(hf, "CommitScheduler")
+            HfApi = hf.HfApi
+            CommitScheduler = hf.CommitScheduler
 
             hf_api = HfApi(token=self.hf_token)
             self._hf_api = hf_api
@@ -123,7 +123,7 @@ class DocumentMemoryService:
     def _is_valid_doc_id(self, doc_id: Any) -> bool:
         return isinstance(doc_id, str) and bool(DOC_ID_PATTERN.fullmatch(doc_id))
 
-    def _infer_extension(self, file_name: str) -> Optional[str]:
+    def _infer_extension(self, file_name: str) -> str | None:
         _, ext = os.path.splitext(file_name.lower())
         return ext if ext in SUPPORTED_EXTENSIONS else None
 
@@ -151,15 +151,13 @@ class DocumentMemoryService:
                     metadata = json.loads(meta_path.read_text(encoding="utf-8"))
                     doc_id = metadata.get("id") or doc_dir.name
                     if not self._is_valid_doc_id(doc_id):
-                        logger.warning(
-                            "⚠️ Skipping document with invalid ID from storage: %s", doc_id
-                        )
+                        logger.warning("⚠️ Skipping document with invalid ID from storage: %s", doc_id)
                         continue
                     self._documents.setdefault(hashed_id, {})[doc_id] = metadata
                 except Exception:
                     continue
 
-    def _write_metadata(self, doc_dir: Path, metadata: Dict[str, Any]) -> None:
+    def _write_metadata(self, doc_dir: Path, metadata: dict[str, Any]) -> None:
         meta_path = doc_dir / "meta.json"
         meta_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -168,6 +166,7 @@ class DocumentMemoryService:
         if ext == ".pdf":
             try:
                 import io
+
                 from pypdf import PdfReader
 
                 reader = PdfReader(io.BytesIO(file_bytes))
@@ -184,6 +183,7 @@ class DocumentMemoryService:
         if ext == ".docx":
             try:
                 import io
+
                 from docx import Document
 
                 doc = Document(io.BytesIO(file_bytes))
@@ -204,8 +204,8 @@ class DocumentMemoryService:
         chat_id: str,
         file_name: str,
         file_bytes: bytes,
-        user_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
         """Store a document and extracted text."""
         if not file_bytes:
             raise ValueError("Empty file data")
@@ -233,7 +233,7 @@ class DocumentMemoryService:
         text_path.write_text(trimmed_text, encoding="utf-8")
 
         checksum = hashlib.sha256(file_bytes).hexdigest()
-        uploaded_at = datetime.now(timezone.utc).isoformat()
+        uploaded_at = datetime.now(UTC).isoformat()
 
         metadata = {
             "id": doc_id,
@@ -254,12 +254,12 @@ class DocumentMemoryService:
 
         return metadata
 
-    def list_documents(self, chat_id: str) -> List[Dict[str, Any]]:
+    def list_documents(self, chat_id: str) -> list[dict[str, Any]]:
         hashed_id = self._hash_chat_id(chat_id)
         docs = list(self._documents.get(hashed_id, {}).values())
         return sorted(docs, key=lambda d: d.get("uploaded_at", ""), reverse=True)
 
-    def get_document_text(self, chat_id: str, doc_id: str) -> Optional[str]:
+    def get_document_text(self, chat_id: str, doc_id: str) -> str | None:
         if not self._is_valid_doc_id(doc_id):
             return None
         hashed_id = self._hash_chat_id(chat_id)
@@ -272,7 +272,7 @@ class DocumentMemoryService:
             return None
         return text_path.read_text(encoding="utf-8")
 
-    def find_by_name(self, chat_id: str, name: str) -> List[Dict[str, Any]]:
+    def find_by_name(self, chat_id: str, name: str) -> list[dict[str, Any]]:
         hashed_id = self._hash_chat_id(chat_id)
         name_lower = name.lower().strip()
         results = []
@@ -281,10 +281,10 @@ class DocumentMemoryService:
                 results.append(metadata)
         return results
 
-    def search_documents(self, chat_id: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def search_documents(self, chat_id: str, query: str, limit: int = 5) -> list[dict[str, Any]]:
         hashed_id = self._hash_chat_id(chat_id)
         query_lower = query.lower().strip()
-        results: List[Dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
 
         for doc_id, metadata in self._documents.get(hashed_id, {}).items():
             text = self.get_document_text(chat_id, doc_id) or ""
@@ -293,11 +293,13 @@ class DocumentMemoryService:
                 start = max(idx - 80, 0)
                 end = min(idx + 220, len(text))
                 snippet = text[start:end]
-                results.append({
-                    "id": doc_id,
-                    "file_name": metadata.get("file_name"),
-                    "snippet": snippet,
-                })
+                results.append(
+                    {
+                        "id": doc_id,
+                        "file_name": metadata.get("file_name"),
+                        "snippet": snippet,
+                    }
+                )
             if len(results) >= limit:
                 break
 
@@ -356,8 +358,8 @@ class DocumentMemoryService:
             import importlib
 
             hf = importlib.import_module("huggingface_hub")
-            list_repo_files = getattr(hf, "list_repo_files")
-            hf_hub_download = getattr(hf, "hf_hub_download")
+            list_repo_files = hf.list_repo_files
+            hf_hub_download = hf.hf_hub_download
 
             files = list_repo_files(
                 repo_id=self.hf_repo_id,
@@ -404,15 +406,15 @@ class DocumentMemoryService:
 
 
 # Singleton instance (configured during app startup)
-document_memory_service: Optional[DocumentMemoryService] = None
+document_memory_service: DocumentMemoryService | None = None
 
 
 def init_document_memory(
-    hf_token: Optional[str] = None,
-    hf_repo_id: Optional[str] = None,
-    storage_path: Optional[str] = None,
-    max_file_size_mb: Optional[float] = None,
-    max_text_chars: Optional[int] = None,
+    hf_token: str | None = None,
+    hf_repo_id: str | None = None,
+    storage_path: str | None = None,
+    max_file_size_mb: float | None = None,
+    max_text_chars: int | None = None,
 ) -> DocumentMemoryService:
     """Initialize the document memory service."""
     global document_memory_service
@@ -427,5 +429,5 @@ def init_document_memory(
     return document_memory_service
 
 
-def get_document_memory() -> Optional[DocumentMemoryService]:
+def get_document_memory() -> DocumentMemoryService | None:
     return document_memory_service

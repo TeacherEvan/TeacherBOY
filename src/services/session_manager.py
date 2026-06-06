@@ -1,10 +1,9 @@
 """Session state management for tracking active translation sessions."""
 
-import logging
 import hashlib
-from typing import Dict, Set, List, Tuple, Optional
-from datetime import datetime, timedelta
+import logging
 import re
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -29,15 +28,15 @@ class SessionManager:
             echo_window_seconds: Time window for cross-language echo suppression (default: 2s)
         """
         # Dictionary: {chat_id: {user_id, started_at, message_count}}
-        self._active_sessions: Dict[str, dict] = {}
+        self._active_sessions: dict[str, dict] = {}
         # Set of chat IDs where translation is always on
-        self._always_on_chats: Set[str] = set()
+        self._always_on_chats: set[str] = set()
         # Message deduplication: {chat_id: [(message_hash, timestamp), ...]}
-        self._message_history: Dict[str, List[Tuple[str, datetime]]] = {}
+        self._message_history: dict[str, list[tuple[str, datetime]]] = {}
         # Sleep mode: {chat_id: wake_at_datetime}
-        self._sleeping_chats: Dict[str, datetime] = {}
+        self._sleeping_chats: dict[str, datetime] = {}
         # Recent language messages for echo suppression: {chat_id: (language, timestamp)}
-        self._recent_language_messages: Dict[str, Tuple[str, datetime]] = {}
+        self._recent_language_messages: dict[str, tuple[str, datetime]] = {}
         # Configuration
         self._max_history_size = max_history_size
         self._dedup_window_seconds = dedup_window_seconds
@@ -109,9 +108,7 @@ class SessionManager:
         if chat_id in self._active_sessions:
             self._active_sessions.pop(chat_id)
 
-        logger.info(
-            f"😴 Chat {chat_id} put to sleep for {hours} hours (wake at {wake_at})"
-        )
+        logger.info(f"😴 Chat {chat_id} put to sleep for {hours} hours (wake at {wake_at})")
 
     def wake_chat(self, chat_id: str) -> bool:
         """
@@ -142,9 +139,7 @@ class SessionManager:
         """End translation session for a chat. Returns True if session existed."""
         if chat_id in self._active_sessions:
             session = self._active_sessions.pop(chat_id)
-            logger.info(
-                f"Ended translation session for chat {chat_id}. Messages translated: {session['message_count']}"
-            )
+            logger.info(f"Ended translation session for chat {chat_id}. Messages translated: {session['message_count']}")
             return True
         return False
 
@@ -214,19 +209,14 @@ class SessionManager:
         # Clean up old messages outside dedup window
         cutoff_time = now - timedelta(seconds=self._dedup_window_seconds)
         self._message_history[chat_id] = [
-            (hash_val, ts)
-            for hash_val, ts in self._message_history[chat_id]
-            if ts > cutoff_time
+            (hash_val, ts) for hash_val, ts in self._message_history[chat_id] if ts > cutoff_time
         ]
 
         # Check for duplicate
         for hash_val, timestamp in self._message_history[chat_id]:
             if hash_val == message_hash:
                 age_seconds = (now - timestamp).total_seconds()
-                logger.warning(
-                    f"🔁 Duplicate message detected in chat {chat_id} "
-                    f"(last seen {age_seconds:.1f}s ago)"
-                )
+                logger.warning(f"🔁 Duplicate message detected in chat {chat_id} (last seen {age_seconds:.1f}s ago)")
                 return True
 
         # Not a duplicate - record this message
@@ -234,9 +224,7 @@ class SessionManager:
 
         # Trim history to max size (keep most recent)
         if len(self._message_history[chat_id]) > self._max_history_size:
-            self._message_history[chat_id] = self._message_history[chat_id][
-                -self._max_history_size :
-            ]
+            self._message_history[chat_id] = self._message_history[chat_id][-self._max_history_size :]
 
         return False
 
@@ -278,8 +266,8 @@ class SessionManager:
         chat_id: str,
         text: str,
         *,
-        now: Optional[datetime] = None,
-        now_offset_seconds: Optional[int] = None,
+        now: datetime | None = None,
+        now_offset_seconds: int | None = None,
     ) -> bool:
         """Return True if the message should be ignored as a cross-language echo.
 

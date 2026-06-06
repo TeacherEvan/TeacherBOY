@@ -1,10 +1,10 @@
 """Tests for main application."""
 
 from datetime import datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, patch, MagicMock
 
 
 @pytest.fixture

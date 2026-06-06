@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from linebot.v3.messaging import MessagingApi
 from linebot.v3.webhooks import ImageMessageContent, MessageEvent, Source, TextMessageContent
 
@@ -65,11 +64,13 @@ async def test_debrief_image_uses_debrief_prompt_builder(
 
     agent = ImageAnalyzerAgent()
 
-    with patch("src.agents.image_analyzer_agent.settings") as mock_settings, \
-         patch("src.agents.image_analyzer_agent.github_models_service") as mock_gms, \
-         patch("src.agents.image_analyzer_agent.image_analyzer_session_manager") as mock_session, \
-         patch("src.agents.image_analyzer_agent.build_debrief_prompt", return_value="DEBRIEF_PROMPT") as mock_build_debrief, \
-         patch("src.agents.image_analyzer_agent.asyncio.to_thread"):
+    with (
+        patch("src.agents.image_analyzer_agent.settings") as mock_settings,
+        patch("src.agents.image_analyzer_agent.github_models_service") as mock_gms,
+        patch("src.agents.image_analyzer_agent.image_analyzer_session_manager") as mock_session,
+        patch("src.agents.image_analyzer_agent.build_debrief_prompt", return_value="DEBRIEF_PROMPT") as mock_build_debrief,
+        patch("src.agents.image_analyzer_agent.asyncio.to_thread"),
+    ):
         mock_settings.llm_temperature = 0.2
         mock_settings.profiler_model = "openai/gpt-4o"
         mock_settings.is_calendar_configured.return_value = False

@@ -4,17 +4,20 @@ Image Handler - Processes calendar events from image analysis.
 This handler integrates with ImageAnalyzerAgent to process dates extracted
 from images and add them to the calendar.
 """
+
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Any
+
+from linebot.v3.messaging import MessageAction, MessagingApi, QuickReply, QuickReplyItem
 from linebot.v3.webhooks import MessageEvent
-from linebot.v3.messaging import MessagingApi, QuickReply, QuickReplyItem, MessageAction
+
+from src.services.calendar_service import CalendarService
+from src.services.calendar_session_manager import (
+    CalendarState,
+    calendar_session_manager,
+)
 
 from ..base_handler import CalendarHandler
-from src.services.calendar_session_manager import (
-    calendar_session_manager,
-    CalendarState,
-)
-from src.services.calendar_service import CalendarService
 
 logger = logging.getLogger(__name__)
 
@@ -42,31 +45,27 @@ class ImageHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         context: dict,
     ) -> bool:
-        calendar_service: Optional[CalendarService] = context.get("calendar_service")
+        calendar_service: CalendarService | None = context.get("calendar_service")
         session = calendar_session_manager.get_session(chat_id)
 
         if not session or session.state != CalendarState.PROCESSING_EXTRACTED_DATES:
             return False
 
-        return await self._handle_extracted_date_response(
-            event, text, line_bot_api, chat_id, user_id, calendar_service
-        )
+        return await self._handle_extracted_date_response(event, text, line_bot_api, chat_id, user_id, calendar_service)
 
     async def start_extraction_flow_from_image(
         self,
         chat_id: str,
         user_id: str,
-        extracted_dates: List[Dict[str, Any]],
+        extracted_dates: list[dict[str, Any]],
         is_friend: bool,
-        event: Optional[MessageEvent] = None,
-        line_bot_api: Optional[MessagingApi] = None,
+        event: MessageEvent | None = None,
+        line_bot_api: MessagingApi | None = None,
     ) -> None:
-        calendar_session_manager.start_extraction_flow(
-            chat_id, user_id, extracted_dates, is_friend
-        )
+        calendar_session_manager.start_extraction_flow(chat_id, user_id, extracted_dates, is_friend)
 
         if event and line_bot_api and extracted_dates:
             current_date = calendar_session_manager.get_current_extracted_date(chat_id)
@@ -85,8 +84,8 @@ class ImageHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
-        calendar_service: Optional[CalendarService],
+        user_id: str | None,
+        calendar_service: CalendarService | None,
     ) -> bool:
         text_lower = text.lower().strip()
         session = calendar_session_manager.get_session(chat_id)
@@ -137,9 +136,7 @@ class ImageHandler(CalendarHandler):
                 ]
             )
 
-            await self._send_message_with_quick_reply(
-                event, line_bot_api, msg, quick_reply
-            )
+            await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
             return True
 
         if text_lower.startswith("bulk:"):
@@ -168,9 +165,7 @@ class ImageHandler(CalendarHandler):
                     )
 
                     if is_duplicate:
-                        logger.info(
-                            f"⏩ Skipping duplicate: {date_info['title']} on {date_info['date']}"
-                        )
+                        logger.info(f"⏩ Skipping duplicate: {date_info['title']} on {date_info['date']}")
                         skipped_count += 1
                     else:
                         try:
@@ -204,16 +199,14 @@ class ImageHandler(CalendarHandler):
                     summary += f"{i}. {title}\n"
             else:
                 for i in range(min(3, len(added_titles))):
-                    summary += f"{i+1}. {added_titles[i]}\n"
+                    summary += f"{i + 1}. {added_titles[i]}\n"
                 if len(added_titles) > 4:
                     summary += f"... ({len(added_titles) - 4} more) ...\n"
                 if added_titles:
                     summary += f"{len(added_titles)}. {added_titles[-1]}\n"
 
             if reminder_days:
-                summary += (
-                    f"\n🔔 Reminders: {', '.join(str(d) for d in sorted([d for d in reminder_days if d > 0], reverse=True))} days + day-of\n"
-                )
+                summary += f"\n🔔 Reminders: {', '.join(str(d) for d in sorted([d for d in reminder_days if d > 0], reverse=True))} days + day-of\n"
             summary += "\nเพิ่มกิจกรรมทั้งหมดสำเร็จแล้ว!"
 
             await self._send_message(event, line_bot_api, summary)
@@ -253,9 +246,7 @@ class ImageHandler(CalendarHandler):
                 ]
             )
 
-            await self._send_message_with_quick_reply(
-                event, line_bot_api, msg, quick_reply
-            )
+            await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
             return True
 
         if text_lower in ["no", "n", "ไม่", "skip"]:
@@ -287,9 +278,7 @@ class ImageHandler(CalendarHandler):
             else:
                 reminder_days = [int(text_lower), 0]
 
-            event_data = calendar_session_manager.set_extraction_reminder_days(
-                chat_id, reminder_days
-            )
+            event_data = calendar_session_manager.set_extraction_reminder_days(chat_id, reminder_days)
 
             if event_data and calendar_service and user_id:
                 is_duplicate = calendar_service.has_duplicate_event(
@@ -300,9 +289,7 @@ class ImageHandler(CalendarHandler):
                 )
 
                 if is_duplicate:
-                    logger.info(
-                        f"⏩ Duplicate detected: {event_data['title']} on {event_data['date']}"
-                    )
+                    logger.info(f"⏩ Duplicate detected: {event_data['title']} on {event_data['date']}")
                     await self._send_message(
                         event,
                         line_bot_api,
@@ -362,9 +349,9 @@ class ImageHandler(CalendarHandler):
         self,
         event: MessageEvent,
         line_bot_api: MessagingApi,
-        date_info: Dict[str, Any],
-        current: Optional[int] = None,
-        total: Optional[int] = None,
+        date_info: dict[str, Any],
+        current: int | None = None,
+        total: int | None = None,
     ) -> None:
         date_obj = date_info.get("date")
         title = date_info.get("title", "Event")
@@ -377,10 +364,7 @@ class ImageHandler(CalendarHandler):
         else:
             msg = "📅 Found event in image:\n\n"
 
-        msg += (
-            f"📌 {title}\n"
-            f"📆 {date_str}\n"
-        )
+        msg += f"📌 {title}\n📆 {date_str}\n"
 
         if description:
             msg += f"📝 {description}\n"
@@ -406,23 +390,19 @@ class ImageHandler(CalendarHandler):
                 QuickReplyItem(
                     type="action",
                     imageUrl=None,
-                    action=MessageAction(
-                        label=f"➕ Add All ({remaining})", text="add all"
-                    ),
+                    action=MessageAction(label=f"➕ Add All ({remaining})", text="add all"),
                 )
             )
 
         quick_reply = QuickReply(items=quick_reply_items)
 
-        await self._send_message_with_quick_reply(
-            event, line_bot_api, msg, quick_reply
-        )
+        await self._send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         if event.source and getattr(event.source, "group_id", None):
-            return f"group_{getattr(event.source, 'group_id')}"
+            return f"group_{event.source.group_id}"
         if event.source and getattr(event.source, "room_id", None):
-            return f"room_{getattr(event.source, 'room_id')}"
+            return f"room_{event.source.room_id}"
         if event.source and getattr(event.source, "user_id", None):
-            return f"user_{getattr(event.source, 'user_id')}"
+            return f"user_{event.source.user_id}"
         return "user_unknown"

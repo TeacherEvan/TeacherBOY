@@ -6,20 +6,20 @@ Provides shared message sending, date formatting, and validation.
 import asyncio
 import logging
 import re
-from abc import ABC, abstractmethod
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Union
+from abc import ABC
+from datetime import date, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
-from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
+    MessageAction,
     MessagingApi,
-    ReplyMessageRequest,
-    TextMessage,
     QuickReply,
     QuickReplyItem,
-    MessageAction,
+    ReplyMessageRequest,
+    TextMessage,
 )
+from linebot.v3.webhooks import MessageEvent
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 class CalendarFlowBase(ABC):
     """Base class for calendar flow handlers with shared utilities."""
 
-    def __init__(self, calendar_service: Optional[Any] = None):
+    def __init__(self, calendar_service: Any | None = None):
         """
         Initialize flow handler.
 
@@ -80,7 +80,7 @@ class CalendarFlowBase(ABC):
         event: MessageEvent,
         line_bot_api: MessagingApi,
         text: str,
-        actions: Union[List[Dict[str, str]], QuickReply],
+        actions: list[dict[str, str]] | QuickReply,
     ) -> bool:
         """
         Send message with Quick Reply buttons.
@@ -113,9 +113,7 @@ class CalendarFlowBase(ABC):
                     line_bot_api.reply_message,
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
-                        messages=[
-                            TextMessage(text=text, quickReply=quick_reply, quoteToken=None)
-                        ],
+                        messages=[TextMessage(text=text, quickReply=quick_reply, quoteToken=None)],
                         notificationDisabled=False,
                     ),
                 )
@@ -164,10 +162,7 @@ class CalendarFlowBase(ABC):
         Returns:
             Formatted string like "15 ม.ค. 2568"
         """
-        thai_months = [
-            "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-            "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
-        ]
+        thai_months = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
         thai_year = dt.year + 543
         return f"{dt.day} {thai_months[dt.month - 1]} {thai_year}"
 
@@ -261,7 +256,7 @@ class CalendarFlowBase(ABC):
         return normalized in {"skip", "none", "no", "n/a", "-", "ข้าม", "ไม่"}
 
     @staticmethod
-    def parse_date(text: str) -> Optional[date]:
+    def parse_date(text: str) -> date | None:
         """Parse a date-only user input into a date.
 
         Supported formats:
@@ -395,7 +390,7 @@ class CalendarFlowBase(ABC):
         return "user_unknown"
 
     @staticmethod
-    def get_user_id(event: MessageEvent) -> Optional[str]:
+    def get_user_id(event: MessageEvent) -> str | None:
         """
         Extract user ID from event.
 
@@ -412,7 +407,7 @@ class CalendarFlowBase(ABC):
     # =========================================================================
 
     @staticmethod
-    def get_reminder_quick_replies() -> List[Dict[str, str]]:
+    def get_reminder_quick_replies() -> list[dict[str, str]]:
         """Get standard reminder day selection quick replies."""
         return [
             {"label": "7 days before", "text": "7"},
@@ -424,7 +419,7 @@ class CalendarFlowBase(ABC):
         ]
 
     @staticmethod
-    def get_yes_no_quick_replies() -> List[Dict[str, str]]:
+    def get_yes_no_quick_replies() -> list[dict[str, str]]:
         """Get standard yes/no quick replies."""
         return [
             {"label": "Yes ✓", "text": "yes"},
@@ -432,6 +427,6 @@ class CalendarFlowBase(ABC):
         ]
 
     @staticmethod
-    def get_cancel_quick_reply() -> Dict[str, str]:
+    def get_cancel_quick_reply() -> dict[str, str]:
         """Get cancel quick reply."""
         return {"label": "Cancel ❌", "text": "cancel"}

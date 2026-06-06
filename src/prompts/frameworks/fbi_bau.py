@@ -12,19 +12,19 @@ Token estimates:
 
 class FBIBAUFramework:
     """FBI Behavioral Analysis Unit profiling methodology."""
-    
+
     VERSION = "2.0"
     CATEGORY = "vision"
-    
+
     TOKENS_SHORT = 200
     TOKENS_STANDARD = 400
     TOKENS_FULL = 600
-    
+
     @staticmethod
     def get_short() -> str:
         """
         Brief version - key behavioral indicators.
-        
+
         Estimated tokens: ~200
         """
         return """
@@ -52,12 +52,12 @@ class FBIBAUFramework:
    - Affiliation indicators
    - Status markers
 """
-    
+
     @staticmethod
     def get_standard() -> str:
         """
         Standard version - core BAU methodology.
-        
+
         Estimated tokens: ~400
         """
         return """
@@ -134,12 +134,12 @@ class FBIBAUFramework:
 - Follower patterns: Deferential body language
 - Outlier identification: Physical distance, different orientation
 """
-    
+
     @staticmethod
     def get_full() -> str:
         """
         Complete version - comprehensive BAU profiling.
-        
+
         Estimated tokens: ~600
         """
         return f"""{FBIBAUFramework.get_standard()}
@@ -202,7 +202,7 @@ class FBIBAUFramework:
 5. **Probabilistic**: Use terms like "suggests" not "proves"
 6. **Ethics**: Avoid diagnosis, focus on observations
 """
-    
+
     @staticmethod
     def get_for_analysis_type(analysis_type: str) -> str:
         """Get appropriate version based on analysis depth."""
@@ -211,10 +211,10 @@ class FBIBAUFramework:
             "standard": FBIBAUFramework.get_standard,
             "full": FBIBAUFramework.get_full,
         }
-        
+
         getter = mapping.get(analysis_type, FBIBAUFramework.get_standard)
         return getter()
-    
+
     @staticmethod
     def estimate_tokens(analysis_type: str) -> int:
         """Estimate token usage for analysis type."""
@@ -223,5 +223,5 @@ class FBIBAUFramework:
             "standard": FBIBAUFramework.TOKENS_STANDARD,
             "full": FBIBAUFramework.TOKENS_FULL,
         }
-        
+
         return mapping.get(analysis_type, FBIBAUFramework.TOKENS_STANDARD)

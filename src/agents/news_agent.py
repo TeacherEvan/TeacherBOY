@@ -6,33 +6,32 @@ Auto-detects language from trigger: 'news' = English, 'ข่าว' = Thai (no 
 import asyncio
 import logging
 import re
-from datetime import datetime, timezone
-from typing import List, Dict, Optional
-from linebot.v3.webhooks import MessageEvent
+from datetime import UTC, datetime
+
 from linebot.v3.messaging import (
     MessagingApi,
     ReplyMessageRequest,
     TextMessage,
 )
 from linebot.v3.messaging.exceptions import ApiException
+from linebot.v3.webhooks import MessageEvent
 
-from .base_agent import BaseAgent
-from src.services.news_session_manager import news_session_manager
-from src.services.news_data_service import NewsDataService
-from src.services.rate_limiter import RateLimiter
-from src.services.metrics_service import metrics_service
 from src.config import settings
-from src.services.privilege_service import privilege_service
 from src.services.ai_translation_service import (
     ai_translation_service as default_ai_translation_service,
 )
+from src.services.metrics_service import metrics_service
+from src.services.news_data_service import NewsDataService
+from src.services.news_session_manager import news_session_manager
+from src.services.privilege_service import privilege_service
+from src.services.rate_limiter import RateLimiter
+
+from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 
 # Rate limiters for news requests
-news_rate_limiter_friend = RateLimiter(
-    max_requests=1, time_window_seconds=3600
-)  # 1/hour for friends
+news_rate_limiter_friend = RateLimiter(max_requests=1, time_window_seconds=3600)  # 1/hour for friends
 
 
 class NewsAgent(BaseAgent):
@@ -54,7 +53,8 @@ class NewsAgent(BaseAgent):
 
         # Cache friendship checks to avoid repeated LINE API calls.
         # {user_id: (is_friend, cached_at_utc)}
-        self._friend_cache: Dict[str, tuple[bool, datetime]] = {}
+        self._friend_cache: dict[str, tuple[bool, datetime]] = {}
+
     def get_priority(self) -> int:
         """News agent priority - runs after Translation (10)."""
         return 15
@@ -87,7 +87,7 @@ class NewsAgent(BaseAgent):
 
     def _is_thai_text(self, text: str) -> bool:
         """Return True when text contains Thai characters."""
-        return any("\u0E00" <= char <= "\u0E7F" for char in text)
+        return any("\u0e00" <= char <= "\u0e7f" for char in text)
 
     def _is_news_trigger(self, text: str) -> bool:
         """Check if text is a news trigger word."""
@@ -117,20 +117,20 @@ class NewsAgent(BaseAgent):
         """Check if user is a friend of the bot; LINE returns error for non-friends."""
         user_id = getattr(event.source, "user_id", None) if event.source else None
         if not user_id:
-            logger.warning(f"📰 No user_id found for friendship check")
+            logger.warning("📰 No user_id found for friendship check")
             return False
 
         cached = self._friend_cache.get(user_id)
         if cached:
             is_friend, cached_at = cached
-            age = (datetime.now(timezone.utc) - cached_at).total_seconds()
+            age = (datetime.now(UTC) - cached_at).total_seconds()
             if age < settings.friend_cache_ttl_seconds:
                 return is_friend
 
         try:
             await asyncio.to_thread(line_bot_api.get_profile, user_id)
             logger.info(f"📰 User {user_id} is a friend (verified via LINE API)")
-            self._friend_cache[user_id] = (True, datetime.now(timezone.utc))
+            self._friend_cache[user_id] = (True, datetime.now(UTC))
             return True
         except ApiException as e:
             status = getattr(e, "status_code", "unknown")
@@ -138,12 +138,10 @@ class NewsAgent(BaseAgent):
                 f"📰 User {user_id} is NOT a friend (ApiException: {status})",
                 exc_info=False,
             )
-            self._friend_cache[user_id] = (False, datetime.now(timezone.utc))
+            self._friend_cache[user_id] = (False, datetime.now(UTC))
             return False
         except Exception as e:
-            logger.warning(
-                f"📰 Friendship check failed for {user_id}: {e}", exc_info=False
-            )
+            logger.warning(f"📰 Friendship check failed for {user_id}: {e}", exc_info=False)
             return False
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
@@ -172,9 +170,7 @@ class NewsAgent(BaseAgent):
 
         return False
 
-    async def handle(
-        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
-    ) -> bool:
+    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """Process news-related messages through multi-step flow."""
         chat_id = self._get_chat_id(event)
         session = news_session_manager.get_session_state(chat_id)
@@ -199,9 +195,7 @@ class NewsAgent(BaseAgent):
                             notificationDisabled=False,
                         ),
                     )
-                logger.info(
-                    f"📰 User ended news session with shutdown phrase in chat {chat_id}"
-                )
+                logger.info(f"📰 User ended news session with shutdown phrase in chat {chat_id}")
                 return True
 
             # Private chats: respond with translation of trigger only UNLESS user is admin/moderator
@@ -210,9 +204,7 @@ class NewsAgent(BaseAgent):
                     # Check if user is privileged (admin or moderator)
                     if privilege_service.is_privileged(user_id):
                         # Admins/moderators get full news menu even in private chat
-                        logger.info(
-                            f"📰 Privileged user {user_id} accessing news in private chat"
-                        )
+                        logger.info(f"📰 Privileged user {user_id} accessing news in private chat")
                         # No rate limit for privileged users - proceed to start news flow
                     else:
                         # Regular users get translation only
@@ -224,16 +216,12 @@ class NewsAgent(BaseAgent):
             # Check if user is session owner (only they can interact)
             if session and not news_session_manager.is_session_owner(chat_id, user_id):
                 # Silently ignore - another user trying to interact with someone else's session
-                logger.debug(
-                    f"📰 User {user_id} tried to interact with news session owned by {session.get('user_id')}"
-                )
+                logger.debug(f"📰 User {user_id} tried to interact with news session owned by {session.get('user_id')}")
                 return True  # Handled but ignored
 
             # Step 1: News trigger - start flow with auto-detected language
             if not session and self._is_news_trigger(text):
-                user_id = (
-                    getattr(event.source, "user_id", None) if event.source else None
-                )
+                user_id = getattr(event.source, "user_id", None) if event.source else None
 
                 # Check if user is privileged (admin or moderator)
                 is_privileged = privilege_service.is_privileged(user_id)
@@ -243,13 +231,9 @@ class NewsAgent(BaseAgent):
                 # rate-limit bypasses, not for feature availability inside groups.
                 if self._is_group_chat(event):
                     if is_privileged:
-                        logger.info(
-                            f"🔓 Privileged user {user_id} accessing news in group chat {chat_id}"
-                        )
+                        logger.info(f"🔓 Privileged user {user_id} accessing news in group chat {chat_id}")
                     else:
-                        logger.info(
-                            f"📰 Non-privileged user {user_id} accessing news in group chat {chat_id}"
-                        )
+                        logger.info(f"📰 Non-privileged user {user_id} accessing news in group chat {chat_id}")
 
                 # Rate limit check (skip for privileged users)
                 if not is_privileged:
@@ -262,17 +246,11 @@ class NewsAgent(BaseAgent):
                         metrics_service.record_rate_limited()
                         remaining = limiter.get_remaining_requests(chat_id)
                         reset_seconds = limiter.get_reset_time(chat_id)
-                        await self._send_rate_limit_message(
-                            event, line_bot_api, max_requests, remaining, reset_seconds
-                        )
-                        logger.warning(
-                            f"⚠️  Rate limited news request for chat {chat_id}"
-                        )
+                        await self._send_rate_limit_message(event, line_bot_api, max_requests, remaining, reset_seconds)
+                        logger.warning(f"⚠️  Rate limited news request for chat {chat_id}")
                         return True
                 elif user_id:
-                    logger.info(
-                        f"🔓 Privileged user {user_id} bypassed news rate limit in chat {chat_id}"
-                    )
+                    logger.info(f"🔓 Privileged user {user_id} bypassed news rate limit in chat {chat_id}")
 
                 # Track successful news request (menu will be shown)
                 metrics_service.record_news_request(chat_id)
@@ -289,9 +267,7 @@ class NewsAgent(BaseAgent):
 
             # Step 2: Main menu - handle selections
             if session and session["step"] == "main_menu":
-                return await self._handle_main_menu(
-                    event, text, line_bot_api, chat_id, session
-                )
+                return await self._handle_main_menu(event, text, line_bot_api, chat_id, session)
 
             # Step 3: Headline detail - return to menu
             if session and session["step"] == "headline_detail":
@@ -307,9 +283,7 @@ class NewsAgent(BaseAgent):
             news_session_manager.end_news_flow(chat_id)
             return False
 
-    async def _send_main_menu(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
+    async def _send_main_menu(self, event: MessageEvent, line_bot_api: MessagingApi, language: str):
         """Fetch data and send main menu with weather and news."""
         chat_id = self._get_chat_id(event)
 
@@ -373,9 +347,7 @@ class NewsAgent(BaseAgent):
                 ),
             )
 
-    async def _translate_headlines_to_thai(
-        self, headlines: List[Dict[str, str]]
-    ) -> List[Dict[str, str]]:
+    async def _translate_headlines_to_thai(self, headlines: list[dict[str, str]]) -> list[dict[str, str]]:
         """Translate English headlines to Thai using the shared AI service."""
         translated_headlines = []
 
@@ -401,9 +373,7 @@ class NewsAgent(BaseAgent):
                 if result and result.text:
                     translated_title = result.text
 
-            translated_headlines.append(
-                {"title": translated_title, "url": url}
-            )
+            translated_headlines.append({"title": translated_title, "url": url})
 
         return translated_headlines
 
@@ -455,9 +425,7 @@ class NewsAgent(BaseAgent):
         """Get current time in HH:MM format for data freshness indicator."""
         return datetime.now().strftime("%H:%M")
 
-    def _format_indices_with_context(
-        self, indices: dict, language: str = "en"
-    ) -> tuple:
+    def _format_indices_with_context(self, indices: dict, language: str = "en") -> tuple:
         """
         Format market indices with context for N/A values.
 
@@ -520,9 +488,7 @@ class NewsAgent(BaseAgent):
         temp = weather.get("temperature", "N/A")
         pm25 = weather.get("pm25", "N/A")
         will_rain = weather.get("will_rain")
-        rain_text = (
-            "ใช่ (Yes)" if will_rain else "ไม่ (No)" if will_rain is not None else "N/A"
-        )
+        rain_text = "ใช่ (Yes)" if will_rain else "ไม่ (No)" if will_rain is not None else "N/A"
 
         timestamp = self._format_timestamp()
         pm25_display = self._get_pm25_context(pm25, "th")
@@ -564,7 +530,7 @@ class NewsAgent(BaseAgent):
             if url and url.strip():
                 msg += f"   🔗 {url}\n"
             else:
-                msg += f"   ⚠️ ลิงก์ไม่พร้อมใช้งาน\n"
+                msg += "   ⚠️ ลิงก์ไม่พร้อมใช้งาน\n"
 
         return msg
 
@@ -623,7 +589,7 @@ class NewsAgent(BaseAgent):
             if url and url.strip():
                 msg += f"   🔗 {url}\n"
             else:
-                msg += f"   ⚠️ Link unavailable\n"
+                msg += "   ⚠️ Link unavailable\n"
 
         return msg
 
@@ -653,9 +619,7 @@ class NewsAgent(BaseAgent):
             try:
                 index = int(normalized) - 1
             except ValueError:
-                await self._send_invalid_choice(
-                    event, line_bot_api, session["language"]
-                )
+                await self._send_invalid_choice(event, line_bot_api, session["language"])
                 return True
 
             cached_data = session.get("cached_data", {})
@@ -664,16 +628,14 @@ class NewsAgent(BaseAgent):
             if index < len(headlines):
                 headline = headlines[index]
                 # Log headline data for debugging
-                logger.info(f"📰 User selected headline {index+1}: title='{headline.get('title', '')[:50]}...', has_url={bool(headline.get('url'))}")
-                news_session_manager.select_headline(chat_id, index)
-                await self._send_headline_detail(
-                    event, line_bot_api, headline, session["language"]
+                logger.info(
+                    f"📰 User selected headline {index + 1}: title='{headline.get('title', '')[:50]}...', has_url={bool(headline.get('url'))}"
                 )
+                news_session_manager.select_headline(chat_id, index)
+                await self._send_headline_detail(event, line_bot_api, headline, session["language"])
                 return True
             else:
-                await self._send_invalid_choice(
-                    event, line_bot_api, session["language"]
-                )
+                await self._send_invalid_choice(event, line_bot_api, session["language"])
                 return True
 
         else:
@@ -719,9 +681,7 @@ class NewsAgent(BaseAgent):
                 ),
             )
 
-    async def _send_trigger_translation(
-        self, event: MessageEvent, line_bot_api: MessagingApi, text: str
-    ):
+    async def _send_trigger_translation(self, event: MessageEvent, line_bot_api: MessagingApi, text: str):
         """Translate the trigger word to the other language (group/non-friend or private)."""
         trigger_text = self._normalize_trigger_text(text)
         if trigger_text == "news":
@@ -743,9 +703,7 @@ class NewsAgent(BaseAgent):
                 ),
             )
 
-    async def _send_invalid_choice(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
+    async def _send_invalid_choice(self, event: MessageEvent, line_bot_api: MessagingApi, language: str):
         """Send invalid choice message."""
         if language == "th":
             msg = "❌ กรุณาเลือก 1-5 (หัวข้อข่าว)"
@@ -796,9 +754,7 @@ class NewsAgent(BaseAgent):
                 ),
             )
 
-    async def _send_error_message(
-        self, event: MessageEvent, line_bot_api: MessagingApi
-    ):
+    async def _send_error_message(self, event: MessageEvent, line_bot_api: MessagingApi):
         """Send error message when something goes wrong."""
         msg = "❌ Sorry, something went wrong. Please try again later.\n"
         msg += "ขออภัย เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง"

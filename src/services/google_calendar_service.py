@@ -11,11 +11,9 @@ Features:
 
 import asyncio
 import logging
-import os
-import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
@@ -25,11 +23,12 @@ BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 
 # Try to import Google libraries
 try:
-    from google.oauth2.credentials import Credentials
     from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
+
     GOOGLE_LIBS_AVAILABLE = True
 except ImportError:
     GOOGLE_LIBS_AVAILABLE = False
@@ -37,20 +36,20 @@ except ImportError:
 
 
 # Scopes required for calendar access
-SCOPES = ['https://www.googleapis.com/auth/calendar']
+SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 
 class GoogleCalendarEvent:
     """Represents a Google Calendar event."""
-    
+
     def __init__(
         self,
         id: str,
         title: str,
         start: datetime,
-        end: Optional[datetime] = None,
+        end: datetime | None = None,
         description: str = "",
-        reminders: Optional[List[int]] = None,
+        reminders: list[int] | None = None,
         link: str = "",
         creator: str = "",
     ):
@@ -63,7 +62,7 @@ class GoogleCalendarEvent:
         self.link = link
         self.creator = creator
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "id": self.id,
@@ -77,7 +76,7 @@ class GoogleCalendarEvent:
         }
 
     @classmethod
-    def from_google_event(cls, event: Dict) -> "GoogleCalendarEvent":
+    def from_google_event(cls, event: dict) -> "GoogleCalendarEvent":
         """Create from Google Calendar API response."""
         # Parse start time
         start_data = event.get("start", {})
@@ -123,10 +122,10 @@ class GoogleCalendarService:
     """Service for interacting with Google Calendar API."""
 
     def __init__(self):
-        self._credentials: Optional[Credentials] = None
+        self._credentials: Credentials | None = None
         self._service = None
-        self._credentials_path: Optional[Path] = None
-        self._token_path: Optional[Path] = None
+        self._credentials_path: Path | None = None
+        self._token_path: Path | None = None
         self._calendar_id = "primary"  # Use primary calendar by default
         self._initialized = False
 
@@ -174,9 +173,7 @@ class GoogleCalendarService:
             return False
 
         try:
-            self._credentials = Credentials.from_authorized_user_file(
-                str(self._token_path), SCOPES
-            )
+            self._credentials = Credentials.from_authorized_user_file(str(self._token_path), SCOPES)
 
             # Refresh if expired
             if self._credentials and self._credentials.expired and self._credentials.refresh_token:
@@ -219,9 +216,7 @@ class GoogleCalendarService:
             return False
 
         try:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                str(self._credentials_path), SCOPES
-            )
+            flow = InstalledAppFlow.from_client_secrets_file(str(self._credentials_path), SCOPES)
             self._credentials = flow.run_local_server(port=0)
             self._save_credentials()
             self._build_service()
@@ -236,11 +231,11 @@ class GoogleCalendarService:
         self,
         title: str,
         start: datetime,
-        end: Optional[datetime] = None,
+        end: datetime | None = None,
         description: str = "",
-        reminder_minutes: Optional[List[int]] = None,
+        reminder_minutes: list[int] | None = None,
         chat_id: str = "",
-    ) -> Optional[GoogleCalendarEvent]:
+    ) -> GoogleCalendarEvent | None:
         """
         Create a new calendar event.
 
@@ -287,9 +282,7 @@ class GoogleCalendarService:
         if reminder_minutes:
             event_body["reminders"] = {
                 "useDefault": False,
-                "overrides": [
-                    {"method": "popup", "minutes": m} for m in reminder_minutes
-                ],
+                "overrides": [{"method": "popup", "minutes": m} for m in reminder_minutes],
             }
         else:
             # Default: 1 day and 1 hour before
@@ -297,18 +290,15 @@ class GoogleCalendarService:
                 "useDefault": False,
                 "overrides": [
                     {"method": "popup", "minutes": 1440},  # 1 day
-                    {"method": "popup", "minutes": 60},    # 1 hour
+                    {"method": "popup", "minutes": 60},  # 1 hour
                 ],
             }
 
         try:
             result = await asyncio.to_thread(
-                self._service.events().insert(
-                    calendarId=self._calendar_id,
-                    body=event_body
-                ).execute
+                self._service.events().insert(calendarId=self._calendar_id, body=event_body).execute
             )
-            
+
             event = GoogleCalendarEvent.from_google_event(result)
             logger.info(f"✅ Created event: {title} on {start.strftime('%Y-%m-%d %H:%M')}")
             return event
@@ -316,7 +306,7 @@ class GoogleCalendarService:
             logger.error(f"❌ Failed to create event: {e}")
             return None
 
-    async def quick_add(self, text: str) -> Optional[GoogleCalendarEvent]:
+    async def quick_add(self, text: str) -> GoogleCalendarEvent | None:
         """
         Create event using natural language (Google's quickAdd).
 
@@ -336,13 +326,8 @@ class GoogleCalendarService:
             return None
 
         try:
-            result = await asyncio.to_thread(
-                self._service.events().quickAdd(
-                    calendarId=self._calendar_id,
-                    text=text
-                ).execute
-            )
-            
+            result = await asyncio.to_thread(self._service.events().quickAdd(calendarId=self._calendar_id, text=text).execute)
+
             event = GoogleCalendarEvent.from_google_event(result)
             logger.info(f"✅ Quick add event: {event.title}")
             return event
@@ -353,8 +338,8 @@ class GoogleCalendarService:
     async def get_upcoming_events(
         self,
         max_results: int = 10,
-        chat_id: Optional[str] = None,
-    ) -> List[GoogleCalendarEvent]:
+        chat_id: str | None = None,
+    ) -> list[GoogleCalendarEvent]:
         """
         Get upcoming events.
 
@@ -371,21 +356,19 @@ class GoogleCalendarService:
 
         try:
             now = datetime.now(BANGKOK_TZ).isoformat()
-            
+
             result = await asyncio.to_thread(
-                self._service.events().list(
-                    calendarId=self._calendar_id,
-                    timeMin=now,
-                    maxResults=max_results,
-                    singleEvents=True,
-                    orderBy="startTime"
-                ).execute
+                self._service.events()
+                .list(
+                    calendarId=self._calendar_id, timeMin=now, maxResults=max_results, singleEvents=True, orderBy="startTime"
+                )
+                .execute
             )
 
             events = []
             for item in result.get("items", []):
                 event = GoogleCalendarEvent.from_google_event(item)
-                
+
                 # Filter by chat_id if specified
                 if chat_id:
                     if f"[TeacherBOY: {chat_id}]" in (event.description or ""):
@@ -399,7 +382,7 @@ class GoogleCalendarService:
             logger.error(f"❌ Failed to get events: {e}")
             return []
 
-    async def get_events_for_date(self, date: datetime) -> List[GoogleCalendarEvent]:
+    async def get_events_for_date(self, date: datetime) -> list[GoogleCalendarEvent]:
         """
         Get events for a specific date.
 
@@ -418,13 +401,15 @@ class GoogleCalendarService:
             end_of_day = start_of_day + timedelta(days=1)
 
             result = await asyncio.to_thread(
-                self._service.events().list(
+                self._service.events()
+                .list(
                     calendarId=self._calendar_id,
                     timeMin=start_of_day.isoformat(),
                     timeMax=end_of_day.isoformat(),
                     singleEvents=True,
-                    orderBy="startTime"
-                ).execute
+                    orderBy="startTime",
+                )
+                .execute
             )
 
             events = [GoogleCalendarEvent.from_google_event(item) for item in result.get("items", [])]
@@ -447,19 +432,14 @@ class GoogleCalendarService:
             return False
 
         try:
-            await asyncio.to_thread(
-                self._service.events().delete(
-                    calendarId=self._calendar_id,
-                    eventId=event_id
-                ).execute
-            )
+            await asyncio.to_thread(self._service.events().delete(calendarId=self._calendar_id, eventId=event_id).execute)
             logger.info(f"🗑️ Deleted event: {event_id}")
             return True
         except HttpError as e:
             logger.error(f"❌ Failed to delete event: {e}")
             return False
 
-    async def delete_events(self, event_ids: List[str]) -> int:
+    async def delete_events(self, event_ids: list[str]) -> int:
         """
         Delete multiple events.
 
@@ -478,12 +458,12 @@ class GoogleCalendarService:
     async def update_event(
         self,
         event_id: str,
-        title: Optional[str] = None,
-        start: Optional[datetime] = None,
-        end: Optional[datetime] = None,
-        description: Optional[str] = None,
-        reminder_minutes: Optional[List[int]] = None,
-    ) -> Optional[GoogleCalendarEvent]:
+        title: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        description: str | None = None,
+        reminder_minutes: list[int] | None = None,
+    ) -> GoogleCalendarEvent | None:
         """
         Update an existing event.
 
@@ -504,10 +484,7 @@ class GoogleCalendarService:
         try:
             # Get existing event
             existing = await asyncio.to_thread(
-                self._service.events().get(
-                    calendarId=self._calendar_id,
-                    eventId=event_id
-                ).execute
+                self._service.events().get(calendarId=self._calendar_id, eventId=event_id).execute
             )
 
             # Update fields
@@ -532,17 +509,11 @@ class GoogleCalendarService:
             if reminder_minutes is not None:
                 existing["reminders"] = {
                     "useDefault": False,
-                    "overrides": [
-                        {"method": "popup", "minutes": m} for m in reminder_minutes
-                    ],
+                    "overrides": [{"method": "popup", "minutes": m} for m in reminder_minutes],
                 }
 
             result = await asyncio.to_thread(
-                self._service.events().update(
-                    calendarId=self._calendar_id,
-                    eventId=event_id,
-                    body=existing
-                ).execute
+                self._service.events().update(calendarId=self._calendar_id, eventId=event_id, body=existing).execute
             )
 
             return GoogleCalendarEvent.from_google_event(result)

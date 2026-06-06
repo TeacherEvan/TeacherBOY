@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from src.services.ai_translation_service import ai_translation_service
 
@@ -20,7 +20,7 @@ class TranslationService:
         text: str,
         source_lang: str,
         target_lang: str,
-    ) -> Optional[Any]:
+    ) -> Any | None:
         return await self.delegate.translate(text, source_lang, target_lang)
 
 

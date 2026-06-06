@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
@@ -434,9 +434,7 @@ async def test_async_repository_reads_fall_back_to_cached_local_events_and_remin
     from src.services.convex_calendar_repository import ConvexCalendarRepository
 
     today = date(2030, 1, 5)
-    repository = ConvexCalendarRepository(
-        _FailingConvexClient(fail_async_get=True)
-    )
+    repository = ConvexCalendarRepository(_FailingConvexClient(fail_async_get=True))
 
     with TemporaryDirectory() as tmpdir:
         service = CalendarService(local_storage_path=tmpdir)
@@ -456,6 +454,4 @@ async def test_async_repository_reads_fall_back_to_cached_local_events_and_remin
 
         assert [event.event_id for event in user_events] == [cached_event.event_id]
         assert [event.event_id for event in chat_events] == [cached_event.event_id]
-        assert [(item["event"].event_id, item["days_until"]) for item in reminders] == [
-            (cached_event.event_id, 0)
-        ]
+        assert [(item["event"].event_id, item["days_until"]) for item in reminders] == [(cached_event.event_id, 0)]

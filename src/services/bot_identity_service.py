@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
-import re
-
 
 DEFAULT_BOT_IDENTITY_NAME = "Ms. Green"
 DEFAULT_BOT_IDENTITY_ALIASES = [
@@ -13,7 +12,7 @@ DEFAULT_BOT_IDENTITY_ALIASES = [
 ]
 
 
-_bot_identity_service: "BotIdentityService | None" = None
+_bot_identity_service: BotIdentityService | None = None
 
 
 @dataclass
@@ -31,9 +30,7 @@ class BotIdentityService:
     ):
         self._storage_path = Path(storage_path)
         self._default_name = default_name.strip()
-        self._default_aliases = self._normalize(
-            default_aliases + [default_name]
-        )
+        self._default_aliases = self._normalize(default_aliases + [default_name])
         self._profile = self._load()
         self._cached_recognition_aliases: list[str] | None = None
 
@@ -50,9 +47,7 @@ class BotIdentityService:
     def _recognition_aliases(self) -> list[str]:
         """Aliases accepted for command-prefix recognition."""
         if self._cached_recognition_aliases is None:
-            self._cached_recognition_aliases = self._normalize(
-                [self._profile.display_name, *self._profile.aliases]
-            )
+            self._cached_recognition_aliases = self._normalize([self._profile.display_name, *self._profile.aliases])
         return self._cached_recognition_aliases
 
     def _load(self) -> BotIdentityProfile:
@@ -78,16 +73,10 @@ class BotIdentityService:
     def get_profile(self) -> BotIdentityProfile:
         return self._profile
 
-    def update_identity(
-        self, display_name: str, aliases: list[str]
-    ) -> BotIdentityProfile:
+    def update_identity(self, display_name: str, aliases: list[str]) -> BotIdentityProfile:
         previous_name = self._profile.display_name
-        merged_aliases = self._normalize(
-            aliases + [display_name, previous_name] + self._profile.aliases
-        )
-        self._profile = BotIdentityProfile(
-            display_name=display_name.strip(), aliases=merged_aliases
-        )
+        merged_aliases = self._normalize(aliases + [display_name, previous_name] + self._profile.aliases)
+        self._profile = BotIdentityProfile(display_name=display_name.strip(), aliases=merged_aliases)
         self._cached_recognition_aliases = None  # Invalidate cache on profile change
         self._save()
         return self._profile
@@ -107,7 +96,7 @@ class BotIdentityService:
             if lowered == alias:
                 return alias, ""
             if lowered.startswith(f"{alias} "):
-                return alias, cleaned[len(alias):].lstrip()
+                return alias, cleaned[len(alias) :].lstrip()
         return None, cleaned
 
     def expand_prefixed_trigger(self, trigger: str) -> list[str]:
@@ -118,7 +107,7 @@ class BotIdentityService:
             if normalized == alias:
                 return expansion_aliases.copy()
             if normalized.startswith(f"{alias} "):
-                suffix = normalized[len(alias):].lstrip()
+                suffix = normalized[len(alias) :].lstrip()
                 return [f"{candidate} {suffix}".strip() for candidate in expansion_aliases]
 
         return [normalized]
@@ -159,11 +148,7 @@ def get_bot_identity_service() -> BotIdentityService:
         None,
     )
     if isinstance(raw_aliases, str) and raw_aliases.strip():
-        default_aliases = [
-            alias.strip()
-            for alias in raw_aliases.split(",")
-            if alias.strip()
-        ]
+        default_aliases = [alias.strip() for alias in raw_aliases.split(",") if alias.strip()]
     else:
         default_aliases = DEFAULT_BOT_IDENTITY_ALIASES.copy()
 

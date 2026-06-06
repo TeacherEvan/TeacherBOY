@@ -10,22 +10,21 @@ Handles the multi-step event creation flow:
 Uses lazy loading pattern for on-demand instantiation.
 """
 
-import re
 import logging
-from datetime import datetime
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Optional
 
-from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
+    MessageAction,
     MessagingApi,
     QuickReply,
     QuickReplyItem,
-    MessageAction,
 )
+from linebot.v3.webhooks import MessageEvent
+
+from src.services.calendar_session_manager import calendar_session_manager
 
 from .base_flow import CalendarFlowBase
-from .states import CalendarState
-from src.services.calendar_session_manager import calendar_session_manager
 
 if TYPE_CHECKING:
     from src.services.calendar_service import CalendarService
@@ -52,15 +51,12 @@ class AddFlow(CalendarFlowBase):
         event: MessageEvent,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         calendar_service: Optional["CalendarService"] = None,
     ) -> bool:
         """Start the manual add event flow."""
         if not user_id:
-            await self.send_message(
-                event, line_bot_api,
-                "❌ Cannot identify user."
-            )
+            await self.send_message(event, line_bot_api, "❌ Cannot identify user.")
             return True
 
         # Start session in AWAITING_DATE state
@@ -106,9 +102,7 @@ class AddFlow(CalendarFlowBase):
 
             # Start extraction flow
             is_friend = getattr(session, "is_friend", False)
-            calendar_session_manager.start_scrape_flow(
-                chat_id, user_id, [text], is_friend
-            )
+            calendar_session_manager.start_scrape_flow(chat_id, user_id, [text], is_friend)
 
             # Extract dates using AI
             try:
@@ -116,10 +110,11 @@ class AddFlow(CalendarFlowBase):
 
                 if not events:
                     await self.send_message(
-                        event, line_bot_api,
+                        event,
+                        line_bot_api,
                         "🤔 I see you pasted event details, but I couldn't extract any dates.\n\n"
                         "Please try using 'Ms. Green scrape' or enter a single date.\n\n"
-                        "ฉันเห็นว่าคุณวางรายละเอียดกิจกรรม แต่ไม่สามารถดึงวันที่ได้"
+                        "ฉันเห็นว่าคุณวางรายละเอียดกิจกรรม แต่ไม่สามารถดึงวันที่ได้",
                     )
                     calendar_session_manager.end_session(chat_id)
                     return True
@@ -140,6 +135,7 @@ class AddFlow(CalendarFlowBase):
 
                 # Import scrape flow to prompt
                 from .scrape_flow import get_scrape_flow
+
                 scrape_flow = get_scrape_flow()
 
                 await scrape_flow.prompt_scrape_selection(
@@ -153,8 +149,9 @@ class AddFlow(CalendarFlowBase):
             except Exception as e:
                 logger.error(f"❌ Bulk date extraction failed: {e}", exc_info=True)
                 await self.send_message(
-                    event, line_bot_api,
-                    "❌ Failed to process bulk dates. Please try 'Ms. Green scrape' or enter one date at a time."
+                    event,
+                    line_bot_api,
+                    "❌ Failed to process bulk dates. Please try 'Ms. Green scrape' or enter one date at a time.",
                 )
                 calendar_session_manager.end_session(chat_id)
                 return True
@@ -164,7 +161,8 @@ class AddFlow(CalendarFlowBase):
 
         if not parsed_date:
             await self.send_message(
-                event, line_bot_api,
+                event,
+                line_bot_api,
                 "❌ I couldn't understand that date.\n\n"
                 "Try formats like:\n"
                 "• Jan 15, 2025\n"
@@ -173,17 +171,16 @@ class AddFlow(CalendarFlowBase):
                 "• tomorrow\n"
                 "• next week\n\n"
                 "💡 TIP: Paste multiple events? I'll extract them automatically!\n\n"
-                "ไม่เข้าใจวันที่ กรุณาลองอีกครั้ง"
+                "ไม่เข้าใจวันที่ กรุณาลองอีกครั้ง",
             )
             return True
 
         # Check if date is in the past
         if not self.validate_future_date(parsed_date):
             await self.send_message(
-                event, line_bot_api,
-                "❌ That date is in the past!\n\n"
-                "Please enter a future date.\n\n"
-                "วันที่ที่ระบุผ่านไปแล้ว กรุณาใส่วันที่ในอนาคต"
+                event,
+                line_bot_api,
+                "❌ That date is in the past!\n\nPlease enter a future date.\n\nวันที่ที่ระบุผ่านไปแล้ว กรุณาใส่วันที่ในอนาคต",
             )
             return True
 
@@ -213,9 +210,9 @@ class AddFlow(CalendarFlowBase):
 
         if len(title) < 2:
             await self.send_message(
-                event, line_bot_api,
-                "❌ Title is too short. Please enter at least 2 characters.\n\n"
-                "ชื่อสั้นเกินไป กรุณาใส่อย่างน้อย 2 ตัวอักษร"
+                event,
+                line_bot_api,
+                "❌ Title is too short. Please enter at least 2 characters.\n\nชื่อสั้นเกินไป กรุณาใส่อย่างน้อย 2 ตัวอักษร",
             )
             return True
 
@@ -259,16 +256,16 @@ class AddFlow(CalendarFlowBase):
             "(Day-of reminder is always included)"
         )
 
-        quick_reply = QuickReply(items=[
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="7 days", text="7")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="3 days", text="3")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="1 day", text="1")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="All", text="all")),
-        ])
-
-        await self.send_message_with_quick_reply(
-            event, line_bot_api, msg, quick_reply
+        quick_reply = QuickReply(
+            items=[
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="7 days", text="7")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="3 days", text="3")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="1 day", text="1")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="All", text="all")),
+            ]
         )
+
+        await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
         return True
 
     async def handle_reminder_days_input(
@@ -300,14 +297,12 @@ class AddFlow(CalendarFlowBase):
                         day = int(part)
                         if 0 <= day <= 30:
                             reminder_days.append(day)
-            except:
+            except Exception:
                 pass
 
             if not reminder_days:
                 await self.send_message(
-                    event, line_bot_api,
-                    "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\n"
-                    "กรุณาเลือก 7, 3, 1 หรือ all"
+                    event, line_bot_api, "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\nกรุณาเลือก 7, 3, 1 หรือ all"
                 )
                 return True
 
@@ -335,14 +330,14 @@ class AddFlow(CalendarFlowBase):
             "ข้อมูลถูกต้องไหม? (yes/no)"
         )
 
-        quick_reply = QuickReply(items=[
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✅ Yes", text="yes")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="❌ No", text="no")),
-        ])
-
-        await self.send_message_with_quick_reply(
-            event, line_bot_api, msg, quick_reply
+        quick_reply = QuickReply(
+            items=[
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✅ Yes", text="yes")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="❌ No", text="no")),
+            ]
         )
+
+        await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
         return True
 
     async def handle_add_confirmation(
@@ -351,7 +346,7 @@ class AddFlow(CalendarFlowBase):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         calendar_service: Optional["CalendarService"] = None,
     ) -> bool:
         """Handle event creation confirmation."""
@@ -361,10 +356,7 @@ class AddFlow(CalendarFlowBase):
             # Get event data
             event_data = calendar_session_manager.get_pending_event_data(chat_id)
             if not event_data or not calendar_service or not user_id:
-                await self.send_message(
-                    event, line_bot_api,
-                    "❌ Something went wrong. Please try again."
-                )
+                await self.send_message(event, line_bot_api, "❌ Something went wrong. Please try again.")
                 calendar_session_manager.end_session(chat_id)
                 return True
 
@@ -376,7 +368,7 @@ class AddFlow(CalendarFlowBase):
                 event_date=event_data["date"],
                 description=event_data["description"],
                 reminder_days=event_data["reminder_days"],
-                is_friend=event_data["is_friend"]
+                is_friend=event_data["is_friend"],
             )
 
             calendar_session_manager.end_session(chat_id)
@@ -399,29 +391,27 @@ class AddFlow(CalendarFlowBase):
         elif text_lower in ["no", "n", "ไม่"]:
             calendar_session_manager.end_session(chat_id)
             await self.send_message(
-                event, line_bot_api,
+                event,
+                line_bot_api,
                 "❌ Event creation cancelled.\n\n"
                 "Say 'Ms. Green add event' to try again.\n\n"
-                "ยกเลิกแล้ว พิมพ์ 'Ms. Green add event' เพื่อลองใหม่"
+                "ยกเลิกแล้ว พิมพ์ 'Ms. Green add event' เพื่อลองใหม่",
             )
             return True
         else:
-            await self.send_message(
-                event, line_bot_api,
-                "Please answer yes or no.\n\nกรุณาตอบ yes หรือ no"
-            )
+            await self.send_message(event, line_bot_api, "Please answer yes or no.\n\nกรุณาตอบ yes หรือ no")
             return True
 
     def _looks_like_bulk_dates(self, text: str) -> bool:
         """
         Detect if text looks like bulk date paste.
-        
+
         Patterns detected:
         - Multiple lines with dates
         - Image analysis output headers
         - Multiple date patterns in one message
         """
-        lines = text.strip().split('\n')
+        lines = text.strip().split("\n")
 
         # Multiple lines is a strong indicator
         if len(lines) >= 3:
@@ -434,11 +424,11 @@ class AddFlow(CalendarFlowBase):
 
         # Count date-like patterns
         date_pattern = re.compile(
-            r'\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|'  # DD/MM/YYYY, MM/DD/YYYY
-            r'\d{4}[/-]\d{1,2}[/-]\d{1,2}|'  # YYYY-MM-DD
-            r'(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}|'  # Jan 15
-            r'\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)\b',  # 15 Jan
-            re.IGNORECASE
+            r"\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|"  # DD/MM/YYYY, MM/DD/YYYY
+            r"\d{4}[/-]\d{1,2}[/-]\d{1,2}|"  # YYYY-MM-DD
+            r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}|"  # Jan 15
+            r"\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)\b",  # 15 Jan
+            re.IGNORECASE,
         )
         matches = date_pattern.findall(text)
         if len(matches) >= 2:
@@ -453,6 +443,7 @@ class AddFlow(CalendarFlowBase):
     ) -> bool:
         """Check if user is a friend of the bot."""
         import asyncio
+
         from linebot.v3.messaging.exceptions import ApiException
 
         user_id = getattr(event.source, "user_id", None) if event.source else None

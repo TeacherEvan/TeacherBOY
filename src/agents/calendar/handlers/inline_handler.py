@@ -4,33 +4,36 @@ Inline Handler - Processes "zeus add [date] [title]" shorthand format.
 This handler provides a quick way to add events without the multi-step flow,
 parsing date and title from a single command.
 """
+
 import asyncio
 import logging
 import re
-from datetime import datetime, date, timedelta
-from typing import Optional, Dict, Any
+from datetime import date, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
-from linebot.v3.webhooks import MessageEvent
+
 from linebot.v3.messaging import (
+    MessageAction,
     MessagingApi,
     QuickReply,
     QuickReplyItem,
-    MessageAction,
 )
 from linebot.v3.messaging.exceptions import ApiException
+from linebot.v3.webhooks import MessageEvent
 
-from ..base_handler import CalendarHandler
-from src.services.calendar_session_manager import (
-    calendar_session_manager,
-    CalendarState,
-)
+from src.config import settings
+from src.services.bot_identity_service import get_bot_identity_service
 from src.services.calendar_access_control import calendar_access_control
+from src.services.calendar_service import CalendarService
+from src.services.calendar_session_manager import (
+    CalendarState,
+    calendar_session_manager,
+)
+from src.services.history_log_service import EventType, LogLevel, get_history_log
 from src.services.privilege_service import privilege_service
 from src.services.rate_limiter import rate_limiter
-from src.services.history_log_service import EventType, LogLevel, get_history_log
-from src.services.calendar_service import CalendarService
-from src.services.bot_identity_service import get_bot_identity_service
-from src.config import settings
+
+from ..base_handler import CalendarHandler
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +57,7 @@ class InlineHandler(CalendarHandler):
             name="InlineHandler",
             description="Processes quick 'zeus add [date] [title]' format",
         )
-        self._friend_cache: Dict[str, tuple[bool, datetime]] = {}
+        self._friend_cache: dict[str, tuple[bool, datetime]] = {}
 
     def get_triggers(self) -> list:
         return ["zeus add", "ms. green add", "ms green add"]
@@ -76,34 +79,28 @@ class InlineHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         context: dict,
     ) -> bool:
-        calendar_service: Optional[CalendarService] = context.get("calendar_service")
+        calendar_service: CalendarService | None = context.get("calendar_service")
         session = calendar_session_manager.get_session(chat_id)
 
         inline_data = self._parse_inline_add(text)
         if inline_data:
-            return await self._handle_inline_add_trigger(
-                event, line_bot_api, chat_id, user_id, inline_data
-            )
+            return await self._handle_inline_add_trigger(event, line_bot_api, chat_id, user_id, inline_data)
 
         if not session:
             return False
 
         if session.state == CalendarState.INLINE_ADD_REMINDER_DAYS:
-            return await self._handle_inline_add_reminder_response(
-                event, text, line_bot_api, chat_id, user_id
-            )
+            return await self._handle_inline_add_reminder_response(event, text, line_bot_api, chat_id, user_id)
 
         if session.state == CalendarState.INLINE_ADD_CONFIRMING:
-            return await self._handle_inline_add_confirmation(
-                event, text, line_bot_api, chat_id, user_id, calendar_service
-            )
+            return await self._handle_inline_add_confirmation(event, text, line_bot_api, chat_id, user_id, calendar_service)
 
         return False
 
-    def _parse_inline_add(self, text: str) -> Optional[Dict[str, Any]]:
+    def _parse_inline_add(self, text: str) -> dict[str, Any] | None:
         normalized = (text or "").strip()
         prefix, rest = get_bot_identity_service().split_command_prefix(normalized)
         command_text = rest.strip() if prefix else normalized
@@ -191,7 +188,7 @@ class InlineHandler(CalendarHandler):
                             if title:
                                 return {
                                     "date": parsed_date,
-                                    "title": remainder[match.start(4):].strip()[:100],
+                                    "title": remainder[match.start(4) :].strip()[:100],
                                 }
 
                         elif fmt == "slash":
@@ -207,7 +204,7 @@ class InlineHandler(CalendarHandler):
                             if title:
                                 return {
                                     "date": parsed_date,
-                                    "title": remainder[match.start(4):].strip()[:100],
+                                    "title": remainder[match.start(4) :].strip()[:100],
                                 }
 
                         elif fmt == "iso":
@@ -220,7 +217,7 @@ class InlineHandler(CalendarHandler):
                             if title:
                                 return {
                                     "date": parsed_date,
-                                    "title": remainder[match.start(4):].strip()[:100],
+                                    "title": remainder[match.start(4) :].strip()[:100],
                                 }
                     except (ValueError, IndexError):
                         continue
@@ -241,20 +238,16 @@ class InlineHandler(CalendarHandler):
         event: MessageEvent,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
-        parsed_data: Dict[str, Any],
+        user_id: str | None,
+        parsed_data: dict[str, Any],
     ) -> bool:
         if not user_id:
             await self._send_message(event, line_bot_api, "❌ Cannot identify user.")
             return True
 
-        can_create = await calendar_access_control.can_create_event(
-            user_id, chat_id, line_bot_api
-        )
+        can_create = await calendar_access_control.can_create_event(user_id, chat_id, line_bot_api)
         if not can_create:
-            logger.warning(
-                f"❌ Access denied: {user_id} cannot create events in {chat_id}"
-            )
+            logger.warning(f"❌ Access denied: {user_id} cannot create events in {chat_id}")
             history_log = get_history_log()
             if history_log:
                 await history_log.log(
@@ -290,9 +283,7 @@ class InlineHandler(CalendarHandler):
             await self._send_message(
                 event,
                 line_bot_api,
-                "❌ That date is in the past!\n\n"
-                "Please use a future date.\n\n"
-                "วันที่ที่ระบุผ่านไปแล้ว กรุณาใส่วันที่ในอนาคต",
+                "❌ That date is in the past!\n\nPlease use a future date.\n\nวันที่ที่ระบุผ่านไปแล้ว กรุณาใส่วันที่ในอนาคต",
             )
             return True
 
@@ -354,7 +345,7 @@ class InlineHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         text_lower = text.lower().strip()
 
@@ -370,28 +361,20 @@ class InlineHandler(CalendarHandler):
             await self._send_message(
                 event,
                 line_bot_api,
-                "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\n"
-                "กรุณาเลือก 7, 3, 1 หรือ all",
+                "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\nกรุณาเลือก 7, 3, 1 หรือ all",
             )
             return True
 
-        event_data = calendar_session_manager.set_inline_reminder_days(
-            chat_id, reminder_days
-        )
+        event_data = calendar_session_manager.set_inline_reminder_days(chat_id, reminder_days)
 
         if not event_data:
             calendar_session_manager.end_session(chat_id)
-            await self._send_message(
-                event, line_bot_api, "❌ Something went wrong. Please try again."
-            )
+            await self._send_message(event, line_bot_api, "❌ Something went wrong. Please try again.")
             return True
 
         date_str = event_data["date"].strftime("%B %d, %Y")
         reminder_str = ", ".join(
-            [
-                f"{d} days" if d > 0 else "day-of"
-                for d in sorted(event_data["reminder_days"], reverse=True)
-            ]
+            [f"{d} days" if d > 0 else "day-of" for d in sorted(event_data["reminder_days"], reverse=True)]
         )
 
         msg = (
@@ -426,23 +409,16 @@ class InlineHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
-        calendar_service: Optional[CalendarService],
+        user_id: str | None,
+        calendar_service: CalendarService | None,
     ) -> bool:
         text_lower = text.lower().strip()
 
         if text_lower in ["yes", "y", "ใช่", "ok", "confirm"]:
             session = calendar_session_manager.get_session(chat_id)
 
-            if (
-                not session
-                or not session.inline_event_data
-                or not calendar_service
-                or not user_id
-            ):
-                await self._send_message(
-                    event, line_bot_api, "❌ Something went wrong. Please try again."
-                )
+            if not session or not session.inline_event_data or not calendar_service or not user_id:
+                await self._send_message(event, line_bot_api, "❌ Something went wrong. Please try again.")
                 calendar_session_manager.end_session(chat_id)
                 return True
 
@@ -459,9 +435,7 @@ class InlineHandler(CalendarHandler):
             calendar_session_manager.end_session(chat_id)
 
             date_str = new_event.event_date.strftime("%B %d, %Y")
-            reminder_str = ", ".join(
-                [f"{d}d" for d in sorted(new_event.reminder_days, reverse=True)]
-            )
+            reminder_str = ", ".join([f"{d}d" for d in sorted(new_event.reminder_days, reverse=True)])
 
             msg = (
                 "✅ Event created!\n\n"
@@ -480,9 +454,7 @@ class InlineHandler(CalendarHandler):
             await self._send_message(
                 event,
                 line_bot_api,
-                "❌ Event creation cancelled.\n\n"
-                "Say 'Ms. Green add [date] [title]' to try again.\n\n"
-                "ยกเลิกแล้ว",
+                "❌ Event creation cancelled.\n\nSay 'Ms. Green add [date] [title]' to try again.\n\nยกเลิกแล้ว",
             )
             return True
 
@@ -517,9 +489,9 @@ class InlineHandler(CalendarHandler):
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         if event.source and getattr(event.source, "group_id", None):
-            return f"group_{getattr(event.source, 'group_id')}"
+            return f"group_{event.source.group_id}"
         if event.source and getattr(event.source, "room_id", None):
-            return f"room_{getattr(event.source, 'room_id')}"
+            return f"room_{event.source.room_id}"
         if event.source and getattr(event.source, "user_id", None):
-            return f"user_{getattr(event.source, 'user_id')}"
+            return f"user_{event.source.user_id}"
         return "user_unknown"

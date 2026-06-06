@@ -20,12 +20,12 @@ Architecture:
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime, date, timedelta
-from typing import List, Dict, Any, Optional
+from datetime import date, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
@@ -79,14 +79,14 @@ RESPOND WITH JSON ONLY:"""
 @dataclass
 class ExtractedEvent:
     """Represents a single extracted event."""
-    
+
     event_date: date
     title: str
     description: str
     source_text: str
     confidence: str  # high, medium, low
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for session manager."""
         return {
             "date": self.event_date,
@@ -100,40 +100,38 @@ class ExtractedEvent:
 class DateExtractionService:
     """
     Service for extracting calendar events from message text using AI.
-    
+
     Uses GPT-4o via GitHub Models Service for natural language understanding
     of dates and events in both English and Thai.
     """
-    
+
     def __init__(self):
         """Initialize the date extraction service."""
         self._extraction_count = 0
         logger.info("📅 DateExtractionService initialized")
-    
+
     async def extract_events_from_messages(
         self,
-        messages: List[str],
+        messages: list[str],
         max_events: int = 10,
-    ) -> List[ExtractedEvent]:
+    ) -> list[ExtractedEvent]:
         """
         Extract calendar events from a list of message texts.
-        
+
         Args:
             messages: List of message text strings to analyze
             max_events: Maximum number of events to extract
-            
+
         Returns:
             List of ExtractedEvent objects
         """
         if not messages:
             logger.debug("📅 No messages to extract from")
             return []
-        
+
         # Format messages for prompt
-        numbered_messages = "\n".join(
-            f"{i+1}. {msg}" for i, msg in enumerate(messages)
-        )
-        
+        numbered_messages = "\n".join(f"{i + 1}. {msg}" for i, msg in enumerate(messages))
+
         today = datetime.now(BANGKOK_TZ).date()
         current_year = today.year
         prompt = EXTRACTION_PROMPT.format(
@@ -142,52 +140,52 @@ class DateExtractionService:
             year=current_year,
             next_year=current_year + 1,
         )
-        
+
         try:
             from src.services.ai_review_service import ai_review_service
 
             response = await ai_review_service.extract_calendar_candidates([prompt])
-            
+
             if not response:
                 logger.warning("📅 No response from AI, using fallback extraction")
                 return self._fallback_extraction(messages, today)
-            
+
             # Parse JSON response
             events = self._parse_extraction_response(response, today)
-            
+
             # Deduplicate and limit
             events = self._deduplicate_events(events)[:max_events]
-            
+
             self._extraction_count += 1
             logger.info(f"📅 Extracted {len(events)} events from {len(messages)} messages")
-            
+
             return events
-            
+
         except Exception as e:
             logger.error(f"📅 AI extraction failed: {e}", exc_info=True)
             return self._fallback_extraction(messages, today)
-    
+
     def _parse_extraction_response(
         self,
         response: str,
         today: date,
-    ) -> List[ExtractedEvent]:
+    ) -> list[ExtractedEvent]:
         """
         Parse the AI response into ExtractedEvent objects.
-        
+
         Args:
             response: JSON string from AI
             today: Today's date for validation
-            
+
         Returns:
             List of ExtractedEvent objects
         """
         events = []
-        
+
         try:
             # Clean response (remove markdown code blocks and extra whitespace)
             cleaned = response.strip()
-            
+
             # Remove markdown code blocks if present
             if "```" in cleaned:
                 # Extract content between code blocks
@@ -198,7 +196,7 @@ class DateExtractionService:
                     # Try removing just the markers
                     cleaned = re.sub(r"```(?:json)?\s*\n?", "", cleaned)
                     cleaned = re.sub(r"\s*```\s*$", "", cleaned)
-            
+
             # Try to extract JSON array if embedded in text
             if not cleaned.startswith("["):
                 json_match = re.search(r"\[.+\]", cleaned, re.DOTALL)
@@ -207,23 +205,23 @@ class DateExtractionService:
                 else:
                     logger.warning(f"📅 Response doesn't contain JSON array: {cleaned[:100]}")
                     return []
-            
+
             data = json.loads(cleaned)
-            
+
             if not isinstance(data, list):
                 logger.warning("📅 AI response is not a list")
                 return []
-            
+
             for item in data:
                 try:
                     # Parse date
                     date_str = item.get("date", "")
-                    
+
                     # Validate date string format and check for placeholders
                     if not date_str or "YYYY" in date_str or "MM" in date_str or "DD" in date_str:
                         logger.warning(f"📅 Invalid date format with placeholders: {date_str}")
                         continue
-                    
+
                     try:
                         event_date = datetime.strptime(date_str, "%Y-%m-%d").date()
                     except ValueError as e:
@@ -231,25 +229,26 @@ class DateExtractionService:
                         # Try alternative parsing with dateparser as fallback
                         try:
                             import dateparser
+
                             dt = dateparser.parse(date_str)
                             if dt:
                                 event_date = dt.date()
                             else:
                                 continue
-                        except:
+                        except Exception:
                             continue
-                    
+
                     # Validate year is reasonable (not 1900 or 9999, etc.)
                     current_year = today.year
                     if event_date.year < current_year or event_date.year > current_year + 5:
                         logger.warning(f"📅 Date year {event_date.year} is out of reasonable range")
                         continue
-                    
+
                     # Skip past dates
                     if event_date < today:
                         logger.debug(f"📅 Skipping past date: {event_date}")
                         continue
-                    
+
                     # Create event
                     event = ExtractedEvent(
                         event_date=event_date,
@@ -259,29 +258,29 @@ class DateExtractionService:
                         confidence=item.get("confidence", "medium"),
                     )
                     events.append(event)
-                    
+
                 except Exception as e:
                     logger.debug(f"📅 Error parsing event item: {e}")
                     continue
-                    
+
         except json.JSONDecodeError as e:
             logger.warning(f"📅 Failed to parse AI response as JSON: {e}")
             logger.debug(f"📅 Raw response: {response[:500]}")
-        
+
         return events
-    
+
     def _fallback_extraction(
         self,
-        messages: List[str],
+        messages: list[str],
         today: date,
-    ) -> List[ExtractedEvent]:
+    ) -> list[ExtractedEvent]:
         """
         Simple regex-based fallback extraction when AI is unavailable.
-        
+
         Args:
             messages: List of message texts
             today: Today's date
-            
+
         Returns:
             List of ExtractedEvent objects
         """
@@ -297,7 +296,7 @@ class DateExtractionService:
             dateparser_parse = getattr(dateparser, "parse", None)
         except Exception:
             dateparser_parse = None
-        
+
         # Heuristic: only attempt extraction when text looks event-like.
         # This reduces false positives significantly.
         event_keywords = [
@@ -343,7 +342,7 @@ class DateExtractionService:
             # "in X days"
             (r"\bin\s+(\d+)\s+days?\b", None),  # Special handling
         ]
-        
+
         # Date format patterns
         date_patterns = [
             (r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b", "%d/%m/%Y"),  # DD/MM/YYYY
@@ -354,14 +353,14 @@ class DateExtractionService:
             r"\b(on\s+)?(mon(day)?|tue(s(day)?)?|wed(nesday)?|thu(r(sday)?)?|fri(day)?|sat(urday)?|sun(day)?)",
             re.IGNORECASE,
         )
-        
+
         # Month names for better detection
         month_pattern = re.compile(
             r"\b(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|"
             r"jul(y)?|aug(ust)?|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?)\s+\d{1,2}\b",
             re.IGNORECASE,
         )
-        
+
         for msg in messages:
             msg_lower = msg.lower()
 
@@ -392,12 +391,11 @@ class DateExtractionService:
                                 source_text=msg[:100],
                                 confidence="low",
                             )
-                            
                         )
                         # Keep going to allow multiple events per message if explicit dates exist.
                 except Exception:
                     pass
-            
+
             # Check relative date patterns
             for pattern, delta in patterns:
                 match = re.search(pattern, msg_lower)
@@ -408,55 +406,59 @@ class DateExtractionService:
                         event_date = today + timedelta(days=days)
                     else:
                         event_date = today + delta
-                    
+
                     # Try to extract title from surrounding text
                     title = self._extract_title_from_context(msg, match.group(0))
-                    
-                    events.append(ExtractedEvent(
-                        event_date=event_date,
-                        title=title,
-                        description="",
-                        source_text=msg[:100],
-                        confidence="low",
-                    ))
-            
+
+                    events.append(
+                        ExtractedEvent(
+                            event_date=event_date,
+                            title=title,
+                            description="",
+                            source_text=msg[:100],
+                            confidence="low",
+                        )
+                    )
+
             # Check absolute date patterns
             for pattern, fmt in date_patterns:
                 for match in re.finditer(pattern, msg):
                     try:
                         date_str = match.group(0)
                         event_date = datetime.strptime(date_str, fmt).date()
-                        
+
                         if event_date >= today:
                             title = self._extract_title_from_context(msg, date_str)
-                            events.append(ExtractedEvent(
-                                event_date=event_date,
-                                title=title,
-                                description="",
-                                source_text=msg[:100],
-                                confidence="low",
-                            ))
+                            events.append(
+                                ExtractedEvent(
+                                    event_date=event_date,
+                                    title=title,
+                                    description="",
+                                    source_text=msg[:100],
+                                    confidence="low",
+                                )
+                            )
                     except ValueError:
                         continue
-        
+
         logger.info(f"📅 Fallback extraction found {len(events)} events")
         return events
-    
+
     def _extract_title_from_context(self, message: str, date_match: str) -> str:
         """
         Try to extract a meaningful title from the message context.
         Enhanced to handle patterns like "Dear all, meeting on Friday".
-        
+
         Args:
             message: Full message text
             date_match: The matched date string
-            
+
         Returns:
             Extracted title or generic "Event"
         """
         # Remove the date portion first
         cleaned = message.replace(date_match, "").strip()
-        
+
         # Remove greetings and announcement patterns
         greeting_patterns = [
             r"^dear\s+all[,:]?\s*",
@@ -466,17 +468,17 @@ class DateExtractionService:
             r"^hey\s+everyone[,:]?\s*",
             r"^everyone[,:]?\s*",
         ]
-        
+
         for pattern in greeting_patterns:
             cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE).strip()
-        
+
         # Look for event keywords and extract context around them
         event_patterns = [
             (r"([\w\s]+?)\s+(?:on|at|this|next|tomorrow|today)", r"\1"),  # "meeting on Friday" -> "meeting"
             (r"(?:have|having)\s+(?:a\s+)?([\w\s]+)", r"\1"),  # "having a workshop" -> "workshop"
             (r"(?:let's|let\s+us)\s+([\w\s]+)", r"\1"),  # "let's review" -> "review"
         ]
-        
+
         for search_pattern, extract_pattern in event_patterns:
             match = re.search(search_pattern, cleaned, re.IGNORECASE)
             if match:
@@ -486,45 +488,45 @@ class DateExtractionService:
                 title = " ".join(title.split())  # Normalize whitespace
                 if len(title) > 3:
                     return title[:50]
-        
+
         # Fallback: Remove common filler words and take what's left
         cleaned = re.sub(r"\b(is|are|the|a|an|on|at|for|to|we|have|has|there|this)\b", "", cleaned, flags=re.IGNORECASE)
         cleaned = " ".join(cleaned.split())  # Normalize whitespace
-        
+
         if len(cleaned) > 5:
             return cleaned[:50]
-        
+
         return "Event"
-    
+
     def _deduplicate_events(
         self,
-        events: List[ExtractedEvent],
-    ) -> List[ExtractedEvent]:
+        events: list[ExtractedEvent],
+    ) -> list[ExtractedEvent]:
         """
         Remove duplicate events (same date and similar title).
-        
+
         Args:
             events: List of extracted events
-            
+
         Returns:
             Deduplicated list
         """
         seen = set()
         unique = []
-        
+
         for event in events:
             # Create a key from date and normalized title
             key = (
                 event.event_date.isoformat(),
                 event.title.lower().strip()[:30],
             )
-            
+
             if key not in seen:
                 seen.add(key)
                 unique.append(event)
-        
+
         return unique
-    
+
     def get_extraction_count(self) -> int:
         """Get total number of extraction operations performed."""
         return self._extraction_count

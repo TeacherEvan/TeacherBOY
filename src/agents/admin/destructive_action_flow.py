@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from threading import Lock
-from typing import Any, Awaitable, Callable, Mapping
+from typing import Any
 
 from linebot.v3.messaging import MessagingApi
 
@@ -101,19 +102,14 @@ class DestructiveActionFlow:
             expires_at=expires_at,
         )
 
-        pushed = await asyncio.to_thread(
-            self._push_preview, line_bot_api, user_id, preview_text
-        )
+        pushed = await asyncio.to_thread(self._push_preview, line_bot_api, user_id, preview_text)
         if not pushed:
             self._rate_limiter.release_admin_destructive_request(
                 token=reservation_token,
                 target_chat_id=request.target_chat_id,
                 rollback_history=True,
             )
-            return (
-                "⚠️ Private preview could not be opened. "
-                "Start a private chat with the bot and try again."
-            )
+            return "⚠️ Private preview could not be opened. Start a private chat with the bot and try again."
 
         pending = self._confirmation_service.create(
             action=normalized_action,
@@ -173,9 +169,7 @@ class DestructiveActionFlow:
         if not normalized_action:
             return "❌ Unknown pending action type."
 
-        target_chat_id = self._target_chat_id_from_payload(
-            normalized_action, pending.payload
-        )
+        target_chat_id = self._target_chat_id_from_payload(normalized_action, pending.payload)
         if not target_chat_id:
             return "❌ Pending destructive action is missing a target."
 
@@ -300,10 +294,7 @@ class DestructiveActionFlow:
                 f"and related flow state for {target_chat_id}."
             )
         else:
-            effect_summary = (
-                "This will reset bot session state, message history, and sleep state "
-                f"for {target_chat_id}."
-            )
+            effect_summary = f"This will reset bot session state, message history, and sleep state for {target_chat_id}."
 
         return (
             DestructiveActionRequest(

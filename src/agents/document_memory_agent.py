@@ -2,21 +2,23 @@
 
 import asyncio
 import logging
-from typing import Optional, List, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, FileMessageContent
 from linebot.v3.messaging import (
+    ApiClient,
+    Configuration,
     MessagingApi,
     MessagingApiBlob,
     ReplyMessageRequest,
     TextMessage,
-    ApiClient,
-    Configuration,
 )
+from linebot.v3.webhooks import FileMessageContent, MessageEvent, TextMessageContent
 
-from .base_agent import BaseAgent
 from src.config import settings
 from src.services.bot_identity_service import get_bot_identity_service
+
+from .base_agent import BaseAgent
+
 if TYPE_CHECKING:
     from src.services.document_memory_service import DocumentMemoryService
 
@@ -49,9 +51,7 @@ class DocumentMemoryAgent(BaseAgent):
 
         return False
 
-    async def handle(
-        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
-    ) -> bool:
+    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         if isinstance(event.message, FileMessageContent):
             return await self._handle_file(event, line_bot_api)
 
@@ -77,10 +77,7 @@ class DocumentMemoryAgent(BaseAgent):
             await self._send_reply(
                 event,
                 line_bot_api,
-                (
-                    "⚠️ File too large for document memory.\n"
-                    f"Max size: {settings.document_max_file_size_mb:.1f} MB"
-                ),
+                (f"⚠️ File too large for document memory.\nMax size: {settings.document_max_file_size_mb:.1f} MB"),
             )
             return True
 
@@ -106,10 +103,7 @@ class DocumentMemoryAgent(BaseAgent):
                 await self._send_reply(
                     event,
                     line_bot_api,
-                    (
-                        "⚠️ File too large for document memory.\n"
-                        f"Max size: {settings.document_max_file_size_mb:.1f} MB"
-                    ),
+                    (f"⚠️ File too large for document memory.\nMax size: {settings.document_max_file_size_mb:.1f} MB"),
                 )
                 return True
             if str(e) == "unsupported_type":
@@ -139,9 +133,7 @@ class DocumentMemoryAgent(BaseAgent):
         await self._send_reply(event, line_bot_api, reply)
         return True
 
-    async def _handle_command(
-        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
-    ) -> bool:
+    async def _handle_command(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         chat_id = self._get_chat_id(event)
         display_name = get_bot_identity_service().get_profile().display_name
         prefix, rest = get_bot_identity_service().split_command_prefix(text)
@@ -160,9 +152,7 @@ class DocumentMemoryAgent(BaseAgent):
 
             lines = ["📄 Stored documents:"]
             for doc in docs[:10]:
-                lines.append(
-                    f"• {doc.get('file_name')} (ID: {doc.get('id')})"
-                )
+                lines.append(f"• {doc.get('file_name')} (ID: {doc.get('id')})")
             if len(docs) > 10:
                 lines.append(f"...and {len(docs) - 10} more")
             await self._send_reply(event, line_bot_api, "\n".join(lines))
@@ -181,9 +171,7 @@ class DocumentMemoryAgent(BaseAgent):
 
             lines = [f"🔎 Matches for '{query}':"]
             for result in results:
-                lines.append(
-                    f"• {result.get('file_name')} (ID: {result.get('id')})\n  {result.get('snippet')}"
-                )
+                lines.append(f"• {result.get('file_name')} (ID: {result.get('id')})\n  {result.get('snippet')}")
             await self._send_reply(event, line_bot_api, "\n".join(lines))
             return True
 
@@ -245,11 +233,9 @@ class DocumentMemoryAgent(BaseAgent):
         )
         return True
 
-    async def _download_file(self, message_id: str) -> Optional[bytes]:
+    async def _download_file(self, message_id: str) -> bytes | None:
         try:
-            configuration = Configuration(
-                access_token=settings.line_channel_access_token
-            )
+            configuration = Configuration(access_token=settings.line_channel_access_token)
 
             with ApiClient(configuration) as api_client:
                 blob_api = MessagingApiBlob(api_client)
@@ -270,7 +256,7 @@ class DocumentMemoryAgent(BaseAgent):
                 if hasattr(response, "read") and callable(getattr(response, "read", None)):
                     return response.read()
 
-                chunks: List[bytes] = []
+                chunks: list[bytes] = []
                 try:
                     for chunk in response:  # type: ignore[union-attr]
                         if isinstance(chunk, bytes):
@@ -295,7 +281,7 @@ class DocumentMemoryAgent(BaseAgent):
             return f"room_{room_id}"
         return f"user_{user_id or 'unknown'}"
 
-    def _get_user_id(self, event: MessageEvent) -> Optional[str]:
+    def _get_user_id(self, event: MessageEvent) -> str | None:
         source = getattr(event, "source", None)
         return getattr(source, "user_id", None) if source else None
 

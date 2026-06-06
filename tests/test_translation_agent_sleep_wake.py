@@ -2,7 +2,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from linebot.v3.messaging import MessagingApi
 from linebot.v3.webhooks import MessageEvent
 
@@ -78,7 +77,7 @@ def _make_identity_service(*aliases: str):
             if lowered == alias:
                 return alias, ""
             if lowered.startswith(f"{alias} "):
-                return alias, cleaned[len(alias):].lstrip()
+                return alias, cleaned[len(alias) :].lstrip()
         return None, cleaned
 
     service = Mock()
@@ -92,9 +91,7 @@ async def _run_inline(func, *args, **kwargs):
 
 
 @pytest.mark.asyncio
-async def test_admin_thai_message_wakes_sleeping_chat_and_starts_session(
-    line_bot_api, translation_service
-):
+async def test_admin_thai_message_wakes_sleeping_chat_and_starts_session(line_bot_api, translation_service):
     agent = TranslationAgent(ai_translation_service=translation_service)
     event = _make_private_event("UADMIN")
     session = _FakeSessionManager(sleeping=True, active=False)
@@ -121,7 +118,9 @@ async def test_admin_thai_message_wakes_sleeping_chat_and_starts_session(
     assert reply_args[0][0].messages[0].text == "สวัสดีค่ะ"
 
     long_event = _make_private_event("UADMIN")
-    long_result = await agent.handle(long_event, "this is a longer thai test message that definitely exceeds thirty characters", line_bot_api)
+    long_result = await agent.handle(
+        long_event, "this is a longer thai test message that definitely exceeds thirty characters", line_bot_api
+    )
     assert long_result is True
     translation_service.translate.assert_awaited_with(
         "this is a longer thai test message that definitely exceeds thirty characters",
@@ -131,9 +130,7 @@ async def test_admin_thai_message_wakes_sleeping_chat_and_starts_session(
 
 
 @pytest.mark.asyncio
-async def test_non_privileged_alias_stop_falls_through_to_translation(
-    line_bot_api, translation_service
-):
+async def test_non_privileged_alias_stop_falls_through_to_translation(line_bot_api, translation_service):
     agent = TranslationAgent(ai_translation_service=translation_service)
     event = _make_private_event("UUSER")
     session = _FakeSessionManager(sleeping=False, active=False)
@@ -161,9 +158,7 @@ async def test_non_privileged_alias_stop_falls_through_to_translation(
 
 
 @pytest.mark.asyncio
-async def test_non_privileged_alias_stop_does_not_bypass_sleeping_chat(
-    line_bot_api, translation_service
-):
+async def test_non_privileged_alias_stop_does_not_bypass_sleeping_chat(line_bot_api, translation_service):
     agent = TranslationAgent(ai_translation_service=translation_service)
     event = _make_private_event("UUSER")
     session = _FakeSessionManager(sleeping=True, active=False)

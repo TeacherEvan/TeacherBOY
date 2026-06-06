@@ -9,27 +9,26 @@ priority-based fallback without duplicating the loop.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from src.config import settings
 from src.services.github_models_service import github_models_service
-from src.services.openrouter_service import openrouter_service
 from src.services.hermes_service import hermes_service
-from src.services.nous_service import nous_inference_service
+from src.services.openrouter_service import openrouter_service
 
 logger = logging.getLogger(__name__)
 
-VisionMessages = List[Dict[str, Any]]
+VisionMessages = list[dict[str, Any]]
 
 
 async def _run_one_vision_provider(
     *,
     provider: str,
     messages: VisionMessages,
-    model: Optional[str],
+    model: str | None,
     temperature: float,
-    max_tokens: Optional[int],
-) -> Optional[str]:
+    max_tokens: int | None,
+) -> str | None:
     wrapper = {
         "hermes": lambda: hermes_service.is_vision_configured(),
         "openrouter": lambda: openrouter_service.is_configured(),
@@ -69,10 +68,10 @@ async def _run_one_vision_provider(
 
 
 async def chat_completion_with_fallback(
-    messages: List[Dict[str, str]],
+    messages: list[dict[str, str]],
     temperature: float = 0.7,
-    max_tokens: Optional[int] = None,
-) -> Optional[str]:
+    max_tokens: int | None = None,
+) -> str | None:
     priority = settings.get_llm_provider_priority()
 
     for provider in priority:
@@ -122,10 +121,10 @@ async def chat_completion_with_fallback(
 async def chat_completion_with_vision_fallback(
     messages: VisionMessages,
     *,
-    model: Optional[str] = None,
+    model: str | None = None,
     temperature: float = 0.7,
-    max_tokens: Optional[int] = None,
-) -> Optional[str]:
+    max_tokens: int | None = None,
+) -> str | None:
     """
     Provider-priority vision completion.
 

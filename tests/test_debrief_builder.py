@@ -5,7 +5,6 @@ from src.prompts.builders.debrief_builder import (
     build_debrief_prompt,
 )
 
-
 EXPECTED_SECTIONS = [
     "SCENE OVERVIEW",
     "SUBJECTS",

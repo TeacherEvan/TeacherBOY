@@ -1,14 +1,15 @@
 """Handler for processing incoming LINE text messages using SDK v3."""
 
-import logging
 import asyncio
+import logging
 import re
+
 from linebot.v3.messaging import (
+    FlexContainer,
+    FlexMessage,
     MessagingApi,
     ReplyMessageRequest,
     TextMessage,
-    FlexMessage,
-    FlexContainer,
 )
 
 from src.services.ai_translation_service import ai_translation_service
@@ -39,9 +40,7 @@ def is_exit_command(text: str) -> bool:
     return is_sleep_command(text)
 
 
-def create_translation_flex_dict(
-    original_text: str, translated_text: str, source_lang: str, target_lang: str
-) -> dict:
+def create_translation_flex_dict(original_text: str, translated_text: str, source_lang: str, target_lang: str) -> dict:
     """
     Create a Flex Message bubble dict for translation result.
 

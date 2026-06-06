@@ -16,9 +16,9 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class StartupDataLoader:
         history_log: Any = None,
         max_retries: int = 3,
         retry_delay_seconds: int = 2,
-    ) -> Dict[str, bool]:
+    ) -> dict[str, bool]:
         """
         Ensure all data services have loaded from HF Hub before returning.
 
@@ -67,15 +67,11 @@ class StartupDataLoader:
         self._calendar_required = bool(
             calendar_service and hasattr(calendar_service, "_hf_enabled") and calendar_service._hf_enabled
         )
-        self._memory_required = bool(
-            memory_service and hasattr(memory_service, "_hf_enabled") and memory_service._hf_enabled
-        )
+        self._memory_required = bool(memory_service and hasattr(memory_service, "_hf_enabled") and memory_service._hf_enabled)
         self._documents_required = bool(
             document_service and hasattr(document_service, "_hf_enabled") and document_service._hf_enabled
         )
-        self._logs_required = bool(
-            history_log and hasattr(history_log, "_hf_enabled") and history_log._hf_enabled
-        )
+        self._logs_required = bool(history_log and hasattr(history_log, "_hf_enabled") and history_log._hf_enabled)
 
         self._calendar_loaded = not self._calendar_required
         self._memory_loaded = not self._memory_required
@@ -92,30 +88,22 @@ class StartupDataLoader:
 
         # Load calendar data
         if self._calendar_required:
-            results["calendar"] = await self._load_calendar_with_retry(
-                calendar_service, max_retries, retry_delay_seconds
-            )
+            results["calendar"] = await self._load_calendar_with_retry(calendar_service, max_retries, retry_delay_seconds)
             self._calendar_loaded = results["calendar"]
 
         # Load conversation memory
         if self._memory_required:
-            results["memory"] = await self._load_memory_with_retry(
-                memory_service, max_retries, retry_delay_seconds
-            )
+            results["memory"] = await self._load_memory_with_retry(memory_service, max_retries, retry_delay_seconds)
             self._memory_loaded = results["memory"]
 
         # Load document memory
         if self._documents_required:
-            results["documents"] = await self._load_documents_with_retry(
-                document_service, max_retries, retry_delay_seconds
-            )
+            results["documents"] = await self._load_documents_with_retry(document_service, max_retries, retry_delay_seconds)
             self._documents_loaded = results["documents"]
 
         # Load history logs
         if self._logs_required:
-            results["logs"] = await self._load_logs_with_retry(
-                history_log, max_retries, retry_delay_seconds
-            )
+            results["logs"] = await self._load_logs_with_retry(history_log, max_retries, retry_delay_seconds)
             self._logs_loaded = results["logs"]
 
         # Create LLM-readable backup for disaster recovery
@@ -130,9 +118,7 @@ class StartupDataLoader:
 
         return results
 
-    async def _load_calendar_with_retry(
-        self, calendar_service: Any, max_retries: int, retry_delay: int
-    ) -> bool:
+    async def _load_calendar_with_retry(self, calendar_service: Any, max_retries: int, retry_delay: int) -> bool:
         """Load calendar events from HF Hub with retry logic."""
         for attempt in range(1, max_retries + 1):
             try:
@@ -170,9 +156,7 @@ class StartupDataLoader:
 
         return False
 
-    async def _load_documents_with_retry(
-        self, document_service: Any, max_retries: int, retry_delay: int
-    ) -> bool:
+    async def _load_documents_with_retry(self, document_service: Any, max_retries: int, retry_delay: int) -> bool:
         """Load document memory from HF Hub with retry logic."""
         for attempt in range(1, max_retries + 1):
             try:
@@ -201,9 +185,7 @@ class StartupDataLoader:
 
         return False
 
-    async def _load_memory_with_retry(
-        self, memory_service: Any, max_retries: int, retry_delay: int
-    ) -> bool:
+    async def _load_memory_with_retry(self, memory_service: Any, max_retries: int, retry_delay: int) -> bool:
         """Load conversation memory from HF Hub with retry logic."""
         for attempt in range(1, max_retries + 1):
             try:
@@ -234,9 +216,7 @@ class StartupDataLoader:
 
         return False
 
-    async def _load_logs_with_retry(
-        self, history_log: Any, max_retries: int, retry_delay: int
-    ) -> bool:
+    async def _load_logs_with_retry(self, history_log: Any, max_retries: int, retry_delay: int) -> bool:
         """Load history logs from HF Hub with retry logic."""
         for attempt in range(1, max_retries + 1):
             try:
@@ -270,7 +250,7 @@ class StartupDataLoader:
             backup_dir.mkdir(parents=True, exist_ok=True)
 
             backup_file = backup_dir / "calendar_backup.md"
-            timestamp = datetime.now(timezone.utc).isoformat()
+            timestamp = datetime.now(UTC).isoformat()
 
             # Generate human-readable markdown
             events = getattr(calendar_service, "_events", {})
@@ -286,15 +266,17 @@ If HF Hub sync fails, Zeus LLM can read this file and restore events.
             else:
                 event_list = []
                 for event_id, event in events.items():
-                    event_list.append({
-                        "id": event.event_id,
-                        "user_id": event.user_id,
-                        "chat_id": event.chat_id,
-                        "title": event.title,
-                        "date": event.event_date.isoformat(),
-                        "description": event.description,
-                        "reminder_days": event.reminder_days,
-                    })
+                    event_list.append(
+                        {
+                            "id": event.event_id,
+                            "user_id": event.user_id,
+                            "chat_id": event.chat_id,
+                            "title": event.title,
+                            "date": event.event_date.isoformat(),
+                            "description": event.description,
+                            "reminder_days": event.reminder_days,
+                        }
+                    )
 
                 backup_content = f"""# Zeus Calendar Backup
 

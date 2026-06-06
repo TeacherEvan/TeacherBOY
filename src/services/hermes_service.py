@@ -11,7 +11,7 @@ Toggle via env/config:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -24,7 +24,7 @@ class HermesService:
         self.base_url = ""
         self.model = ""
         self.vision_model = ""
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     @property
     def chat_url(self) -> str:
@@ -39,16 +39,16 @@ class HermesService:
     def is_vision_configured(self) -> bool:
         return bool(self.api_key and self.chat_url and (self.vision_model or self.model))
 
-    def set_client(self, client: Optional[httpx.AsyncClient]) -> None:
+    def set_client(self, client: httpx.AsyncClient | None) -> None:
         self._client = client
 
     def configure(
         self,
         *,
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
-        model: Optional[str] = None,
-        vision_model: Optional[str] = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
+        vision_model: str | None = None,
     ) -> None:
         self.api_key = (api_key or "").strip()
         self.base_url = (base_url or "").strip()
@@ -59,11 +59,11 @@ class HermesService:
 
     async def chat_completion(
         self,
-        messages: List[Dict[str, str]],
-        model: Optional[str] = None,
+        messages: list[dict[str, str]],
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
-    ) -> Optional[str]:
+        max_tokens: int | None = None,
+    ) -> str | None:
         if not self.is_configured():
             return None
 
@@ -77,7 +77,7 @@ class HermesService:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": target_model,
             "messages": messages,
             "temperature": temperature,
@@ -99,11 +99,7 @@ class HermesService:
                 )
                 return None
             data = response.json()
-            content = (
-                data.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content")
-            )
+            content = data.get("choices", [{}])[0].get("message", {}).get("content")
             if isinstance(content, str) and content.strip():
                 return content
             return None
@@ -116,11 +112,11 @@ class HermesService:
 
     async def chat_completion_with_vision(
         self,
-        messages: List[Dict[str, Any]],
-        model: Optional[str] = None,
+        messages: list[dict[str, Any]],
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
-    ) -> Optional[str]:
+        max_tokens: int | None = None,
+    ) -> str | None:
         if not (self.api_key and self.chat_url and (self.vision_model or self.model)):
             logger.warning("Hermes vision is not configured")
             return None
@@ -135,7 +131,7 @@ class HermesService:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": target_model,
             "messages": messages,
             "temperature": temperature,
@@ -157,11 +153,7 @@ class HermesService:
                 )
                 return None
             data = response.json()
-            content = (
-                data.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content")
-            )
+            content = data.get("choices", [{}])[0].get("message", {}).get("content")
             if isinstance(content, str) and content.strip():
                 return content
             return None

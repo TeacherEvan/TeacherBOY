@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import httpx
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
-from src.services.github_models_service import github_models_service
-from src.services.openrouter_service import openrouter_service
+import httpx
+
 from src.config import settings
+from src.services.github_models_service import github_models_service
 from src.services.hermes_service import hermes_service
 from src.services.nous_service import nous_inference_service
-
+from src.services.openrouter_service import openrouter_service
 
 logger = logging.getLogger(__name__)
 
@@ -20,16 +19,16 @@ logger = logging.getLogger(__name__)
 class AITranslationResult:
     text: str
     provider: str
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class LibreTranslateProvider:
     """Thin wrapper so LibreTranslate can participate in the provider chain."""
 
     def __init__(self) -> None:
-        self._last_status_code: Optional[int] = None
-        self._last_error: Optional[str] = None
-        self._last_model: Optional[str] = None
+        self._last_status_code: int | None = None
+        self._last_error: str | None = None
+        self._last_model: str | None = None
 
     def _base_url(self) -> str:
         url = getattr(settings, "libretranslate_api_url", None)
@@ -37,7 +36,7 @@ class LibreTranslateProvider:
             return "https://libretranslate.de/translate"
         return url.rstrip("/")
 
-    def _api_key(self) -> Optional[str]:
+    def _api_key(self) -> str | None:
         return getattr(settings, "libretranslate_api_key", None)
 
     def _headers(self) -> dict:
@@ -50,16 +49,16 @@ class LibreTranslateProvider:
     def is_configured(self) -> bool:
         return bool(self._base_url())
 
-    def get_last_error(self) -> Tuple[Optional[int], Optional[str], Optional[str]]:
+    def get_last_error(self) -> tuple[int | None, str | None, str | None]:
         return self._last_status_code, self._last_error, self._last_model
 
     async def chat_completion(
         self,
         messages: list[dict[str, str]],
         temperature: float = 0.2,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         retry_on_rate_limit: bool = True,
-    ) -> Optional[str]:
+    ) -> str | None:
         if not self.is_configured():
             return None
 
@@ -140,11 +139,12 @@ class LibreTranslateProvider:
 
 class AITranslationService:
     MIN_TEXT_LENGTH = 30
+
     def __init__(
         self,
         github_models=github_models_service,
         openrouter=openrouter_service,
-        libre_translate: Optional[LibreTranslateProvider] = None,
+        libre_translate: LibreTranslateProvider | None = None,
         hermes=hermes_service,
         nous=nous_inference_service,
     ):
@@ -159,7 +159,7 @@ class AITranslationService:
         text: str,
         source_lang: str,
         target_lang: str,
-    ) -> Optional[AITranslationResult]:
+    ) -> AITranslationResult | None:
         messages = self._build_messages(text, source_lang, target_lang)
         attempt = 0
         max_attempts = 5

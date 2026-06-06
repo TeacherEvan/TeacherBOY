@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, date, datetime
+from typing import Any
 
 from src.services.calendar_service import CalendarEvent
 
@@ -116,8 +116,8 @@ class ConvexCalendarRepository:
         self,
         today: date,
         *,
-        line_user_id: Optional[str] = None,
-        source_chat_id: Optional[str] = None,
+        line_user_id: str | None = None,
+        source_chat_id: str | None = None,
     ) -> list[dict[str, Any]]:
         response = self._convex_client.get_sync(
             "/calendar/getDueReminders",
@@ -147,8 +147,8 @@ class ConvexCalendarRepository:
         self,
         today: date,
         *,
-        line_user_id: Optional[str] = None,
-        source_chat_id: Optional[str] = None,
+        line_user_id: str | None = None,
+        source_chat_id: str | None = None,
     ) -> list[dict[str, Any]]:
         response = await self._convex_client.get(
             "/calendar/getDueReminders",
@@ -243,24 +243,22 @@ class ConvexCalendarRepository:
             event_date=date.fromisoformat(str(payload.get("eventDate"))),
             description=str(payload.get("description") or ""),
             reminder_days=[int(value) for value in payload.get("reminderDays", [0])],
-            notification_target_user_id=self._optional_string(
-                payload.get("notificationTargetUserId")
-            ),
+            notification_target_user_id=self._optional_string(payload.get("notificationTargetUserId")),
             notified_dates=[str(value) for value in payload.get("notifiedDates", [])],
             created_at=created_at,
             repository_event_id=self._optional_string(payload.get("eventId")),
         )
 
-    def _deserialize_created_at(self, value: Any) -> Optional[datetime]:
+    def _deserialize_created_at(self, value: Any) -> datetime | None:
         if value in {None, ""}:
             return None
         if isinstance(value, (int, float)):
-            return datetime.fromtimestamp(float(value) / 1000, tz=timezone.utc)
+            return datetime.fromtimestamp(float(value) / 1000, tz=UTC)
         if isinstance(value, str):
             return datetime.fromisoformat(value.replace("Z", "+00:00"))
         return None
 
-    def _optional_string(self, value: Any) -> Optional[str]:
+    def _optional_string(self, value: Any) -> str | None:
         if value in {None, ""}:
             return None
         return str(value)

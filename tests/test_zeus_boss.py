@@ -1,8 +1,8 @@
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
-from linebot.v3.webhooks import MessageEvent, Source
+import pytest
 from linebot.v3.messaging import MessagingApi
+from linebot.v3.webhooks import MessageEvent, Source
 
 
 @pytest.mark.asyncio

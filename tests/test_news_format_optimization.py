@@ -7,8 +7,10 @@ Tests validate:
 - N/A context for unavailable data
 """
 
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
+
 from src.agents.news_agent import NewsAgent
 from src.services.news_data_service import NewsDataService
 
@@ -134,12 +136,12 @@ class TestMenuFormatting:
         crypto = {
             "btc": {"price_usd": "$85,174.00", "change_24h_percent": "(-0.95%)"},
             "eth": {"price_usd": "$2,819.22", "change_24h_percent": "(-0.24%)"},
-            "usdt": {"price_usd": "$1.00", "change_24h_percent": "(-0.03%)"}
+            "usdt": {"price_usd": "$1.00", "change_24h_percent": "(-0.03%)"},
         }
         exchange = {"usd": "0.032", "jpy": "4.952", "zar": "0.533", "aud": "0.048", "gbp": "0.024", "rub": "2.541"}
 
         result = news_agent._format_menu_thai(weather, headlines, holidays, indices, crypto, exchange)
-        
+
         assert "อัปเดต:" in result
         assert "µg/m³" in result
         assert "ดี 🟢" in result
@@ -156,12 +158,12 @@ class TestMenuFormatting:
         crypto = {
             "btc": {"price_usd": "$85,174.00", "change_24h_percent": "(-0.95%)"},
             "eth": {"price_usd": "$2,819.22", "change_24h_percent": "(-0.24%)"},
-            "usdt": {"price_usd": "$1.00", "change_24h_percent": "(-0.03%)"}
+            "usdt": {"price_usd": "$1.00", "change_24h_percent": "(-0.03%)"},
         }
         exchange = {"usd": "0.032", "jpy": "4.952", "zar": "0.533", "aud": "0.048", "gbp": "0.024", "rub": "2.541"}
 
         result = news_agent._format_menu_english(weather, headlines, holidays, indices, crypto, exchange)
-        
+
         assert "Updated:" in result
         assert "µg/m³" in result
         assert "Good 🟢" in result
@@ -179,7 +181,7 @@ class TestMenuFormatting:
         exchange = {}
 
         result = news_agent._format_menu_english(weather, headlines, holidays, indices, crypto, exchange)
-        
+
         assert "N/A (closed)" in result
 
     def test_menu_pm25_moderate(self, news_agent):
@@ -192,7 +194,7 @@ class TestMenuFormatting:
         exchange = {}
 
         result = news_agent._format_menu_english(weather, headlines, holidays, indices, crypto, exchange)
-        
+
         assert "Moderate 🟡" in result
         assert "85 µg/m³" in result
 
@@ -206,6 +208,6 @@ class TestMenuFormatting:
         exchange = {}
 
         result = news_agent._format_menu_thai(weather, headlines, holidays, indices, crypto, exchange)
-        
+
         assert "ไม่ดี 🔴" in result
         assert "125 µg/m³" in result

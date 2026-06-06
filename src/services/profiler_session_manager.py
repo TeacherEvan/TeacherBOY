@@ -3,7 +3,6 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -14,15 +13,15 @@ class ProfilerSessionManager:
     def __init__(self):
         """Initialize profiler session manager."""
         # {chat_id: (user_id, timestamp, analysis_mode)}
-        self._waiting_for_image: Dict[str, tuple[str, datetime, str]] = {}
+        self._waiting_for_image: dict[str, tuple[str, datetime, str]] = {}
         self._session_ttl_seconds = 60  # Expire after 60 seconds
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
         self._cleanup_interval_seconds = 60  # Run cleanup every 60 seconds
 
     def request_profiling(
         self,
         chat_id: str,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         analysis_mode: str = "standard",
     ) -> None:
         """
@@ -47,7 +46,7 @@ class ProfilerSessionManager:
             return "standard"
         return session[2]
 
-    def is_waiting_for_image(self, chat_id: str, user_id: Optional[str] = None) -> bool:
+    def is_waiting_for_image(self, chat_id: str, user_id: str | None = None) -> bool:
         """
         Check if this chat is waiting for an image to profile.
 
@@ -72,10 +71,7 @@ class ProfilerSessionManager:
 
         # Check user match (in groups, ensure same user sent trigger and image)
         if user_id and stored_user_id != "unknown" and user_id != stored_user_id:
-            logger.debug(
-                f"🔬 User mismatch: trigger from {stored_user_id}, "
-                f"image from {user_id}"
-            )
+            logger.debug(f"🔬 User mismatch: trigger from {stored_user_id}, image from {user_id}")
             return False
 
         return True
@@ -108,9 +104,7 @@ class ProfilerSessionManager:
 
     async def _cleanup_loop(self) -> None:
         """Background task to periodically clean up expired sessions."""
-        logger.info(
-            f"🔬 Starting profiler session cleanup loop (every {self._cleanup_interval_seconds}s)"
-        )
+        logger.info(f"🔬 Starting profiler session cleanup loop (every {self._cleanup_interval_seconds}s)")
         try:
             while True:
                 await asyncio.sleep(self._cleanup_interval_seconds)

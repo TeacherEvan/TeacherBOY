@@ -5,12 +5,13 @@ Used for sensitive admin actions that should be confirmed in private chat.
 
 from __future__ import annotations
 
+import secrets
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-import secrets
 from types import MappingProxyType
-from typing import Any, Mapping, Optional
+from typing import Any
 
 
 def _default_created_at() -> datetime:
@@ -51,7 +52,7 @@ class AdminConfirmationService:
         self._default_ttl_seconds = default_ttl_seconds
         self._pending: dict[str, PendingAdminAction] = {}
 
-    def issue_token(self, ttl_seconds: Optional[int] = None) -> tuple[str, datetime, datetime]:
+    def issue_token(self, ttl_seconds: int | None = None) -> tuple[str, datetime, datetime]:
         now = datetime.utcnow()
         ttl = ttl_seconds if ttl_seconds is not None else self._default_ttl_seconds
         return self._generate_token(), now, now + timedelta(seconds=ttl)
@@ -65,9 +66,7 @@ class AdminConfirmationService:
 
     def _validate_on_duplicate(self, on_duplicate: str) -> str:
         if on_duplicate not in {"allow", "reject", "replace"}:
-            raise ValueError(
-                "Invalid on_duplicate value. Expected 'allow', 'reject' or 'replace'."
-            )
+            raise ValueError("Invalid on_duplicate value. Expected 'allow', 'reject' or 'replace'.")
         return on_duplicate
 
     def _mappings_match(
@@ -82,13 +81,10 @@ class AdminConfirmationService:
 
     def _freeze_preview_fields(
         self,
-        preview_fields: Optional[dict[str, Any]],
+        preview_fields: dict[str, Any] | None,
     ) -> Mapping[str, Any]:
         if preview_fields:
-            copied_preview_fields = {
-                key: self._snapshot_value(value)
-                for key, value in preview_fields.items()
-            }
+            copied_preview_fields = {key: self._snapshot_value(value) for key, value in preview_fields.items()}
         else:
             copied_preview_fields = {}
         return MappingProxyType(copied_preview_fields)
@@ -229,13 +225,13 @@ class AdminConfirmationService:
         requested_from_chat_id: str,
         payload: dict[str, Any],
         preview_text: str | None = None,
-        preview_fields: Optional[dict[str, Any]] = None,
+        preview_fields: dict[str, Any] | None = None,
         on_duplicate: str = "allow",
-        ttl_seconds: Optional[int] = None,
-        token: Optional[str] = None,
-        created_at: Optional[datetime] = None,
-        expires_at: Optional[datetime] = None,
-        revision: Optional[str] = None,
+        ttl_seconds: int | None = None,
+        token: str | None = None,
+        created_at: datetime | None = None,
+        expires_at: datetime | None = None,
+        revision: str | None = None,
     ) -> PendingAdminAction:
         on_duplicate = self._validate_on_duplicate(on_duplicate)
         self._cleanup()
@@ -286,7 +282,7 @@ class AdminConfirmationService:
         self._cleanup()
         return len(self._pending)
 
-    def get(self, token: str) -> Optional[PendingAdminAction]:
+    def get(self, token: str) -> PendingAdminAction | None:
         self._cleanup()
         pending = self._pending.get(token)
         if pending is None:
@@ -295,11 +291,7 @@ class AdminConfirmationService:
 
     def list_pending_for_user(self, user_id: str) -> list[PendingAdminAction]:
         self._cleanup()
-        pending_for_user = [
-            pending
-            for pending in self._pending.values()
-            if pending.requested_by_user_id == user_id
-        ]
+        pending_for_user = [pending for pending in self._pending.values() if pending.requested_by_user_id == user_id]
         pending_for_user.sort(key=lambda pending: pending.expires_at)
         return [self._copy_pending_action(pending) for pending in pending_for_user]
 
@@ -313,7 +305,7 @@ class AdminConfirmationService:
         self._pending.pop(token, None)
         return True, "✅ Cancelled."
 
-    def confirm(self, token: str, user_id: str) -> tuple[Optional[PendingAdminAction], str]:
+    def confirm(self, token: str, user_id: str) -> tuple[PendingAdminAction | None, str]:
         self._cleanup()
         pending = self._pending.get(token)
         if not pending:

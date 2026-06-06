@@ -3,8 +3,9 @@ Brave Search Service - Web search capabilities using Brave Search API.
 """
 
 import logging
+
 import httpx
-from typing import List, Dict, Optional, Any
+
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 class BraveSearchService:
     """Service for performing web searches using Brave Search API."""
 
-    def __init__(self, http_client: Optional[httpx.AsyncClient] = None):
+    def __init__(self, http_client: httpx.AsyncClient | None = None):
         """
         Initialize Brave Search service.
 
@@ -32,7 +33,7 @@ class BraveSearchService:
         """Check if Brave Search is configured."""
         return settings.is_brave_search_configured()
 
-    async def search(self, query: str, count: int = 5) -> List[Dict[str, str]]:
+    async def search(self, query: str, count: int = 5) -> list[dict[str, str]]:
         """
         Perform a web search.
 
@@ -62,9 +63,7 @@ class BraveSearchService:
                 "safesearch": "moderate",
             }
 
-            response = await self.client.get(
-                self.api_url, headers=headers, params=params, timeout=10.0
-            )
+            response = await self.client.get(self.api_url, headers=headers, params=params, timeout=10.0)
             response.raise_for_status()
             data = response.json()
 
@@ -72,11 +71,9 @@ class BraveSearchService:
             web_results = data.get("web", {}).get("results", [])
 
             for item in web_results:
-                results.append({
-                    "title": item.get("title", ""),
-                    "url": item.get("url", ""),
-                    "description": item.get("description", "")
-                })
+                results.append(
+                    {"title": item.get("title", ""), "url": item.get("url", ""), "description": item.get("description", "")}
+                )
 
             logger.info(f"🔍 Brave Search found {len(results)} results for '{query}'")
             return results

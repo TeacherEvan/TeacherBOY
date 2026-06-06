@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from linebot.v3.messaging import MessagingApi
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, Source
+from linebot.v3.webhooks import MessageEvent, Source, TextMessageContent
 
 
 @pytest.fixture
@@ -45,31 +45,25 @@ async def test_analyze_prompt_asks_new_or_last(mock_event, mock_line_bot_api):
 
     agent = ImageAnalyzerAgent()
 
-    with patch(
-        "src.agents.image_analyzer_agent.github_models_service"
-    ) as mock_gms, patch(
-        "src.agents.image_analyzer_agent.privilege_service"
-    ) as mock_privilege, patch(
-        "src.agents.image_analyzer_agent.image_analyzer_rate_limiter"
-    ) as mock_rl, patch(
-        "src.agents.image_analyzer_agent.image_analyzer_session_manager"
-    ) as mock_session, patch(
-        "src.agents.image_analyzer_agent.asyncio.to_thread",
-        new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
+    with (
+        patch("src.agents.image_analyzer_agent.github_models_service") as mock_gms,
+        patch("src.agents.image_analyzer_agent.privilege_service") as mock_privilege,
+        patch("src.agents.image_analyzer_agent.image_analyzer_rate_limiter") as mock_rl,
+        patch("src.agents.image_analyzer_agent.image_analyzer_session_manager") as mock_session,
+        patch(
+            "src.agents.image_analyzer_agent.asyncio.to_thread",
+            new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
+        ),
     ):
         mock_gms.is_configured.return_value = True
         mock_privilege.is_admin.return_value = False
         mock_rl.is_allowed.return_value = True
         mock_session.start_analysis_choice = MagicMock()
 
-        handled = await agent.handle(
-            mock_event, "Ms. Green analyze", mock_line_bot_api
-        )
+        handled = await agent.handle(mock_event, "Ms. Green analyze", mock_line_bot_api)
 
     assert handled is True
-    mock_session.start_analysis_choice.assert_called_once_with(
-        "user_user123", "user123"
-    )
+    mock_session.start_analysis_choice.assert_called_once_with("user_user123", "user123")
     mock_line_bot_api.reply_message.assert_called_once()
     request = mock_line_bot_api.reply_message.call_args[0][0]
     assert request.messages[0].text == "New or Last"
@@ -85,17 +79,15 @@ async def test_plain_analyze_keeps_new_or_last_prompt(mock_event, mock_line_bot_
 
     agent = ImageAnalyzerAgent()
 
-    with patch(
-        "src.agents.image_analyzer_agent.github_models_service"
-    ) as mock_gms, patch(
-        "src.agents.image_analyzer_agent.privilege_service"
-    ) as mock_privilege, patch(
-        "src.agents.image_analyzer_agent.image_analyzer_rate_limiter"
-    ) as mock_rl, patch(
-        "src.agents.image_analyzer_agent.image_analyzer_session_manager"
-    ) as mock_session, patch(
-        "src.agents.image_analyzer_agent.asyncio.to_thread",
-        new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
+    with (
+        patch("src.agents.image_analyzer_agent.github_models_service") as mock_gms,
+        patch("src.agents.image_analyzer_agent.privilege_service") as mock_privilege,
+        patch("src.agents.image_analyzer_agent.image_analyzer_rate_limiter") as mock_rl,
+        patch("src.agents.image_analyzer_agent.image_analyzer_session_manager") as mock_session,
+        patch(
+            "src.agents.image_analyzer_agent.asyncio.to_thread",
+            new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
+        ),
     ):
         mock_gms.is_configured.return_value = True
         mock_privilege.is_admin.return_value = False
@@ -105,9 +97,7 @@ async def test_plain_analyze_keeps_new_or_last_prompt(mock_event, mock_line_bot_
         handled = await agent.handle(mock_event, "analyze", mock_line_bot_api)
 
     assert handled is True
-    mock_session.start_analysis_choice.assert_called_once_with(
-        "user_user123", "user123"
-    )
+    mock_session.start_analysis_choice.assert_called_once_with("user_user123", "user123")
     mock_line_bot_api.reply_message.assert_called_once()
     request = mock_line_bot_api.reply_message.call_args[0][0]
     assert request.messages[0].text == "New or Last"
@@ -123,11 +113,12 @@ async def test_analysis_choice_last_uses_last_image(mock_event, mock_line_bot_ap
 
     agent = ImageAnalyzerAgent()
 
-    with patch(
-        "src.agents.image_analyzer_agent.image_analyzer_session_manager"
-    ) as mock_session, patch(
-        "src.agents.image_analyzer_agent.asyncio.to_thread",
-        new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
+    with (
+        patch("src.agents.image_analyzer_agent.image_analyzer_session_manager") as mock_session,
+        patch(
+            "src.agents.image_analyzer_agent.asyncio.to_thread",
+            new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
+        ),
     ):
         mock_session.get_last_image.return_value = "data:image/jpeg;base64,abc"
 
@@ -160,11 +151,12 @@ async def test_analysis_choice_last_without_previous_image_returns_fallback(
 
     agent = ImageAnalyzerAgent()
 
-    with patch(
-        "src.agents.image_analyzer_agent.image_analyzer_session_manager"
-    ) as mock_session, patch(
-        "src.agents.image_analyzer_agent.asyncio.to_thread",
-        new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
+    with (
+        patch("src.agents.image_analyzer_agent.image_analyzer_session_manager") as mock_session,
+        patch(
+            "src.agents.image_analyzer_agent.asyncio.to_thread",
+            new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
+        ),
     ):
         mock_session.get_last_image.return_value = None
 

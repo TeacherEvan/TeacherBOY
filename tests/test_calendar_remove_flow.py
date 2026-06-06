@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from src.agents.calendar.remove_flow import RemoveFlow
 from src.services.calendar_session_manager import CalendarState, calendar_session_manager
@@ -149,11 +149,14 @@ class TestCalendarRemoveSessionManager:
 
         assert second_preview is not None
         assert second_preview["code"] != first_preview["code"]
-        assert calendar_session_manager.confirm_remove_selection(
-            "remove_chat",
-            "U_REMOVE",
-            first_preview["code"],
-        ) is None
+        assert (
+            calendar_session_manager.confirm_remove_selection(
+                "remove_chat",
+                "U_REMOVE",
+                first_preview["code"],
+            )
+            is None
+        )
 
     def test_cleanup_tracks_recent_remove_expiry_for_same_owner_only(self):
         calendar_session_manager.start_removal_flow("remove_chat", "U_REMOVE", _events())
@@ -389,7 +392,10 @@ class TestCalendarRemoveFlow:
         )
 
         assert handled is True
-        assert "expired" in remove_flow.send_message.await_args.args[2].lower() or "stale" in remove_flow.send_message.await_args.args[2].lower()
+        assert (
+            "expired" in remove_flow.send_message.await_args.args[2].lower()
+            or "stale" in remove_flow.send_message.await_args.args[2].lower()
+        )
         remove_flow._calendar_service.remove_events_by_ids_async.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -460,7 +466,10 @@ class TestCalendarRemoveFlow:
             "U_REMOVE",
         )
         assert handled is True
-        assert "stale" in remove_flow.send_message.await_args.args[2].lower() or "expired" in remove_flow.send_message.await_args.args[2].lower()
+        assert (
+            "stale" in remove_flow.send_message.await_args.args[2].lower()
+            or "expired" in remove_flow.send_message.await_args.args[2].lower()
+        )
         remove_flow._calendar_service.remove_events_by_ids_async.assert_not_awaited()
 
         handled = await remove_flow.handle_removal_confirmation(
@@ -491,5 +500,8 @@ class TestCalendarRemoveFlow:
         )
 
         assert handled is True
-        assert "owner" in remove_flow.send_message.await_args.args[2].lower() or "started" in remove_flow.send_message.await_args.args[2].lower()
+        assert (
+            "owner" in remove_flow.send_message.await_args.args[2].lower()
+            or "started" in remove_flow.send_message.await_args.args[2].lower()
+        )
         remove_flow._calendar_service.remove_events_by_ids_async.assert_not_awaited()

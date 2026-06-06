@@ -8,10 +8,9 @@ This adapter provides a consistent interface for:
 The adapter automatically selects the appropriate backend based on configuration.
 """
 
-import asyncio
 import logging
-from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import date, datetime
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from src.config import settings
@@ -24,11 +23,11 @@ BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 class CalendarAdapter:
     """
     Unified calendar adapter that routes to the appropriate backend.
-    
+
     Usage:
         adapter = CalendarAdapter()
         await adapter.initialize()
-        
+
         # Create event
         event = await adapter.add_event(
             user_id="U1234",
@@ -37,21 +36,21 @@ class CalendarAdapter:
             event_date=date(2026, 1, 15),
             reminder_days=[7, 1, 0]
         )
-        
+
         # Get events
         events = await adapter.get_chat_events("group_C5678")
     """
 
     def __init__(self):
         self._backend: str = "local"  # "local" or "google"
-        self._local_service: Optional[Any] = None
-        self._google_service: Optional[Any] = None
+        self._local_service: Any | None = None
+        self._google_service: Any | None = None
         self._initialized: bool = False
 
     async def initialize(self) -> bool:
         """
         Initialize the calendar adapter with the appropriate backend.
-        
+
         Returns:
             True if initialization successful
         """
@@ -62,13 +61,13 @@ class CalendarAdapter:
         if settings.google_calendar_enabled:
             try:
                 from src.services.google_calendar_service import google_calendar_service
-                
+
                 configured = google_calendar_service.configure(
                     credentials_path=settings.google_calendar_credentials_file,
                     token_path=settings.google_calendar_token_file,
                     calendar_id=settings.google_calendar_id,
                 )
-                
+
                 if configured and google_calendar_service.is_configured():
                     self._google_service = google_calendar_service
                     self._backend = "google"
@@ -76,7 +75,9 @@ class CalendarAdapter:
                     logger.info("✅ Calendar adapter initialized with Google Calendar backend")
                     return True
                 else:
-                    logger.warning("⚠️ Google Calendar enabled but not configured. Run: python scripts/setup_google_calendar.py")
+                    logger.warning(
+                        "⚠️ Google Calendar enabled but not configured. Run: python scripts/setup_google_calendar.py"
+                    )
             except ImportError:
                 logger.warning("⚠️ Google Calendar libraries not installed")
             except Exception as e:
@@ -85,7 +86,7 @@ class CalendarAdapter:
         # Fall back to local storage
         try:
             from src.services.calendar_service import CalendarService
-            
+
             self._local_service = CalendarService()
             self._backend = "local"
             self._initialized = True
@@ -111,12 +112,12 @@ class CalendarAdapter:
         title: str,
         event_date: date,
         description: str = "",
-        reminder_days: Optional[List[int]] = None,
+        reminder_days: list[int] | None = None,
         is_friend: bool = False,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Add a new calendar event.
-        
+
         Args:
             user_id: LINE user ID
             chat_id: Chat ID (group/room/user)
@@ -125,7 +126,7 @@ class CalendarAdapter:
             description: Event description
             reminder_days: Days before to remind (e.g., [7, 3, 1, 0])
             is_friend: Whether user is LINE friend
-            
+
         Returns:
             Created event dictionary or None if failed
         """
@@ -143,7 +144,7 @@ class CalendarAdapter:
                 # Create datetime from date (set to 9 AM Bangkok time)
                 start_dt = datetime.combine(event_date, datetime.min.time().replace(hour=9))
                 start_dt = start_dt.replace(tzinfo=BANGKOK_TZ)
-                
+
                 event = await self._google_service.create_event(
                     title=title,
                     start=start_dt,
@@ -151,7 +152,7 @@ class CalendarAdapter:
                     reminder_minutes=reminder_minutes,
                     chat_id=chat_id,
                 )
-                
+
                 if event:
                     return {
                         "event_id": event.id,
@@ -192,14 +193,14 @@ class CalendarAdapter:
         self,
         chat_id: str,
         include_past: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get all events for a specific chat.
-        
+
         Args:
             chat_id: Chat ID
             include_past: Whether to include past events
-            
+
         Returns:
             List of event dictionaries
         """
@@ -212,7 +213,7 @@ class CalendarAdapter:
                     max_results=50,
                     chat_id=chat_id,  # Filter by chat_id in description
                 )
-                
+
                 return [
                     {
                         "event_id": e.id,
@@ -243,14 +244,14 @@ class CalendarAdapter:
         self,
         user_id: str,
         include_past: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get all events for a specific user.
-        
+
         Args:
             user_id: LINE user ID
             include_past: Whether to include past events
-            
+
         Returns:
             List of event dictionaries
         """
@@ -291,15 +292,15 @@ class CalendarAdapter:
     async def remove_event(
         self,
         event_id: str,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ) -> bool:
         """
         Remove a calendar event.
-        
+
         Args:
             event_id: Event ID to remove
             user_id: User ID for authorization (local only)
-            
+
         Returns:
             True if removed successfully
         """
@@ -325,16 +326,16 @@ class CalendarAdapter:
 
     async def remove_events_by_ids(
         self,
-        event_ids: List[str],
-        user_id: Optional[str] = None,
-    ) -> Tuple[int, int]:
+        event_ids: list[str],
+        user_id: str | None = None,
+    ) -> tuple[int, int]:
         """
         Remove multiple events by their IDs.
-        
+
         Args:
             event_ids: List of event IDs to remove
             user_id: User ID for authorization
-            
+
         Returns:
             Tuple of (removed_count, failed_count)
         """
@@ -359,16 +360,16 @@ class CalendarAdapter:
 
         return 0, len(event_ids)
 
-    async def quick_add(self, text: str) -> Optional[Dict[str, Any]]:
+    async def quick_add(self, text: str) -> dict[str, Any] | None:
         """
         Add event using natural language (Google Calendar quickAdd).
-        
+
         Only works with Google Calendar backend.
-        
+
         Args:
             text: Natural language event description
                   e.g., "Meeting tomorrow at 3pm"
-            
+
         Returns:
             Created event dictionary or None
         """

@@ -22,52 +22,49 @@ the agent can offer to add them to the user's calendar with reminders.
 """
 
 import asyncio
-import logging
 import base64
-import re
 import json
-from datetime import datetime, timezone
+import logging
+import re
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
-from typing import Optional, List, Dict, Any
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, ImageMessageContent
+
 from linebot.v3.messaging import (
-    MessagingApi,
-    MessagingApiBlob,
-    ReplyMessageRequest,
-    PushMessageRequest,
-    TextMessage,
-    QuickReply,
-    QuickReplyItem,
-    MessageAction,
     ApiClient,
     Configuration,
+    MessageAction,
+    MessagingApi,
+    MessagingApiBlob,
+    PushMessageRequest,
+    QuickReply,
+    QuickReplyItem,
+    ReplyMessageRequest,
+    TextMessage,
 )
 from linebot.v3.messaging.exceptions import ApiException
+from linebot.v3.webhooks import MessageEvent
 
-from .base_agent import BaseAgent
+from src.config import settings
+from src.prompts.builders.debrief_builder import build_debrief_prompt
+from src.services.bot_identity_service import get_bot_identity_service
+from src.services.debrief_extraction_service import DebriefExtractionService
+from src.services.debrief_formatter import DebriefFormatter
+from src.services.github_models_service import github_models_service
+from src.services.hermes_service import hermes_service
 from src.services.image_analyzer_session_manager import (
     image_analyzer_session_manager,
-    AnalyzerState,
 )
-from src.services.github_models_service import github_models_service
+from src.services.metrics_service import metrics_service
 from src.services.openrouter_service import openrouter_service
-from src.services.hermes_service import hermes_service
+from src.services.privilege_service import privilege_service
 from src.services.rate_limiter import RateLimiter
 from src.utils.llm_fallback import chat_completion_with_vision_fallback
-from src.services.metrics_service import metrics_service
-from src.services.privilege_service import privilege_service
-from src.services.bot_identity_service import get_bot_identity_service
-from src.config import settings
 from src.utils.tracing import get_tracer
-from src.prompts.builders.debrief_builder import build_debrief_prompt
-from src.services.debrief_formatter import DebriefFormatter
-from src.services.debrief_extraction_service import DebriefExtractionService
-from src.utils.llm_fallback import chat_completion_with_vision_fallback
+
+from .base_agent import BaseAgent
 
 # Instantiate debrief extraction service with the proper vision fallback
-_debrief_extraction_service = DebriefExtractionService(
-    llm_vision_fn=chat_completion_with_vision_fallback
-)
+_debrief_extraction_service = DebriefExtractionService(llm_vision_fn=chat_completion_with_vision_fallback)
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -116,7 +113,7 @@ class ImageAnalyzerAgent(BaseAgent):
         )
         self.http_client = http_client
         # Cache for friend status checks
-        self._friend_cache: Dict[str, tuple[bool, datetime]] = {}
+        self._friend_cache: dict[str, tuple[bool, datetime]] = {}
 
     def _identity_name(self) -> str:
         return get_bot_identity_service().get_profile().display_name
@@ -134,9 +131,7 @@ class ImageAnalyzerAgent(BaseAgent):
 
         for alias in aliases:
             if normalized.startswith(f"{alias}/"):
-                return self._strip_identity_prefix(
-                    normalized[len(alias) + 1 :].lstrip()
-                )
+                return self._strip_identity_prefix(normalized[len(alias) + 1 :].lstrip())
 
         prefix, rest = identity_service.split_command_prefix(normalized)
         if prefix:
@@ -183,20 +178,20 @@ class ImageAnalyzerAgent(BaseAgent):
         """
         user_id = getattr(event.source, "user_id", None) if event.source else None
         if not user_id:
-            logger.warning(f"🖼️ No user_id found for friendship check")
+            logger.warning("🖼️ No user_id found for friendship check")
             return False
 
         # Check cache (5 minute TTL)
         cached = self._friend_cache.get(user_id)
         if cached:
             is_friend, cached_at = cached
-            age = (datetime.now(timezone.utc) - cached_at).total_seconds()
+            age = (datetime.now(UTC) - cached_at).total_seconds()
             if age < 300:  # 5 minute cache
                 return is_friend
 
         try:
             await asyncio.to_thread(line_bot_api.get_profile, user_id)
-            self._friend_cache[user_id] = (True, datetime.now(timezone.utc))
+            self._friend_cache[user_id] = (True, datetime.now(UTC))
             logger.info(f"🖼️ User {user_id} is a friend (verified via LINE API)")
             return True
         except ApiException as e:
@@ -205,17 +200,13 @@ class ImageAnalyzerAgent(BaseAgent):
                 f"🖼️ User {user_id} is NOT a friend (ApiException: {status})",
                 exc_info=False,
             )
-            self._friend_cache[user_id] = (False, datetime.now(timezone.utc))
+            self._friend_cache[user_id] = (False, datetime.now(UTC))
             return False
         except Exception as e:
-            logger.warning(
-                f"🖼️ Friendship check failed for {user_id}: {e}", exc_info=False
-            )
+            logger.warning(f"🖼️ Friendship check failed for {user_id}: {e}", exc_info=False)
             return False
 
-    async def _get_user_display_name(
-        self, user_id: str, line_bot_api: MessagingApi
-    ) -> str:
+    async def _get_user_display_name(self, user_id: str, line_bot_api: MessagingApi) -> str:
         """
         Get user's display name from LINE API.
 
@@ -246,18 +237,13 @@ class ImageAnalyzerAgent(BaseAgent):
 
         # Debrief is a first-class trigger path.
         if "debrief" in text_lower and (
-            text_lower.startswith("debrief")
-            or "assistantbot debrief" in text_lower
-            or "ms. green debrief" in text_lower
+            text_lower.startswith("debrief") or "assistantbot debrief" in text_lower or "ms. green debrief" in text_lower
         ):
             return True
 
         command_text = self._strip_identity_prefix(text)
         if command_text != text_lower:
-            return any(
-                command_text.startswith(trigger)
-                for trigger in self.PREFIXED_TRIGGERS + self.GENERIC_TRIGGERS
-            )
+            return any(command_text.startswith(trigger) for trigger in self.PREFIXED_TRIGGERS + self.GENERIC_TRIGGERS)
 
         return any(text_lower.startswith(trigger) for trigger in self.GENERIC_TRIGGERS)
 
@@ -271,11 +257,7 @@ class ImageAnalyzerAgent(BaseAgent):
         5. Calendar confirmation response (yes/no add to calendar)
         """
         # Check if any vision-capable provider is available
-        if not (
-            hermes_service.is_configured()
-            or openrouter_service.is_configured()
-            or github_models_service.is_configured()
-        ):
+        if not (hermes_service.is_configured() or openrouter_service.is_configured() or github_models_service.is_configured()):
             return False
 
         message = getattr(event, "message", None)
@@ -295,13 +277,7 @@ class ImageAnalyzerAgent(BaseAgent):
             return image_analyzer_session_manager.is_waiting_for_image(chat_id, user_id)
 
         # Case 3: Text message when waiting for analysis choice
-        if (
-            message_type == "text"
-            and text
-            and image_analyzer_session_manager.is_waiting_for_analysis_choice(
-                chat_id, user_id
-            )
-        ):
+        if message_type == "text" and text and image_analyzer_session_manager.is_waiting_for_analysis_choice(chat_id, user_id):
             if any(choice in text.lower().strip() for choice in ["new", "last"]):
                 return True
             return True
@@ -313,20 +289,13 @@ class ImageAnalyzerAgent(BaseAgent):
 
             # Case 5: Calendar confirmation response
             text_lower = text.lower().strip()
-            if image_analyzer_session_manager.is_waiting_for_calendar_confirmation(
-                chat_id, user_id
-            ):
-                if any(
-                    kw in text_lower
-                    for kw in ["yes add", "no skip", "yes", "no", "ใช่", "ไม่"]
-                ):
+            if image_analyzer_session_manager.is_waiting_for_calendar_confirmation(chat_id, user_id):
+                if any(kw in text_lower for kw in ["yes add", "no skip", "yes", "no", "ใช่", "ไม่"]):
                     return True
 
         return False
 
-    async def handle(
-        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
-    ) -> bool:
+    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """
         Process image analysis request through multi-step flow.
 
@@ -349,48 +318,25 @@ class ImageAnalyzerAgent(BaseAgent):
             try:
                 # Step 1: Trigger phrase - start analysis choice flow
                 if message_type == "text" and self._is_trigger(text):
-                    return await self._handle_trigger(
-                        event, text, chat_id, user_id, line_bot_api
-                    )
+                    return await self._handle_trigger(event, text, chat_id, user_id, line_bot_api)
 
                 # Step 2: Analysis choice received
-                if (
-                    message_type == "text"
-                    and image_analyzer_session_manager.is_waiting_for_analysis_choice(
-                        chat_id, user_id
-                    )
-                ):
-                    return await self._handle_analysis_choice(
-                        event, text, chat_id, user_id, line_bot_api
-                    )
+                if message_type == "text" and image_analyzer_session_manager.is_waiting_for_analysis_choice(chat_id, user_id):
+                    return await self._handle_analysis_choice(event, text, chat_id, user_id, line_bot_api)
 
                 # Step 3: Image received - store and ask for question
                 if message_type == "image":
-                    return await self._handle_image(
-                        event, chat_id, user_id, line_bot_api, span
-                    )
+                    return await self._handle_image(event, chat_id, user_id, line_bot_api, span)
 
                 # Step 4: Question received - analyze and respond
-                if (
-                    message_type == "text"
-                    and image_analyzer_session_manager.is_waiting_for_question(
-                        chat_id, user_id
-                    )
-                ):
-                    return await self._handle_question(
-                        event, text, chat_id, user_id, line_bot_api, span
-                    )
+                if message_type == "text" and image_analyzer_session_manager.is_waiting_for_question(chat_id, user_id):
+                    return await self._handle_question(event, text, chat_id, user_id, line_bot_api, span)
 
                 # Step 5: Calendar confirmation response
-                if (
-                    message_type == "text"
-                    and image_analyzer_session_manager.is_waiting_for_calendar_confirmation(
-                        chat_id, user_id
-                    )
+                if message_type == "text" and image_analyzer_session_manager.is_waiting_for_calendar_confirmation(
+                    chat_id, user_id
                 ):
-                    return await self._handle_calendar_confirmation(
-                        event, text, chat_id, user_id, line_bot_api
-                    )
+                    return await self._handle_calendar_confirmation(event, text, chat_id, user_id, line_bot_api)
 
                 return False
 
@@ -405,15 +351,15 @@ class ImageAnalyzerAgent(BaseAgent):
         self,
         event: MessageEvent,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         line_bot_api: MessagingApi,
         image_data: str,
     ) -> bool:
         """Process a direct debrief request when an image is already stored."""
         logger.info(f"📖 Processing direct debrief for chat {chat_id}")
-        
+
         await self._send_analyzing_message(event, line_bot_api)
-        
+
         messages = [
             {
                 "role": "user",
@@ -423,7 +369,7 @@ class ImageAnalyzerAgent(BaseAgent):
                 ],
             }
         ]
-        
+
         model = getattr(settings, "profiler_model", "openai/gpt-4o")
         analysis = await chat_completion_with_vision_fallback(
             messages=messages,
@@ -431,32 +377,36 @@ class ImageAnalyzerAgent(BaseAgent):
             temperature=0.15,
             max_tokens=500,
         )
-        
+
         if not analysis:
             await self._send_error_message(event, line_bot_api, "Failed to analyze the image for debrief.")
             image_analyzer_session_manager.clear_session(chat_id)
             return False
-            
+
         # Parse the JSON response
-        import json, re
-        cleaned = re.sub(r'^```json\s*', '', analysis, flags=re.IGNORECASE)
-        cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.IGNORECASE).strip()
-        
+        import json
+        import re
+
+        cleaned = re.sub(r"^```json\s*", "", analysis, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.IGNORECASE).strip()
+
         try:
             debrief_data = json.loads(cleaned)
         except json.JSONDecodeError:
-            debrief_data = {"observations": analysis} # Fallback
-            
+            debrief_data = {"observations": analysis}  # Fallback
+
         # Format and send the parent-facing message
-        formatted_msg = DebriefFormatter.format_single_session({
-            "date": datetime.now().strftime("%Y-%m-%d"),
-            "timePeriod": debrief_data.get("timePeriod"),
-            "subject": debrief_data.get("subject"),
-            "lesson": debrief_data.get("lesson"),
-            "teacher": debrief_data.get("teacher"),
-            "observations": debrief_data.get("observations", "A wonderful day of learning!"),
-        })
-        
+        formatted_msg = DebriefFormatter.format_single_session(
+            {
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "timePeriod": debrief_data.get("timePeriod"),
+                "subject": debrief_data.get("subject"),
+                "lesson": debrief_data.get("lesson"),
+                "teacher": debrief_data.get("teacher"),
+                "observations": debrief_data.get("observations", "A wonderful day of learning!"),
+            }
+        )
+
         response_msg = TextMessage(text=formatted_msg, quickReply=None, quoteToken=None)
         if event.reply_token:
             await asyncio.to_thread(
@@ -467,7 +417,7 @@ class ImageAnalyzerAgent(BaseAgent):
                     notificationDisabled=False,
                 ),
             )
-            
+
         logger.info(f"✅ Debrief sent for chat {chat_id}")
         image_analyzer_session_manager.clear_session(chat_id)
         return True
@@ -477,7 +427,7 @@ class ImageAnalyzerAgent(BaseAgent):
         event: MessageEvent,
         text: str,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         line_bot_api: MessagingApi,
     ) -> bool:
         """Handle trigger phrase - start choice or image session."""
@@ -486,9 +436,7 @@ class ImageAnalyzerAgent(BaseAgent):
         if not privilege_service.is_admin(user_id):
             if not image_analyzer_rate_limiter.is_allowed(chat_id, user_id):
                 metrics_service.record_rate_limited()
-                reset_seconds = image_analyzer_rate_limiter.get_reset_time(
-                    chat_id, user_id
-                )
+                reset_seconds = image_analyzer_rate_limiter.get_reset_time(chat_id, user_id)
                 await self._send_rate_limit_message(event, line_bot_api, reset_seconds)
                 return True
         else:
@@ -496,14 +444,14 @@ class ImageAnalyzerAgent(BaseAgent):
 
         command_text = self._strip_identity_prefix(text)
         is_debrief = "debrief" in command_text or command_text.strip().lower() == "m"
-        
+
         # If debrief trigger and we already have an image stored, process immediately
         if is_debrief:
             session = image_analyzer_session_manager.get_session(chat_id)
             if session and session.image_data:
                 logger.info(f"📖 Direct debrief trigger detected for chat {chat_id}")
                 return await self._process_direct_debrief(event, chat_id, user_id, line_bot_api, session.image_data)
-        
+
         bare_analyze = command_text == "analyze"
 
         if bare_analyze:
@@ -540,9 +488,7 @@ class ImageAnalyzerAgent(BaseAgent):
             return True
 
         analysis_mode = "debrief" if is_debrief else "standard"
-        image_analyzer_session_manager.start_session(
-            chat_id, user_id, analysis_mode=analysis_mode
-        )
+        image_analyzer_session_manager.start_session(chat_id, user_id, analysis_mode=analysis_mode)
 
         prompt_text = (
             "🖼️ Please send the image you'd like me to analyze.\n\n"
@@ -552,11 +498,7 @@ class ImageAnalyzerAgent(BaseAgent):
         prompt_msg = TextMessage(
             text=prompt_text
             + "(You have 60 seconds to send an image)\n\n"
-            + (
-                "ส่งภาพที่ต้องการให้วิเคราะห์ (60 วินาที)"
-                if analysis_mode != "debrief"
-                else "ส่งภาพที่ต้องการให้สรุปเชิงวิเคราะห์ (60 วินาที)"
-            ),
+            + ("ส่งภาพที่ต้องการให้วิเคราะห์ (60 วินาที)" if analysis_mode != "debrief" else "ส่งภาพที่ต้องการให้สรุปเชิงวิเคราะห์ (60 วินาที)"),
             quickReply=None,
             quoteToken=None,
         )
@@ -579,16 +521,14 @@ class ImageAnalyzerAgent(BaseAgent):
         event: MessageEvent,
         text: str,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         line_bot_api: MessagingApi,
     ) -> bool:
         """Handle New/Last choice after the bare analyze trigger."""
         choice = re.sub(r"\s+", " ", (text or "").strip().lower())
 
         if choice == "new":
-            image_analyzer_session_manager.start_session(
-                chat_id, user_id, analysis_mode="standard"
-            )
+            image_analyzer_session_manager.start_session(chat_id, user_id, analysis_mode="standard")
             prompt_msg = TextMessage(
                 text=(
                     "🖼️ Please send the image you'd like me to analyze.\n\n"
@@ -690,7 +630,7 @@ class ImageAnalyzerAgent(BaseAgent):
         self,
         event: MessageEvent,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         line_bot_api: MessagingApi,
         span,
     ) -> bool:
@@ -698,9 +638,7 @@ class ImageAnalyzerAgent(BaseAgent):
 
         message_id = getattr(event.message, "id", None)
         if not isinstance(message_id, str) or not message_id.strip():
-            await self._send_error_message(
-                event, line_bot_api, "Could not retrieve image. Please try again."
-            )
+            await self._send_error_message(event, line_bot_api, "Could not retrieve image. Please try again.")
             return False
 
         # Download image
@@ -708,9 +646,7 @@ class ImageAnalyzerAgent(BaseAgent):
         image_bytes = await self._download_image(message_id)
 
         if not image_bytes:
-            await self._send_error_message(
-                event, line_bot_api, "Failed to download image. Please try again."
-            )
+            await self._send_error_message(event, line_bot_api, "Failed to download image. Please try again.")
             image_analyzer_session_manager.clear_session(chat_id)
             return False
 
@@ -756,7 +692,7 @@ class ImageAnalyzerAgent(BaseAgent):
                 ),
             ]
         )
-        
+
         question_msg = TextMessage(
             text="⚡ Image received! What would you like to do?\\n\\n"
             "(Tap a button above, or type your question)\\n\\n"
@@ -813,7 +749,7 @@ class ImageAnalyzerAgent(BaseAgent):
         event: MessageEvent,
         question: str,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         line_bot_api: MessagingApi,
         span,
     ) -> bool:
@@ -840,9 +776,7 @@ class ImageAnalyzerAgent(BaseAgent):
         await self._send_analyzing_message(event, line_bot_api)
 
         low_risk_scene = self._is_low_risk_scene_question(question)
-        scene_mode = (
-            "literal" if low_risk_scene or analysis_mode == "debrief" else "standard"
-        )
+        scene_mode = "literal" if low_risk_scene or analysis_mode == "debrief" else "standard"
 
         # Build vision message
         if analysis_mode == "debrief":
@@ -856,9 +790,7 @@ class ImageAnalyzerAgent(BaseAgent):
                 }
             ]
         else:
-            messages = self._build_vision_message(
-                image_data, question, scene_mode=scene_mode
-            )
+            messages = self._build_vision_message(image_data, question, scene_mode=scene_mode)
 
         # Call vision via provider-agnostic fallback
         logger.info(f"🖼️ Analyzing image with question: {question[:50]}...")
@@ -877,9 +809,7 @@ class ImageAnalyzerAgent(BaseAgent):
                 None,
                 None,
             )
-            logger.error(
-                f"❌ Vision API fallback failed: {status_code} - {error_detail}"
-            )
+            logger.error(f"❌ Vision API fallback failed: {status_code} - {error_detail}")
             policy_error_terms = (
                 "policy",
                 "moderation",
@@ -888,17 +818,9 @@ class ImageAnalyzerAgent(BaseAgent):
                 "content violation",
                 "violation",
             )
-            if (
-                error_detail
-                and any(term in error_detail.lower() for term in policy_error_terms)
-                and not low_risk_scene
-            ):
-                logger.info(
-                    "🖼️ Retrying image analysis with a more literal prompt after policy-like failure"
-                )
-                messages = self._build_vision_message(
-                    image_data, question, scene_mode="literal"
-                )
+            if error_detail and any(term in error_detail.lower() for term in policy_error_terms) and not low_risk_scene:
+                logger.info("🖼️ Retrying image analysis with a more literal prompt after policy-like failure")
+                messages = self._build_vision_message(image_data, question, scene_mode="literal")
                 analysis = await chat_completion_with_vision_fallback(
                     messages=messages,
                     model=model,
@@ -957,17 +879,13 @@ class ImageAnalyzerAgent(BaseAgent):
 
         # Offer calendar integration if dates were detected
         if detected_dates:
-            await self._offer_calendar_integration(
-                event, line_bot_api, detected_dates, user_id, chat_id
-            )
+            await self._offer_calendar_integration(event, line_bot_api, detected_dates, user_id, chat_id)
 
         # Explicitly clear session to prevent memory leaks
         image_analyzer_session_manager.clear_session(chat_id)
         return True
 
-    def _build_vision_message(
-        self, image_data_url: str, question: str, scene_mode: str = "standard"
-    ) -> list:
+    def _build_vision_message(self, image_data_url: str, question: str, scene_mode: str = "standard") -> list:
         """Build the vision API message structure."""
 
         # Get today's date in Bangkok timezone for accurate year inference
@@ -1004,9 +922,7 @@ class ImageAnalyzerAgent(BaseAgent):
         ]
 
         extra_conservative_instruction = ""
-        if scene_mode == "literal" or any(
-            term in question_lower for term in neutral_scene_terms
-        ):
+        if scene_mode == "literal" or any(term in question_lower for term in neutral_scene_terms):
             extra_conservative_instruction = (
                 "This looks like a normal everyday scene. "
                 "Stay extremely literal and calm; do not sexualize, sensationalize, or assume hidden intent. "
@@ -1048,7 +964,7 @@ class ImageAnalyzerAgent(BaseAgent):
             },
         ]
 
-    def _get_vision_error_detail(self) -> tuple[Optional[int], Optional[str], Optional[str]]:
+    def _get_vision_error_detail(self) -> tuple[int | None, str | None, str | None]:
         """Collect the most recent vision API error detail."""
         for svc in (github_models_service, openrouter_service):
             try:
@@ -1080,7 +996,7 @@ class ImageAnalyzerAgent(BaseAgent):
         pattern = r"---DATES_DETECTED---.*?---END_DATES---"
         return re.sub(pattern, "", analysis, flags=re.DOTALL).strip()
 
-    def _extract_dates_from_analysis(self, analysis: str) -> List[Dict[str, str]]:
+    def _extract_dates_from_analysis(self, analysis: str) -> list[dict[str, str]]:
         """
         Extract detected dates from the analysis response.
 
@@ -1089,9 +1005,7 @@ class ImageAnalyzerAgent(BaseAgent):
         """
         try:
             # Look for the dates section
-            match = re.search(
-                r"---DATES_DETECTED---\s*(.+?)\s*---END_DATES---", analysis, re.DOTALL
-            )
+            match = re.search(r"---DATES_DETECTED---\s*(.+?)\s*---END_DATES---", analysis, re.DOTALL)
             if not match:
                 return []
 
@@ -1124,8 +1038,8 @@ class ImageAnalyzerAgent(BaseAgent):
         self,
         event: MessageEvent,
         line_bot_api: MessagingApi,
-        detected_dates: List[Dict[str, str]],
-        user_id: Optional[str],
+        detected_dates: list[dict[str, str]],
+        user_id: str | None,
         chat_id: str,
     ) -> bool:
         """
@@ -1165,9 +1079,7 @@ class ImageAnalyzerAgent(BaseAgent):
             items=[
                 QuickReplyItem(
                     type="action",
-                    action=MessageAction(
-                        label="📅 Yes / ใช่", text="yes add to calendar"
-                    ),
+                    action=MessageAction(label="📅 Yes / ใช่", text="yes add to calendar"),
                 ),
                 QuickReplyItem(
                     type="action",
@@ -1194,9 +1106,7 @@ class ImageAnalyzerAgent(BaseAgent):
                         customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
                     ),
                 )
-                logger.info(
-                    f"📅 Offered calendar integration for {len(detected_dates)} dates in chat {chat_id}"
-                )
+                logger.info(f"📅 Offered calendar integration for {len(detected_dates)} dates in chat {chat_id}")
                 return True
             except Exception as e:
                 logger.error(f"❌ Failed to offer calendar integration: {e}")
@@ -1209,7 +1119,7 @@ class ImageAnalyzerAgent(BaseAgent):
         event: MessageEvent,
         text: str,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         line_bot_api: MessagingApi,
     ) -> bool:
         """
@@ -1236,11 +1146,7 @@ class ImageAnalyzerAgent(BaseAgent):
 
             if not is_friend:
                 # Get user's display name for personalized quirky response
-                display_name = (
-                    await self._get_user_display_name(user_id or "", line_bot_api)
-                    if user_id
-                    else "mortal"
-                )
+                display_name = await self._get_user_display_name(user_id or "", line_bot_api) if user_id else "mortal"
 
                 identity_name = self._identity_name()
                 quirky_responses = [
@@ -1277,9 +1183,7 @@ class ImageAnalyzerAgent(BaseAgent):
                         ),
                     )
                 image_analyzer_session_manager.clear_session(chat_id)
-                logger.info(
-                    f"🖼️ Non-friend {user_id} ({display_name}) denied calendar access"
-                )
+                logger.info(f"🖼️ Non-friend {user_id} ({display_name}) denied calendar access")
                 return True
 
             # Get detected dates from session
@@ -1288,8 +1192,7 @@ class ImageAnalyzerAgent(BaseAgent):
             if not detected_dates:
                 # Session expired or no dates found
                 msg = TextMessage(
-                    text="⏳ Session expired. Please analyze the image again.\n\n"
-                    "เซสชันหมดอายุ กรุณาวิเคราะห์ภาพใหม่อีกครั้ง",
+                    text="⏳ Session expired. Please analyze the image again.\n\nเซสชันหมดอายุ กรุณาวิเคราะห์ภาพใหม่อีกครั้ง",
                     quickReply=None,
                     quoteToken=None,
                 )
@@ -1310,8 +1213,9 @@ class ImageAnalyzerAgent(BaseAgent):
 
             # Import and call calendar agent to start extraction flow
             try:
-                from src.agents.calendar_agent import CalendarAgent
                 from datetime import datetime
+
+                from src.agents.calendar_agent import CalendarAgent
 
                 # Find calendar agent from the router or create one
                 # For now, we'll create a new instance since it's stateless
@@ -1367,15 +1271,11 @@ class ImageAnalyzerAgent(BaseAgent):
                     line_bot_api=line_bot_api,
                 )
 
-                logger.info(
-                    f"📅 Started calendar extraction flow for {len(extracted_dates)} dates in chat {chat_id}"
-                )
+                logger.info(f"📅 Started calendar extraction flow for {len(extracted_dates)} dates in chat {chat_id}")
                 return True
 
             except Exception as e:
-                logger.error(
-                    f"❌ Failed to start calendar extraction flow: {e}", exc_info=True
-                )
+                logger.error(f"❌ Failed to start calendar extraction flow: {e}", exc_info=True)
                 identity_name = self._identity_name()
                 msg = TextMessage(
                     text=f"❌ Failed to start calendar flow. Please try '{identity_name} add event' manually.\n\n"
@@ -1400,8 +1300,7 @@ class ImageAnalyzerAgent(BaseAgent):
             image_analyzer_session_manager.clear_session(chat_id)
 
             msg = TextMessage(
-                text="👍 Understood. Calendar skipped.\n\n"
-                "เข้าใจแล้ว ไม่เพิ่มลงปฏิทิน",
+                text="👍 Understood. Calendar skipped.\n\nเข้าใจแล้ว ไม่เพิ่มลงปฏิทิน",
                 quickReply=None,
                 quoteToken=None,
             )
@@ -1424,22 +1323,17 @@ class ImageAnalyzerAgent(BaseAgent):
                 items=[
                     QuickReplyItem(
                         type="action",
-                        action=MessageAction(
-                            label="📅 Yes / ใช่", text="yes add to calendar"
-                        ),
+                        action=MessageAction(label="📅 Yes / ใช่", text="yes add to calendar"),
                     ),
                     QuickReplyItem(
                         type="action",
-                        action=MessageAction(
-                            label="❌ No / ไม่", text="no skip calendar"
-                        ),
+                        action=MessageAction(label="❌ No / ไม่", text="no skip calendar"),
                     ),
                 ]
             )
 
             msg = TextMessage(
-                text="❓ Would you like to add the detected dates to your calendar?\n\n"
-                "ต้องการเพิ่มวันที่ที่ตรวจพบลงในปฏิทินไหม?",
+                text="❓ Would you like to add the detected dates to your calendar?\n\nต้องการเพิ่มวันที่ที่ตรวจพบลงในปฏิทินไหม?",
                 quickReply=quick_reply,
                 quoteToken=None,
             )
@@ -1454,19 +1348,15 @@ class ImageAnalyzerAgent(BaseAgent):
                 )
             return True
 
-    async def _download_image(self, message_id: str) -> Optional[bytes]:
+    async def _download_image(self, message_id: str) -> bytes | None:
         """Download image content from LINE servers."""
         try:
-            configuration = Configuration(
-                access_token=settings.line_channel_access_token
-            )
+            configuration = Configuration(access_token=settings.line_channel_access_token)
 
             with ApiClient(configuration) as api_client:
                 blob_api = MessagingApiBlob(api_client)
 
-                response = await asyncio.to_thread(
-                    blob_api.get_message_content, message_id
-                )
+                response = await asyncio.to_thread(blob_api.get_message_content, message_id)
 
                 # Handle None response explicitly
                 if response is None:
@@ -1477,9 +1367,7 @@ class ImageAnalyzerAgent(BaseAgent):
                     return response
                 elif isinstance(response, bytearray):
                     return bytes(response)
-                elif hasattr(response, "read") and callable(
-                    getattr(response, "read", None)
-                ):
+                elif hasattr(response, "read") and callable(getattr(response, "read", None)):
                     return response.read()
                 else:
                     # Try to iterate as generator/stream
@@ -1497,13 +1385,10 @@ class ImageAnalyzerAgent(BaseAgent):
             logger.error(f"❌ Failed to download image {message_id}: {e}", exc_info=True)
             return None
 
-    async def _send_analyzing_message(
-        self, event: MessageEvent, line_bot_api: MessagingApi
-    ):
+    async def _send_analyzing_message(self, event: MessageEvent, line_bot_api: MessagingApi):
         """Send a message indicating analysis is in progress."""
         msg = TextMessage(
-            text="🔍 Examining thy image... One moment.\n\n"
-            "กำลังวิเคราะห์ภาพ... กรุณารอสักครู่",
+            text="🔍 Examining thy image... One moment.\n\nกำลังวิเคราะห์ภาพ... กรุณารอสักครู่",
             quickReply=None,
             quoteToken=None,
         )
@@ -1521,9 +1406,7 @@ class ImageAnalyzerAgent(BaseAgent):
             except Exception as e:
                 logger.warning(f"⚠️ Failed to send analyzing message: {e}")
 
-    async def _send_rate_limit_message(
-        self, event: MessageEvent, line_bot_api: MessagingApi, reset_seconds: int
-    ):
+    async def _send_rate_limit_message(self, event: MessageEvent, line_bot_api: MessagingApi, reset_seconds: int):
         """Send rate limit notification."""
         reset_minutes = (reset_seconds + 59) // 60
 
@@ -1546,9 +1429,7 @@ class ImageAnalyzerAgent(BaseAgent):
                 ),
             )
 
-    async def _send_error_message(
-        self, event: MessageEvent, line_bot_api: MessagingApi, error_detail: str
-    ):
+    async def _send_error_message(self, event: MessageEvent, line_bot_api: MessagingApi, error_detail: str):
         """Send softer fallback message to user."""
         msg = TextMessage(
             text=(

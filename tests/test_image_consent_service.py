@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from src.services.image_consent_service import ImageConsentService, image_consent_service
 

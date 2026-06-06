@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-from typing import Dict, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -20,9 +19,9 @@ class NewsSessionManager:
         """
         # Per-chat conversation state
         # Format: {chat_id: {...}}
-        self._news_sessions: Dict[str, dict] = {}
+        self._news_sessions: dict[str, dict] = {}
         self._session_timeout_minutes = session_timeout_minutes
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
         self._cleanup_interval_seconds = 300  # Run cleanup every 5 minutes
 
     def is_in_news_flow(self, chat_id: str) -> bool:
@@ -38,7 +37,7 @@ class NewsSessionManager:
         self._cleanup_expired_sessions()
         return chat_id in self._news_sessions
 
-    def get_session_state(self, chat_id: str) -> Optional[dict]:
+    def get_session_state(self, chat_id: str) -> dict | None:
         """
         Get current session state for a chat.
 
@@ -51,7 +50,7 @@ class NewsSessionManager:
         self._cleanup_expired_sessions()
         return self._news_sessions.get(chat_id)
 
-    def start_news_flow(self, chat_id: str, user_id: Optional[str] = None):
+    def start_news_flow(self, chat_id: str, user_id: str | None = None):
         """
         Initialize news conversation flow.
 
@@ -121,7 +120,8 @@ class NewsSessionManager:
             self._news_sessions[chat_id]["step"] = "main_menu"
             self._news_sessions[chat_id]["selected_headline"] = None
             self._news_sessions[chat_id]["last_activity"] = datetime.now()
-    def is_session_owner(self, chat_id: str, user_id: Optional[str]) -> bool:
+
+    def is_session_owner(self, chat_id: str, user_id: str | None) -> bool:
         """
         Check if user is the owner of the news session (started it).
 
@@ -134,10 +134,11 @@ class NewsSessionManager:
         """
         if chat_id not in self._news_sessions:
             return True  # No session, anyone can start
-        
+
         session_user = self._news_sessions[chat_id].get("user_id")
         # Allow if no user was tracked or if it matches
         return session_user is None or session_user == user_id
+
     def end_news_flow(self, chat_id: str):
         """
         Exit news conversation and cleanup session.
@@ -154,9 +155,7 @@ class NewsSessionManager:
         now = datetime.now()
         timeout = timedelta(minutes=self._session_timeout_minutes)
         expired_chats = [
-            chat_id
-            for chat_id, session in self._news_sessions.items()
-            if now - session["last_activity"] > timeout
+            chat_id for chat_id, session in self._news_sessions.items() if now - session["last_activity"] > timeout
         ]
 
         for chat_id in expired_chats:

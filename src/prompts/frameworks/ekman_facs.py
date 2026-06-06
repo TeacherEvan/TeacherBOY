@@ -12,25 +12,25 @@ Token estimates:
 
 class EkmanFACSFramework:
     """Paul Ekman's Facial Action Coding System - modular versions."""
-    
+
     VERSION = "2.0"
     CATEGORY = "vision"
-    
+
     # Token estimates for each version
     TOKENS_SHORT = 300
     TOKENS_STANDARD = 700
     TOKENS_FULL = 1200
-    
+
     @staticmethod
     def get_short() -> str:
         """
         Brief version - 7 universal emotions only.
-        
+
         Use for:
         - Quick emotion detection
         - Token-constrained scenarios
         - Mobile/low-latency applications
-        
+
         Estimated tokens: ~300
         """
         return """
@@ -48,17 +48,17 @@ Identify emotions using these core patterns:
 
 **Authenticity Check**: Genuine emotions show symmetry and involve eyes. Fake smiles lack AU6.
 """
-    
+
     @staticmethod
     def get_standard() -> str:
         """
         Standard version - AU codes with practical guidance.
-        
+
         Use for:
         - General profiling tasks
         - Balanced token usage vs. detail
         - Most common use cases
-        
+
         Estimated tokens: ~700
         """
         return """
@@ -104,17 +104,17 @@ Identify emotions using these core patterns:
 - **Timing**: Genuine emotions appear simultaneously with speech
 - **Symmetry**: Asymmetry may indicate deception
 """
-    
+
     @staticmethod
     def get_full() -> str:
         """
         Complete version - comprehensive FACS reference.
-        
+
         Use for:
         - Detailed forensic analysis
         - Academic/research applications
         - When token budget allows
-        
+
         Estimated tokens: ~1200
         """
         return f"""{EkmanFACSFramework.get_standard()}
@@ -175,15 +175,15 @@ While the 7 universal emotions are cross-cultural, display rules vary:
 
 Note: Always consider context and individual baselines.
 """
-    
+
     @staticmethod
     def get_for_analysis_type(analysis_type: str) -> str:
         """
         Get appropriate version based on analysis depth.
-        
+
         Args:
             analysis_type: "quick", "standard", or "full"
-            
+
         Returns:
             Framework text optimized for analysis type
         """
@@ -192,18 +192,18 @@ Note: Always consider context and individual baselines.
             "standard": EkmanFACSFramework.get_standard,
             "full": EkmanFACSFramework.get_full,
         }
-        
+
         getter = mapping.get(analysis_type, EkmanFACSFramework.get_standard)
         return getter()
-    
+
     @staticmethod
     def estimate_tokens(analysis_type: str) -> int:
         """
         Estimate token usage for analysis type.
-        
+
         Args:
             analysis_type: "quick", "standard", or "full"
-            
+
         Returns:
             Estimated token count
         """
@@ -212,5 +212,5 @@ Note: Always consider context and individual baselines.
             "standard": EkmanFACSFramework.TOKENS_STANDARD,
             "full": EkmanFACSFramework.TOKENS_FULL,
         }
-        
+
         return mapping.get(analysis_type, EkmanFACSFramework.TOKENS_STANDARD)

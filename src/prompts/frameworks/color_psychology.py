@@ -11,25 +11,25 @@ Token estimates:
 
 class ColorPsychologyFramework:
     """Color psychology analysis framework."""
-    
+
     VERSION = "2.0"
     CATEGORY = "vision"
-    
+
     # Token estimates for each version
     TOKENS_SHORT = 150
     TOKENS_STANDARD = 300
     TOKENS_FULL = 400
-    
+
     @staticmethod
     def get_short() -> str:
         """
         Brief version - primary colors only.
-        
+
         Use for:
         - Quick color assessment
         - Token-constrained scenarios
         - Basic profiling
-        
+
         Estimated tokens: ~150
         """
         return """
@@ -44,17 +44,17 @@ Analyze clothing/environmental colors:
 - **White**: Purity, simplicity, cleanliness
 - **Gray**: Neutrality, sophistication
 """
-    
+
     @staticmethod
     def get_standard() -> str:
         """
         Standard version - comprehensive color meanings.
-        
+
         Use for:
         - Professional analysis
         - Standard profiling depth
         - Balanced detail
-        
+
         Estimated tokens: ~300
         """
         return """
@@ -75,17 +75,17 @@ Analyze clothing/environmental colors:
 - **Brown**: Reliability, earthiness, warmth, stability
 - **Pink**: Nurturing, romantic, youthful, compassionate
 """
-    
+
     @staticmethod
     def get_full() -> str:
         """
         Full version - colors + combinations.
-        
+
         Use for:
         - Deep psychological analysis
         - Professional profiling
         - Maximum insight
-        
+
         Estimated tokens: ~400
         """
         return """

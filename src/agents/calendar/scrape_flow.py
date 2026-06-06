@@ -9,23 +9,24 @@ Handles the "zeus scrape" flow for extracting dates from chat messages:
 Uses lazy loading pattern for on-demand instantiation.
 """
 
-import re
 import logging
-from datetime import datetime, date
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
+import re
+from datetime import date
+from typing import TYPE_CHECKING, Any, Optional
 
-from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
+    MessageAction,
     MessagingApi,
     QuickReply,
     QuickReplyItem,
-    MessageAction,
 )
+from linebot.v3.webhooks import MessageEvent
 
-from .base_flow import CalendarFlowBase
 from src.services.bot_identity_service import get_bot_identity_service
 from src.services.calendar_session_manager import CalendarState, calendar_session_manager
 from src.services.message_buffer_service import message_buffer_service
+
+from .base_flow import CalendarFlowBase
 
 if TYPE_CHECKING:
     from src.services.calendar_service import CalendarService
@@ -74,9 +75,7 @@ class ScrapeFlow(CalendarFlowBase):
     @staticmethod
     def _is_explicit_scrape_selection_followup(text: str) -> bool:
         normalized = ScrapeFlow._normalize_followup_text(text)
-        return normalized in {"all", "none", "done", "cancel"} or bool(
-            re.fullmatch(r"\d+(?:\s*,\s*\d+)*", normalized)
-        )
+        return normalized in {"all", "none", "done", "cancel"} or bool(re.fullmatch(r"\d+(?:\s*,\s*\d+)*", normalized))
 
     @staticmethod
     def _is_explicit_scrape_reminder_followup(text: str) -> bool:
@@ -89,15 +88,15 @@ class ScrapeFlow(CalendarFlowBase):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         discrete_mode: bool = False,
     ) -> bool:
         """
         Handle "zeus scrape" trigger.
-        
+
         Retrieves recent messages from buffer, extracts dates using AI,
         and guides user through adding events.
-        
+
         Args:
             event: LINE message event
             text: Message text
@@ -109,10 +108,7 @@ class ScrapeFlow(CalendarFlowBase):
         from src.services.date_extraction_service import date_extraction_service
 
         if not user_id:
-            await self.send_message(
-                event, line_bot_api,
-                "❌ Cannot identify user."
-            )
+            await self.send_message(event, line_bot_api, "❌ Cannot identify user.")
             return True
 
         scan_limit = self._parse_scan_limit(text)
@@ -122,11 +118,12 @@ class ScrapeFlow(CalendarFlowBase):
 
         if not messages:
             await self.send_message(
-                event, line_bot_api,
+                event,
+                line_bot_api,
                 "📭 No recent messages found to scan.\n\n"
                 "💡 I can only scan messages from the last 24 hours.\n"
                 "ฉันสามารถสแกนเฉพาะข้อความจาก 24 ชั่วโมงที่ผ่านมา\n\n"
-                "Try 'Ms. Green add [date] [title]' to add events directly."
+                "Try 'Ms. Green add [date] [title]' to add events directly.",
             )
             return True
 
@@ -136,9 +133,7 @@ class ScrapeFlow(CalendarFlowBase):
         is_friend = await self._check_is_friend(event, line_bot_api)
 
         # Start scrape flow
-        calendar_session_manager.start_scrape_flow(
-            chat_id, user_id, messages, is_friend
-        )
+        calendar_session_manager.start_scrape_flow(chat_id, user_id, messages, is_friend)
         if discrete_mode and user_id:
             calendar_session_manager.set_discrete_scrape_target(chat_id, user_id)
 
@@ -149,19 +144,18 @@ class ScrapeFlow(CalendarFlowBase):
             logger.error(f"❌ Date extraction failed: {e}", exc_info=True)
             calendar_session_manager.end_session(chat_id)
             await self.send_message(
-                event, line_bot_api,
-                "❌ Failed to scan messages. Please try again.\n\n"
-                "สแกนข้อความไม่สำเร็จ กรุณาลองใหม่"
+                event, line_bot_api, "❌ Failed to scan messages. Please try again.\n\nสแกนข้อความไม่สำเร็จ กรุณาลองใหม่"
             )
             return True
 
         if not events:
             calendar_session_manager.end_session(chat_id)
             await self.send_message(
-                event, line_bot_api,
+                event,
+                line_bot_api,
                 "📭 No dates or events found in recent messages.\n\n"
                 "ไม่พบวันที่หรือกิจกรรมในข้อความล่าสุด\n\n"
-                "💡 Try 'Ms. Green add [date] [title]' to add directly."
+                "💡 Try 'Ms. Green add [date] [title]' to add directly.",
             )
             return True
 
@@ -193,10 +187,7 @@ class ScrapeFlow(CalendarFlowBase):
                 discrete_target_user_id=discrete_target,
             )
         else:
-            await self.send_message(
-                event, line_bot_api,
-                f"✅ Found {len(events_data)} event(s) but couldn't load first one."
-            )
+            await self.send_message(event, line_bot_api, f"✅ Found {len(events_data)} event(s) but couldn't load first one.")
 
         return True
 
@@ -204,16 +195,16 @@ class ScrapeFlow(CalendarFlowBase):
         self,
         event: MessageEvent,
         line_bot_api: MessagingApi,
-        event_data: Dict[str, Any],
+        event_data: dict[str, Any],
         current: int,
         total: int,
         header: str = "",
-        discrete_target_user_id: Optional[str] = None,
+        discrete_target_user_id: str | None = None,
         show_add_all: bool = False,
     ) -> None:
         """
         Prompt user about a scraped event.
-        
+
         Args:
             event: LINE message event
             line_bot_api: LINE Messaging API client
@@ -224,8 +215,10 @@ class ScrapeFlow(CalendarFlowBase):
             discrete_target_user_id: If provided, send via push message to this user instead of replying
         """
         import asyncio
-        from linebot.v3.messaging import PushMessageRequest, TextMessage as TextMsg
-        
+
+        from linebot.v3.messaging import PushMessageRequest
+        from linebot.v3.messaging import TextMessage as TextMsg
+
         date_obj = event_data.get("date")
         title = event_data.get("title", "Event")
         source = event_data.get("source_text", "")
@@ -233,28 +226,26 @@ class ScrapeFlow(CalendarFlowBase):
 
         date_str = date_obj.strftime("%B %d, %Y") if date_obj else "Unknown"
 
-        msg = header + (
-            f"📅 Event {current}/{total}:\n\n"
-            f"📌 {title}\n"
-            f"📆 {date_str}\n"
-        )
+        msg = header + (f"📅 Event {current}/{total}:\n\n📌 {title}\n📆 {date_str}\n")
 
         if source:
             source_preview = source[:50] + "..." if len(source) > 50 else source
-            msg += f"📝 From: \"{source_preview}\"\n"
+            msg += f'📝 From: "{source_preview}"\n'
 
         # Visual confidence indicator
         confidence_emoji = "🟢" if confidence == "high" else "🟡" if confidence == "medium" else "🔴"
         msg += f"{confidence_emoji} Confidence: {confidence.title()}\n\n"
         msg += "Add this to calendar? (yes/no/add all/skip all)"
 
-        quick_reply = QuickReply(items=[
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✅ Yes", text="yes")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="⏭️ Skip", text="no")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="➕ Add All", text="add all")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="🚫 Skip All", text="done")),
-        ])
-        
+        quick_reply = QuickReply(
+            items=[
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✅ Yes", text="yes")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="⏭️ Skip", text="no")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="➕ Add All", text="add all")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="🚫 Skip All", text="done")),
+            ]
+        )
+
         # Send via push message if discrete mode, otherwise reply
         if discrete_target_user_id:
             try:
@@ -264,7 +255,7 @@ class ScrapeFlow(CalendarFlowBase):
                         to=discrete_target_user_id,
                         messages=[TextMsg(text=msg, quickReply=quick_reply, quoteToken=None)],
                         notificationDisabled=False,
-                    )
+                    ),
                 )
                 logger.info(f"📨 Sent discrete scrape prompt to user {discrete_target_user_id}")
             except Exception as e:
@@ -279,11 +270,13 @@ class ScrapeFlow(CalendarFlowBase):
         line_bot_api: MessagingApi,
         chat_id: str,
         header: str = "",
-        discrete_target_user_id: Optional[str] = None,
+        discrete_target_user_id: str | None = None,
     ) -> None:
         """Prompt the user to batch-select scraped events with explicit commands."""
         import asyncio
-        from linebot.v3.messaging import PushMessageRequest, TextMessage as TextMsg
+
+        from linebot.v3.messaging import PushMessageRequest
+        from linebot.v3.messaging import TextMessage as TextMsg
 
         session = calendar_session_manager.get_session(chat_id)
         if not session:
@@ -295,12 +288,14 @@ class ScrapeFlow(CalendarFlowBase):
             return
 
         msg = self._format_scrape_selection(session, header)
-        quick_reply = QuickReply(items=[
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="All", text="all")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="None", text="none")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Done", text="done")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Cancel", text="cancel")),
-        ])
+        quick_reply = QuickReply(
+            items=[
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="All", text="all")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="None", text="none")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Done", text="done")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Cancel", text="cancel")),
+            ]
+        )
 
         if discrete_target_user_id:
             try:
@@ -322,13 +317,15 @@ class ScrapeFlow(CalendarFlowBase):
 
     def _format_scrape_selection(self, session: Any, header: str = "") -> str:
         """Render the numbered scrape candidates and current selection state."""
-        lines: List[str] = []
+        lines: list[str] = []
         if header:
             lines.append(header.rstrip())
-        lines.extend([
-            "🗂️ Select events to add:",
-            "",
-        ])
+        lines.extend(
+            [
+                "🗂️ Select events to add:",
+                "",
+            ]
+        )
 
         for index, item in enumerate(session.scraped_events, start=1):
             date_obj = item.get("date") or item.get("event_date")
@@ -337,15 +334,17 @@ class ScrapeFlow(CalendarFlowBase):
             lines.append(f"{marker} {index}. {item.get('title', 'Event')} ({date_text})")
 
         selected_numbers = ", ".join(str(index + 1) for index in session.selected_scraped_indices)
-        lines.extend([
-            "",
-            f"Selected: {selected_numbers if selected_numbers else 'none'}",
-            "Use numbers like 1,3 to toggle events.",
-            "Commands: all, none, done, cancel.",
-        ])
+        lines.extend(
+            [
+                "",
+                f"Selected: {selected_numbers if selected_numbers else 'none'}",
+                "Use numbers like 1,3 to toggle events.",
+                "Commands: all, none, done, cancel.",
+            ]
+        )
         return "\n".join(lines)
 
-    def _format_selected_scrape_preview(self, items: List[Dict[str, Any]]) -> str:
+    def _format_selected_scrape_preview(self, items: list[dict[str, Any]]) -> str:
         """Render the exact selected scrape batch before the shared reminder choice."""
         lines = [
             "✅ Selected events to add:",
@@ -357,17 +356,19 @@ class ScrapeFlow(CalendarFlowBase):
             date_text = self.format_date_display(date_obj) if isinstance(date_obj, date) else "Unknown date"
             lines.append(f"{index}. {item.get('title', 'Event')} ({date_text})")
 
-        lines.extend([
-            "",
-            "When should I remind you for this batch?",
-            "",
-            "• 7 - 7 days before",
-            "• 3 - 3 days before",
-            "• 1 - 1 day before",
-            "• all - All of the above",
-            "",
-            "(Day-of reminder is always included)",
-        ])
+        lines.extend(
+            [
+                "",
+                "When should I remind you for this batch?",
+                "",
+                "• 7 - 7 days before",
+                "• 3 - 3 days before",
+                "• 1 - 1 day before",
+                "• all - All of the above",
+                "",
+                "(Day-of reminder is always included)",
+            ]
+        )
         return "\n".join(lines)
 
     async def handle_scrape_review_response(
@@ -376,16 +377,15 @@ class ScrapeFlow(CalendarFlowBase):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         """Handle user response during scrape batch selection."""
         active_chat_id = calendar_session_manager.resolve_discrete_scrape_chat_id(chat_id, user_id)
         session = calendar_session_manager.get_session(active_chat_id)
         if not session or session.state != CalendarState.SCRAPE_SELECTING:
-            if (
-                calendar_session_manager.had_recent_scrape_flow(chat_id, user_id)
-                and self._is_explicit_scrape_selection_followup(text)
-            ):
+            if calendar_session_manager.had_recent_scrape_flow(
+                chat_id, user_id
+            ) and self._is_explicit_scrape_selection_followup(text):
                 await self.send_message(
                     event,
                     line_bot_api,
@@ -424,12 +424,14 @@ class ScrapeFlow(CalendarFlowBase):
                 return True
 
             msg = self._format_selected_scrape_preview(preview["items"])
-            quick_reply = QuickReply(items=[
-                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="7 days", text="7")),
-                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="3 days", text="3")),
-                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="1 day", text="1")),
-                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="All", text="all")),
-            ])
+            quick_reply = QuickReply(
+                items=[
+                    QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="7 days", text="7")),
+                    QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="3 days", text="3")),
+                    QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="1 day", text="1")),
+                    QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="All", text="all")),
+                ]
+            )
             await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
             return True
 
@@ -439,16 +441,12 @@ class ScrapeFlow(CalendarFlowBase):
                 event,
                 line_bot_api,
                 "❌ Invalid selection. Use exact commands: all, none, done, cancel, or numbers like 1,3.\n\n"
-                "กรุณาใช้คำสั่งที่รองรับเท่านั้น เช่น all, none, done, cancel หรือ 1,3"
+                "กรุณาใช้คำสั่งที่รองรับเท่านั้น เช่น all, none, done, cancel หรือ 1,3",
             )
             return True
 
         count = len(updated_session.selected_scraped_indices)
-        header = (
-            f"🗂️ Selected {count} event{'s' if count != 1 else ''}.\n\n"
-            if count
-            else "🗂️ No events selected yet.\n\n"
-        )
+        header = f"🗂️ Selected {count} event{'s' if count != 1 else ''}.\n\n" if count else "🗂️ No events selected yet.\n\n"
         await self.prompt_scrape_selection(event, line_bot_api, active_chat_id, header=header)
         return True
 
@@ -458,7 +456,7 @@ class ScrapeFlow(CalendarFlowBase):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         calendar_service: Optional["CalendarService"] = None,
     ) -> bool:
         """Handle the shared reminder choice for the selected scrape batch."""
@@ -486,9 +484,7 @@ class ScrapeFlow(CalendarFlowBase):
             reminder_days = [1, 0]
         else:
             await self.send_message(
-                event, line_bot_api,
-                "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\n"
-                "กรุณาเลือก 7, 3, 1 หรือ all"
+                event, line_bot_api, "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\nกรุณาเลือก 7, 3, 1 หรือ all"
             )
             return True
 
@@ -554,10 +550,11 @@ class ScrapeFlow(CalendarFlowBase):
 
         if added_count > 0:
             await self.send_message(
-                event, line_bot_api,
+                event,
+                line_bot_api,
                 f"✅ Added {added_count} selected event(s) to calendar!"
                 + ("" if failed_count == 0 else f" (Failed: {failed_count})")
-                + "\n\nเพิ่มกิจกรรมที่เลือกเรียบร้อยแล้ว"
+                + "\n\nเพิ่มกิจกรรมที่เลือกเรียบร้อยแล้ว",
             )
         else:
             await self.send_message(
@@ -573,29 +570,24 @@ class ScrapeFlow(CalendarFlowBase):
         event: MessageEvent,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         calendar_service: Optional["CalendarService"] = None,
     ) -> None:
         """Add all remaining scraped events with default reminder settings."""
         # Get calendar service from import if not provided
         if not calendar_service:
             from src.services.calendar_service import calendar_service as cal_svc
+
             calendar_service = cal_svc
 
         if not user_id or not calendar_service:
-            await self.send_message(
-                event, line_bot_api,
-                "❌ Cannot add events - service unavailable."
-            )
+            await self.send_message(event, line_bot_api, "❌ Cannot add events - service unavailable.")
             calendar_session_manager.end_session(chat_id)
             return
 
         session = calendar_session_manager.get_session(chat_id)
         if not session or not session.scraped_events:
-            await self.send_message(
-                event, line_bot_api,
-                "❌ No events to add."
-            )
+            await self.send_message(event, line_bot_api, "❌ No events to add.")
             calendar_session_manager.end_session(chat_id)
             return
 
@@ -603,7 +595,7 @@ class ScrapeFlow(CalendarFlowBase):
         default_reminder_days = [7, 3, 1, 0]  # 7, 3, 1 days before + day-of (strictly enforced)
 
         # Get all remaining events
-        remaining_events = session.scraped_events[session.current_scrape_index:]
+        remaining_events = session.scraped_events[session.current_scrape_index :]
         added_count = 0
         failed_count = 0
 
@@ -655,6 +647,7 @@ class ScrapeFlow(CalendarFlowBase):
     ) -> bool:
         """Check if user is a friend of the bot."""
         import asyncio
+
         from linebot.v3.messaging.exceptions import ApiException
 
         user_id = getattr(event.source, "user_id", None) if event.source else None

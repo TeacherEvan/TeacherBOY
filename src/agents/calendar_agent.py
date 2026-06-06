@@ -20,25 +20,26 @@ Triggers:
 
 import logging
 import re
-from typing import Optional, List, Dict, Any
+from typing import Any
 from zoneinfo import ZoneInfo
 
-from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import MessagingApi
+from linebot.v3.webhooks import MessageEvent
+
+from src.services.bot_identity_service import get_bot_identity_service
+from src.services.calendar_session_manager import CalendarState, calendar_session_manager
+from src.services.message_buffer_service import message_buffer_service
+from src.utils.tracing import get_tracer
 
 from .base_agent import BaseAgent
 from .calendar import (
-    get_view_flow,
-    get_remove_flow,
-    get_inline_add_flow,
-    get_add_flow,
-    get_scrape_flow,
     DateParser,
+    get_add_flow,
+    get_inline_add_flow,
+    get_remove_flow,
+    get_scrape_flow,
+    get_view_flow,
 )
-from src.services.bot_identity_service import get_bot_identity_service
-from src.services.calendar_session_manager import calendar_session_manager, CalendarState
-from src.services.message_buffer_service import message_buffer_service
-from src.utils.tracing import get_tracer
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -97,12 +98,12 @@ REMOVE_DELETE_PATTERN = re.compile(r"^delete\s+[a-z0-9]{8,32}$")
 class CalendarAgent(BaseAgent):
     """
     Calendar agent with modular flow architecture.
-    
+
     This agent acts as a dispatcher, routing calendar operations to
     specialized flow handlers that are lazily instantiated on demand.
     """
 
-    def __init__(self, calendar_service: Optional[Any] = None):
+    def __init__(self, calendar_service: Any | None = None):
         """
         Initialize CalendarAgent with lazy-loaded flows.
 
@@ -114,14 +115,14 @@ class CalendarAgent(BaseAgent):
             description="Calendar events and reminders management (modular)",
         )
         self._calendar_service = calendar_service
-        
+
         # Flow instances (lazy-loaded via getter properties)
         self._view_flow = None
         self._remove_flow = None
         self._inline_add_flow = None
         self._add_flow = None
         self._scrape_flow = None
-        
+
         # Date parser utility
         self._date_parser = DateParser()
 
@@ -132,7 +133,7 @@ class CalendarAgent(BaseAgent):
     def get_priority(self) -> int:
         """
         Calendar agent priority.
-        
+
         Priority 6: After admin (5), before profiler (7) and search (8).
         """
         return 6
@@ -200,17 +201,17 @@ class CalendarAgent(BaseAgent):
             return f"user_{user_id}"
         return "user_unknown"
 
-    def _is_trigger(self, text: str, triggers: List[str]) -> bool:
+    def _is_trigger(self, text: str, triggers: list[str]) -> bool:
         """
         Check if text matches any trigger.
-        
+
         IMPORTANT: Triggers must START the message (after normalization)
         to prevent false matches from instructional text like:
         'you can say zeus add event' or 'just say zeus scrape'.
-        
+
         Examples:
         - "zeus add event" -> MATCH
-        - "add event tomorrow" -> MATCH  
+        - "add event tomorrow" -> MATCH
         - "you can say zeus add event" -> NO MATCH (instructional)
         - "If you guys want to add event just say zeus add" -> NO MATCH
         """
@@ -237,9 +238,7 @@ class CalendarAgent(BaseAgent):
     def _is_remove_selection_command(self, text: str) -> bool:
         """Check whether text is a supported remove-selection command."""
         text_lower = text.lower().strip()
-        return text_lower in {"all", "none", "done"} or bool(
-            REMOVE_SELECTION_PATTERN.fullmatch(text_lower)
-        )
+        return text_lower in {"all", "none", "done"} or bool(REMOVE_SELECTION_PATTERN.fullmatch(text_lower))
 
     def _is_remove_confirmation_command(self, text: str) -> bool:
         """Check whether text is a supported remove-confirmation command."""
@@ -313,15 +312,14 @@ class CalendarAgent(BaseAgent):
             or ("," in text_lower and bool(REMOVE_SELECTION_PATTERN.fullmatch(text_lower)))
             or self._looks_like_remove_selection_attempt(text)
         )
-    
+
     def _is_stale_scrape_followup(self, text: str) -> bool:
         """Catch explicit scrape follow-ups after expiry without hijacking ordinary chatter."""
         normalized = (text or "").strip()
         prefix, rest = get_bot_identity_service().split_command_prefix(normalized)
         text_lower = rest.lower().strip() if prefix else normalized.lower().strip()
-        return (
-            text_lower in {"all", "none", "done", "cancel", "7", "3", "1", "7 days", "3 days", "1 day"}
-            or bool(re.fullmatch(r"\d+(?:\s*,\s*\d+)*", text_lower))
+        return text_lower in {"all", "none", "done", "cancel", "7", "3", "1", "7 days", "3 days", "1 day"} or bool(
+            re.fullmatch(r"\d+(?:\s*,\s*\d+)*", text_lower)
         )
 
     def _is_scrape_session_input(self, text: str, state: CalendarState) -> bool:
@@ -339,7 +337,7 @@ class CalendarAgent(BaseAgent):
         chat_id: str,
         active_chat_id: str,
         session: Any,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         """Keep discrete scrape follow-ups in DM once the flow has been handed off there."""
         if not session or session.state not in {
@@ -359,37 +357,36 @@ class CalendarAgent(BaseAgent):
         """Detect if text contains bulk date input (should trigger scrape flow)."""
         if not text or len(text) < 50:
             return False
-        
+
         text_lower = text.lower()
-        
+
         # Check for image analysis output headers
         if "zeus observes" in text_lower or "ms. green observes" in text_lower or "━━━━━" in text:
             return True
-        
+
         # Check for multiple date patterns (numbered lists)
-        numbered_items = len(re.findall(r'^\s*\d+\.', text, re.MULTILINE))
+        numbered_items = len(re.findall(r"^\s*\d+\.", text, re.MULTILINE))
         if numbered_items >= 3:
             return True
-        
+
         # Check for multiple date formats
         date_patterns = [
-            r'\d{4}-\d{2}-\d{2}',  # ISO format
-            r'\d{1,2}/\d{1,2}/\d{4}',  # Slash format
-            r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}',  # Named month
+            r"\d{4}-\d{2}-\d{2}",  # ISO format
+            r"\d{1,2}/\d{1,2}/\d{4}",  # Slash format
+            r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}",  # Named month
         ]
-        
+
         date_matches = sum(len(re.findall(pattern, text, re.IGNORECASE)) for pattern in date_patterns)
         if date_matches >= 3:
             return True
-        
+
         # Check for multiple lines with dates
         lines_with_dates = sum(
-            1 for line in text.split('\n')
-            if any(re.search(pattern, line, re.IGNORECASE) for pattern in date_patterns)
+            1 for line in text.split("\n") if any(re.search(pattern, line, re.IGNORECASE) for pattern in date_patterns)
         )
         if lines_with_dates >= 3:
             return True
-        
+
         return False
 
     # =========================================================================
@@ -399,13 +396,13 @@ class CalendarAgent(BaseAgent):
         """Store non-Zeus messages in buffer for potential scraping."""
         if not text:
             return
-        
+
         text_lower = text.lower().strip()
-        
+
         # Don't store Zeus commands or cancel keywords
         if self._has_identity_prefix(text) or text_lower in CANCEL_KEYWORDS:
             return
-        
+
         # Store for scrape flow
         message_buffer_service.store_message(chat_id, user_id, text)
 
@@ -413,10 +410,10 @@ class CalendarAgent(BaseAgent):
     # Backward Compatibility Methods (for tests)
     # =========================================================================
 
-    def _parse_inline_add(self, text: str) -> Optional[Dict[str, Any]]:
+    def _parse_inline_add(self, text: str) -> dict[str, Any] | None:
         """
         Parse inline add syntax: "zeus add [date] [title]".
-        
+
         Returns:
             Dict with 'date' (date object) and 'title' (str), or None
         """
@@ -424,10 +421,7 @@ class CalendarAgent(BaseAgent):
         result = self._date_parser.parse_inline_date(text)
         if result:
             date_obj, title = result
-            return {
-                "date": date_obj,
-                "title": title
-            }
+            return {"date": date_obj, "title": title}
         return None
 
     def _looks_like_event_message(self, text: str) -> bool:
@@ -446,11 +440,11 @@ class CalendarAgent(BaseAgent):
 
         # Check for date patterns
         date_patterns = [
-            r'\b(tomorrow|today)\b',
-            r'\b(next|this)\s+(week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b',
-            r'\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}',
-            r'\b\d{1,2}/\d{1,2}(/\d{2,4})?\b',
-            r'\b\d{4}-\d{2}-\d{2}\b',
+            r"\b(tomorrow|today)\b",
+            r"\b(next|this)\s+(week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
+            r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}",
+            r"\b\d{1,2}/\d{1,2}(/\d{2,4})?\b",
+            r"\b\d{4}-\d{2}-\d{2}\b",
         ]
 
         for pattern in date_patterns:
@@ -459,14 +453,10 @@ class CalendarAgent(BaseAgent):
 
         return False
 
-    async def _is_friend(
-        self,
-        event: MessageEvent,
-        line_bot_api: MessagingApi
-    ) -> bool:
+    async def _is_friend(self, event: MessageEvent, line_bot_api: MessagingApi) -> bool:
         """
         Check if user is a friend of the bot (for reminder delivery).
-        
+
         Returns:
             bool: True if friend, False otherwise
         """
@@ -480,7 +470,7 @@ class CalendarAgent(BaseAgent):
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
         Check if this agent should handle the message.
-        
+
         Handles:
         - Calendar triggers (view, add, remove, scrape)
         - Active calendar sessions
@@ -530,15 +520,10 @@ class CalendarAgent(BaseAgent):
 
         return False
 
-    async def handle(
-        self, 
-        event: MessageEvent, 
-        text: str, 
-        line_bot_api: MessagingApi
-    ) -> bool:
+    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """
         Route calendar operations to appropriate flow handlers.
-        
+
         This method acts as a dispatcher, delegating work to:
         - ViewFlow: For viewing events
         - RemoveFlow: For deleting events
@@ -555,9 +540,7 @@ class CalendarAgent(BaseAgent):
 
         # Session ownership check (in groups, only session owner can interact)
         if session and not calendar_session_manager.is_session_owner(active_chat_id, user_id):
-            logger.debug(
-                f"📅 User {user_id} tried to interact with calendar session owned by {session.user_id}"
-            )
+            logger.debug(f"📅 User {user_id} tried to interact with calendar session owned by {session.user_id}")
             if session.state in {
                 CalendarState.AWAITING_REMOVAL_SELECTION,
                 CalendarState.CONFIRMING_REMOVAL,
@@ -603,10 +586,15 @@ class CalendarAgent(BaseAgent):
                     self._store_message_in_buffer(chat_id, user_id, text)
 
                 # Let RemoveFlow own explicit cancel in remove states so it fully ends the session.
-                if session and session.state in {
-                    CalendarState.AWAITING_REMOVAL_SELECTION,
-                    CalendarState.CONFIRMING_REMOVAL,
-                } and self._is_cancel_command(text):
+                if (
+                    session
+                    and session.state
+                    in {
+                        CalendarState.AWAITING_REMOVAL_SELECTION,
+                        CalendarState.CONFIRMING_REMOVAL,
+                    }
+                    and self._is_cancel_command(text)
+                ):
                     return await self.remove_flow.handle_removal_confirmation(
                         event, text, line_bot_api, active_chat_id, user_id
                     )
@@ -614,17 +602,15 @@ class CalendarAgent(BaseAgent):
                 # Check for cancel command
                 if self._is_cancel_command(text) and (
                     not session
-                    or session.state not in {
+                    or session.state
+                    not in {
                         CalendarState.SCRAPE_PROCESSING,
                         CalendarState.SCRAPE_SELECTING,
                         CalendarState.SCRAPE_REMINDER_DAYS,
                     }
                 ):
                     if calendar_session_manager.cancel_flow(active_chat_id):
-                        await self.add_flow.send_message(
-                            event, line_bot_api,
-                            "❌ Calendar operation cancelled.\n\nยกเลิกแล้วค่ะ"
-                        )
+                        await self.add_flow.send_message(event, line_bot_api, "❌ Calendar operation cancelled.\n\nยกเลิกแล้วค่ะ")
                         return True
                     return False
 
@@ -634,19 +620,16 @@ class CalendarAgent(BaseAgent):
 
                 # VIEW TRIGGER
                 if self._is_trigger(text, TRIGGERS_VIEW):
-                    return await self.view_flow.handle_view_events(
-                        event, text, line_bot_api, chat_id, user_id
-                    )
+                    return await self.view_flow.handle_view_events(event, text, line_bot_api, chat_id, user_id)
 
                 # REMOVE TRIGGER
                 if self._is_trigger(text, TRIGGERS_REMOVE):
-                    return await self.remove_flow.start_remove_flow(
-                        event, line_bot_api, chat_id, user_id
-                    )
+                    return await self.remove_flow.start_remove_flow(event, line_bot_api, chat_id, user_id)
 
-                if not session and calendar_session_manager.had_recent_remove_flow(chat_id, user_id) and (
-                    REMOVE_DELETE_PATTERN.fullmatch(text.lower().strip())
-                    or self._is_stale_remove_followup(text)
+                if (
+                    not session
+                    and calendar_session_manager.had_recent_remove_flow(chat_id, user_id)
+                    and (REMOVE_DELETE_PATTERN.fullmatch(text.lower().strip()) or self._is_stale_remove_followup(text))
                 ):
                     await self.remove_flow.send_message(
                         event,
@@ -654,8 +637,12 @@ class CalendarAgent(BaseAgent):
                         "❌ This remove flow is stale or expired. Start the remove flow again.",
                     )
                     return True
-                
-                if not session and calendar_session_manager.had_recent_scrape_flow(chat_id, user_id) and self._is_stale_scrape_followup(text):
+
+                if (
+                    not session
+                    and calendar_session_manager.had_recent_scrape_flow(chat_id, user_id)
+                    and self._is_stale_scrape_followup(text)
+                ):
                     await self.scrape_flow.send_message(
                         event,
                         line_bot_api,
@@ -665,19 +652,13 @@ class CalendarAgent(BaseAgent):
 
                 # DISCRETE SCRAPE TRIGGER (friend-only, DM delivery)
                 if self._is_trigger(text, TRIGGERS_DISCRETE_SCRAPE):
-                    return await self._handle_discrete_scrape(
-                        event, text, line_bot_api, chat_id, user_id
-                    )
+                    return await self._handle_discrete_scrape(event, text, line_bot_api, chat_id, user_id)
 
                 # SCRAPE TRIGGER
                 if self._is_trigger(text, TRIGGERS_SCRAPE):
                     if getattr(getattr(event, "source", None), "type", None) in {"group", "room"}:
-                        return await self._handle_discrete_scrape(
-                            event, text, line_bot_api, chat_id, user_id
-                        )
-                    return await self.scrape_flow.handle_scrape_trigger(
-                        event, text, line_bot_api, chat_id, user_id
-                    )
+                        return await self._handle_discrete_scrape(event, text, line_bot_api, chat_id, user_id)
+                    return await self.scrape_flow.handle_scrape_trigger(event, text, line_bot_api, chat_id, user_id)
 
                 # INLINE ADD (zeus add [date] [title])
                 prefix, rest = get_bot_identity_service().split_command_prefix(text)
@@ -689,15 +670,11 @@ class CalendarAgent(BaseAgent):
                         )
                     # If parsing failed, fallback to bulk detection
                     if self._looks_like_bulk_dates(text):
-                        return await self.scrape_flow.handle_scrape_trigger(
-                            event, text, line_bot_api, chat_id, user_id
-                        )
+                        return await self.scrape_flow.handle_scrape_trigger(event, text, line_bot_api, chat_id, user_id)
 
                 # INTERACTIVE ADD TRIGGER
                 if self._is_trigger(text, TRIGGERS_ADD):
-                    return await self.add_flow.start_add_flow(
-                        event, line_bot_api, chat_id, user_id
-                    )
+                    return await self.add_flow.start_add_flow(event, line_bot_api, chat_id, user_id)
 
                 # ============================================================
                 # Handle active session states
@@ -718,19 +695,14 @@ class CalendarAgent(BaseAgent):
                         )
                     if not self._is_remove_session_input(text, state):
                         return False
-                    return await self.remove_flow.handle_removal_selection(
-                        event, text, line_bot_api, active_chat_id, user_id
-                    )
-                
+                    return await self.remove_flow.handle_removal_selection(event, text, line_bot_api, active_chat_id, user_id)
+
                 if state == CalendarState.CONFIRMING_REMOVAL:
                     if self._is_remove_reselection_command(text) or self._looks_like_remove_selection_attempt(text):
                         return await self.remove_flow.handle_removal_selection(
                             event, text, line_bot_api, active_chat_id, user_id
                         )
-                    if not (
-                        self._is_remove_confirmation_command(text)
-                        or self._is_remove_preview_followup(text)
-                    ):
+                    if not (self._is_remove_confirmation_command(text) or self._is_remove_preview_followup(text)):
                         return False
                     return await self.remove_flow.handle_removal_confirmation(
                         event, text, line_bot_api, active_chat_id, user_id
@@ -741,37 +713,25 @@ class CalendarAgent(BaseAgent):
                     return await self.inline_add_flow.handle_reminder_response(
                         event, text, line_bot_api, active_chat_id, user_id
                     )
-                
+
                 if state == CalendarState.INLINE_ADD_CONFIRMING:
-                    return await self.inline_add_flow.handle_confirmation(
-                        event, text, line_bot_api, active_chat_id, user_id
-                    )
+                    return await self.inline_add_flow.handle_confirmation(event, text, line_bot_api, active_chat_id, user_id)
 
                 # AddFlow states
                 if state == CalendarState.AWAITING_DATE:
-                    return await self.add_flow.handle_date_input(
-                        event, text, line_bot_api, active_chat_id, user_id
-                    )
-                
+                    return await self.add_flow.handle_date_input(event, text, line_bot_api, active_chat_id, user_id)
+
                 if state == CalendarState.AWAITING_TITLE:
-                    return await self.add_flow.handle_title_input(
-                        event, text, line_bot_api, active_chat_id, user_id
-                    )
-                
+                    return await self.add_flow.handle_title_input(event, text, line_bot_api, active_chat_id, user_id)
+
                 if state == CalendarState.AWAITING_DESCRIPTION:
-                    return await self.add_flow.handle_description_input(
-                        event, text, line_bot_api, active_chat_id, user_id
-                    )
-                
+                    return await self.add_flow.handle_description_input(event, text, line_bot_api, active_chat_id, user_id)
+
                 if state == CalendarState.AWAITING_REMINDER_DAYS:
-                    return await self.add_flow.handle_reminder_days_input(
-                        event, text, line_bot_api, active_chat_id, user_id
-                    )
-                
+                    return await self.add_flow.handle_reminder_days_input(event, text, line_bot_api, active_chat_id, user_id)
+
                 if state == CalendarState.CONFIRMING_ADD:
-                    return await self.add_flow.handle_add_confirmation(
-                        event, text, line_bot_api, active_chat_id, user_id
-                    )
+                    return await self.add_flow.handle_add_confirmation(event, text, line_bot_api, active_chat_id, user_id)
 
                 # ScrapeFlow states
                 if state == CalendarState.SCRAPE_SELECTING:
@@ -780,12 +740,9 @@ class CalendarAgent(BaseAgent):
                     return await self.scrape_flow.handle_scrape_review_response(
                         event, text, line_bot_api, active_chat_id, user_id
                     )
-                
+
                 if state == CalendarState.SCRAPE_REMINDER_DAYS:
-                    if not (
-                        self._is_cancel_command(text)
-                        or self.scrape_flow._is_explicit_scrape_reminder_followup(text)
-                    ):
+                    if not (self._is_cancel_command(text) or self.scrape_flow._is_explicit_scrape_reminder_followup(text)):
                         return False
                     return await self.scrape_flow.handle_scrape_reminder_response(
                         event, text, line_bot_api, active_chat_id, user_id
@@ -798,9 +755,7 @@ class CalendarAgent(BaseAgent):
             except Exception as e:
                 logger.exception(f"❌ Error in calendar handler: {e}")
                 await self.add_flow.send_message(
-                    event, line_bot_api,
-                    "❌ Something went wrong. Please try again.\n\n"
-                    "เกิดข้อผิดพลาด กรุณาลองใหม่"
+                    event, line_bot_api, "❌ Something went wrong. Please try again.\n\nเกิดข้อผิดพลาด กรุณาลองใหม่"
                 )
                 calendar_session_manager.cancel_flow(chat_id)
                 return True
@@ -815,29 +770,26 @@ class CalendarAgent(BaseAgent):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         """
         Handle discrete scrape request.
-        
+
         Scrapes dates from group messages but sends all confirmations
         and reminders via DM to the requester (if they're a friend).
-        
+
         Args:
             event: LINE message event
             text: Message text
             line_bot_api: LINE Messaging API client
             chat_id: Chat ID (group/room)
             user_id: User ID of requester
-            
+
         Returns:
             True if handled
         """
         if not user_id:
-            await self.add_flow.send_message(
-                event, line_bot_api,
-                "❌ Cannot identify user for discrete scrape."
-            )
+            await self.add_flow.send_message(event, line_bot_api, "❌ Cannot identify user for discrete scrape.")
             return True
 
         is_friend = await self._is_friend(event, line_bot_api)
@@ -853,14 +805,11 @@ class CalendarAgent(BaseAgent):
 
         # Acknowledge request in group only after DM delivery is plausibly available.
         await self.add_flow.send_message(
-            event, line_bot_api,
-            "I'll try to continue in your DM. If that fails, I'll continue here."
+            event, line_bot_api, "I'll try to continue in your DM. If that fails, I'll continue here."
         )
 
         # Delegate to scrape flow (which will check for discrete mode)
-        return await self.scrape_flow.handle_scrape_trigger(
-            event, text, line_bot_api, chat_id, user_id, discrete_mode=True
-        )
+        return await self.scrape_flow.handle_scrape_trigger(event, text, line_bot_api, chat_id, user_id, discrete_mode=True)
 
     # =========================================================================
     # Image-Triggered Calendar (ImageAnalyzerAgent Integration)
@@ -870,16 +819,16 @@ class CalendarAgent(BaseAgent):
         self,
         chat_id: str,
         user_id: str,
-        extracted_dates: List[Dict[str, Any]],
+        extracted_dates: list[dict[str, Any]],
         is_friend: bool,
-        event: Optional[MessageEvent] = None,
-        line_bot_api: Optional[MessagingApi] = None,
+        event: MessageEvent | None = None,
+        line_bot_api: MessagingApi | None = None,
     ) -> None:
         """
         Start processing dates extracted from an image.
-        
+
         Called by ImageAnalyzerAgent when dates are detected.
-        
+
         Args:
             chat_id: Chat ID where the image was sent
             user_id: User ID who sent the image
@@ -889,17 +838,13 @@ class CalendarAgent(BaseAgent):
             line_bot_api: Optional LINE API client (for sending prompts)
         """
         # Start extraction flow via session manager
-        calendar_session_manager.start_extraction_flow(
-            chat_id, user_id, extracted_dates, is_friend
-        )
-        
+        calendar_session_manager.start_extraction_flow(chat_id, user_id, extracted_dates, is_friend)
+
         # If event and line_bot_api provided, prompt for first date
         if event and line_bot_api and extracted_dates:
             current_date = calendar_session_manager.get_current_extracted_date(chat_id)
             if current_date:
                 # Delegate to scrape_flow for prompting (uses same review UI)
                 await self.scrape_flow.prompt_scraped_event(
-                    event, line_bot_api, current_date,
-                    current=1, total=len(extracted_dates),
-                    show_add_all=True
+                    event, line_bot_api, current_date, current=1, total=len(extracted_dates), show_add_all=True
                 )

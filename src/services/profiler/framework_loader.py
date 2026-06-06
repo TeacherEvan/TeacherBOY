@@ -4,7 +4,6 @@ Reduces startup memory by ~30MB by loading only when needed.
 """
 
 import logging
-from typing import Optional, Dict
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -13,7 +12,7 @@ logger = logging.getLogger(__name__)
 class FrameworkLoader:
     """Lazy loader for profiler frameworks."""
 
-    _frameworks: Dict[str, Optional[str]] = {}
+    _frameworks: dict[str, str | None] = {}
     _base_path = Path(__file__).parent.parent.parent / "prompts" / "frameworks"
 
     @classmethod

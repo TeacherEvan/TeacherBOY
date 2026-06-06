@@ -3,10 +3,9 @@ Calendar Date Parsing - Extracted from main agent.
 Handles various date formats for inline event creation.
 """
 
+import logging
 import re
 from datetime import datetime, timedelta
-from typing import Optional, Tuple
-import logging
 
 from src.services.bot_identity_service import get_bot_identity_service
 
@@ -44,7 +43,7 @@ class DateParser:
     }
 
     @staticmethod
-    def parse_inline_date(text: str) -> Optional[Tuple[datetime, str]]:
+    def parse_inline_date(text: str) -> tuple[datetime, str] | None:
         """
         Parse 'zeus add [date] [title]' format.
 
@@ -96,9 +95,7 @@ class DateParser:
 
         # Try: Month Day format (Jan 15, January 15)
         month_pattern = "|".join(DateParser.MONTH_MAP.keys())
-        match = re.match(
-            rf"({month_pattern})\s+(\d{{1,2}})\s+(.+)", text, re.IGNORECASE
-        )
+        match = re.match(rf"({month_pattern})\s+(\d{{1,2}})\s+(.+)", text, re.IGNORECASE)
         if match:
             month_str = match.group(1).lower()
             day = int(match.group(2))

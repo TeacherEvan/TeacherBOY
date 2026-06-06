@@ -14,7 +14,6 @@ module-local `settings`.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +26,15 @@ class PrivilegeService:
         self._claimed_moderator_user_ids: set[str] = set()
         # Load persisted moderators if available
         try:
-            import json, os
+            import json
+            import os
+
             if os.path.exists("data/moderators.json"):
-                with open("data/moderators.json", "r") as f:
+                with open("data/moderators.json") as f:
                     self._claimed_moderator_user_ids = set(json.load(f))
         except Exception as e:
             logger.warning(f"⚠️ Failed to load persisted moderators: {e}")
-            
+
         # Cache admin/moderator lists from settings for performance
         self._env_admin_user_ids: list[str] = []
         self._env_moderator_user_ids: list[str] = []
@@ -45,6 +46,7 @@ class PrivilegeService:
             return
         try:
             from src.config import settings
+
             self._env_admin_user_ids = settings.get_admin_user_ids()
             self._env_moderator_user_ids = settings.get_moderator_user_ids()
             self._settings_loaded = True
@@ -67,18 +69,20 @@ class PrivilegeService:
         self._claimed_moderator_user_ids.add(user_id)
         logger.info(f"🔓 Moderator granted: {user_id}")
         try:
-            import json, os
+            import json
+            import os
+
             os.makedirs("data", exist_ok=True)
             with open("data/moderators.json", "w") as f:
                 json.dump(list(self._claimed_moderator_user_ids), f)
         except Exception as e:
             logger.error(f"❌ Failed to persist moderators: {e}")
 
-    def is_claimed_admin(self, user_id: Optional[str]) -> bool:
+    def is_claimed_admin(self, user_id: str | None) -> bool:
         """Return True if user was granted admin via `/admin claim` in this process."""
         return bool(user_id and user_id in self._claimed_admin_user_ids)
 
-    def is_admin(self, user_id: Optional[str]) -> bool:
+    def is_admin(self, user_id: str | None) -> bool:
         """Check if user is an admin (claimed or environment-based)."""
         if not user_id:
             return False
@@ -89,7 +93,7 @@ class PrivilegeService:
         self._ensure_settings_loaded()
         return user_id in self._env_admin_user_ids
 
-    def is_moderator(self, user_id: Optional[str]) -> bool:
+    def is_moderator(self, user_id: str | None) -> bool:
         """Check if user is a moderator (claimed or environment-based)."""
         if not user_id:
             return False
@@ -98,7 +102,7 @@ class PrivilegeService:
         self._ensure_settings_loaded()
         return user_id in self._env_moderator_user_ids
 
-    def is_privileged(self, user_id: Optional[str]) -> bool:
+    def is_privileged(self, user_id: str | None) -> bool:
         """Check if user is admin or moderator (both get same privileges)."""
         return self.is_admin(user_id) or self.is_moderator(user_id)
 

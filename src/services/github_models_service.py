@@ -15,10 +15,12 @@ Available free-tier models include:
 - And more at https://github.com/marketplace/models
 """
 
-import logging
 import asyncio
+import logging
+from typing import Any
+
 import httpx
-from typing import List, Dict, Optional, Any
+
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -38,16 +40,16 @@ class GitHubModelsService:
     https://github.com/settings/tokens with 'models:read' scope.
     """
 
-    def __init__(self, http_client: Optional[httpx.AsyncClient] = None) -> None:
+    def __init__(self, http_client: httpx.AsyncClient | None = None) -> None:
         self.client = http_client
         self.api_url = "https://models.github.ai/inference/chat/completions"
         self.api_version = "2022-11-28"
 
-        self._last_error: Optional[str] = None
-        self._last_status_code: Optional[int] = None
-        self._last_model: Optional[str] = None
+        self._last_error: str | None = None
+        self._last_status_code: int | None = None
+        self._last_model: str | None = None
 
-    def get_last_error(self) -> tuple[Optional[int], Optional[str], Optional[str]]:
+    def get_last_error(self) -> tuple[int | None, str | None, str | None]:
         return self._last_status_code, self._last_error, self._last_model
 
     def set_client(self, client: httpx.AsyncClient) -> None:
@@ -59,7 +61,7 @@ class GitHubModelsService:
     def is_vision_configured(self) -> bool:
         return self.is_configured()
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         if not settings.github_models_pat:
             return {}
         return {
@@ -71,12 +73,12 @@ class GitHubModelsService:
 
     async def chat_completion(
         self,
-        messages: List[Dict[str, str]],
-        model: Optional[str] = None,
+        messages: list[dict[str, str]],
+        model: str | None = None,
         temperature: float = 0.9,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         retry_on_rate_limit: bool = True,
-    ) -> Optional[str]:
+    ) -> str | None:
         if not self.is_configured():
             logger.warning("⚠️ GitHub Models PAT not configured")
             return None
@@ -87,7 +89,7 @@ class GitHubModelsService:
 
         target_model = model or settings.github_models_default_model
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": target_model,
             "messages": messages,
             "temperature": temperature,
@@ -143,18 +145,12 @@ class GitHubModelsService:
                         err_json = None
 
                     if isinstance(err_json, dict):
-                        payload_err = (
-                            err_json.get("error")
-                            if isinstance(err_json.get("error"), dict)
-                            else err_json
-                        )
-                        err_message = (
-                            payload_err.get("message") if isinstance(payload_err, dict) else None
-                        )
+                        payload_err = err_json.get("error") if isinstance(err_json.get("error"), dict) else err_json
+                        err_message = payload_err.get("message") if isinstance(payload_err, dict) else None
                         if isinstance(err_message, str) and err_message.strip():
                             err_text = err_message.strip()
 
-                        details: Dict[str, Any] = {}
+                        details: dict[str, Any] = {}
                         for key in (
                             "type",
                             "code",
@@ -165,9 +161,7 @@ class GitHubModelsService:
                             val = payload_err.get(key) if isinstance(payload_err, dict) else None
                             if val is not None:
                                 details[key] = val
-                        self._last_error = (
-                            f"{err_text} | details={details}" if details else err_text
-                        )
+                        self._last_error = f"{err_text} | details={details}" if details else err_text
                     else:
                         self._last_error = err_text
 
@@ -211,12 +205,12 @@ class GitHubModelsService:
 
     async def chat_completion_with_vision(
         self,
-        messages: List[Dict[str, Any]],
-        model: Optional[str] = None,
+        messages: list[dict[str, Any]],
+        model: str | None = None,
         temperature: float = 0.9,
-        max_tokens: Optional[int] = 4096,
+        max_tokens: int | None = 4096,
         retry_on_rate_limit: bool = True,
-    ) -> Optional[str]:
+    ) -> str | None:
         if not self.is_configured():
             logger.warning("⚠️ GitHub Models PAT not configured")
             return None
@@ -230,7 +224,7 @@ class GitHubModelsService:
         self._last_status_code = None
         self._last_model = target_model
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": target_model,
             "messages": messages,
             "temperature": temperature,
@@ -286,18 +280,12 @@ class GitHubModelsService:
                         err_json = None
 
                     if isinstance(err_json, dict):
-                        payload_err = (
-                            err_json.get("error")
-                            if isinstance(err_json.get("error"), dict)
-                            else err_json
-                        )
-                        err_message = (
-                            payload_err.get("message") if isinstance(payload_err, dict) else None
-                        )
+                        payload_err = err_json.get("error") if isinstance(err_json.get("error"), dict) else err_json
+                        err_message = payload_err.get("message") if isinstance(payload_err, dict) else None
                         if isinstance(err_message, str) and err_message.strip():
                             err_text = err_message.strip()
 
-                        details: Dict[str, Any] = {}
+                        details: dict[str, Any] = {}
                         for key in (
                             "type",
                             "code",
@@ -308,9 +296,7 @@ class GitHubModelsService:
                             val = payload_err.get(key) if isinstance(payload_err, dict) else None
                             if val is not None:
                                 details[key] = val
-                        self._last_error = (
-                            f"{err_text} | details={details}" if details else err_text
-                        )
+                        self._last_error = f"{err_text} | details={details}" if details else err_text
                     else:
                         self._last_error = err_text
 
@@ -352,7 +338,7 @@ class GitHubModelsService:
 
         return None
 
-    async def list_models(self) -> Optional[List[Dict[str, Any]]]:
+    async def list_models(self) -> list[dict[str, Any]] | None:
         if not self.is_configured():
             return None
 

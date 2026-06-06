@@ -1,8 +1,9 @@
 """Tests for the interactive menu feature."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from linebot.v3.webhooks import MessageEvent
+
 from src.agents.llm_agent import LLMAgent
 
 
@@ -40,7 +41,7 @@ class TestZeusMenu:
         event.source.user_id = "U123456"
 
         # Mock LLM configuration
-        with patch.object(agent, '_is_any_llm_configured', return_value=True):
+        with patch.object(agent, "_is_any_llm_configured", return_value=True):
             # These should be handled but NOT as menu commands
             assert await agent.should_handle(event, "Ms. Green what is the weather") is True
             assert await agent.should_handle(event, "Ms. Green search something") is False  # Reserved for SearchAgent
@@ -56,7 +57,7 @@ class TestZeusMenu:
         event.reply_token = "reply_token"
 
         line_api = AsyncMock()
-        
+
         # Handle menu command
         result = await agent.handle(event, "Ms. Green", line_api)
         assert result is True
@@ -64,11 +65,11 @@ class TestZeusMenu:
         # Verify reply_message was called with menu
         line_api.reply_message.assert_called_once()
         call_args = line_api.reply_message.call_args
-        
+
         # Extract message from call
         request = call_args[0][0]
         message = request.messages[0]
-        
+
         # Verify message content includes features
         assert "Ms. Green Command Center" in message.text
         assert "Scrape" in message.text
@@ -79,7 +80,7 @@ class TestZeusMenu:
         assert "Search" in message.text
         assert "Translate" in message.text
         assert "DR. Hanibal" in message.text
-        
+
         # Verify QuickReply buttons exist
         assert message.quick_reply is not None
         assert len(message.quick_reply.items) >= 10  # At least 10 buttons (including DR. Hanibal)
@@ -95,9 +96,9 @@ class TestZeusMenu:
         event.reply_token = "reply_token"
 
         line_api = AsyncMock()
-        
+
         # Mock admin check
-        with patch('src.agents.llm_agent.privilege_service.is_admin', return_value=True):
+        with patch("src.agents.llm_agent.privilege_service.is_admin", return_value=True):
             result = await agent.handle(event, "Ms. Green", line_api)
             assert result is True
 
@@ -105,7 +106,7 @@ class TestZeusMenu:
             call_args = line_api.reply_message.call_args
             request = call_args[0][0]
             message = request.messages[0]
-            
+
             # Check for admin in text and buttons
             assert "Admin" in message.text
             admin_buttons = [item for item in message.quick_reply.items if "Admin" in item.action.label]
@@ -122,9 +123,9 @@ class TestZeusMenu:
         event.reply_token = "reply_token"
 
         line_api = AsyncMock()
-        
+
         # Mock non-admin check
-        with patch('src.agents.llm_agent.privilege_service.is_admin', return_value=False):
+        with patch("src.agents.llm_agent.privilege_service.is_admin", return_value=False):
             result = await agent.handle(event, "Ms. Green", line_api)
             assert result is True
 
@@ -132,7 +133,7 @@ class TestZeusMenu:
             call_args = line_api.reply_message.call_args
             request = call_args[0][0]
             message = request.messages[0]
-            
+
             # Admin should not be in QuickReply buttons
             admin_buttons = [item for item in message.quick_reply.items if "Admin" in item.action.label]
             assert len(admin_buttons) == 0

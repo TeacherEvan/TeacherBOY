@@ -11,9 +11,8 @@ Tracing is intentionally optional and controlled by Settings.enable_tracing.
 
 from __future__ import annotations
 
-import logging
 import importlib
-from typing import Optional
+import logging
 from contextlib import contextmanager
 
 from fastapi import FastAPI
@@ -42,28 +41,18 @@ def setup_tracing(app: FastAPI, settings: Settings) -> None:
         sdk_resources = importlib.import_module("opentelemetry.sdk.resources")
         sdk_trace = importlib.import_module("opentelemetry.sdk.trace")
         sdk_trace_export = importlib.import_module("opentelemetry.sdk.trace.export")
-        otlp_exporter = importlib.import_module(
-            "opentelemetry.exporter.otlp.proto.http.trace_exporter"
-        )
-        fastapi_instrumentation = importlib.import_module(
-            "opentelemetry.instrumentation.fastapi"
-        )
-        httpx_instrumentation = importlib.import_module(
-            "opentelemetry.instrumentation.httpx"
-        )
-        logging_instrumentation = importlib.import_module(
-            "opentelemetry.instrumentation.logging"
-        )
+        otlp_exporter = importlib.import_module("opentelemetry.exporter.otlp.proto.http.trace_exporter")
+        fastapi_instrumentation = importlib.import_module("opentelemetry.instrumentation.fastapi")
+        httpx_instrumentation = importlib.import_module("opentelemetry.instrumentation.httpx")
+        logging_instrumentation = importlib.import_module("opentelemetry.instrumentation.logging")
 
-        Resource = getattr(sdk_resources, "Resource")
-        TracerProvider = getattr(sdk_trace, "TracerProvider")
-        BatchSpanProcessor = getattr(sdk_trace_export, "BatchSpanProcessor")
-        OTLPSpanExporter = getattr(otlp_exporter, "OTLPSpanExporter")
-        FastAPIInstrumentor = getattr(fastapi_instrumentation, "FastAPIInstrumentor")
-        HTTPXClientInstrumentor = getattr(
-            httpx_instrumentation, "HTTPXClientInstrumentor"
-        )
-        LoggingInstrumentor = getattr(logging_instrumentation, "LoggingInstrumentor")
+        Resource = sdk_resources.Resource
+        TracerProvider = sdk_trace.TracerProvider
+        BatchSpanProcessor = sdk_trace_export.BatchSpanProcessor
+        OTLPSpanExporter = otlp_exporter.OTLPSpanExporter
+        FastAPIInstrumentor = fastapi_instrumentation.FastAPIInstrumentor
+        HTTPXClientInstrumentor = httpx_instrumentation.HTTPXClientInstrumentor
+        LoggingInstrumentor = logging_instrumentation.LoggingInstrumentor
 
         # If someone already configured a provider elsewhere, don't replace it.
         current_provider = trace.get_tracer_provider()
@@ -93,7 +82,7 @@ def setup_tracing(app: FastAPI, settings: Settings) -> None:
         logger.warning("⚠️  Tracing setup failed: %s", e, exc_info=True)
 
 
-def get_tracer(name: Optional[str] = None):
+def get_tracer(name: str | None = None):
     """Return an OpenTelemetry tracer (safe even if tracing is disabled)."""
 
     try:
@@ -119,7 +108,7 @@ def get_tracer(name: Optional[str] = None):
 
 
 @contextmanager
-def create_span(name: str, attributes: Optional[dict] = None):
+def create_span(name: str, attributes: dict | None = None):
     """
     Create a span for a specific operation (agent, service, etc).
 

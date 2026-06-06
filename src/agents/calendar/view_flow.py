@@ -5,17 +5,18 @@ Extracted from calendar_agent.py for modular architecture.
 
 import logging
 from datetime import datetime
-from typing import Optional, Any
+from typing import Any
 from zoneinfo import ZoneInfo
 
-from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import MessagingApi
+from linebot.v3.webhooks import MessageEvent
 
-from .base_flow import CalendarFlowBase
 from src.services.calendar_access_control import calendar_access_control
+from src.services.history_log_service import EventType, LogLevel, get_history_log
 from src.services.privilege_service import privilege_service
 from src.services.rate_limiter import rate_limiter
-from src.services.history_log_service import EventType, LogLevel, get_history_log
+
+from .base_flow import CalendarFlowBase
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class ViewFlow(CalendarFlowBase):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         """
         Show calendar events for current chat only (privacy-isolated).
@@ -50,52 +51,35 @@ class ViewFlow(CalendarFlowBase):
             True if handled successfully
         """
         if not self._calendar_service or not user_id:
-            await self.send_message(
-                event, line_bot_api,
-                "❌ Calendar service not available."
-            )
+            await self.send_message(event, line_bot_api, "❌ Calendar service not available.")
             return True
 
         # Check access control
-        can_view = await calendar_access_control.can_view_events(
-            user_id, chat_id, line_bot_api
-        )
+        can_view = await calendar_access_control.can_view_events(user_id, chat_id, line_bot_api)
         if not can_view:
             logger.warning(f"❌ Access denied: {user_id} cannot view events in {chat_id}")
             await self._log_access_denied(chat_id, user_id, "view_events")
-            await self.send_message(
-                event, line_bot_api,
-                "❌ You don't have permission to view events in this chat."
-            )
+            await self.send_message(event, line_bot_api, "❌ You don't have permission to view events in this chat.")
             return True
 
         # Check rate limiting
         is_admin = privilege_service.is_admin(user_id)
         if not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin):
-            await self.send_message(
-                event, line_bot_api,
-                "⏳ Calendar rate limit exceeded. Please try again later."
-            )
+            await self.send_message(event, line_bot_api, "⏳ Calendar rate limit exceeded. Please try again later.")
             return True
 
         # CRITICAL PRIVACY: Use get_chat_events() to ensure isolation
-        events = await self._calendar_service.get_chat_events_async(
-            chat_id, requesting_user_id=user_id
-        )
+        events = await self._calendar_service.get_chat_events_async(chat_id, requesting_user_id=user_id)
 
         if not events:
-            return await self._send_empty_calendar_message(
-                event, line_bot_api, chat_id
-            )
+            return await self._send_empty_calendar_message(event, line_bot_api, chat_id)
 
         # Format and send events list
         msg = self._format_events_list(events, chat_id)
         await self.send_message(event, line_bot_api, msg)
         return True
 
-    async def _log_access_denied(
-        self, chat_id: str, user_id: str, operation: str
-    ) -> None:
+    async def _log_access_denied(self, chat_id: str, user_id: str, operation: str) -> None:
         """Log access denied event."""
         history_log = get_history_log()
         if history_log:
@@ -120,11 +104,12 @@ class ViewFlow(CalendarFlowBase):
         context_msg = "this group" if is_group else "your private calendar"
 
         await self.send_message(
-            event, line_bot_api,
+            event,
+            line_bot_api,
             f"📅 No events in {context_msg} yet!\n\n"
             "Say 'Ms. Green add event' to create one.\n\n"
             "คุณยังไม่มีกิจกรรมในปฏิทิน\n"
-            "พิมพ์ 'Ms. Green add event' เพื่อเพิ่มกิจกรรม"
+            "พิมพ์ 'Ms. Green add event' เพื่อเพิ่มกิจกรรม",
         )
         return True
 
@@ -142,11 +127,7 @@ class ViewFlow(CalendarFlowBase):
         is_group = chat_id.startswith("group_") or chat_id.startswith("room_")
         title = "Group Calendar" if is_group else "Your Calendar"
 
-        msg_lines = [
-            f"📅 {title} ({len(events)} event{'s' if len(events) != 1 else ''})",
-            "━" * 20,
-            ""
-        ]
+        msg_lines = [f"📅 {title} ({len(events)} event{'s' if len(events) != 1 else ''})", "━" * 20, ""]
 
         today = datetime.now(BANGKOK_TZ).date()
 
@@ -163,9 +144,7 @@ class ViewFlow(CalendarFlowBase):
             else:
                 time_str = f"(in {days_until} days)"
 
-            reminder_str = ", ".join(
-                [f"{d}d" for d in sorted(evt.reminder_days, reverse=True)]
-            )
+            reminder_str = ", ".join([f"{d}d" for d in sorted(evt.reminder_days, reverse=True)])
 
             msg_lines.append(f"{i}. {evt.title}")
             msg_lines.append(f"   📆 {date_str} {time_str}")
@@ -182,7 +161,7 @@ class ViewFlow(CalendarFlowBase):
 
 
 # Lazy loader for on-demand instantiation
-_view_flow_instance: Optional[ViewFlow] = None
+_view_flow_instance: ViewFlow | None = None
 
 
 def get_view_flow(calendar_service: Any) -> ViewFlow:

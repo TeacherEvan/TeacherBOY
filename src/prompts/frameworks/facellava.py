@@ -12,25 +12,25 @@ Token estimates:
 
 class FaceLLaVAFramework:
     """Face-LLaVA enhanced facial analysis framework."""
-    
+
     VERSION = "2.0"
     CATEGORY = "vision"
-    
+
     # Token estimates for each version
     TOKENS_SHORT = 200
     TOKENS_STANDARD = 400
     TOKENS_FULL = 600
-    
+
     @staticmethod
     def get_short() -> str:
         """
         Brief version - basic facial attributes.
-        
+
         Use for:
         - Quick attribute detection
         - Demographic estimation
         - Token-efficient scenarios
-        
+
         Estimated tokens: ~200
         """
         return """
@@ -44,17 +44,17 @@ Systematically identify visible facial attributes:
 - **Hair**: Style, color, grooming level
 - **Accessories**: Glasses, jewelry, makeup level
 """
-    
+
     @staticmethod
     def get_standard() -> str:
         """
         Standard version - attributes + compound emotions.
-        
+
         Use for:
         - Professional analysis
         - Balanced token/quality
         - Standard profiling depth
-        
+
         Estimated tokens: ~400
         """
         return """
@@ -81,17 +81,17 @@ Identify complex emotional states beyond basic emotions:
 - **Awe**: Surprise + Fear in positive context (wonder)
 - **Contemptuous Amusement**: Contempt + mild happiness (smirking at someone)
 """
-    
+
     @staticmethod
     def get_full() -> str:
         """
         Full version - complete framework with intensity metrics.
-        
+
         Use for:
         - Research-grade analysis
         - Maximum detail requirements
         - Professional forensic work
-        
+
         Estimated tokens: ~600
         """
         return """

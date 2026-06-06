@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from linebot.v3.messaging import (
     MessagingApi,
@@ -32,13 +32,8 @@ from src.services.staff_memory_service import StaffMemoryService
 logger = logging.getLogger(__name__)
 
 SAVE_OPTIONS = {"calendar", "memory", "both", "neither"}
-STAFF_ANSWER = (
-    "I am purely a hardworking assistant and at the service of all KPS "
-    "employees."
-)
-PENDING_REVIEW_MESSAGE = (
-    "Please finish the pending review in your DM before starting a new one."
-)
+STAFF_ANSWER = "I am purely a hardworking assistant and at the service of all KPS employees."
+PENDING_REVIEW_MESSAGE = "Please finish the pending review in your DM before starting a new one."
 IMPORTANT_THIS_WEEK_COMMANDS = {
     "whats important this week?",
     "whats important this week",
@@ -48,9 +43,7 @@ IMPORTANT_THIS_WEEK_COMMANDS = {
 }
 # Evict pending-review entries after 24 hours to prevent in-process memory leaks.
 _REVIEW_TTL = timedelta(hours=24)
-MEMORY_SAVE_FAILED_MESSAGE = (
-    "I couldn't save that to memory right now. Please try again."
-)
+MEMORY_SAVE_FAILED_MESSAGE = "I couldn't save that to memory right now. Please try again."
 
 
 @dataclass
@@ -64,23 +57,19 @@ class PendingReview:
 class ReviewAgent(BaseAgent):
     def __init__(
         self,
-        ai_review_service: Optional[Any] = None,
-        message_buffer: Optional[Any] = None,
-        staff_memory_service: Optional[StaffMemoryService] = None,
-        calendar_service_instance: Optional[Any] = None,
-        bot_user_id: Optional[str] = None,
+        ai_review_service: Any | None = None,
+        message_buffer: Any | None = None,
+        staff_memory_service: StaffMemoryService | None = None,
+        calendar_service_instance: Any | None = None,
+        bot_user_id: str | None = None,
     ):
         super().__init__(
             name="ReviewAgent",
             description="Explicit AI review and requester DM follow-up",
         )
-        self._ai_review_service = (
-            ai_review_service or default_ai_review_service
-        )
+        self._ai_review_service = ai_review_service or default_ai_review_service
         self._message_buffer = message_buffer or message_buffer_service
-        self._staff_memory = staff_memory_service or StaffMemoryService(
-            Path("./data/staff_memory/staff_memory.json")
-        )
+        self._staff_memory = staff_memory_service or StaffMemoryService(Path("./data/staff_memory/staff_memory.json"))
         self._calendar_service = calendar_service_instance or calendar_service
         self._bot_user_id = bot_user_id
         self._pending_reviews: dict[str, PendingReview] = {}
@@ -91,11 +80,7 @@ class ReviewAgent(BaseAgent):
     def _prune_pending_reviews(self) -> None:
         """Evict pending reviews older than 24 hours."""
         cutoff = datetime.now() - _REVIEW_TTL
-        stale = [
-            uid
-            for uid, review in self._pending_reviews.items()
-            if review.created_at < cutoff
-        ]
+        stale = [uid for uid, review in self._pending_reviews.items() if review.created_at < cutoff]
         for uid in stale:
             logger.info("🗑️ Evicted stale pending review for user %s", uid)
             self._pending_reviews.pop(uid, None)
@@ -113,9 +98,7 @@ class ReviewAgent(BaseAgent):
             *IMPORTANT_THIS_WEEK_COMMANDS,
         }
 
-    async def handle(
-        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
-    ) -> bool:
+    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         user_id = getattr(getattr(event, "source", None), "user_id", None)
         self._prune_pending_reviews()
 
@@ -123,9 +106,7 @@ class ReviewAgent(BaseAgent):
             return False
 
         if self._is_pending_save_response(event, text, user_id):
-            return await self._handle_pending_save_response(
-                event, text, user_id, line_bot_api
-            )
+            return await self._handle_pending_save_response(event, text, user_id, line_bot_api)
 
         command = self._parse_prefixed_command(text)
         if command == "review":
@@ -144,9 +125,7 @@ class ReviewAgent(BaseAgent):
             )
 
         if command in IMPORTANT_THIS_WEEK_COMMANDS:
-            return await self._handle_important_this_week(
-                event, line_bot_api, user_id
-            )
+            return await self._handle_important_this_week(event, line_bot_api, user_id)
 
         if command in {"who do you work for?", "who do you work for"}:
             await self._send_reply(event, line_bot_api, STAFF_ANSWER)
@@ -160,16 +139,11 @@ class ReviewAgent(BaseAgent):
             return None
         return rest.strip().lower()
 
-    def _is_pending_save_response(
-        self, event: MessageEvent, text: str, user_id: str
-    ) -> bool:
+    def _is_pending_save_response(self, event: MessageEvent, text: str, user_id: str) -> bool:
         source = getattr(event, "source", None)
         if getattr(source, "type", None) != "user":
             return False
-        return (
-            user_id in self._pending_reviews
-            and text.strip().lower() in SAVE_OPTIONS
-        )
+        return user_id in self._pending_reviews and text.strip().lower() in SAVE_OPTIONS
 
     async def _handle_review(
         self,
@@ -191,9 +165,7 @@ class ReviewAgent(BaseAgent):
             )
             return True
 
-        summary = await self._ai_review_service.translate_and_summarize(
-            last_message.text
-        )
+        summary = await self._ai_review_service.translate_and_summarize(last_message.text)
         if not summary:
             await self._send_reply(
                 event,
@@ -216,11 +188,7 @@ class ReviewAgent(BaseAgent):
         await self._push_message(
             line_bot_api,
             user_id,
-            (
-                summary
-                + "\n\nWould you like to add this to the calendar, memory, "
-                "both, or neither?"
-            ),
+            (summary + "\n\nWould you like to add this to the calendar, memory, both, or neither?"),
         )
         return True
 
@@ -293,21 +261,13 @@ class ReviewAgent(BaseAgent):
                 )
 
         memory_records = await self._staff_memory.get_items_for_week_async(today)
-        memory_items = [
-            (item.priority, item.title, item.due_date or "")
-            for item in memory_records
-        ]
+        memory_items = [(item.priority, item.title, item.due_date or "") for item in memory_records]
 
         combined = memory_items + calendar_items
-        combined.sort(
-            key=lambda item: (item[0], item[2] or "9999-12-31", item[1])
-        )
+        combined.sort(key=lambda item: (item[0], item[2] or "9999-12-31", item[1]))
 
         if combined:
-            lines = [
-                f"{priority} - {title}"
-                for priority, title, _ in combined[:5]
-            ]
+            lines = [f"{priority} - {title}" for priority, title, _ in combined[:5]]
             message = "Important this week:\n" + "\n".join(lines)
         else:
             message = "Nothing critical is recorded for this week."
@@ -315,12 +275,8 @@ class ReviewAgent(BaseAgent):
         await self._send_reply(event, line_bot_api, message)
         return True
 
-    async def _try_add_calendar_event(
-        self, user_id: str, pending: PendingReview
-    ) -> str:
-        response = await self._ai_review_service.extract_calendar_candidates(
-            [pending.original_text]
-        )
+    async def _try_add_calendar_event(self, user_id: str, pending: PendingReview) -> str:
+        response = await self._ai_review_service.extract_calendar_candidates([pending.original_text])
         if not response:
             return "no calendar date found"
 
@@ -333,9 +289,7 @@ class ReviewAgent(BaseAgent):
             return "no calendar date found"
 
         candidate = candidates[0]
-        event_date_raw = (
-            candidate.get("date") if isinstance(candidate, dict) else None
-        )
+        event_date_raw = candidate.get("date") if isinstance(candidate, dict) else None
         title = candidate.get("title") if isinstance(candidate, dict) else None
         if not event_date_raw or not title:
             return "no calendar date found"
@@ -361,16 +315,10 @@ class ReviewAgent(BaseAgent):
         return "saved to calendar"
 
     def _build_memory_title(self, summary: str) -> str:
-        first_line = (
-            summary.strip().splitlines()[0]
-            if summary.strip()
-            else "Reviewed item"
-        )
+        first_line = summary.strip().splitlines()[0] if summary.strip() else "Reviewed item"
         return first_line[:50]
 
-    def _get_last_non_english_message(
-        self, chat_id: str, current_text: str
-    ) -> BufferedMessage | None:
+    def _get_last_non_english_message(self, chat_id: str, current_text: str) -> BufferedMessage | None:
         recent_messages = self._message_buffer.get_recent_messages(
             chat_id,
             limit=20,
@@ -418,23 +366,17 @@ class ReviewAgent(BaseAgent):
             line_bot_api.reply_message,
             ReplyMessageRequest(
                 replyToken=event.reply_token,
-                messages=[
-                    TextMessage(text=message, quickReply=None, quoteToken=None)
-                ],
+                messages=[TextMessage(text=message, quickReply=None, quoteToken=None)],
                 notificationDisabled=False,
             ),
         )
 
-    async def _push_message(
-        self, line_bot_api: MessagingApi, user_id: str, message: str
-    ) -> None:
+    async def _push_message(self, line_bot_api: MessagingApi, user_id: str, message: str) -> None:
         await asyncio.to_thread(
             line_bot_api.push_message,
             PushMessageRequest(
                 to=user_id,
-                messages=[
-                    TextMessage(text=message, quickReply=None, quoteToken=None)
-                ],
+                messages=[TextMessage(text=message, quickReply=None, quoteToken=None)],
                 notificationDisabled=False,
                 customAggregationUnits=None,
             ),

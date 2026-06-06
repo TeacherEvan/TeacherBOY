@@ -3,24 +3,26 @@
 import asyncio
 import logging
 import re
-from typing import Optional, Dict, List, Any
-from linebot.v3.webhooks import MessageEvent
+from typing import Any
+
 from linebot.v3.messaging import (
-    MessagingApi,
-    ReplyMessageRequest,
-    TextMessage,
-    FlexMessage,
     FlexContainer,
+    FlexMessage,
+    MessageAction,
+    MessagingApi,
     QuickReply,
     QuickReplyItem,
-    MessageAction,
+    ReplyMessageRequest,
+    TextMessage,
 )
+from linebot.v3.webhooks import MessageEvent
 
-from .base_agent import BaseAgent
+from src.config import settings
 from src.services.bot_identity_service import get_bot_identity_service
 from src.services.privilege_service import privilege_service
-from src.config import settings
 from src.utils.tracing import get_tracer
+
+from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -57,7 +59,7 @@ class HelpAgent(BaseAgent):
         """Check if text is a help command."""
         return self._extract_help_topic(text) is not None or bool(re.match(r"^/?help\s*$", text.lower().strip()))
 
-    def _extract_help_topic(self, text: str) -> Optional[str]:
+    def _extract_help_topic(self, text: str) -> str | None:
         """Extract a help topic from commands like 'help calendar' or '/help admin'."""
         text_lower = text.lower().strip()
         match = re.match(r"^/?help(?:\s+(?P<topic>.+?))?\s*$", text_lower)
@@ -90,7 +92,7 @@ class HelpAgent(BaseAgent):
         chat_type: str,
         zeus_available: bool,
         search_available: bool,
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    ) -> dict[str, list[dict[str, Any]]]:
         """Get categorized command list based on user permissions and context."""
         display_name = get_bot_identity_service().get_profile().display_name
         categories = {
@@ -99,94 +101,94 @@ class HelpAgent(BaseAgent):
                     "command": "help",
                     "description": "Show this help menu",
                     "examples": ["help", "/help", f"{display_name} help"],
-                    "available": True
+                    "available": True,
                 },
                 {
                     "command": display_name,
                     "description": "Wake the bot from sleep mode",
                     "examples": [display_name],
-                    "available": True
+                    "available": True,
                 },
                 {
                     "command": "amen",
                     "description": "Put the bot to sleep for 24 hours",
                     "examples": ["amen"],
-                    "available": True
-                }
+                    "available": True,
+                },
             ],
             "Translation": [
                 {
                     "command": "Thai text",
                     "description": "Auto-translate Thai to English",
                     "examples": ["สวัสดีครับ", "ขอบคุณมาก"],
-                    "available": True
+                    "available": True,
                 },
                 {
                     "command": "English text",
                     "description": "Auto-translate English to Thai",
                     "examples": ["Hello", "Thank you"],
-                    "available": True
-                }
+                    "available": True,
+                },
             ],
             "AI & Search": [
                 {
                     "command": f"{display_name} <question>",
                     "description": f"Ask {display_name} AI general questions",
                     "examples": [f"{display_name} what is the weather?", f"{display_name} tell me a joke"],
-                    "available": zeus_available
+                    "available": zeus_available,
                 },
                 {
                     "command": f"{display_name} search <query>",
                     "description": "Search the web for information",
                     "examples": [f"{display_name} search Python tutorials"],
-                    "available": search_available
-                }
+                    "available": search_available,
+                },
             ],
             "News & Information": [
                 {
                     "command": "news",
                     "description": "Get latest news headlines",
                     "examples": ["news", "ข่าว"],
-                    "available": True
+                    "available": True,
                 },
                 {
                     "command": "/special news",
                     "description": "Get specialized news (sports, tourism, etc.)",
                     "examples": ["/special news"],
-                    "available": True
-                }
+                    "available": True,
+                },
             ],
             "Calendar & Reminders": [
                 {
                     "command": f"{display_name} calendar",
                     "description": "View your upcoming events and reminders",
                     "examples": [f"{display_name} calendar", "my events", "my reminders"],
-                    "available": settings.is_calendar_configured()
+                    "available": settings.is_calendar_configured(),
                 },
                 {
                     "command": f"{display_name} add event",
                     "description": "Create event with customizable reminders (7/3/1 days)",
                     "examples": [f"{display_name} add event", f"{display_name} remind me"],
-                    "available": settings.is_calendar_configured()
+                    "available": settings.is_calendar_configured(),
                 },
                 {
                     "command": f"{display_name} add [date] [title]",
                     "description": f"Quick add: {display_name} add Jan 15 Birthday party",
                     "examples": [f"{display_name} add tomorrow Meeting", f"{display_name} add 15/01 Conference"],
-                    "available": settings.is_calendar_configured()
+                    "available": settings.is_calendar_configured(),
                 },
                 {
                     "command": f"{display_name} scrape",
                     "description": "AI-powered date extraction from recent messages",
                     "examples": [f"{display_name} scrape", f"{display_name} scan messages"],
-                    "available": settings.is_calendar_configured()
+                    "available": settings.is_calendar_configured(),
                 },
                 {
                     "command": f"{display_name} remove event",
                     "description": "Delete events with multi-select support",
                     "examples": [f"{display_name} remove event", f"{display_name} delete event"],
-                    "available": settings.is_calendar_configured()
-                }
+                    "available": settings.is_calendar_configured(),
+                },
             ],
             "Image Analysis": [
                 {
@@ -194,16 +196,16 @@ class HelpAgent(BaseAgent):
                     "description": "Psychological profiling from photos using FBI/Ekman/Navarro frameworks",
                     "examples": [f"{display_name} profile", f"{display_name} analyze this photo"],
                     "rate_limit": "3 analyses/hour (admins unlimited)" if not is_admin else "Unlimited",
-                    "available": settings.is_profiler_configured()
+                    "available": settings.is_profiler_configured(),
                 },
                 {
                     "command": f"{display_name} analyze this",
                     "description": "General image Q&A with GPT-4o vision",
                     "examples": [f"{display_name} analyze this", "analyze image", "examine this photo"],
                     "rate_limit": "5 analyses/hour (admins unlimited)" if not is_admin else "Unlimited",
-                    "available": settings.is_github_models_configured()
-                }
-            ]
+                    "available": settings.is_github_models_configured(),
+                },
+            ],
         }
 
         # Admin-only commands
@@ -213,37 +215,37 @@ class HelpAgent(BaseAgent):
                     "command": "/admin help",
                     "description": "Show admin command reference",
                     "examples": ["/admin help"],
-                    "available": True
+                    "available": True,
                 },
                 {
                     "command": "/admin stats",
                     "description": "View bot usage statistics",
                     "examples": ["/admin stats"],
-                    "available": True
+                    "available": True,
                 },
                 {
                     "command": "/admin leave",
                     "description": "Make bot leave current group/room",
                     "examples": ["/admin leave"],
-                    "available": chat_type in ["group chat", "room chat"]
+                    "available": chat_type in ["group chat", "room chat"],
                 },
                 {
                     "command": "/admin purge",
                     "description": "Clear chat session data",
                     "examples": ["/admin purge"],
-                    "available": True
+                    "available": True,
                 },
                 {
                     "command": "/admin confirm <token>",
                     "description": "Confirm destructive admin actions",
                     "examples": ["/admin confirm ABC123"],
-                    "available": True
-                }
+                    "available": True,
+                },
             ]
 
         return categories
 
-    def _get_adaptive_tips(self, is_admin: bool, chat_type: str) -> List[str]:
+    def _get_adaptive_tips(self, is_admin: bool, chat_type: str) -> list[str]:
         """Get contextual tips based on user status and chat type."""
         tips = []
         display_name = get_bot_identity_service().get_profile().display_name
@@ -251,7 +253,7 @@ class HelpAgent(BaseAgent):
         # Interactive tutorial prompts
         tips.append(f"📚 Try '{display_name} calendar' to explore the events feature")
         tips.append(f"🎓 Use '{display_name} scrape' to see AI date extraction in action")
-        
+
         if chat_type == "private chat":
             tips.append("💡 In private chats, you can use simple 'help' command")
             if is_admin:
@@ -269,11 +271,11 @@ class HelpAgent(BaseAgent):
         # Customization options
         if settings.is_calendar_configured():
             tips.append("⚙️ Customize reminder timing: 7/3/1 days or all")
-        
+
         tips.append("⚡ AI translation is active")
 
         tips.append(f"😴 Bot sleeps after 24h of inactivity - wake with '{display_name}'")
-        
+
         # Advanced search tip
         if settings.is_brave_search_configured():
             tips.append(f"🔍 Advanced: '{display_name} search' for web results with AI summary")
@@ -282,17 +284,23 @@ class HelpAgent(BaseAgent):
 
     def _build_quick_reply(self, display_name: str):
         """Build quick reply shortcuts for common help actions."""
-        return QuickReply(items=[
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Help menu", text="help")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Calendar help", text=f"{display_name} calendar")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Search help", text=f"{display_name} search")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="News help", text="help news")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Image help", text="help image")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Admin help", text="/admin help")),
-            QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Wake bot", text=display_name)),
-        ])
+        return QuickReply(
+            items=[
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Help menu", text="help")),
+                QuickReplyItem(
+                    type="action", imageUrl=None, action=MessageAction(label="Calendar help", text=f"{display_name} calendar")
+                ),
+                QuickReplyItem(
+                    type="action", imageUrl=None, action=MessageAction(label="Search help", text=f"{display_name} search")
+                ),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="News help", text="help news")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Image help", text="help image")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Admin help", text="/admin help")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Wake bot", text=display_name)),
+            ]
+        )
 
-    def _topic_aliases(self) -> Dict[str, str]:
+    def _topic_aliases(self) -> dict[str, str]:
         """Map natural help topics to canonical help sections."""
         display_name = get_bot_identity_service().get_profile().display_name.lower()
         return {
@@ -318,7 +326,7 @@ class HelpAgent(BaseAgent):
             display_name: "Core Commands",
         }
 
-    def _resolve_help_topic(self, topic: Optional[str], categories: Dict[str, List[Dict[str, Any]]]) -> Optional[str]:
+    def _resolve_help_topic(self, topic: str | None, categories: dict[str, list[dict[str, Any]]]) -> str | None:
         """Normalize a help topic to a known category name."""
         if not topic:
             return None
@@ -337,7 +345,7 @@ class HelpAgent(BaseAgent):
 
         return None
 
-    def _get_supported_sections(self, categories: Dict[str, List[Dict[str, Any]]]) -> List[str]:
+    def _get_supported_sections(self, categories: dict[str, list[dict[str, Any]]]) -> list[str]:
         """Build a compact list of all available help sections."""
         section_order = [
             "Core Commands",
@@ -348,9 +356,13 @@ class HelpAgent(BaseAgent):
             "Image Analysis",
             "Admin Commands",
         ]
-        return [section for section in section_order if section in categories and any(cmd["available"] for cmd in categories[section])]
+        return [
+            section
+            for section in section_order
+            if section in categories and any(cmd["available"] for cmd in categories[section])
+        ]
 
-    def _build_category_box(self, category_name: str, commands: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _build_category_box(self, category_name: str, commands: list[dict[str, Any]]) -> dict[str, Any]:
         """Build one category card."""
         category_box = {
             "type": "box",
@@ -362,7 +374,7 @@ class HelpAgent(BaseAgent):
                     "weight": "bold",
                     "size": "md",
                     "color": "#1F2937",
-                    "margin": "none"
+                    "margin": "none",
                 }
             ],
             "backgroundColor": "#FFFFFF",
@@ -370,7 +382,7 @@ class HelpAgent(BaseAgent):
             "borderWidth": "1px",
             "cornerRadius": "8px",
             "paddingAll": "12px",
-            "margin": "md"
+            "margin": "md",
         }
 
         command_contents = []
@@ -382,50 +394,47 @@ class HelpAgent(BaseAgent):
                     "weight": "bold",
                     "size": "sm",
                     "color": "#1F2937",
-                    "wrap": True
-                },
-                {
-                    "type": "text",
-                    "text": cmd['description'],
-                    "size": "xs",
-                    "color": "#6B7280",
                     "wrap": True,
-                    "margin": "xs"
-                }
+                },
+                {"type": "text", "text": cmd["description"], "size": "xs", "color": "#6B7280", "wrap": True, "margin": "xs"},
             ]
 
-            if 'rate_limit' in cmd and cmd['rate_limit']:
-                cmd_box_contents.append({
+            if "rate_limit" in cmd and cmd["rate_limit"]:
+                cmd_box_contents.append(
+                    {
+                        "type": "text",
+                        "text": f"⏱️ {cmd['rate_limit']}",
+                        "size": "xxs",
+                        "color": "#DC2626",
+                        "wrap": True,
+                        "margin": "xs",
+                    }
+                )
+
+            cmd_box_contents.append(
+                {
                     "type": "text",
-                    "text": f"⏱️ {cmd['rate_limit']}",
+                    "text": f"Example: {cmd['examples'][0]}",
                     "size": "xxs",
-                    "color": "#DC2626",
+                    "color": "#9CA3AF",
                     "wrap": True,
-                    "margin": "xs"
-                })
+                    "margin": "xs",
+                }
+            )
 
-            cmd_box_contents.append({
-                "type": "text",
-                "text": f"Example: {cmd['examples'][0]}",
-                "size": "xxs",
-                "color": "#9CA3AF",
-                "wrap": True,
-                "margin": "xs"
-            })
-
-            command_contents.append({
-                "type": "box",
-                "layout": "vertical",
-                "contents": cmd_box_contents,
-                "margin": "sm"
-            })
+            command_contents.append({"type": "box", "layout": "vertical", "contents": cmd_box_contents, "margin": "sm"})
 
         category_box["contents"].extend(command_contents)
         return category_box
 
-    def _create_help_cards(self, categories: Dict[str, List[Dict[str, Any]]],
-                           tips: List[str], chat_type: str, topic: Optional[str] = None,
-                           quick_reply: Optional[QuickReply] = None) -> List[FlexMessage]:
+    def _create_help_cards(
+        self,
+        categories: dict[str, list[dict[str, Any]]],
+        tips: list[str],
+        chat_type: str,
+        topic: str | None = None,
+        quick_reply: QuickReply | None = None,
+    ) -> list[FlexMessage]:
         """Create 1-3 help cards to keep LINE messages readable."""
         display_name = get_bot_identity_service().get_profile().display_name
         if quick_reply is None:
@@ -437,38 +446,78 @@ class HelpAgent(BaseAgent):
             sections = [topic]
 
         cards = []
-        chunks = [sections[i:i+2] for i in range(0, len(sections), 2)] if not topic else [sections]
+        chunks = [sections[i : i + 2] for i in range(0, len(sections), 2)] if not topic else [sections]
         for idx, chunk in enumerate(chunks, start=1):
             body_contents = []
-            body_contents.append({
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {"type": "text", "text": "🗡️ MS. GREEN HELP SYSTEM", "weight": "bold", "size": "xl", "color": "#1F2937", "align": "center"},
-                    {"type": "text", "text": f"{('Focused help: ' + topic) if topic else 'Full feature menu'} • {chat_type.title()}", "size": "sm", "color": "#6B7280", "align": "center", "margin": "sm"},
-                    {"type": "text", "text": f"Part {idx}/{len(chunks)}", "size": "xxs", "color": "#6B7280", "align": "center", "margin": "xs"},
-                ],
-                "backgroundColor": "#F3F4F6",
-                "paddingAll": "16px",
-                "cornerRadius": "8px",
-                "margin": "none"
-            })
-
-            if not topic and idx == 1:
-                body_contents.append({
+            body_contents.append(
+                {
                     "type": "box",
                     "layout": "vertical",
                     "contents": [
-                        {"type": "text", "text": "All features in one place. Tap a shortcut below or ask for a topic like help calendar.", "size": "xs", "color": "#374151", "wrap": True, "align": "center"},
-                        {"type": "text", "text": f"Sections: {', '.join(sections)}", "size": "xxs", "color": "#6B7280", "wrap": True, "align": "center", "margin": "xs"},
+                        {
+                            "type": "text",
+                            "text": "🗡️ MS. GREEN HELP SYSTEM",
+                            "weight": "bold",
+                            "size": "xl",
+                            "color": "#1F2937",
+                            "align": "center",
+                        },
+                        {
+                            "type": "text",
+                            "text": f"{('Focused help: ' + topic) if topic else 'Full feature menu'} • {chat_type.title()}",
+                            "size": "sm",
+                            "color": "#6B7280",
+                            "align": "center",
+                            "margin": "sm",
+                        },
+                        {
+                            "type": "text",
+                            "text": f"Part {idx}/{len(chunks)}",
+                            "size": "xxs",
+                            "color": "#6B7280",
+                            "align": "center",
+                            "margin": "xs",
+                        },
                     ],
-                    "backgroundColor": "#EFF6FF",
-                    "borderColor": "#BFDBFE",
-                    "borderWidth": "1px",
+                    "backgroundColor": "#F3F4F6",
+                    "paddingAll": "16px",
                     "cornerRadius": "8px",
-                    "paddingAll": "12px",
-                    "margin": "md"
-                })
+                    "margin": "none",
+                }
+            )
+
+            if not topic and idx == 1:
+                body_contents.append(
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "All features in one place. Tap a shortcut below or ask for a topic like help calendar.",
+                                "size": "xs",
+                                "color": "#374151",
+                                "wrap": True,
+                                "align": "center",
+                            },
+                            {
+                                "type": "text",
+                                "text": f"Sections: {', '.join(sections)}",
+                                "size": "xxs",
+                                "color": "#6B7280",
+                                "wrap": True,
+                                "align": "center",
+                                "margin": "xs",
+                            },
+                        ],
+                        "backgroundColor": "#EFF6FF",
+                        "borderColor": "#BFDBFE",
+                        "borderWidth": "1px",
+                        "cornerRadius": "8px",
+                        "paddingAll": "12px",
+                        "margin": "md",
+                    }
+                )
 
             for category_name in chunk:
                 commands = categories[category_name]
@@ -482,44 +531,78 @@ class HelpAgent(BaseAgent):
                     "type": "box",
                     "layout": "vertical",
                     "contents": [
-                        {"type": "text", "text": "💡 HELPFUL NOTES FROM MS. GREEN", "weight": "bold", "size": "md", "color": "#1F2937", "margin": "none"}
+                        {
+                            "type": "text",
+                            "text": "💡 HELPFUL NOTES FROM MS. GREEN",
+                            "weight": "bold",
+                            "size": "md",
+                            "color": "#1F2937",
+                            "margin": "none",
+                        }
                     ],
                     "backgroundColor": "#FEF3C7",
                     "borderColor": "#F59E0B",
                     "borderWidth": "1px",
                     "cornerRadius": "8px",
                     "paddingAll": "12px",
-                    "margin": "md"
+                    "margin": "md",
                 }
                 tip_contents = []
                 for tip in tips[:3]:
-                    tip_contents.append({"type": "text", "text": tip, "size": "xs", "color": "#92400E", "wrap": True, "margin": "xs"})
+                    tip_contents.append(
+                        {"type": "text", "text": tip, "size": "xs", "color": "#92400E", "wrap": True, "margin": "xs"}
+                    )
                 tips_box["contents"].extend(tip_contents)
                 body_contents.append(tips_box)
 
-            body_contents.append({
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {"type": "separator", "color": "#E5E7EB", "margin": "md"},
-                    {"type": "text", "text": "⚡ Powered by Ms. Green • Assistant", "size": "xxs", "color": "#9CA3AF", "align": "center"}
-                ],
-                "paddingAll": "8px"
-            })
+            body_contents.append(
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {"type": "separator", "color": "#E5E7EB", "margin": "md"},
+                        {
+                            "type": "text",
+                            "text": "⚡ Powered by Ms. Green • Assistant",
+                            "size": "xxs",
+                            "color": "#9CA3AF",
+                            "align": "center",
+                        },
+                    ],
+                    "paddingAll": "8px",
+                }
+            )
 
             flex_dict = {
                 "type": "bubble",
                 "size": "giga",
-                "body": {"type": "box", "layout": "vertical", "contents": body_contents, "spacing": "none", "paddingAll": "16px"},
-                "styles": {"body": {"backgroundColor": "#FAFAFA"}}
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": body_contents,
+                    "spacing": "none",
+                    "paddingAll": "16px",
+                },
+                "styles": {"body": {"backgroundColor": "#FAFAFA"}},
             }
-            cards.append(FlexMessage(altText="Ms. Green Help System - Command Reference", contents=FlexContainer.from_dict(flex_dict), quickReply=quick_reply if idx == 1 else None))
+            cards.append(
+                FlexMessage(
+                    altText="Ms. Green Help System - Command Reference",
+                    contents=FlexContainer.from_dict(flex_dict),
+                    quickReply=quick_reply if idx == 1 else None,
+                )
+            )
 
         return cards
 
-    def _create_help_flex_message(self, categories: Dict[str, List[Dict[str, Any]]],
-                                tips: List[str], chat_type: str, topic: Optional[str] = None,
-                                quick_reply: Optional[QuickReply] = None) -> FlexMessage:
+    def _create_help_flex_message(
+        self,
+        categories: dict[str, list[dict[str, Any]]],
+        tips: list[str],
+        chat_type: str,
+        topic: str | None = None,
+        quick_reply: QuickReply | None = None,
+    ) -> FlexMessage:
         """Create a visually appealing Flex Message for help content."""
         display_name = get_bot_identity_service().get_profile().display_name
         if quick_reply is None:
@@ -543,15 +626,15 @@ class HelpAgent(BaseAgent):
         """Handle if text is a help command."""
         if not self._is_help_command(text):
             return False
-            
+
         chat_type = self._get_chat_type(event)
         is_group_or_room = chat_type in ("group chat", "room chat")
         user_id = getattr(event.source, "user_id", None) if getattr(event, "source", None) else None
-        
+
         # Normal users in groups cannot trigger the help menu
         if is_group_or_room and not privilege_service.is_privileged(user_id):
             return False
-            
+
         return True
 
     async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
@@ -571,9 +654,7 @@ class HelpAgent(BaseAgent):
             zeus_available = True
             search_available = settings.is_brave_search_configured()
         else:
-            zeus_available = settings.is_zeus_allowed_in_group(
-                group_id, room_id, user_is_admin=is_admin
-            )
+            zeus_available = settings.is_zeus_allowed_in_group(group_id, room_id, user_is_admin=is_admin)
             search_available = settings.is_brave_search_configured() and zeus_available
 
         with tracer.start_as_current_span("help_agent.handle") as span:
@@ -583,9 +664,7 @@ class HelpAgent(BaseAgent):
 
             try:
                 # Get contextual command categories and tips
-                categories = self._get_command_categories(
-                    is_admin, chat_type, zeus_available, search_available
-                )
+                categories = self._get_command_categories(is_admin, chat_type, zeus_available, search_available)
                 tips = self._get_adaptive_tips(is_admin, chat_type)
                 display_name = get_bot_identity_service().get_profile().display_name
                 quick_reply = self._build_quick_reply(display_name)

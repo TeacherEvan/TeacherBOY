@@ -1,7 +1,9 @@
 """Tests for calendar duplicate detection and Zeus scraping own messages."""
 
-import pytest
 from datetime import date, timedelta
+
+import pytest
+
 from src.services.calendar_service import CalendarService
 
 
@@ -19,8 +21,9 @@ class TestCalendarDuplicates:
         )
         yield service
         # Cleanup
-        import shutil
         import pathlib
+        import shutil
+
         test_path = pathlib.Path("./test_calendar_duplicates")
         if test_path.exists():
             shutil.rmtree(test_path)

@@ -1,12 +1,13 @@
 """Cache service for in-memory TTL caching."""
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 try:
     from cachetools import TTLCache
+
     CACHETOOLS_AVAILABLE = True
 except ImportError:
     logger.warning("cachetools not available, caching disabled")
@@ -45,7 +46,7 @@ class CacheService:
             logger.debug(f"Created cache '{name}' with maxsize={maxsize}, ttl={ttl}")
         return self._caches[name]
 
-    def get(self, cache_name: str, key: str) -> Optional[Any]:
+    def get(self, cache_name: str, key: str) -> Any | None:
         """
         Get value from cache.
 
@@ -64,7 +65,7 @@ class CacheService:
             return None
         return cache.get(key)
 
-    def set(self, cache_name: str, key: str, value: Any, ttl: Optional[int] = None) -> None:
+    def set(self, cache_name: str, key: str, value: Any, ttl: int | None = None) -> None:
         """
         Set value in cache.
 

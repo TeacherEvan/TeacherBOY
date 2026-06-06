@@ -1,7 +1,7 @@
 """Tests for session manager deduplication."""
 
 import pytest
-from datetime import datetime, timedelta
+
 from src.services.session_manager import SessionManager
 
 

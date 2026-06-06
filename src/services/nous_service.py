@@ -5,12 +5,13 @@ and calls the Nous Portal inference API. Uses free-tier models.
 Token refresh is handled externally by the Hermes agent; we re-read auth.json
 on every request so we never stale-out.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import httpx
 
@@ -24,11 +25,11 @@ _DEFAULT_MODEL = "stepfun/step-3.7-flash:free"
 class NousInferenceService:
     """Thin wrapper around the Nous Portal OpenAI-compatible chat endpoint."""
 
-    def __init__(self, http_client: Optional[httpx.AsyncClient] = None) -> None:
+    def __init__(self, http_client: httpx.AsyncClient | None = None) -> None:
         self.client = http_client
-        self._last_error: Optional[str] = None
-        self._last_status_code: Optional[int] = None
-        self._last_model: Optional[str] = None
+        self._last_error: str | None = None
+        self._last_status_code: int | None = None
+        self._last_model: str | None = None
 
     # ------------------------------------------------------------------
     # Token helpers
@@ -36,19 +37,16 @@ class NousInferenceService:
     @staticmethod
     def _read_auth_json() -> dict[str, Any]:
         try:
-            with open(_AUTH_JSON_PATH, "r", encoding="utf-8") as fh:
+            with open(_AUTH_JSON_PATH, encoding="utf-8") as fh:
                 return json.load(fh)
         except Exception:
             return {}
 
-    def _get_token(self) -> Optional[str]:
+    def _get_token(self) -> str | None:
         data = self._read_auth_json()
         providers = data.get("providers", {})
         nous = providers.get("nous", {})
-        token = (
-            nous.get("agent_key")
-            or nous.get("access_token")
-        )
+        token = nous.get("agent_key") or nous.get("access_token")
         if isinstance(token, str) and token.strip():
             return token.strip()
         return None
@@ -65,7 +63,7 @@ class NousInferenceService:
     # ------------------------------------------------------------------
     # Public API (mirrors github_models / openrouter signatures)
     # ------------------------------------------------------------------
-    def get_last_error(self) -> Tuple[Optional[int], Optional[str], Optional[str]]:
+    def get_last_error(self) -> tuple[int | None, str | None, str | None]:
         return self._last_status_code, self._last_error, self._last_model
 
     def set_client(self, client: httpx.AsyncClient) -> None:
@@ -76,12 +74,12 @@ class NousInferenceService:
 
     async def chat_completion(
         self,
-        messages: List[Dict[str, str]],
-        model: Optional[str] = None,
+        messages: list[dict[str, str]],
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         retry_on_rate_limit: bool = True,
-    ) -> Optional[str]:
+    ) -> str | None:
         token = self._get_token()
         if not token:
             self._last_error = "Nous OAuth token not found in ~/.hermes/auth.json"
@@ -97,7 +95,7 @@ class NousInferenceService:
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": target_model,
             "messages": messages,
             "temperature": temperature,
@@ -154,11 +152,11 @@ class NousInferenceService:
 
     async def chat_completion_with_vision(
         self,
-        messages: List[Dict[str, Any]],
-        model: Optional[str] = None,
+        messages: list[dict[str, Any]],
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
-    ) -> Optional[str]:
+        max_tokens: int | None = None,
+    ) -> str | None:
         """Vision is not supported on the free model; fall back to text."""
         return await self.chat_completion(
             messages,  # type: ignore[arg-type]

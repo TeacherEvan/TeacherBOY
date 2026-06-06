@@ -70,10 +70,7 @@ def test_llm_agent_extracts_identity_queries_with_and_without_prefix() -> None:
     agent = LLMAgent()
 
     assert agent._extract_identity_query("Who are you?") == "Who are you?"
-    assert (
-        agent._extract_identity_query("Ms. Green what is your name?")
-        == "what is your name?"
-    )
+    assert agent._extract_identity_query("Ms. Green what is your name?") == "what is your name?"
     assert agent._extract_identity_query("Ms. Green search python") is None
 
 

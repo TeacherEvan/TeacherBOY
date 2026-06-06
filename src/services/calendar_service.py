@@ -14,20 +14,17 @@ Events are tied to:
 """
 
 import asyncio
-import hashlib
 import json
 import logging
-import os
 import uuid
-import base64
-from datetime import datetime, date, timedelta, timezone
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from collections import OrderedDict
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Optional
 
-from src.services.history_log_service import get_history_log, EventType, LogLevel
-from src.services.calendar_validator import calendar_validator
 from src.config import settings
+from src.services.calendar_validator import calendar_validator
+from src.services.history_log_service import EventType, LogLevel, get_history_log
 
 if TYPE_CHECKING:
     from src.services.convex_calendar_repository import ConvexCalendarRepository
@@ -50,7 +47,7 @@ def _schedule_audit_log(coro: "asyncio.Future[Any] | asyncio.coroutines.CoroWrap
 
 class CalendarEvent:
     """Represents a calendar event with reminder settings."""
-    
+
     def __init__(
         self,
         event_id: str,
@@ -59,16 +56,16 @@ class CalendarEvent:
         title: str,
         event_date: date,
         description: str = "",
-        reminder_days: Optional[List[int]] = None,
+        reminder_days: list[int] | None = None,
         is_friend: bool = False,
-        notification_target_user_id: Optional[str] = None,
-        notified_dates: Optional[List[str]] = None,
-        created_at: Optional[datetime] = None,
-        repository_event_id: Optional[str] = None,
+        notification_target_user_id: str | None = None,
+        notified_dates: list[str] | None = None,
+        created_at: datetime | None = None,
+        repository_event_id: str | None = None,
     ):
         """
         Initialize a calendar event.
-        
+
         Args:
             event_id: Unique event identifier
             user_id: LINE user ID who created the event
@@ -94,10 +91,10 @@ class CalendarEvent:
         self.is_friend = is_friend
         self.notification_target_user_id = notification_target_user_id or user_id
         self.notified_dates = notified_dates if notified_dates else []
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.repository_event_id = repository_event_id
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert event to dictionary for JSON serialization."""
         return {
             "event_id": self.event_id,
@@ -115,7 +112,7 @@ class CalendarEvent:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CalendarEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "CalendarEvent":
         """Create event from dictionary."""
         event_date_raw = data.get("event_date")
         event_date_parsed: date
@@ -125,11 +122,11 @@ class CalendarEvent:
             event_date_parsed = event_date_raw
         else:
             event_date_parsed = date.today()  # Fallback
-        
+
         created_at = data.get("created_at")
         if isinstance(created_at, str):
             created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-        
+
         return cls(
             event_id=data.get("event_id", str(uuid.uuid4())),
             user_id=data.get("user_id", ""),
@@ -157,16 +154,16 @@ class CalendarEvent:
     def needs_reminder(self, days_before: int) -> bool:
         """
         Check if event needs a reminder for the given days_before value.
-        
+
         Args:
             days_before: Number of days before event (0 = day-of)
-            
+
         Returns:
             True if reminder should be sent
         """
         if days_before not in self.reminder_days:
             return False
-        
+
         reminder_date = (self.event_date - timedelta(days=days_before)).isoformat()
         return reminder_date not in self.notified_dates
 
@@ -180,21 +177,21 @@ class CalendarEvent:
 class CalendarService:
     """
     Service for managing calendar events with HF Hub persistence.
-    
+
     Follows the same pattern as ConversationMemoryService for HF sync.
     """
 
     def __init__(
         self,
-        hf_token: Optional[str] = None,
-        hf_repo_id: Optional[str] = None,
+        hf_token: str | None = None,
+        hf_repo_id: str | None = None,
         local_storage_path: str = "./data/calendar",
-        encryption_key: Optional[str] = None,
+        encryption_key: str | None = None,
         repository: Optional["ConvexCalendarRepository"] = None,
     ):
         """
         Initialize calendar service.
-        
+
         Args:
             hf_token: Hugging Face API token for persistent storage
             hf_repo_id: HF dataset repo ID (e.g., "username/zeus-memory")
@@ -205,27 +202,27 @@ class CalendarService:
         self.hf_repo_id = hf_repo_id
         self.local_storage_path = Path(local_storage_path)
         self._encryption_key = encryption_key
-        self._cipher_suite: Optional[Any] = None
+        self._cipher_suite: Any | None = None
         self._repository = repository
-        
+
         # In-memory event store: {event_id: CalendarEvent}
         self._events: OrderedDict[str, CalendarEvent] = OrderedDict()
-        
+
         # Track HF Hub configuration
         self._hf_enabled = bool(hf_token and hf_repo_id)
-        self._hf_api: Optional[Any] = None
-        self._commit_scheduler: Optional[Any] = None
-        
+        self._hf_api: Any | None = None
+        self._commit_scheduler: Any | None = None
+
         # Setup encryption if key provided
         if self._encryption_key:
             self._setup_encryption()
-        
+
         # Ensure local storage directory exists
         self.local_storage_path.mkdir(parents=True, exist_ok=True)
-        
+
         # Load existing events
         self._load_from_local_storage()
-        
+
         if self._hf_enabled:
             self._setup_hf_storage()
         else:
@@ -235,7 +232,7 @@ class CalendarService:
         """Initialize AES encryption for local storage."""
         try:
             from cryptography.fernet import Fernet
-            
+
             # Validate key format
             key_bytes = self._encryption_key.encode() if isinstance(self._encryption_key, str) else self._encryption_key
             self._cipher_suite = Fernet(key_bytes)
@@ -256,12 +253,12 @@ class CalendarService:
             import importlib
 
             hf = importlib.import_module("huggingface_hub")
-            HfApi = getattr(hf, "HfApi")
-            CommitScheduler = getattr(hf, "CommitScheduler")
+            HfApi = hf.HfApi
+            CommitScheduler = hf.CommitScheduler
 
             hf_api = HfApi(token=self.hf_token)
             self._hf_api = hf_api
-            
+
             # Ensure the dataset repo exists
             try:
                 hf_api.create_repo(
@@ -275,7 +272,7 @@ class CalendarService:
                 logger.warning(f"⚠️ Could not create/verify HF repo for calendar: {e}")
                 self._hf_enabled = False
                 return
-            
+
             # Set up scheduled commits
             self._commit_scheduler = CommitScheduler(
                 repo_id=self.hf_repo_id,
@@ -286,12 +283,12 @@ class CalendarService:
                 private=True,
                 squash_history=True,
             )
-            
+
             # Load existing events from HF Hub (synchronously during startup)
             self._load_from_hub_sync()
-            
+
             logger.info("📅 Calendar service initialized with HF Hub persistence")
-            
+
         except ModuleNotFoundError:
             logger.warning("⚠️ huggingface_hub not installed, using local storage only")
             self._hf_enabled = False
@@ -303,14 +300,15 @@ class CalendarService:
         """Load events from HF Hub synchronously during startup."""
         if not self._hf_enabled or not self._hf_api:
             return
-            
+
         try:
             import importlib
+
             hf = importlib.import_module("huggingface_hub")
-            hf_hub_download = getattr(hf, "hf_hub_download")
-            
+            hf_hub_download = hf.hf_hub_download
+
             logger.info(f"📥 Downloading calendar from HF Hub: {self.hf_repo_id}")
-            
+
             local_file = hf_hub_download(
                 repo_id=self.hf_repo_id,
                 filename=CALENDAR_FILENAME,
@@ -318,13 +316,13 @@ class CalendarService:
                 token=self.hf_token,
                 local_dir=str(self.local_storage_path),
             )
-            
-            with open(local_file, "r", encoding="utf-8") as f:
+
+            with open(local_file, encoding="utf-8") as f:
                 data = json.load(f)
-            
+
             # Clear existing events before loading from HF Hub
             self._events.clear()
-            
+
             events_data = data.get("events", [])
             for event_dict in events_data:
                 try:
@@ -332,9 +330,9 @@ class CalendarService:
                     self._events[event.event_id] = event
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to load event: {e}")
-            
+
             logger.info(f"✅ Loaded {len(self._events)} events from HF Hub")
-            
+
         except Exception as e:
             logger.warning(f"⚠️ Could not load events from HF Hub (repo may be empty): {e}")
             logger.info("📅 Starting with empty calendar - will sync to HF Hub on first save")
@@ -343,12 +341,13 @@ class CalendarService:
         """Load events from HF Hub on startup."""
         if not self._hf_enabled or not self._hf_api:
             return
-            
+
         try:
             import importlib
+
             hf = importlib.import_module("huggingface_hub")
-            hf_hub_download = getattr(hf, "hf_hub_download")
-            
+            hf_hub_download = hf.hf_hub_download
+
             local_file = hf_hub_download(
                 repo_id=self.hf_repo_id,
                 filename=CALENDAR_FILENAME,
@@ -356,13 +355,13 @@ class CalendarService:
                 token=self.hf_token,
                 local_dir=str(self.local_storage_path),
             )
-            
-            with open(local_file, "r", encoding="utf-8") as f:
+
+            with open(local_file, encoding="utf-8") as f:
                 data = json.load(f)
-            
+
             # Clear existing events before loading from HF Hub
             self._events.clear()
-            
+
             events_data = data.get("events", [])
             for event_dict in events_data:
                 try:
@@ -370,24 +369,24 @@ class CalendarService:
                     self._events[event.event_id] = event
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to load event: {e}")
-            
+
             logger.info(f"📅 Loaded {len(self._events)} events from HF Hub")
-            
+
         except Exception as e:
             logger.warning(f"⚠️ Could not load events from HF Hub: {e}")
 
     def _load_from_local_storage(self):
         """Load events from local JSON file (with optional decryption)."""
         file_path = self.local_storage_path / CALENDAR_FILENAME
-        
+
         if not file_path.exists():
             logger.info("📅 No existing calendar file, starting fresh")
             return
-        
+
         try:
             with open(file_path, "rb" if self._cipher_suite else "r", encoding=None if self._cipher_suite else "utf-8") as f:
                 file_content = f.read()
-            
+
             # Decrypt if encryption enabled
             if self._cipher_suite:
                 try:
@@ -401,7 +400,7 @@ class CalendarService:
                 if isinstance(file_content, bytes):
                     file_content = file_content.decode("utf-8")
                 data = json.loads(file_content)
-            
+
             events_data = data.get("events", [])
             for event_dict in events_data:
                 try:
@@ -409,25 +408,25 @@ class CalendarService:
                     self._events[event.event_id] = event
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to load event: {e}")
-            
+
             logger.info(f"📅 Loaded {len(self._events)} events from local storage")
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to load calendar from local storage: {e}")
 
     def _save_to_local_storage(self):
         """Save all events to local JSON file (with optional encryption)."""
         file_path = self.local_storage_path / CALENDAR_FILENAME
-        
+
         try:
             data = {
                 "events": [event.to_dict() for event in self._events.values()],
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }
-            
+
             # Serialize to JSON
             json_str = json.dumps(data, indent=2, ensure_ascii=False)
-            
+
             # Encrypt if encryption enabled
             if self._cipher_suite:
                 try:
@@ -442,7 +441,7 @@ class CalendarService:
                 with open(file_path, "w", encoding="utf-8") as f:
                     f.write(json_str)
                 logger.debug(f"📅 Saved {len(self._events)} events to local storage")
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to save calendar to local storage: {e}")
 
@@ -455,24 +454,24 @@ class CalendarService:
     ) -> bool:
         """
         Check if a duplicate event already exists.
-        
+
         An event is considered a duplicate if:
         - Same user_id
         - Same chat_id
         - Same title (case-insensitive, trimmed)
         - Same event_date
-        
+
         Args:
             user_id: LINE user ID
             chat_id: Chat ID
             title: Event title
             event_date: Event date
-            
+
         Returns:
             True if duplicate exists
         """
         title_normalized = title.strip().lower()
-        
+
         for event in self._events.values():
             if (
                 event.user_id == user_id
@@ -481,7 +480,7 @@ class CalendarService:
                 and event.event_date == event_date
             ):
                 return True
-        
+
         return False
 
     def add_event(
@@ -491,14 +490,14 @@ class CalendarService:
         title: str,
         event_date: date,
         description: str = "",
-        reminder_days: Optional[List[int]] = None,
+        reminder_days: list[int] | None = None,
         is_friend: bool = False,
-        notification_target_user_id: Optional[str] = None,
+        notification_target_user_id: str | None = None,
         skip_duplicate_check: bool = False,
     ) -> CalendarEvent:
         """
         Add a new calendar event.
-        
+
         Args:
             user_id: LINE user ID
             chat_id: Chat ID (group/room/user)
@@ -508,10 +507,10 @@ class CalendarService:
             reminder_days: Days before to remind
             is_friend: Whether user is LINE friend
             skip_duplicate_check: If True, bypass duplicate detection (use with caution)
-            
+
         Returns:
             Created CalendarEvent
-            
+
         Raises:
             ValueError: If event is invalid or duplicate exists
         """
@@ -542,7 +541,7 @@ class CalendarService:
                 raise
         else:
             event = self._store_local_event(event)
-        
+
         # Audit log: event creation (best-effort, non-blocking)
         history_log = get_history_log()
         if history_log:
@@ -562,7 +561,7 @@ class CalendarService:
                     },
                 )
             )
-        
+
         logger.info(f"📅 Added event '{event.title}' for {user_id} on {event.event_date}")
         return event
 
@@ -573,9 +572,9 @@ class CalendarService:
         title: str,
         event_date: date,
         description: str = "",
-        reminder_days: Optional[List[int]] = None,
+        reminder_days: list[int] | None = None,
         is_friend: bool = False,
-        notification_target_user_id: Optional[str] = None,
+        notification_target_user_id: str | None = None,
         skip_duplicate_check: bool = False,
     ) -> CalendarEvent:
         if self._repository and not skip_duplicate_check:
@@ -606,22 +605,18 @@ class CalendarService:
             )
             raise
 
-    def get_event(self, event_id: str) -> Optional[CalendarEvent]:
+    def get_event(self, event_id: str) -> CalendarEvent | None:
         """Get event by ID."""
         return self._events.get(event_id)
 
-    def get_user_events(
-        self, 
-        user_id: str, 
-        include_past: bool = False
-    ) -> List[CalendarEvent]:
+    def get_user_events(self, user_id: str, include_past: bool = False) -> list[CalendarEvent]:
         """
         Get all events for a specific user.
-        
+
         Args:
             user_id: LINE user ID
             include_past: Whether to include past events
-            
+
         Returns:
             List of user's events sorted by date
         """
@@ -645,19 +640,16 @@ class CalendarService:
         return self._get_cached_user_events(user_id, include_past=include_past)
 
     def get_chat_events(
-        self, 
-        chat_id: str, 
-        include_past: bool = False,
-        requesting_user_id: Optional[str] = None
-    ) -> List[CalendarEvent]:
+        self, chat_id: str, include_past: bool = False, requesting_user_id: str | None = None
+    ) -> list[CalendarEvent]:
         """
         Get all events for a specific chat (group/room/DM).
-        
+
         Args:
             chat_id: Chat ID
             include_past: Whether to include past events
             requesting_user_id: User ID making the request (for audit logging)
-            
+
         Returns:
             List of chat's events sorted by date
         """
@@ -684,7 +676,7 @@ class CalendarService:
         self,
         user_id: str,
         include_past: bool = False,
-    ) -> List[CalendarEvent]:
+    ) -> list[CalendarEvent]:
         if not self._repository:
             return self._get_cached_user_events(user_id, include_past=include_past)
 
@@ -708,8 +700,8 @@ class CalendarService:
         self,
         chat_id: str,
         include_past: bool = False,
-        requesting_user_id: Optional[str] = None,
-    ) -> List[CalendarEvent]:
+        requesting_user_id: str | None = None,
+    ) -> list[CalendarEvent]:
         if not self._repository:
             events = self._get_cached_chat_events(chat_id, include_past=include_past)
             self._log_chat_view(chat_id, requesting_user_id, include_past, len(events))
@@ -733,13 +725,13 @@ class CalendarService:
         self._log_chat_view(chat_id, requesting_user_id, include_past, len(events))
         return events
 
-    def get_events_needing_reminder(self, days_before: int) -> List[CalendarEvent]:
+    def get_events_needing_reminder(self, days_before: int) -> list[CalendarEvent]:
         """
         Get all events that need a reminder for the given days_before.
-        
+
         Args:
             days_before: Days before event (0 = day-of)
-            
+
         Returns:
             List of events needing reminders
         """
@@ -757,18 +749,14 @@ class CalendarService:
             )
             return self._get_cached_events_needing_reminder(days_before)
 
-        events = [
-            item["event"]
-            for item in reminders
-            if int(item.get("days_until", -1)) == days_before
-        ]
+        events = [item["event"] for item in reminders if int(item.get("days_until", -1)) == days_before]
         self._merge_cached_events(events)
         return sorted(events, key=lambda event: event.event_date)
 
     async def get_events_needing_reminder_async(
         self,
         today: date,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         if self._repository:
             try:
                 reminders = await self._repository.get_due_reminders(today)
@@ -781,9 +769,7 @@ class CalendarService:
                 return self._get_cached_reminders_for_date(today)
 
             self._merge_cached_events([item["event"] for item in reminders])
-            reminders.sort(
-                key=lambda item: (item["event"].event_date, item["event"].title)
-            )
+            reminders.sort(key=lambda item: (item["event"].event_date, item["event"].title))
             return reminders
 
         return self._get_cached_reminders_for_date(today)
@@ -791,11 +777,11 @@ class CalendarService:
     def mark_event_notified(self, event_id: str, days_before: int) -> bool:
         """
         Mark that a reminder was sent for an event.
-        
+
         Args:
             event_id: Event ID
             days_before: Days before value that was notified
-            
+
         Returns:
             True if successful
         """
@@ -833,7 +819,7 @@ class CalendarService:
         self,
         event_id: str,
         days_before: int,
-        notified_date: Optional[date] = None,
+        notified_date: date | None = None,
     ) -> bool:
         event = self._events.get(event_id)
         if not event:
@@ -857,7 +843,7 @@ class CalendarService:
     async def remove_event_async(
         self,
         event_id: str,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ) -> bool:
         event = self._events.get(event_id)
         if not event:
@@ -889,21 +875,21 @@ class CalendarService:
         logger.info(f"📅 Removed event '{event.title}' ({event_id})")
         return True
 
-    def remove_event(self, event_id: str, user_id: Optional[str] = None) -> bool:
+    def remove_event(self, event_id: str, user_id: str | None = None) -> bool:
         """
         Remove an event.
-        
+
         Args:
             event_id: Event ID to remove
             user_id: Optional user ID for ownership verification
-            
+
         Returns:
             True if event was removed
         """
         event = self._events.get(event_id)
         if not event:
             return False
-        
+
         # Verify ownership if user_id provided
         if user_id and event.user_id != user_id:
             logger.warning(f"⚠️ User {user_id} tried to remove event owned by {event.user_id}")
@@ -933,9 +919,9 @@ class CalendarService:
 
     async def remove_events_by_ids_async(
         self,
-        event_ids: List[str],
+        event_ids: list[str],
         user_id: str,
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         removed = 0
         failed = 0
 
@@ -947,64 +933,54 @@ class CalendarService:
 
         return removed, failed
 
-    def remove_events_by_ids(
-        self, 
-        event_ids: List[str], 
-        user_id: str
-    ) -> Tuple[int, int]:
+    def remove_events_by_ids(self, event_ids: list[str], user_id: str) -> tuple[int, int]:
         """
         Remove multiple events by IDs (for multi-select removal).
-        
+
         Args:
             event_ids: List of event IDs to remove
             user_id: User ID for ownership verification
-            
+
         Returns:
             Tuple of (removed_count, failed_count)
         """
         removed = 0
         failed = 0
-        
+
         for event_id in event_ids:
             if self.remove_event(event_id, user_id):
                 removed += 1
             else:
                 failed += 1
-        
+
         return removed, failed
 
     def cleanup_past_events(self, days_to_keep: int = 30) -> int:
         """
         Remove events older than specified days.
-        
+
         Args:
             days_to_keep: Keep events up to this many days in the past
-            
+
         Returns:
             Number of events removed
         """
         cutoff_date = date.today() - timedelta(days=days_to_keep)
-        
-        to_remove = [
-            event_id for event_id, event in self._events.items()
-            if event.event_date < cutoff_date
-        ]
-        
+
+        to_remove = [event_id for event_id, event in self._events.items() if event.event_date < cutoff_date]
+
         for event_id in to_remove:
             del self._events[event_id]
-        
+
         if to_remove:
             self._save_to_local_storage()
             logger.info(f"📅 Cleaned up {len(to_remove)} old events")
-        
+
         return len(to_remove)
 
-    def get_all_events(self, include_past: bool = False) -> List[CalendarEvent]:
+    def get_all_events(self, include_past: bool = False) -> list[CalendarEvent]:
         """Get all events (for admin purposes)."""
-        events = [
-            event for event in self._events.values()
-            if include_past or not event.is_past()
-        ]
+        events = [event for event in self._events.values() if include_past or not event.is_past()]
         return sorted(events, key=lambda e: e.event_date)
 
     def stop(self):
@@ -1017,17 +993,17 @@ class CalendarService:
 
     def configure(
         self,
-        storage_path: Optional[str] = None,
-        hf_token: Optional[str] = None,
-        hf_repo_id: Optional[str] = None,
+        storage_path: str | None = None,
+        hf_token: str | None = None,
+        hf_repo_id: str | None = None,
         sync_interval_seconds: int = 300,
         repository: Optional["ConvexCalendarRepository"] = None,
     ) -> None:
         """
         Configure the calendar service after instantiation.
-        
+
         This allows the singleton to be reconfigured during app startup.
-        
+
         Args:
             storage_path: Local directory for event storage
             hf_token: Hugging Face API token for persistent storage
@@ -1041,7 +1017,7 @@ class CalendarService:
 
         if repository is not None:
             self._repository = repository
-        
+
         # Update HF Hub configuration
         if hf_token and hf_repo_id:
             self.hf_token = hf_token
@@ -1062,9 +1038,9 @@ class CalendarService:
         title: str,
         event_date: date,
         description: str = "",
-        reminder_days: Optional[List[int]] = None,
+        reminder_days: list[int] | None = None,
         is_friend: bool = False,
-        notification_target_user_id: Optional[str] = None,
+        notification_target_user_id: str | None = None,
         skip_duplicate_check: bool = False,
     ) -> CalendarEvent:
         if not skip_duplicate_check and self.has_duplicate_event(
@@ -1073,9 +1049,7 @@ class CalendarService:
             title,
             event_date,
         ):
-            raise ValueError(
-                f"Duplicate event: '{title}' on {event_date.isoformat()} already exists"
-            )
+            raise ValueError(f"Duplicate event: '{title}' on {event_date.isoformat()} already exists")
 
         is_valid, sanitized, error = calendar_validator.validate_event(
             title=title,
@@ -1165,12 +1139,10 @@ class CalendarService:
         stored_event: CalendarEvent,
         *,
         local_event_id: str,
-        repository_event_id: Optional[str],
+        repository_event_id: str | None,
     ) -> CalendarEvent:
         stored_event.event_id = local_event_id
-        stored_event.repository_event_id = (
-            stored_event.repository_event_id or repository_event_id
-        )
+        stored_event.repository_event_id = stored_event.repository_event_id or repository_event_id
         self._events[stored_event.event_id] = stored_event
         self._save_to_local_storage()
         return stored_event
@@ -1197,7 +1169,7 @@ class CalendarService:
                 )
             )
 
-    def _merge_cached_events(self, events: List[CalendarEvent]) -> None:
+    def _merge_cached_events(self, events: list[CalendarEvent]) -> None:
         for event in events:
             self._events[event.event_id] = event
         if events:
@@ -1208,10 +1180,9 @@ class CalendarService:
         user_id: str,
         *,
         include_past: bool = False,
-    ) -> List[CalendarEvent]:
+    ) -> list[CalendarEvent]:
         events = [
-            event for event in self._events.values()
-            if event.user_id == user_id and (include_past or not event.is_past())
+            event for event in self._events.values() if event.user_id == user_id and (include_past or not event.is_past())
         ]
         return sorted(events, key=lambda event: event.event_date)
 
@@ -1220,23 +1191,21 @@ class CalendarService:
         chat_id: str,
         *,
         include_past: bool = False,
-    ) -> List[CalendarEvent]:
+    ) -> list[CalendarEvent]:
         events = [
-            event for event in self._events.values()
-            if event.chat_id == chat_id and (include_past or not event.is_past())
+            event for event in self._events.values() if event.chat_id == chat_id and (include_past or not event.is_past())
         ]
         return sorted(events, key=lambda event: event.event_date)
 
-    def _get_cached_events_needing_reminder(self, days_before: int) -> List[CalendarEvent]:
+    def _get_cached_events_needing_reminder(self, days_before: int) -> list[CalendarEvent]:
         today = date.today()
         target_date = today + timedelta(days=days_before)
         return [
-            event for event in self._events.values()
-            if event.event_date == target_date and event.needs_reminder(days_before)
+            event for event in self._events.values() if event.event_date == target_date and event.needs_reminder(days_before)
         ]
 
-    def _get_cached_reminders_for_date(self, today: date) -> List[Dict[str, Any]]:
-        reminders: List[Dict[str, Any]] = []
+    def _get_cached_reminders_for_date(self, today: date) -> list[dict[str, Any]]:
+        reminders: list[dict[str, Any]] = []
         for event in self._events.values():
             days_until = (event.event_date - today).days
             if days_until < 0:
@@ -1245,15 +1214,13 @@ class CalendarService:
                 continue
             reminders.append({"event": event, "days_until": days_until})
 
-        reminders.sort(
-            key=lambda item: (item["event"].event_date, item["event"].title)
-        )
+        reminders.sort(key=lambda item: (item["event"].event_date, item["event"].title))
         return reminders
 
     def _log_chat_view(
         self,
         chat_id: str,
-        requesting_user_id: Optional[str],
+        requesting_user_id: str | None,
         include_past: bool,
         event_count: int,
     ) -> None:
@@ -1279,9 +1246,9 @@ class CalendarService:
     def _replace_cached_scope_events(
         self,
         *,
-        user_id: Optional[str] = None,
-        chat_id: Optional[str] = None,
-        events: List[CalendarEvent],
+        user_id: str | None = None,
+        chat_id: str | None = None,
+        events: list[CalendarEvent],
     ) -> None:
         retained: OrderedDict[str, CalendarEvent] = OrderedDict()
         for existing_event_id, existing_event in self._events.items():
@@ -1299,23 +1266,22 @@ class CalendarService:
 
 
 # Tuple import for type hint
-from typing import Tuple
 
 # Singleton instance - will be initialized in main.py
-_calendar_service: Optional[CalendarService] = None
+_calendar_service: CalendarService | None = None
 
 
 def init_calendar_service(
-    hf_token: Optional[str] = None,
-    hf_repo_id: Optional[str] = None,
+    hf_token: str | None = None,
+    hf_repo_id: str | None = None,
 ) -> CalendarService:
     """
     Initialize the global calendar service instance.
-    
+
     Args:
         hf_token: HF API token
         hf_repo_id: HF dataset repo ID
-        
+
     Returns:
         Initialized CalendarService
     """
@@ -1329,7 +1295,7 @@ def init_calendar_service(
     return _calendar_service
 
 
-def get_calendar_service() -> Optional[CalendarService]:
+def get_calendar_service() -> CalendarService | None:
     """Get the global calendar service instance."""
     return _calendar_service
 

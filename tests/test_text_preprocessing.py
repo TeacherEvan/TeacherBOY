@@ -1,10 +1,9 @@
 """Tests for text preprocessing utilities."""
 
-import pytest
 from src.utils.text_preprocessing import (
     extract_parenthesized_text,
-    restore_parenthesized_text,
     is_only_parenthesized_content,
+    restore_parenthesized_text,
 )
 
 
@@ -15,7 +14,7 @@ class TestTextPreprocessing:
         """Test extracting a single parenthesized item."""
         text = "(Pim) had the day off."
         processed, extracted = extract_parenthesized_text(text)
-        
+
         assert processed == "__PAREN_0__ had the day off."
         assert extracted == ["(Pim)"]
 
@@ -23,7 +22,7 @@ class TestTextPreprocessing:
         """Test extracting multiple parenthesized items."""
         text = "(John) met (Jane) at the (park)."
         processed, extracted = extract_parenthesized_text(text)
-        
+
         assert processed == "__PAREN_0__ met __PAREN_1__ at the __PAREN_2__."
         assert extracted == ["(John)", "(Jane)", "(park)"]
 
@@ -31,7 +30,7 @@ class TestTextPreprocessing:
         """Test text without any parentheses."""
         text = "Hello world"
         processed, extracted = extract_parenthesized_text(text)
-        
+
         assert processed == "Hello world"
         assert extracted == []
 
@@ -39,7 +38,7 @@ class TestTextPreprocessing:
         """Test empty parentheses."""
         text = "Test () text"
         processed, extracted = extract_parenthesized_text(text)
-        
+
         assert processed == "Test __PAREN_0__ text"
         assert extracted == ["()"]
 
@@ -47,7 +46,7 @@ class TestTextPreprocessing:
         """Test that nested parentheses are handled (innermost only)."""
         text = "Test (outer (inner)) text"
         processed, extracted = extract_parenthesized_text(text)
-        
+
         # Simple regex only matches innermost non-nested parentheses
         # So (inner) gets extracted, leaving (outer __PAREN_0__)
         assert len(extracted) == 1
@@ -59,7 +58,7 @@ class TestTextPreprocessing:
         """Test parentheses containing special characters."""
         text = "(Dr. Smith) and (Mr. O'Brien) met."
         processed, extracted = extract_parenthesized_text(text)
-        
+
         assert processed == "__PAREN_0__ and __PAREN_1__ met."
         assert extracted == ["(Dr. Smith)", "(Mr. O'Brien)"]
 
@@ -67,7 +66,7 @@ class TestTextPreprocessing:
         """Test parentheses containing numbers."""
         text = "The result (42) is correct."
         processed, extracted = extract_parenthesized_text(text)
-        
+
         assert processed == "The result __PAREN_0__ is correct."
         assert extracted == ["(42)"]
 
@@ -76,7 +75,7 @@ class TestTextPreprocessing:
         text = "__PAREN_0__ มีวันหยุด"
         extracted = ["(Pim)"]
         restored = restore_parenthesized_text(text, extracted)
-        
+
         assert restored == "(Pim) มีวันหยุด"
 
     def test_restore_multiple_parentheses(self):
@@ -84,7 +83,7 @@ class TestTextPreprocessing:
         text = "__PAREN_0__ พบ __PAREN_1__ ที่ __PAREN_2__"
         extracted = ["(John)", "(Jane)", "(park)"]
         restored = restore_parenthesized_text(text, extracted)
-        
+
         assert restored == "(John) พบ (Jane) ที่ (park)"
 
     def test_restore_no_placeholders(self):
@@ -92,22 +91,22 @@ class TestTextPreprocessing:
         text = "Hello world"
         extracted = []
         restored = restore_parenthesized_text(text, extracted)
-        
+
         assert restored == "Hello world"
 
     def test_roundtrip_preservation(self):
         """Test that extract and restore preserve the original structure."""
         original = "(Pim) had the day off and saw (Tom) at (home)."
-        
+
         # Extract
         processed, extracted = extract_parenthesized_text(original)
-        
+
         # Simulate translation (just returning the same processed text)
         translated = processed
-        
+
         # Restore
         restored = restore_parenthesized_text(translated, extracted)
-        
+
         # Should maintain parentheses in their original positions
         assert "(Pim)" in restored
         assert "(Tom)" in restored
@@ -117,7 +116,7 @@ class TestTextPreprocessing:
         """Test extraction with Thai text inside parentheses."""
         text = "(สวัสดี) Hello (ครับ)"
         processed, extracted = extract_parenthesized_text(text)
-        
+
         assert processed == "__PAREN_0__ Hello __PAREN_1__"
         assert extracted == ["(สวัสดี)", "(ครับ)"]
 
@@ -125,7 +124,7 @@ class TestTextPreprocessing:
         """Test extraction with various Unicode characters."""
         text = "(日本語) and (한국어) text"
         processed, extracted = extract_parenthesized_text(text)
-        
+
         assert processed == "__PAREN_0__ and __PAREN_1__ text"
         assert extracted == ["(日本語)", "(한국어)"]
 
@@ -133,11 +132,11 @@ class TestTextPreprocessing:
         """Test handling of identical parenthesized text appearing multiple times."""
         text = "(test) is different from (test)"
         processed, extracted = extract_parenthesized_text(text)
-        
+
         # Should extract both instances
         assert extracted == ["(test)", "(test)"]
         assert processed == "__PAREN_0__ is different from __PAREN_1__"
-        
+
         # Restore should work correctly
         restored = restore_parenthesized_text(processed, extracted)
         assert restored == text

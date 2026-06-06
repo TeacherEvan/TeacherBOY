@@ -2,17 +2,18 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+
+from linebot.v3.messaging import MessagingApi
 from linebot.v3.webhooks import (
+    FileMessageContent,
+    ImageMessageContent,
     MessageEvent,
     TextMessageContent,
-    ImageMessageContent,
-    FileMessageContent,
 )
-from linebot.v3.messaging import MessagingApi
+
+from src.utils.tracing import get_tracer
 
 from .base_agent import BaseAgent
-from src.utils.tracing import get_tracer
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -23,8 +24,8 @@ class RouteResult:
     """Lightweight route result that preserves truthy handled semantics."""
 
     handled: bool
-    agent_name: Optional[str]
-    message_type: Optional[str]
+    agent_name: str | None
+    message_type: str | None
 
     def __bool__(self) -> bool:
         return self.handled
@@ -35,8 +36,8 @@ class AgentRouter:
 
     def __init__(self):
         """Initialize agent router with priority map optimization."""
-        self.agents: List[BaseAgent] = []
-        self._priority_map: Dict[int, List[BaseAgent]] = {}  # Priority -> Agents
+        self.agents: list[BaseAgent] = []
+        self._priority_map: dict[int, list[BaseAgent]] = {}  # Priority -> Agents
         self._map_dirty = True  # Rebuild map on next route
         logger.info("✅ Agent router initialized with priority map optimization")
 
@@ -49,14 +50,12 @@ class AgentRouter:
         """
         self.agents.append(agent)
         self._map_dirty = True  # Trigger rebuild on next route
-        logger.info(
-            f"✅ Registered agent: {agent.name} (priority: {agent.get_priority()})"
-        )
+        logger.info(f"✅ Registered agent: {agent.name} (priority: {agent.get_priority()})")
 
     def load_agents_from_factory(self):
         """
         Load agents from factory (lazy approach).
-        
+
         This triggers lazy instantiation only when needed.
         Agents are loaded on first message, not at startup.
         """
@@ -65,38 +64,36 @@ class AgentRouter:
         self.agents = AgentFactory.get_all_agents()
         self._map_dirty = True  # Trigger rebuild
         logger.info(f"✅ Loaded {len(self.agents)} agents from factory (lazy loading)")
-    
+
     def _rebuild_priority_map(self):
         """
         Rebuild priority map for O(1) priority group lookup.
-        
+
         Performance: Reduces routing from O(n) to O(p) where p is number of priority levels.
         Typical case: 5-7 priority levels vs 10+ agents = 50% faster routing.
         """
         if not self._map_dirty:
             return  # Map is up-to-date
-        
+
         logger.debug("🔄 Rebuilding agent priority map...")
         self._priority_map.clear()
-        
+
         for agent in self.agents:
             priority = agent.get_priority()
             if priority not in self._priority_map:
                 self._priority_map[priority] = []
             self._priority_map[priority].append(agent)
-        
+
         self._map_dirty = False
-        
+
         # Log priority distribution for debugging
         priority_counts = {p: len(agents) for p, agents in self._priority_map.items()}
         logger.debug(f"📊 Priority map: {priority_counts}")
 
-    async def route_message(
-        self, event: MessageEvent, line_bot_api: MessagingApi
-    ) -> RouteResult:
+    async def route_message(self, event: MessageEvent, line_bot_api: MessagingApi) -> RouteResult:
         """
         Route message to first matching agent using priority-based lookup.
-        
+
         Optimization: Uses pre-built priority map for faster routing.
         Before: O(n) linear search through all agents
         After: O(p) where p = number of unique priority levels (typically 5-7)
@@ -113,7 +110,7 @@ class AgentRouter:
         """
         # Rebuild priority map if needed (lazy rebuild)
         self._rebuild_priority_map()
-        
+
         with tracer.start_as_current_span("agent_router.route_message") as span:
             # Extract text for text messages, empty string for images/other
             if isinstance(event.message, TextMessageContent):
@@ -148,7 +145,7 @@ class AgentRouter:
                 logger.info(
                     f"📨 Routing {message_type} message from {source_type} ({user_id[:8] if user_id else 'unknown'}...): '{text[:30]}...'"
                 )
-            
+
             # Try agents in priority order (lower number = higher precedence)
             for priority in sorted(self._priority_map.keys()):
                 # Within each priority level, try each agent
@@ -164,18 +161,14 @@ class AgentRouter:
                             span.set_attribute("agent.success", bool(success))
 
                             if success:
-                                logger.info(
-                                    f"✅ Message handled successfully by {agent.name}"
-                                )
+                                logger.info(f"✅ Message handled successfully by {agent.name}")
                                 return RouteResult(
                                     handled=True,
                                     agent_name=agent.name,
                                     message_type=message_type,
                                 )
                             else:
-                                logger.warning(
-                                    f"⚠️  Agent {agent.name} failed to handle message"
-                                )
+                                logger.warning(f"⚠️  Agent {agent.name} failed to handle message")
 
                     except Exception as e:
                         logger.error(f"❌ Agent {agent.name} error: {e}", exc_info=True)
@@ -190,7 +183,7 @@ class AgentRouter:
                 message_type=message_type,
             )
 
-    def list_agents(self) -> List[dict]:
+    def list_agents(self) -> list[dict]:
         """
         Get list of registered agents.
 

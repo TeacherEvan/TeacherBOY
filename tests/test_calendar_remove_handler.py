@@ -1,5 +1,5 @@
-from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -62,7 +62,10 @@ class TestRemoveHandler:
 
         assert handled is True
         remove_handler._remove_flow.send_message.assert_awaited_once()
-        assert "only the person who started this removal flow" in remove_handler._remove_flow.send_message.await_args.args[2].lower()
+        assert (
+            "only the person who started this removal flow"
+            in remove_handler._remove_flow.send_message.await_args.args[2].lower()
+        )
 
     @pytest.mark.asyncio
     async def test_cancel_during_selection_ends_session(
@@ -120,7 +123,10 @@ class TestRemoveHandler:
 
         assert handled is True
         remove_handler._remove_flow.send_message.assert_awaited_once()
-        assert "only the person who started this removal flow" in remove_handler._remove_flow.send_message.await_args.args[2].lower()
+        assert (
+            "only the person who started this removal flow"
+            in remove_handler._remove_flow.send_message.await_args.args[2].lower()
+        )
 
     @pytest.mark.asyncio
     async def test_registry_dispatches_hardened_remove_handler(

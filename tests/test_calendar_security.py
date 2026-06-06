@@ -10,24 +10,20 @@ This test suite validates:
 - Audit logging
 """
 
-import pytest
 from datetime import date, timedelta
-from unittest.mock import Mock, AsyncMock, patch
-from collections import OrderedDict
+from unittest.mock import patch
 
-from src.services.calendar_service import CalendarService, CalendarEvent
-from src.services.calendar_access_control import (
-    CalendarAccessControl,
-    CalendarRole,
-    calendar_access_control
-)
-from src.services.calendar_validator import CalendarValidator, ValidationError, calendar_validator
+import pytest
+
+from src.services.calendar_access_control import CalendarAccessControl, CalendarRole
+from src.services.calendar_service import CalendarService
+from src.services.calendar_validator import CalendarValidator
 from src.services.rate_limiter import RateLimiter
-
 
 # ============================================================================
 # Test Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def calendar_service(tmp_path):
@@ -44,10 +40,11 @@ def calendar_service(tmp_path):
 def encrypted_calendar_service(tmp_path):
     """Calendar service with encryption."""
     # Generate a test encryption key (Fernet compatible)
-    import os
     import base64
+    import os
+
     test_key = base64.urlsafe_b64encode(os.urandom(32)).decode("utf-8")
-    
+
     return CalendarService(
         hf_token=None,
         hf_repo_id=None,
@@ -78,6 +75,7 @@ def rate_limiter():
 # Cross-Chat Isolation Tests
 # ============================================================================
 
+
 def test_chat_isolation_get_events(calendar_service):
     """Test that events are isolated by chat_id."""
     # Add events to different chats
@@ -87,19 +85,19 @@ def test_chat_isolation_get_events(calendar_service):
         title="Group A Event",
         event_date=date.today() + timedelta(days=1),
     )
-    
+
     event2 = calendar_service.add_event(
         user_id="U002",
         chat_id="group_B",
         title="Group B Event",
         event_date=date.today() + timedelta(days=2),
     )
-    
+
     # Get events for group_A - should only see event1
     group_a_events = calendar_service.get_chat_events("group_A")
     assert len(group_a_events) == 1
     assert group_a_events[0].event_id == event1.event_id
-    
+
     # Get events for group_B - should only see event2
     group_b_events = calendar_service.get_chat_events("group_B")
     assert len(group_b_events) == 1
@@ -115,7 +113,7 @@ def test_private_dm_isolation(calendar_service):
         title="Private Event",
         event_date=date.today() + timedelta(days=1),
     )
-    
+
     # Same user creates event in group
     group_event = calendar_service.add_event(
         user_id="U001",
@@ -123,12 +121,12 @@ def test_private_dm_isolation(calendar_service):
         title="Group Event",
         event_date=date.today() + timedelta(days=2),
     )
-    
+
     # DM events should not appear in group
     group_events = calendar_service.get_chat_events("group_A")
     assert len(group_events) == 1
     assert group_events[0].event_id == group_event.event_id
-    
+
     # Group events should not appear in DM
     dm_events = calendar_service.get_chat_events("user_U001")
     assert len(dm_events) == 1
@@ -139,10 +137,11 @@ def test_private_dm_isolation(calendar_service):
 # RBAC Tests
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_admin_role_bypass(access_control):
     """Test that admins have access to all chats."""
-    with patch.object(access_control, '_is_admin', return_value=True):
+    with patch.object(access_control, "_is_admin", return_value=True):
         role = await access_control.get_user_role(
             user_id="ADMIN001",
             chat_id="group_A",
@@ -185,12 +184,12 @@ async def test_dm_non_member_access(access_control):
 async def test_can_view_events_permission(access_control):
     """Test view events permission checking."""
     # Admin can view
-    with patch.object(access_control, '_is_admin', return_value=True):
+    with patch.object(access_control, "_is_admin", return_value=True):
         assert await access_control.can_view_events("ADMIN", "group_A")
-    
+
     # Member can view their own DM
     assert await access_control.can_view_events("U001", "user_U001")
-    
+
     # Non-member cannot view other's DM
     assert not await access_control.can_view_events("U002", "user_U001")
 
@@ -205,7 +204,7 @@ async def test_can_modify_event_permission(access_control):
         event_owner_id="U001",
     )
     assert can_modify
-    
+
     # Non-owner cannot modify
     can_modify = await access_control.can_modify_event(
         user_id="U002",
@@ -219,6 +218,7 @@ async def test_can_modify_event_permission(access_control):
 # Encryption Tests
 # ============================================================================
 
+
 def test_encryption_enabled(encrypted_calendar_service):
     """Test that encryption is properly initialized."""
     assert encrypted_calendar_service._cipher_suite is not None
@@ -228,7 +228,7 @@ def test_encryption_enabled(encrypted_calendar_service):
 def test_encrypted_storage_cycle(encrypted_calendar_service, tmp_path):
     """Test that data is encrypted when saved and decrypted when loaded."""
     encrypted_calendar_service.local_storage_path = tmp_path
-    
+
     # Add event
     event = encrypted_calendar_service.add_event(
         user_id="U001",
@@ -236,20 +236,21 @@ def test_encrypted_storage_cycle(encrypted_calendar_service, tmp_path):
         title="Encrypted Event",
         event_date=date.today() + timedelta(days=1),
     )
-    
+
     # Verify file exists and is encrypted (not plain JSON)
     calendar_file = tmp_path / "calendar_events.json"
     assert calendar_file.exists()
-    
+
     # Read raw file - should be encrypted bytes, not JSON
-    with open(calendar_file, 'rb') as f:
+    with open(calendar_file, "rb") as f:
         raw_content = f.read()
-    
+
     # Should not be valid JSON
     with pytest.raises(Exception):
         import json
+
         json.loads(raw_content)
-    
+
     # Create new service instance to test decryption on load
     new_service = CalendarService(
         hf_token=None,
@@ -257,7 +258,7 @@ def test_encrypted_storage_cycle(encrypted_calendar_service, tmp_path):
         local_storage_path=str(tmp_path),
         encryption_key=encrypted_calendar_service._encryption_key,
     )
-    
+
     # Should successfully decrypt and load event
     loaded_events = new_service.get_chat_events("group_A")
     assert len(loaded_events) == 1
@@ -268,15 +269,16 @@ def test_encrypted_storage_cycle(encrypted_calendar_service, tmp_path):
 # Rate Limiting Tests
 # ============================================================================
 
+
 def test_calendar_rate_limit_user(rate_limiter):
     """Test user-based calendar rate limiting."""
     user_id = "U001"
     chat_id = "group_A"
-    
+
     # First 10 operations should succeed
     for i in range(10):
         assert rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin=False)
-    
+
     # 11th operation should fail (limit is 10/minute)
     assert not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin=False)
 
@@ -284,12 +286,12 @@ def test_calendar_rate_limit_user(rate_limiter):
 def test_calendar_rate_limit_chat(rate_limiter):
     """Test chat-based calendar rate limiting."""
     chat_id = "group_A"
-    
+
     # Simulate 30 operations from different users (chat limit)
     for i in range(30):
         user_id = f"U{i:03d}"
         assert rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin=False)
-    
+
     # 31st operation should fail (chat limit is 30/minute)
     assert not rate_limiter.is_calendar_operation_allowed("U999", chat_id, is_admin=False)
 
@@ -298,7 +300,7 @@ def test_calendar_rate_limit_admin_bypass(rate_limiter):
     """Test that admins bypass rate limits."""
     user_id = "ADMIN"
     chat_id = "group_A"
-    
+
     # Admin should be able to exceed limits
     for i in range(50):
         assert rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin=True)
@@ -307,6 +309,7 @@ def test_calendar_rate_limit_admin_bypass(rate_limiter):
 # ============================================================================
 # Input Validation Tests
 # ============================================================================
+
 
 def test_title_validation_empty(validator):
     """Test that empty titles are rejected."""
@@ -368,10 +371,7 @@ def test_reminder_days_validation(validator):
 def test_complete_event_validation(validator):
     """Test complete event validation."""
     valid, data, error = validator.validate_event(
-        title="Team Meeting",
-        event_date=date.today() + timedelta(days=7),
-        description="Discuss Q1 goals",
-        reminder_days=[7, 1]
+        title="Team Meeting", event_date=date.today() + timedelta(days=7), description="Discuss Q1 goals", reminder_days=[7, 1]
     )
     assert valid
     assert data["title"] == "Team Meeting"
@@ -382,21 +382,23 @@ def test_complete_event_validation(validator):
 # Audit Logging Tests
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_audit_log_event_creation(calendar_service, monkeypatch):
     """Test that event creation is logged."""
     log_calls = []
-    
+
     async def mock_log(**kwargs):
         log_calls.append(kwargs)
-    
+
     class _MockHistoryLog:
         async def log(self, **kwargs):
             await mock_log(**kwargs)
 
     from src.services import calendar_service as calendar_service_module
+
     monkeypatch.setattr(calendar_service_module, "get_history_log", lambda: _MockHistoryLog())
-    
+
     # Create event
     calendar_service.add_event(
         user_id="U001",
@@ -407,8 +409,9 @@ async def test_audit_log_event_creation(calendar_service, monkeypatch):
 
     # Allow background task to run
     import asyncio
+
     await asyncio.sleep(0)
-    
+
     # Verify log was called
     assert len(log_calls) > 0
     # Audit log is scheduled as a background task; ensure at least one call happened
@@ -418,6 +421,7 @@ async def test_audit_log_event_creation(calendar_service, monkeypatch):
 # ============================================================================
 # Edge Cases & Security
 # ============================================================================
+
 
 def test_sql_injection_prevention(validator):
     """Test that SQL injection attempts are sanitized."""
@@ -430,7 +434,7 @@ def test_sql_injection_prevention(validator):
 
 def test_control_character_removal(validator):
     """Test that control characters are removed."""
-    title_with_control = "Event\x00\x01\x1FTitle"
+    title_with_control = "Event\x00\x01\x1fTitle"
     valid, sanitized, error = validator.validate_title(title_with_control)
     assert valid
     assert "\x00" not in sanitized

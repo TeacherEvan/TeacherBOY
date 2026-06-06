@@ -12,16 +12,17 @@ Similar pattern to image_analyzer_session_manager.py and news_session_manager.py
 import asyncio
 import logging
 import re
-from datetime import datetime, date, timedelta
-from typing import Dict, List, Optional, Any
-from enum import Enum
 from dataclasses import dataclass, field
+from datetime import date, datetime
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class CalendarState(Enum):
     """States for the calendar session flow."""
+
     IDLE = "idle"
     AWAITING_DATE = "awaiting_date"
     AWAITING_TITLE = "awaiting_title"
@@ -53,58 +54,58 @@ class CalendarState(Enum):
 @dataclass
 class CalendarSession:
     """Session data for calendar operations."""
-    
+
     user_id: str
     chat_id: str
     state: CalendarState = CalendarState.IDLE
-    
+
     # Event being created
-    pending_date: Optional[date] = None
-    pending_title: Optional[str] = None
-    pending_description: Optional[str] = None
-    pending_reminder_days: Optional[List[int]] = None
+    pending_date: date | None = None
+    pending_title: str | None = None
+    pending_description: str | None = None
+    pending_reminder_days: list[int] | None = None
     pending_is_friend: bool = False
-    
+
     # For removal flow
-    events_for_removal: List[Dict[str, Any]] = field(default_factory=list)
-    selected_event_ids: List[str] = field(default_factory=list)
+    events_for_removal: list[dict[str, Any]] = field(default_factory=list)
+    selected_event_ids: list[str] = field(default_factory=list)
     removal_revision: int = 0
     removal_flow_nonce: int = 0
     removal_confirmation_code: str = ""
-    
+
     # For image date extraction
-    extracted_dates: List[Dict[str, Any]] = field(default_factory=list)  # [{date, title, description}]
+    extracted_dates: list[dict[str, Any]] = field(default_factory=list)  # [{date, title, description}]
     current_extraction_index: int = 0
-    
+
     # For "Zeus Scrape" flow
-    scraped_events: List[Dict[str, Any]] = field(default_factory=list)  # Events extracted from messages
+    scraped_events: list[dict[str, Any]] = field(default_factory=list)  # Events extracted from messages
     current_scrape_index: int = 0  # Which scraped event is being processed
-    selected_scraped_indices: List[int] = field(default_factory=list)
+    selected_scraped_indices: list[int] = field(default_factory=list)
     scrape_selection_revision: int = 0
     scrape_preview_revision: int = 0
-    scraped_source_messages: List[str] = field(default_factory=list)  # Source messages for context
-    discrete_scrape_target: Optional[str] = None  # User ID for discrete scrape DM delivery
+    scraped_source_messages: list[str] = field(default_factory=list)  # Source messages for context
+    discrete_scrape_target: str | None = None  # User ID for discrete scrape DM delivery
 
     # For "Zeus Add Event" live bulk-add flow
-    live_events: List[Dict[str, Any]] = field(default_factory=list)  # Events scraped from incoming messages
+    live_events: list[dict[str, Any]] = field(default_factory=list)  # Events scraped from incoming messages
     current_live_index: int = 0
-    
+
     # For "Zeus Add [date] [title]" inline flow
-    inline_event_data: Optional[Dict[str, Any]] = None  # Pre-parsed date/title from command
-    
+    inline_event_data: dict[str, Any] | None = None  # Pre-parsed date/title from command
+
     # Timestamps
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
-    
+
     def update(self) -> None:
         """Update the timestamp."""
         self.updated_at = datetime.now()
-    
+
     def is_expired(self, ttl_seconds: int = 120) -> bool:
         """Check if session has expired (2 minutes default)."""
         age = (datetime.now() - self.updated_at).total_seconds()
         return age > ttl_seconds
-    
+
     def reset(self) -> None:
         """Reset session to idle state."""
         self.state = CalendarState.IDLE
@@ -144,15 +145,15 @@ class CalendarSessionManager:
 
     def __init__(self):
         """Initialize calendar session manager."""
-        self._sessions: Dict[str, CalendarSession] = {}
-        self._recently_expired_remove_flows: Dict[str, Dict[str, datetime]] = {}
-        self._recently_expired_scrape_flows: Dict[str, Dict[str, datetime]] = {}
+        self._sessions: dict[str, CalendarSession] = {}
+        self._recently_expired_remove_flows: dict[str, dict[str, datetime]] = {}
+        self._recently_expired_scrape_flows: dict[str, dict[str, datetime]] = {}
         self._session_ttl_seconds = 120  # 2 minutes per step
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
         self._cleanup_interval_seconds = 60
         self._remove_flow_nonce_counter = 0
 
-    def get_session(self, chat_id: str) -> Optional[CalendarSession]:
+    def get_session(self, chat_id: str) -> CalendarSession | None:
         """
         Get session for a chat if it exists and hasn't expired.
 
@@ -164,9 +165,9 @@ class CalendarSessionManager:
         """
         if chat_id not in self._sessions:
             return None
-        
+
         session = self._sessions[chat_id]
-        
+
         if session.is_expired(self._session_ttl_seconds):
             logger.info(f"📅 Calendar session expired for chat {chat_id}")
             if session.state in {
@@ -182,14 +183,10 @@ class CalendarSessionManager:
                 self._mark_recent_scrape_followup(session)
             del self._sessions[chat_id]
             return None
-        
+
         return session
 
-    def get_or_create_session(
-        self, 
-        chat_id: str, 
-        user_id: str
-    ) -> CalendarSession:
+    def get_or_create_session(self, chat_id: str, user_id: str) -> CalendarSession:
         """
         Get existing session or create new one.
 
@@ -205,7 +202,7 @@ class CalendarSessionManager:
             return session
 
         self._clear_recent_remove_marker(chat_id, user_id)
-        
+
         session = CalendarSession(user_id=user_id, chat_id=chat_id)
         self._sessions[chat_id] = session
         logger.info(f"📅 Created calendar session for chat {chat_id}")
@@ -216,11 +213,7 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         return session is not None and session.state != CalendarState.IDLE
 
-    def is_session_owner(
-        self, 
-        chat_id: str, 
-        user_id: Optional[str]
-    ) -> bool:
+    def is_session_owner(self, chat_id: str, user_id: str | None) -> bool:
         """Check if user owns the session."""
         session = self.get_session(chat_id)
         if not session:
@@ -231,12 +224,7 @@ class CalendarSessionManager:
     # Add Event Flow
     # =========================================================================
 
-    def start_add_flow(
-        self, 
-        chat_id: str, 
-        user_id: str,
-        is_friend: bool = False
-    ) -> CalendarSession:
+    def start_add_flow(self, chat_id: str, user_id: str, is_friend: bool = False) -> CalendarSession:
         """
         Start the add event flow.
 
@@ -253,11 +241,11 @@ class CalendarSessionManager:
         session.state = CalendarState.AWAITING_DATE
         session.pending_is_friend = is_friend
         session.update()
-        
+
         logger.info(f"📅 Started add event flow for chat {chat_id}")
         return session
 
-    def set_pending_date(self, chat_id: str, event_date: date) -> Optional[CalendarSession]:
+    def set_pending_date(self, chat_id: str, event_date: date) -> CalendarSession | None:
         """
         Set the pending event date and advance to title state.
 
@@ -271,14 +259,14 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.AWAITING_DATE:
             return None
-        
+
         session.pending_date = event_date
         session.state = CalendarState.AWAITING_TITLE
         session.update()
-        
+
         return session
 
-    def set_pending_title(self, chat_id: str, title: str) -> Optional[CalendarSession]:
+    def set_pending_title(self, chat_id: str, title: str) -> CalendarSession | None:
         """
         Set the pending event title and advance to description state.
 
@@ -292,18 +280,14 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.AWAITING_TITLE:
             return None
-        
+
         session.pending_title = title
         session.state = CalendarState.AWAITING_DESCRIPTION
         session.update()
-        
+
         return session
 
-    def set_pending_description(
-        self, 
-        chat_id: str, 
-        description: str
-    ) -> Optional[CalendarSession]:
+    def set_pending_description(self, chat_id: str, description: str) -> CalendarSession | None:
         """
         Set the pending description and advance to reminder days state.
 
@@ -317,18 +301,14 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.AWAITING_DESCRIPTION:
             return None
-        
+
         session.pending_description = description
         session.state = CalendarState.AWAITING_REMINDER_DAYS
         session.update()
-        
+
         return session
 
-    def set_pending_reminder_days(
-        self, 
-        chat_id: str, 
-        reminder_days: List[int]
-    ) -> Optional[CalendarSession]:
+    def set_pending_reminder_days(self, chat_id: str, reminder_days: list[int]) -> CalendarSession | None:
         """
         Set reminder days and advance to confirmation state.
 
@@ -342,18 +322,18 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.AWAITING_REMINDER_DAYS:
             return None
-        
+
         # Always include day-of reminder
         if 0 not in reminder_days:
             reminder_days.append(0)
-        
+
         session.pending_reminder_days = reminder_days
         session.state = CalendarState.CONFIRMING_ADD
         session.update()
-        
+
         return session
 
-    def get_pending_event_data(self, chat_id: str) -> Optional[Dict[str, Any]]:
+    def get_pending_event_data(self, chat_id: str) -> dict[str, Any] | None:
         """
         Get all pending event data for creation.
 
@@ -363,7 +343,7 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.CONFIRMING_ADD:
             return None
-        
+
         return {
             "date": session.pending_date,
             "title": session.pending_title,
@@ -376,12 +356,7 @@ class CalendarSessionManager:
     # Remove Event Flow
     # =========================================================================
 
-    def start_removal_flow(
-        self, 
-        chat_id: str, 
-        user_id: str,
-        events: List[Dict[str, Any]]
-    ) -> CalendarSession:
+    def start_removal_flow(self, chat_id: str, user_id: str, events: list[dict[str, Any]]) -> CalendarSession:
         """
         Start the event removal flow.
 
@@ -402,15 +377,11 @@ class CalendarSessionManager:
         session.removal_confirmation_code = ""
         self._clear_recent_remove_marker(chat_id, user_id)
         session.update()
-        
+
         logger.info(f"📅 Started removal flow for chat {chat_id} with {len(events)} events")
         return session
 
-    def set_removal_selection(
-        self, 
-        chat_id: str, 
-        event_ids: List[str]
-    ) -> Optional[CalendarSession]:
+    def set_removal_selection(self, chat_id: str, event_ids: list[str]) -> CalendarSession | None:
         """
         Set the events selected for removal.
 
@@ -424,19 +395,17 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.AWAITING_REMOVAL_SELECTION:
             return None
-        
+
         session.selected_event_ids = event_ids
         if session.removal_flow_nonce == 0:
             session.removal_flow_nonce = self._next_remove_flow_nonce()
-        session.removal_confirmation_code = (
-            f"{session.removal_flow_nonce:08x}{session.removal_revision:04x}"
-        )
+        session.removal_confirmation_code = f"{session.removal_flow_nonce:08x}{session.removal_revision:04x}"
         session.state = CalendarState.CONFIRMING_REMOVAL
         session.update()
-        
+
         return session
 
-    def get_removal_event_ids(self, chat_id: str) -> Optional[List[str]]:
+    def get_removal_event_ids(self, chat_id: str) -> list[str] | None:
         """
         Get the event IDs selected for removal.
 
@@ -446,14 +415,14 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.CONFIRMING_REMOVAL:
             return None
-        
+
         return session.selected_event_ids
 
     def apply_remove_selection(
         self,
         chat_id: str,
         text: str,
-    ) -> Optional[CalendarSession]:
+    ) -> CalendarSession | None:
         """Apply an explicit remove selection command while staying in selection mode."""
         session = self.get_session(chat_id)
         if not session or session.state not in (
@@ -463,7 +432,7 @@ class CalendarSessionManager:
             return None
 
         normalized = (text or "").strip().lower()
-        event_ids: Optional[List[str]] = None
+        event_ids: list[str] | None = None
 
         if normalized == "all":
             event_ids = [event["event_id"] for event in session.events_for_removal]
@@ -485,7 +454,7 @@ class CalendarSessionManager:
         session.update()
         return session
 
-    def finalize_remove_selection(self, chat_id: str) -> Optional[Dict[str, Any]]:
+    def finalize_remove_selection(self, chat_id: str) -> dict[str, Any] | None:
         """Lock the current remove selection into an explicit delete preview."""
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.AWAITING_REMOVAL_SELECTION:
@@ -497,9 +466,7 @@ class CalendarSessionManager:
         if len(items) != len(session.selected_event_ids):
             return None
 
-        session.removal_confirmation_code = (
-            f"{session.removal_flow_nonce:08x}{session.removal_revision:04x}"
-        )
+        session.removal_confirmation_code = f"{session.removal_flow_nonce:08x}{session.removal_revision:04x}"
         session.state = CalendarState.CONFIRMING_REMOVAL
         session.update()
         return {
@@ -512,9 +479,9 @@ class CalendarSessionManager:
     def validate_remove_confirmation(
         self,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         code: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Validate explicit delete confirmation against owner and preview code."""
         session = self.get_session(chat_id)
         if not session:
@@ -543,9 +510,9 @@ class CalendarSessionManager:
     def confirm_remove_selection(
         self,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         code: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Return confirmed removal payload when the owner and preview code still match."""
         result = self.validate_remove_confirmation(chat_id, user_id, code)
         return result if result.get("ok") else None
@@ -558,10 +525,10 @@ class CalendarSessionManager:
     def _parse_remove_number_selection(
         self,
         text: str,
-        events: List[Dict[str, Any]],
-    ) -> Optional[List[str]]:
+        events: list[dict[str, Any]],
+    ) -> list[str] | None:
         """Parse comma-separated remove indexes without guessing mixed input."""
-        selected_ids: List[str] = []
+        selected_ids: list[str] = []
         seen_ids = set()
 
         for part in [piece.strip() for piece in text.split(",")]:
@@ -575,12 +542,9 @@ class CalendarSessionManager:
 
         return selected_ids
 
-    def _get_selected_removal_items(self, session: CalendarSession) -> List[Dict[str, Any]]:
+    def _get_selected_removal_items(self, session: CalendarSession) -> list[dict[str, Any]]:
         """Resolve selected removal items in the same order as the current selection."""
-        events_by_id = {
-            event["event_id"]: event
-            for event in session.events_for_removal
-        }
+        events_by_id = {event["event_id"]: event for event in session.events_for_removal}
         return [
             {
                 "event_id": event_id,
@@ -596,11 +560,7 @@ class CalendarSessionManager:
     # =========================================================================
 
     def start_extraction_flow(
-        self, 
-        chat_id: str, 
-        user_id: str,
-        extracted_dates: List[Dict[str, Any]],
-        is_friend: bool = False
+        self, chat_id: str, user_id: str, extracted_dates: list[dict[str, Any]], is_friend: bool = False
     ) -> CalendarSession:
         """
         Start flow for processing dates extracted from an image.
@@ -621,14 +581,11 @@ class CalendarSessionManager:
         session.current_extraction_index = 0
         session.pending_is_friend = is_friend
         session.update()
-        
-        logger.info(
-            f"📅 Started extraction flow for chat {chat_id} "
-            f"with {len(extracted_dates)} dates"
-        )
+
+        logger.info(f"📅 Started extraction flow for chat {chat_id} with {len(extracted_dates)} dates")
         return session
 
-    def get_current_extracted_date(self, chat_id: str) -> Optional[Dict[str, Any]]:
+    def get_current_extracted_date(self, chat_id: str) -> dict[str, Any] | None:
         """
         Get the current date being processed from extraction.
 
@@ -638,10 +595,10 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.PROCESSING_EXTRACTED_DATES:
             return None
-        
+
         if session.current_extraction_index >= len(session.extracted_dates):
             return None
-        
+
         return session.extracted_dates[session.current_extraction_index]
 
     def advance_extraction_index(self, chat_id: str) -> bool:
@@ -654,17 +611,13 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.PROCESSING_EXTRACTED_DATES:
             return False
-        
+
         session.current_extraction_index += 1
         session.update()
-        
+
         return session.current_extraction_index < len(session.extracted_dates)
 
-    def set_extraction_reminder_days(
-        self, 
-        chat_id: str, 
-        reminder_days: List[int]
-    ) -> Optional[Dict[str, Any]]:
+    def set_extraction_reminder_days(self, chat_id: str, reminder_days: list[int]) -> dict[str, Any] | None:
         """
         Set reminder days for current extracted date.
 
@@ -674,15 +627,15 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.PROCESSING_EXTRACTED_DATES:
             return None
-        
+
         current = self.get_current_extracted_date(chat_id)
         if not current:
             return None
-        
+
         # Always include day-of
         if 0 not in reminder_days:
             reminder_days.append(0)
-        
+
         return {
             "date": current.get("date"),
             "title": current.get("title", "Event from image"),
@@ -696,11 +649,7 @@ class CalendarSessionManager:
     # =========================================================================
 
     def start_scrape_flow(
-        self,
-        chat_id: str,
-        user_id: str,
-        source_messages: List[str],
-        is_friend: bool = False
+        self, chat_id: str, user_id: str, source_messages: list[str], is_friend: bool = False
     ) -> CalendarSession:
         """
         Start the scrape flow to extract dates from recent messages.
@@ -722,25 +671,18 @@ class CalendarSessionManager:
         session.scraped_source_messages = source_messages
         session.pending_is_friend = is_friend
         session.update()
-        
-        logger.info(
-            f"📅 Started scrape flow for chat {chat_id} "
-            f"with {len(source_messages)} messages"
-        )
+
+        logger.info(f"📅 Started scrape flow for chat {chat_id} with {len(source_messages)} messages")
         return session
 
-    def set_discrete_scrape_target(
-        self,
-        chat_id: str,
-        target_user_id: str
-    ) -> bool:
+    def set_discrete_scrape_target(self, chat_id: str, target_user_id: str) -> bool:
         """
         Set discrete scrape target for sending DMs.
-        
+
         Args:
             chat_id: Chat identifier (group where scraping occurs)
             target_user_id: User ID to send confirmations/reminders to
-            
+
         Returns:
             True if set successfully
         """
@@ -748,7 +690,7 @@ class CalendarSessionManager:
         if not session:
             logger.warning(f"⚠️ No session found for discrete scrape target: {chat_id}")
             return False
-        
+
         self._clear_conflicting_discrete_sessions(chat_id, target_user_id)
         session.discrete_scrape_target = target_user_id
         self._clear_recent_scrape_marker(f"user_{target_user_id}", session.user_id)
@@ -758,7 +700,7 @@ class CalendarSessionManager:
 
     def _clear_conflicting_discrete_sessions(self, chat_id: str, target_user_id: str) -> None:
         """Keep DM scrape replies unambiguous by allowing one DM/discrete session per user."""
-        conflicting_chat_ids: List[str] = []
+        conflicting_chat_ids: list[str] = []
         user_chat_id = f"user_{target_user_id}"
 
         for candidate_chat_id, candidate in list(self._sessions.items()):
@@ -785,7 +727,7 @@ class CalendarSessionManager:
     def resolve_discrete_scrape_chat_id(
         self,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> str:
         """Resolve DM replies back to the owning discrete scrape session when one exists."""
         if not user_id or chat_id in self._sessions:
@@ -810,11 +752,11 @@ class CalendarSessionManager:
                 return candidate_chat_id
 
         return chat_id
-    
-    def get_discrete_scrape_target(self, chat_id: str) -> Optional[str]:
+
+    def get_discrete_scrape_target(self, chat_id: str) -> str | None:
         """
         Get discrete scrape target user ID.
-        
+
         Returns:
             User ID for discrete scrape DM delivery, or None
         """
@@ -832,13 +774,8 @@ class CalendarSessionManager:
     # =========================================================================
     # Live Bulk Add Flow ("zeus add event") - Enhanced with Smart Mode Selection
     # =========================================================================
-    
-    def start_add_mode_selection(
-        self,
-        chat_id: str,
-        user_id: str,
-        is_friend: bool = False
-    ) -> None:
+
+    def start_add_mode_selection(self, chat_id: str, user_id: str, is_friend: bool = False) -> None:
         """Start the add mode selection flow (scan/listen/manual)."""
         session = self.get_or_create_session(chat_id, user_id)
         session.state = CalendarState.ADD_MODE_SELECTION
@@ -864,8 +801,8 @@ class CalendarSessionManager:
     def add_live_events(
         self,
         chat_id: str,
-        events: List[Dict[str, Any]],
-    ) -> Optional[CalendarSession]:
+        events: list[dict[str, Any]],
+    ) -> CalendarSession | None:
         """Append newly detected live events and move to review state if needed."""
         session = self.get_session(chat_id)
         if not session or session.state not in (
@@ -885,7 +822,7 @@ class CalendarSessionManager:
         session.update()
         return session
 
-    def get_current_live_event(self, chat_id: str) -> Optional[Dict[str, Any]]:
+    def get_current_live_event(self, chat_id: str) -> dict[str, Any] | None:
         """Return the current live-scraped event dict."""
         session = self.get_session(chat_id)
         if not session or session.state not in (
@@ -897,7 +834,7 @@ class CalendarSessionManager:
             return None
         return session.live_events[session.current_live_index]
 
-    def accept_live_event(self, chat_id: str) -> Optional[CalendarSession]:
+    def accept_live_event(self, chat_id: str) -> CalendarSession | None:
         """Move from reviewing to reminder-days selection for the current live event."""
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.LIVE_ADD_REVIEWING:
@@ -922,8 +859,8 @@ class CalendarSessionManager:
     def set_live_reminder_days(
         self,
         chat_id: str,
-        reminder_days: List[int],
-    ) -> Optional[Dict[str, Any]]:
+        reminder_days: list[int],
+    ) -> dict[str, Any] | None:
         """Return full event data for creation based on current live event."""
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.LIVE_ADD_REMINDER_DAYS:
@@ -945,11 +882,7 @@ class CalendarSessionManager:
             "is_friend": session.pending_is_friend,
         }
 
-    def set_scraped_events(
-        self,
-        chat_id: str,
-        events: List[Dict[str, Any]]
-    ) -> Optional[CalendarSession]:
+    def set_scraped_events(self, chat_id: str, events: list[dict[str, Any]]) -> CalendarSession | None:
         """
         Set the events extracted from scraping.
 
@@ -963,7 +896,7 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.SCRAPE_PROCESSING:
             return None
-        
+
         session.scraped_events = events
         session.current_scrape_index = 0
         session.selected_scraped_indices = []
@@ -971,17 +904,15 @@ class CalendarSessionManager:
         session.scrape_preview_revision = 0
         session.state = CalendarState.SCRAPE_SELECTING
         session.update()
-        
-        logger.info(
-            f"📅 Found {len(events)} events in scrape for chat {chat_id}"
-        )
+
+        logger.info(f"📅 Found {len(events)} events in scrape for chat {chat_id}")
         return session
 
     def apply_scrape_selection(
         self,
         chat_id: str,
         text: str,
-    ) -> Optional[CalendarSession]:
+    ) -> CalendarSession | None:
         """Apply an explicit scrape-batch selection command while staying in selection mode."""
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.SCRAPE_SELECTING:
@@ -1011,20 +942,20 @@ class CalendarSessionManager:
         session.update()
         return session
 
-    def get_selected_scraped_events(self, chat_id: str) -> List[Dict[str, Any]]:
+    def get_selected_scraped_events(self, chat_id: str) -> list[dict[str, Any]]:
         """Return the currently selected scraped events in numeric order."""
         session = self.get_session(chat_id)
         if not session:
             return []
 
-        selected_events: List[Dict[str, Any]] = []
+        selected_events: list[dict[str, Any]] = []
         for index in session.selected_scraped_indices:
             if index < 0 or index >= len(session.scraped_events):
                 return []
             selected_events.append(session.scraped_events[index])
         return selected_events
 
-    def finalize_scrape_selection(self, chat_id: str) -> Optional[Dict[str, Any]]:
+    def finalize_scrape_selection(self, chat_id: str) -> dict[str, Any] | None:
         """Lock the current scrape selection and transition to the shared reminder step."""
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.SCRAPE_SELECTING:
@@ -1048,8 +979,8 @@ class CalendarSessionManager:
     def validate_scrape_batch_confirmation(
         self,
         chat_id: str,
-        user_id: Optional[str],
-    ) -> Dict[str, Any]:
+        user_id: str | None,
+    ) -> dict[str, Any]:
         """Validate that the shared reminder choice still matches the preview owner and revision."""
         session = self.get_session(chat_id)
         if not session:
@@ -1079,9 +1010,9 @@ class CalendarSessionManager:
     def _toggle_scrape_number_selection(
         self,
         text: str,
-        events: List[Dict[str, Any]],
-        current_selection: List[int],
-    ) -> Optional[List[int]]:
+        events: list[dict[str, Any]],
+        current_selection: list[int],
+    ) -> list[int] | None:
         """Toggle selected scrape indexes without guessing mixed or out-of-range input."""
         toggled = set(current_selection)
 
@@ -1101,13 +1032,7 @@ class CalendarSessionManager:
     # =========================================================================
 
     def start_inline_add_flow(
-        self,
-        chat_id: str,
-        user_id: str,
-        event_date: date,
-        title: str,
-        description: str = "",
-        is_friend: bool = False
+        self, chat_id: str, user_id: str, event_date: date, title: str, description: str = "", is_friend: bool = False
     ) -> CalendarSession:
         """
         Start inline add flow with pre-parsed date and title.
@@ -1135,18 +1060,11 @@ class CalendarSessionManager:
         }
         session.pending_is_friend = is_friend
         session.update()
-        
-        logger.info(
-            f"📅 Started inline add flow for chat {chat_id}: "
-            f"{title} on {event_date}"
-        )
+
+        logger.info(f"📅 Started inline add flow for chat {chat_id}: {title} on {event_date}")
         return session
 
-    def set_inline_reminder_days(
-        self,
-        chat_id: str,
-        reminder_days: List[int]
-    ) -> Optional[Dict[str, Any]]:
+    def set_inline_reminder_days(self, chat_id: str, reminder_days: list[int]) -> dict[str, Any] | None:
         """
         Set reminder days for inline add event.
 
@@ -1156,18 +1074,18 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if not session or session.state != CalendarState.INLINE_ADD_REMINDER_DAYS:
             return None
-        
+
         if not session.inline_event_data:
             return None
-        
+
         # Always include day-of reminder
         if 0 not in reminder_days:
             reminder_days.append(0)
-        
+
         session.pending_reminder_days = reminder_days
         session.state = CalendarState.INLINE_ADD_CONFIRMING
         session.update()
-        
+
         return {
             "date": session.inline_event_data.get("date"),
             "title": session.inline_event_data.get("title", "Event"),
@@ -1176,7 +1094,7 @@ class CalendarSessionManager:
             "is_friend": session.pending_is_friend,
         }
 
-    def get_inline_event_data(self, chat_id: str) -> Optional[Dict[str, Any]]:
+    def get_inline_event_data(self, chat_id: str) -> dict[str, Any] | None:
         """
         Get the inline event data for display/confirmation.
 
@@ -1184,12 +1102,9 @@ class CalendarSessionManager:
             Dict with date, title, description
         """
         session = self.get_session(chat_id)
-        if not session or session.state not in (
-            CalendarState.INLINE_ADD_REMINDER_DAYS,
-            CalendarState.INLINE_ADD_CONFIRMING
-        ):
+        if not session or session.state not in (CalendarState.INLINE_ADD_REMINDER_DAYS, CalendarState.INLINE_ADD_CONFIRMING):
             return None
-        
+
         return session.inline_event_data
 
     # =========================================================================
@@ -1222,7 +1137,7 @@ class CalendarSessionManager:
     def had_recent_remove_flow(
         self,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         grace_seconds: int = 180,
     ) -> bool:
         """Return whether a remove flow expired recently enough to explain a stale follow-up."""
@@ -1244,7 +1159,7 @@ class CalendarSessionManager:
     def had_recent_scrape_flow(
         self,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         grace_seconds: int = 90,
     ) -> bool:
         """Return whether a scrape flow expired recently enough to explain an explicit follow-up."""
@@ -1279,7 +1194,7 @@ class CalendarSessionManager:
     def _clear_recent_scrape_marker(
         self,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> None:
         """Clear scrape-expiry markers once a new scrape flow starts."""
         if not user_id:
@@ -1301,7 +1216,7 @@ class CalendarSessionManager:
         session = self.get_session(chat_id)
         if not session or session.state == CalendarState.IDLE:
             return False
-        
+
         session.reset()
         logger.info(f"📅 Cancelled calendar flow for chat {chat_id}")
         return True
@@ -1333,9 +1248,7 @@ class CalendarSessionManager:
     def _cleanup_expired_sessions(self):
         """Remove expired sessions."""
         expired = [
-            (chat_id, session)
-            for chat_id, session in self._sessions.items()
-            if session.is_expired(self._session_ttl_seconds)
+            (chat_id, session) for chat_id, session in self._sessions.items() if session.is_expired(self._session_ttl_seconds)
         ]
 
         for chat_id, session in expired:
@@ -1353,19 +1266,17 @@ class CalendarSessionManager:
             del self._sessions[chat_id]
 
         self._prune_recent_remove_flow_markers()
-        
+
         if expired:
             logger.info(f"📅 Cleaned up {len(expired)} expired calendar sessions")
 
     def _prune_recent_remove_flow_markers(self, grace_seconds: int = 180) -> None:
         """Drop expired recent-remove markers without requiring a chat lookup."""
         now = datetime.now()
-        expired_chat_ids: List[str] = []
+        expired_chat_ids: list[str] = []
         for chat_id, user_markers in self._recently_expired_remove_flows.items():
             expired_users = [
-                user_id
-                for user_id, expired_at in user_markers.items()
-                if (now - expired_at).total_seconds() > grace_seconds
+                user_id for user_id, expired_at in user_markers.items() if (now - expired_at).total_seconds() > grace_seconds
             ]
             for user_id in expired_users:
                 del user_markers[user_id]
@@ -1374,7 +1285,7 @@ class CalendarSessionManager:
         for chat_id in expired_chat_ids:
             del self._recently_expired_remove_flows[chat_id]
 
-    def _clear_recent_remove_marker(self, chat_id: str, user_id: Optional[str]) -> None:
+    def _clear_recent_remove_marker(self, chat_id: str, user_id: str | None) -> None:
         """Clear the recent remove marker for one user in one chat."""
         if not user_id:
             return

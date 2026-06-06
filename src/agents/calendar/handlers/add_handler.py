@@ -4,28 +4,31 @@ Add Handler - Handles adding calendar events (multi-step flow).
 This handler manages the complex multi-step process of adding calendar events,
 including date, title, description, and reminder configuration.
 """
+
 import asyncio
 import logging
 import re
-from datetime import datetime, date, timedelta
-from typing import Optional, Dict, Any, List
+from datetime import date, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
-from linebot.v3.webhooks import MessageEvent
-from linebot.v3.messaging import MessagingApi, QuickReply, QuickReplyItem, MessageAction
-from linebot.v3.messaging.exceptions import ApiException
 
-from ..base_handler import CalendarHandler
-from src.services.calendar_session_manager import (
-    calendar_session_manager,
-    CalendarState,
-)
+from linebot.v3.messaging import MessageAction, MessagingApi, QuickReply, QuickReplyItem
+from linebot.v3.messaging.exceptions import ApiException
+from linebot.v3.webhooks import MessageEvent
+
+from src.services.bot_identity_service import get_bot_identity_service
 from src.services.calendar_access_control import calendar_access_control
-from src.services.privilege_service import privilege_service
-from src.services.rate_limiter import rate_limiter
-from src.services.message_buffer_service import message_buffer_service
+from src.services.calendar_session_manager import (
+    CalendarState,
+    calendar_session_manager,
+)
 from src.services.date_extraction_service import date_extraction_service
 from src.services.history_log_service import EventType, LogLevel, get_history_log
-from src.services.bot_identity_service import get_bot_identity_service
+from src.services.message_buffer_service import message_buffer_service
+from src.services.privilege_service import privilege_service
+from src.services.rate_limiter import rate_limiter
+
+from ..base_handler import CalendarHandler
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +56,7 @@ class AddHandler(CalendarHandler):
             name="AddHandler",
             description="Adds calendar events via multi-step flow",
         )
-        self._friend_cache: Dict[str, tuple[bool, datetime]] = {}
+        self._friend_cache: dict[str, tuple[bool, datetime]] = {}
 
     def get_triggers(self) -> list:
         return TRIGGERS_ADD
@@ -82,7 +85,7 @@ class AddHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         context: dict,
     ) -> bool:
         calendar_service = context.get("calendar_service")
@@ -105,25 +108,15 @@ class AddHandler(CalendarHandler):
         if state == CalendarState.AWAITING_REMINDER_DAYS:
             return await self._handle_reminder_days_input(event, text, line_bot_api, chat_id)
         if state == CalendarState.CONFIRMING_ADD:
-            return await self._handle_add_confirmation(
-                event, text, line_bot_api, chat_id, user_id, calendar_service
-            )
+            return await self._handle_add_confirmation(event, text, line_bot_api, chat_id, user_id, calendar_service)
         if state == CalendarState.ADD_MODE_SELECTION:
-            return await self._handle_add_mode_selection(
-                event, text, line_bot_api, chat_id, user_id
-            )
+            return await self._handle_add_mode_selection(event, text, line_bot_api, chat_id, user_id)
         if state == CalendarState.LIVE_ADD_LISTENING:
-            return await self._handle_live_listening_message(
-                event, text, line_bot_api, chat_id, user_id
-            )
+            return await self._handle_live_listening_message(event, text, line_bot_api, chat_id, user_id)
         if state == CalendarState.LIVE_ADD_REVIEWING:
-            return await self._handle_live_review_response(
-                event, text, line_bot_api, chat_id, user_id
-            )
+            return await self._handle_live_review_response(event, text, line_bot_api, chat_id, user_id)
         if state == CalendarState.LIVE_ADD_REMINDER_DAYS:
-            return await self._handle_live_reminder_response(
-                event, text, line_bot_api, chat_id, user_id, calendar_service
-            )
+            return await self._handle_live_reminder_response(event, text, line_bot_api, chat_id, user_id, calendar_service)
 
         return False
 
@@ -132,19 +125,15 @@ class AddHandler(CalendarHandler):
         event: MessageEvent,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         if not user_id:
             await self._send_message(event, line_bot_api, "❌ Cannot identify user.")
             return True
 
-        can_create = await calendar_access_control.can_create_event(
-            user_id, chat_id, line_bot_api
-        )
+        can_create = await calendar_access_control.can_create_event(user_id, chat_id, line_bot_api)
         if not can_create:
-            logger.warning(
-                f"❌ Access denied: {user_id} cannot create events in {chat_id}"
-            )
+            logger.warning(f"❌ Access denied: {user_id} cannot create events in {chat_id}")
             history_log = get_history_log()
             if history_log:
                 await history_log.log(
@@ -192,7 +181,7 @@ class AddHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         choice = text.strip()
 
@@ -211,9 +200,7 @@ class AddHandler(CalendarHandler):
             )
         if choice == "2":
             calendar_session_manager.end_session(chat_id)
-            return await self._start_original_live_bulk_add(
-                event, line_bot_api, chat_id, user_id
-            )
+            return await self._start_original_live_bulk_add(event, line_bot_api, chat_id, user_id)
         if choice == "3":
             calendar_session_manager.end_session(chat_id)
             return await self._start_add_flow(event, line_bot_api, chat_id, user_id)
@@ -230,16 +217,14 @@ class AddHandler(CalendarHandler):
         event: MessageEvent,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         if not user_id:
             await self._send_message(event, line_bot_api, "❌ Cannot identify user.")
             return True
 
         recent_messages = message_buffer_service.get_message_texts(chat_id, limit=10)
-        event_like_messages = [
-            msg for msg in recent_messages if self._looks_like_event_message(msg)
-        ]
+        event_like_messages = [msg for msg in recent_messages if self._looks_like_event_message(msg)]
 
         if len(event_like_messages) >= 2:
             msg = (
@@ -282,7 +267,7 @@ class AddHandler(CalendarHandler):
         event: MessageEvent,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         if not user_id:
             await self._send_message(event, line_bot_api, "❌ Cannot identify user.")
@@ -310,7 +295,7 @@ class AddHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         if self._is_live_stop_command(text) or self._is_cancel_command(text):
             calendar_session_manager.end_session(chat_id)
@@ -352,16 +337,12 @@ class AddHandler(CalendarHandler):
         except Exception:
             date_str = "Unknown"
 
-        source_preview = (
-            source[:80] + "..." if isinstance(source, str) and len(source) > 80 else (source or "")
-        )
+        source_preview = source[:80] + "..." if isinstance(source, str) and len(source) > 80 else (source or "")
 
         msg = (
             "🧾 Events scraped (live):\n\n"
             f"📆 {date_str}\n"
-            f"📌 {title}\n"
-            + (f"📝 From: \"{source_preview}\"\n" if source_preview else "")
-            + "\nAdd this event? (yes/no)"
+            f"📌 {title}\n" + (f'📝 From: "{source_preview}"\n' if source_preview else "") + "\nAdd this event? (yes/no)"
         )
 
         quick_reply = QuickReply(
@@ -386,7 +367,7 @@ class AddHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         text_lower = text.lower().strip()
 
@@ -447,7 +428,7 @@ class AddHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         calendar_service: Any,
     ) -> bool:
         text_lower = text.lower().strip()
@@ -603,9 +584,7 @@ class AddHandler(CalendarHandler):
             await self._send_message(
                 event,
                 line_bot_api,
-                "❌ That date is in the past!\n\n"
-                "Please enter a future date.\n\n"
-                "วันที่ที่ระบุผ่านไปแล้ว กรุณาใส่วันที่ในอนาคต",
+                "❌ That date is in the past!\n\nPlease enter a future date.\n\nวันที่ที่ระบุผ่านไปแล้ว กรุณาใส่วันที่ในอนาคต",
             )
             return True
 
@@ -632,8 +611,7 @@ class AddHandler(CalendarHandler):
             await self._send_message(
                 event,
                 line_bot_api,
-                "❌ Title is too short. Please enter at least 2 characters.\n\n"
-                "ชื่อสั้นเกินไป กรุณาใส่อย่างน้อย 2 ตัวอักษร",
+                "❌ Title is too short. Please enter at least 2 characters.\n\nชื่อสั้นเกินไป กรุณาใส่อย่างน้อย 2 ตัวอักษร",
             )
             return True
 
@@ -690,7 +668,7 @@ class AddHandler(CalendarHandler):
         chat_id: str,
     ) -> bool:
         text_lower = text.lower().strip()
-        reminder_days: List[int] = []
+        reminder_days: list[int] = []
 
         if text_lower == "all":
             reminder_days = [7, 3, 1, 0]
@@ -715,8 +693,7 @@ class AddHandler(CalendarHandler):
                 await self._send_message(
                     event,
                     line_bot_api,
-                    "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\n"
-                    "กรุณาเลือก 7, 3, 1 หรือ all",
+                    "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\nกรุณาเลือก 7, 3, 1 หรือ all",
                 )
                 return True
 
@@ -729,9 +706,7 @@ class AddHandler(CalendarHandler):
             return False
 
         date_str = session.pending_date.strftime("%B %d, %Y") if session.pending_date else "N/A"
-        reminder_str = ", ".join(
-            [f"{d} days" if d > 0 else "day-of" for d in sorted(reminder_days, reverse=True)]
-        )
+        reminder_str = ", ".join([f"{d} days" if d > 0 else "day-of" for d in sorted(reminder_days, reverse=True)])
         msg = (
             "📝 Please confirm your event:\n\n"
             f"📆 Date: {date_str}\n"
@@ -756,7 +731,7 @@ class AddHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         calendar_service: Any,
     ) -> bool:
         text_lower = text.lower().strip()
@@ -780,9 +755,7 @@ class AddHandler(CalendarHandler):
 
             calendar_session_manager.end_session(chat_id)
             date_str = new_event.event_date.strftime("%B %d, %Y")
-            reminder_str = ", ".join(
-                [f"{d}d" for d in sorted(new_event.reminder_days, reverse=True)]
-            )
+            reminder_str = ", ".join([f"{d}d" for d in sorted(new_event.reminder_days, reverse=True)])
             msg = (
                 "✅ Event created!\n\n"
                 f"📆 {new_event.title}\n"
@@ -812,7 +785,7 @@ class AddHandler(CalendarHandler):
         self,
         event: MessageEvent,
         line_bot_api: MessagingApi,
-        event_data: Dict[str, Any],
+        event_data: dict[str, Any],
         current: int,
         total: int,
         header: str = "",
@@ -824,15 +797,11 @@ class AddHandler(CalendarHandler):
 
         date_str = date_obj.strftime("%B %d, %Y") if date_obj else "Unknown"
 
-        msg = header + (
-            f"📅 Event {current}/{total}:\n\n"
-            f"📌 {title}\n"
-            f"📆 {date_str}\n"
-        )
+        msg = header + (f"📅 Event {current}/{total}:\n\n📌 {title}\n📆 {date_str}\n")
 
         if source:
             source_preview = source[:50] + "..." if len(source) > 50 else source
-            msg += f"📝 From: \"{source_preview}\"\n"
+            msg += f'📝 From: "{source_preview}"\n'
 
         msg += f"🎯 Confidence: {confidence}\n\n"
         msg += "Add this to calendar? (yes/no/skip all)"
@@ -864,16 +833,12 @@ class AddHandler(CalendarHandler):
             r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}",
         ]
 
-        date_matches = sum(
-            len(re.findall(pattern, text, re.IGNORECASE)) for pattern in date_patterns
-        )
+        date_matches = sum(len(re.findall(pattern, text, re.IGNORECASE)) for pattern in date_patterns)
         if date_matches >= 3:
             return True
 
         lines_with_dates = sum(
-            1
-            for line in text.split("\n")
-            if any(re.search(pattern, line, re.IGNORECASE) for pattern in date_patterns)
+            1 for line in text.split("\n") if any(re.search(pattern, line, re.IGNORECASE) for pattern in date_patterns)
         )
         return lines_with_dates >= 3
 
@@ -915,9 +880,7 @@ class AddHandler(CalendarHandler):
 
     async def _extract_events_from_single_message(self, text: str) -> list[dict]:
         try:
-            extracted = await date_extraction_service.extract_events_from_messages(
-                [text], max_events=3
-            )
+            extracted = await date_extraction_service.extract_events_from_messages([text], max_events=3)
             return [evt.to_dict() for evt in extracted]
         except Exception as exc:
             logger.error(f"❌ Live extraction failed: {exc}", exc_info=True)
@@ -954,7 +917,7 @@ class AddHandler(CalendarHandler):
         except Exception:
             return False
 
-    def _parse_date(self, text: str) -> Optional[date]:
+    def _parse_date(self, text: str) -> date | None:
         text = text.strip().lower()
         today = datetime.now(BANGKOK_TZ).date()
 
@@ -1007,9 +970,9 @@ class AddHandler(CalendarHandler):
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         if event.source and getattr(event.source, "group_id", None):
-            return f"group_{getattr(event.source, 'group_id')}"
+            return f"group_{event.source.group_id}"
         if event.source and getattr(event.source, "room_id", None):
-            return f"room_{getattr(event.source, 'room_id')}"
+            return f"room_{event.source.room_id}"
         if event.source and getattr(event.source, "user_id", None):
-            return f"user_{getattr(event.source, 'user_id')}"
+            return f"user_{event.source.user_id}"
         return "user_unknown"

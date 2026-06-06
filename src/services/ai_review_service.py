@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from src.services.github_models_service import github_models_service
 from src.services.openrouter_service import (
     openrouter_service as default_openrouter_service,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -15,13 +14,11 @@ logger = logging.getLogger(__name__)
 class AIReviewService:
     def __init__(
         self,
-        github_service: Optional[Any] = None,
-        openrouter_service: Optional[Any] = None,
+        github_service: Any | None = None,
+        openrouter_service: Any | None = None,
     ):
         self.github_service = github_service or github_models_service
-        self.openrouter_service = (
-            openrouter_service or default_openrouter_service
-        )
+        self.openrouter_service = openrouter_service or default_openrouter_service
 
     async def _complete(
         self,
@@ -74,16 +71,11 @@ class AIReviewService:
         ]
         return await self._complete(messages)
 
-    async def extract_calendar_candidates(
-        self, texts: list[str]
-    ) -> str | None:
+    async def extract_calendar_candidates(self, texts: list[str]) -> str | None:
         messages = [
             {
                 "role": "system",
-                "content": (
-                    "Extract date-bearing events for school staff planning. "
-                    "Return JSON only."
-                ),
+                "content": ("Extract date-bearing events for school staff planning. Return JSON only."),
             },
             {
                 "role": "user",

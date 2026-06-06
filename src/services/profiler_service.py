@@ -14,11 +14,11 @@ purposes only. It should NOT be used for making actual psychological assessments
 hiring decisions, legal judgments, or any professional evaluations.
 """
 
-import logging
 import base64
-from typing import Optional, Dict, Any, List
-from datetime import datetime
+import logging
 from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -26,56 +26,56 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ProfileAnalysis:
     """Structured psychological profile analysis result."""
-    
+
     # Subject identification
     subject_count: int = 0
     primary_subject_description: str = ""
-    
+
     # Facial analysis (Ekman Framework)
     primary_emotion: str = ""  # One of 7 universal emotions
     emotion_intensity: str = ""  # low/medium/high
-    secondary_emotions: List[str] = field(default_factory=list)
+    secondary_emotions: list[str] = field(default_factory=list)
     facial_symmetry: str = ""  # balanced/asymmetric
-    microexpression_indicators: List[str] = field(default_factory=list)
-    
+    microexpression_indicators: list[str] = field(default_factory=list)
+
     # Eye analysis
     gaze_direction: str = ""
     eye_contact_quality: str = ""
     pupil_indicators: str = ""
-    
+
     # Body language (Navarro Principles)
     posture_type: str = ""  # open/closed/neutral
-    confidence_indicators: List[str] = field(default_factory=list)
-    stress_indicators: List[str] = field(default_factory=list)
+    confidence_indicators: list[str] = field(default_factory=list)
+    stress_indicators: list[str] = field(default_factory=list)
     comfort_level: str = ""  # comfortable/uncomfortable/mixed
     hand_position: str = ""
-    barrier_behaviors: List[str] = field(default_factory=list)
-    
+    barrier_behaviors: list[str] = field(default_factory=list)
+
     # Clothing analysis
     clothing_style: str = ""
     formality_level: str = ""
     color_psychology: str = ""
     condition_indicators: str = ""
-    
+
     # Environmental context
     setting_type: str = ""
     environment_mood: str = ""
     social_context: str = ""
-    
+
     # Action/Activity
     current_action: str = ""
     energy_level: str = ""
-    
+
     # Overall assessment
     behavioral_summary: str = ""
-    personality_indicators: List[str] = field(default_factory=list)
-    deception_indicators: List[str] = field(default_factory=list)
+    personality_indicators: list[str] = field(default_factory=list)
+    deception_indicators: list[str] = field(default_factory=list)
     authenticity_assessment: str = ""
-    
+
     # Raw analysis
     full_analysis: str = ""
     confidence_score: str = ""  # low/medium/high
-    
+
     # Metadata
     analyzed_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
@@ -420,7 +420,7 @@ Provide your analysis in a clear, organized format using the structure above. Be
 class ProfilerService:
     """
     Service for psychological profiling of images.
-    
+
     Integrates multiple behavioral analysis frameworks to provide
     comprehensive psychological assessment from photos.
     """
@@ -450,41 +450,37 @@ Keep response under 300 words. Focus on most significant observable indicators.
     def encode_image_to_base64(self, image_bytes: bytes) -> str:
         """
         Encode image bytes to base64 string for API transmission.
-        
+
         Args:
             image_bytes: Raw image bytes
-            
+
         Returns:
             Base64 encoded string
         """
-        return base64.b64encode(image_bytes).decode('utf-8')
+        return base64.b64encode(image_bytes).decode("utf-8")
 
     def get_image_data_url(self, image_bytes: bytes, mime_type: str = "image/jpeg") -> str:
         """
         Create a data URL for the image.
-        
+
         Args:
             image_bytes: Raw image bytes
             mime_type: MIME type of the image
-            
+
         Returns:
             Data URL string for use in vision API
         """
         base64_data = self.encode_image_to_base64(image_bytes)
         return f"data:{mime_type};base64,{base64_data}"
 
-    def build_vision_message(
-        self,
-        image_data_url: str,
-        analysis_type: str = "full"
-    ) -> List[Dict[str, Any]]:
+    def build_vision_message(self, image_data_url: str, analysis_type: str = "full") -> list[dict[str, Any]]:
         """
         Build the message structure for vision API call.
-        
+
         Args:
             image_data_url: Base64 data URL of the image
             analysis_type: "full" for comprehensive, "quick" for brief
-            
+
         Returns:
             List of message dicts for API
         """
@@ -496,53 +492,42 @@ Keep response under 300 words. Focus on most significant observable indicators.
         return [
             {
                 "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": prompt
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": image_data_url
-                        }
-                    }
-                ]
+                "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": image_data_url}}],
             }
         ]
 
     def format_response_for_line(self, analysis: str, truncate: bool = True) -> str:
         """
         Format the analysis response for LINE message constraints.
-        
+
         LINE has a 5000 character limit for text messages.
-        
+
         Args:
             analysis: Raw analysis text
             truncate: Whether to truncate for LINE limits
-            
+
         Returns:
             Formatted response string
         """
         # Add current assistant branding
         header = "⚡ MS. GREEN PSYCHOLOGICAL PROFILER ⚡\n"
         header += "━" * 28 + "\n\n"
-        
+
         footer = "\n\n" + "━" * 28
         footer += "\n⚠️ For entertainment only. Not professional advice."
-        
+
         available_chars = 5000 - len(header) - len(footer) - 50  # Buffer
-        
+
         if truncate and len(analysis) > available_chars:
             analysis = analysis[:available_chars] + "\n\n[Analysis truncated]"
-        
+
         return header + analysis + footer
 
     def extract_primary_emotion(self, analysis: str) -> str:
         """Extract the primary emotion from analysis text."""
         emotions = ["Happiness", "Sadness", "Fear", "Anger", "Surprise", "Disgust", "Contempt", "Neutral"]
         analysis_lower = analysis.lower()
-        
+
         for emotion in emotions:
             if emotion.lower() in analysis_lower:
                 return emotion

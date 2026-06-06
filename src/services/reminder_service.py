@@ -9,8 +9,8 @@ Uses APScheduler via the existing scheduler_service.py pattern.
 
 import asyncio
 import logging
-from datetime import datetime, date, timezone, timedelta
-from typing import Optional, List, Dict, Any
+from datetime import datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 class ReminderService:
     """
     Service for checking and sending calendar reminders.
-    
+
     Integrates with:
     - CalendarService: Get events needing reminders
     - LINE Messaging API: Send push notifications
@@ -31,18 +31,18 @@ class ReminderService:
 
     def __init__(self):
         """Initialize reminder service."""
-        self._line_bot_api: Optional[Any] = None
-        self._calendar_service: Optional[Any] = None
-        self._scheduler_job_id: Optional[str] = None
+        self._line_bot_api: Any | None = None
+        self._calendar_service: Any | None = None
+        self._scheduler_job_id: str | None = None
         self._reminder_hour: int = 8  # Default 8 AM Bangkok
         self._enabled: bool = True
 
     def configure(
         self,
-        line_bot_api: Optional[Any] = None,
-        calendar_service: Optional[Any] = None,
+        line_bot_api: Any | None = None,
+        calendar_service: Any | None = None,
         reminder_hour: int = 8,
-        enabled: bool = True
+        enabled: bool = True,
     ) -> None:
         """
         Configure the reminder service with dependencies.
@@ -59,10 +59,8 @@ class ReminderService:
             self._calendar_service = calendar_service
         self._reminder_hour = reminder_hour
         self._enabled = enabled
-        
-        logger.info(
-            f"⏰ ReminderService configured: hour={reminder_hour}, enabled={enabled}"
-        )
+
+        logger.info(f"⏰ ReminderService configured: hour={reminder_hour}, enabled={enabled}")
 
     def start_scheduler(self, scheduler_service: Any) -> None:
         """
@@ -78,25 +76,19 @@ class ReminderService:
         # Create a cron trigger for daily at the configured hour (Bangkok time)
         try:
             from apscheduler.triggers.cron import CronTrigger
-            
-            trigger = CronTrigger(
-                hour=self._reminder_hour,
-                minute=0,
-                timezone=BANGKOK_TZ
-            )
-            
+
+            trigger = CronTrigger(hour=self._reminder_hour, minute=0, timezone=BANGKOK_TZ)
+
             self._scheduler_job_id = scheduler_service.add_job(
                 func=self._check_and_send_reminders,
                 trigger=trigger,
                 id="calendar_reminder_check",
                 name="Calendar Reminder Check",
-                replace_existing=True
+                replace_existing=True,
             )
-            
-            logger.info(
-                f"⏰ Scheduled daily reminder check at {self._reminder_hour}:00 Bangkok time"
-            )
-            
+
+            logger.info(f"⏰ Scheduled daily reminder check at {self._reminder_hour}:00 Bangkok time")
+
         except ImportError:
             logger.error("❌ APScheduler not available for reminder scheduling")
         except Exception as e:
@@ -118,7 +110,7 @@ class ReminderService:
             finally:
                 self._scheduler_job_id = None
 
-    def stop(self, scheduler_service: Optional[Any] = None) -> None:
+    def stop(self, scheduler_service: Any | None = None) -> None:
         """Backward-compatible shutdown wrapper for legacy callers."""
         if scheduler_service is not None:
             self.stop_scheduler(scheduler_service)
@@ -129,33 +121,33 @@ class ReminderService:
     async def _check_and_send_reminders(self) -> None:
         """
         Check all events for reminders due today and send notifications.
-        
+
         This is the main scheduled job that runs daily.
         """
         if not self._enabled or not self._calendar_service:
             return
 
         logger.info("⏰ Starting daily reminder check...")
-        
+
         try:
             # Get today's date in Bangkok timezone
             today = datetime.now(BANGKOK_TZ).date()
-            
+
             # Get all events needing reminders
             events_needing_reminder = await self._calendar_service.get_events_needing_reminder_async(today)
-            
+
             if not events_needing_reminder:
                 logger.info("⏰ No reminders to send today")
                 return
-            
+
             logger.info(f"⏰ Found {len(events_needing_reminder)} reminders to send")
-            
+
             # Send each reminder
             sent_count = 0
             for event_data in events_needing_reminder:
                 event = event_data["event"]
                 days_until = event_data["days_until"]
-                
+
                 try:
                     success = await self._send_reminder(event, days_until)
                     if success:
@@ -167,19 +159,17 @@ class ReminderService:
                         )
                         sent_count += 1
                 except Exception as e:
-                    logger.error(
-                        f"❌ Failed to send reminder for event {event.event_id}: {e}"
-                    )
-            
+                    logger.error(f"❌ Failed to send reminder for event {event.event_id}: {e}")
+
             logger.info(f"⏰ Sent {sent_count}/{len(events_needing_reminder)} reminders")
-            
+
         except Exception as e:
             logger.error(f"❌ Error in reminder check: {e}", exc_info=True)
 
     async def _send_reminder(
-        self, 
+        self,
         event: Any,  # CalendarEvent
-        days_until: int
+        days_until: int,
     ) -> bool:
         """
         Send a reminder notification for an event.
@@ -197,7 +187,7 @@ class ReminderService:
 
         # Format the reminder message
         message_text = self._format_reminder_message(event, days_until)
-        
+
         # Determine where to send.
         # Explicit notification target overrides the original group/room target.
         explicit_target = getattr(event, "notification_target_user_id", None)
@@ -224,36 +214,29 @@ class ReminderService:
 
         try:
             from linebot.v3.messaging import PushMessageRequest, TextMessage
-            
-            text_msg = TextMessage(
-                text=message_text,
-                quickReply=None,
-                quoteToken=None
-            )
-            
+
+            text_msg = TextMessage(text=message_text, quickReply=None, quoteToken=None)
+
             request = PushMessageRequest(
                 to=target,
                 messages=[text_msg],
                 notificationDisabled=False,
                 customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
             )
-            
-            await asyncio.to_thread(
-                self._line_bot_api.push_message,
-                request
-            )
-            
+
+            await asyncio.to_thread(self._line_bot_api.push_message, request)
+
             logger.info(f"✅ Sent reminder for '{event.title}' ({days_until} days)")
             return True
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to send LINE push: {e}", exc_info=True)
             return False
 
     def _format_reminder_message(
-        self, 
+        self,
         event: Any,  # CalendarEvent
-        days_until: int
+        days_until: int,
     ) -> str:
         """
         Format the reminder message text.
@@ -267,7 +250,7 @@ class ReminderService:
         """
         # Format date
         date_str = event.event_date.strftime("%b %d, %Y")
-        
+
         # Build message based on urgency
         if days_until == 0:
             # Today - most urgent
@@ -297,12 +280,12 @@ class ReminderService:
             f"{urgency_emoji} {event.title}",
             f"📅 {date_str} ({time_text})",
         ]
-        
+
         # Add description if present
         if event.description:
             lines.append("")
             lines.append(f"📝 {event.description}")
-        
+
         # Add Thai translation for key parts
         if days_until == 0:
             lines.append("")
@@ -310,14 +293,14 @@ class ReminderService:
         elif days_until == 1:
             lines.append("")
             lines.append("พรุ่งนี้แล้ว! เตรียมตัวด้วยนะคะ")
-        
+
         return "\n".join(lines)
 
     async def send_immediate_reminder(
         self,
         event: Any,  # CalendarEvent
         days_until: int,
-        target_id: str
+        target_id: str,
     ) -> bool:
         """
         Send an immediate reminder (for testing or manual trigger).
@@ -334,35 +317,28 @@ class ReminderService:
             return False
 
         message_text = self._format_reminder_message(event, days_until)
-        
+
         try:
             from linebot.v3.messaging import PushMessageRequest, TextMessage
-            
-            text_msg = TextMessage(
-                text=message_text,
-                quickReply=None,
-                quoteToken=None
-            )
-            
+
+            text_msg = TextMessage(text=message_text, quickReply=None, quoteToken=None)
+
             request = PushMessageRequest(
                 to=target_id,
                 messages=[text_msg],
                 notificationDisabled=False,
                 customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
             )
-            
-            await asyncio.to_thread(
-                self._line_bot_api.push_message,
-                request
-            )
-            
+
+            await asyncio.to_thread(self._line_bot_api.push_message, request)
+
             return True
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to send immediate reminder: {e}")
             return False
 
-    async def check_reminders_manually(self) -> Dict[str, Any]:
+    async def check_reminders_manually(self) -> dict[str, Any]:
         """
         Manually trigger reminder check (for admin/testing).
 
@@ -374,7 +350,7 @@ class ReminderService:
 
         today = datetime.now(BANGKOK_TZ).date()
         events_needing_reminder = await self._calendar_service.get_events_needing_reminder_async(today)
-        
+
         return {
             "date": today.isoformat(),
             "reminders_due": len(events_needing_reminder),
@@ -387,25 +363,20 @@ class ReminderService:
                     "is_friend": e["event"].is_friend,
                 }
                 for e in events_needing_reminder
-            ]
+            ],
         }
 
-    def get_next_run_time(self) -> Optional[datetime]:
+    def get_next_run_time(self) -> datetime | None:
         """Get the next scheduled run time."""
         # Calculate next run based on current time and configured hour
         now = datetime.now(BANGKOK_TZ)
-        
-        next_run = now.replace(
-            hour=self._reminder_hour,
-            minute=0,
-            second=0,
-            microsecond=0
-        )
-        
+
+        next_run = now.replace(hour=self._reminder_hour, minute=0, second=0, microsecond=0)
+
         # If we've passed today's run time, schedule for tomorrow
         if now >= next_run:
             next_run += timedelta(days=1)
-        
+
         return next_run
 
 

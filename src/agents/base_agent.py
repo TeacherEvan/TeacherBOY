@@ -2,9 +2,9 @@
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional
-from linebot.v3.webhooks import MessageEvent, TextMessageContent
+
 from linebot.v3.messaging import MessagingApi
+from linebot.v3.webhooks import MessageEvent
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +40,7 @@ class BaseAgent(ABC):
         pass
 
     @abstractmethod
-    async def handle(
-        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
-    ) -> bool:
+    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """
         Process the message.
 

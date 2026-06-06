@@ -1,10 +1,10 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.agents.review_agent import ReviewAgent
+from src.agents.review_agent import PendingReview, ReviewAgent
 from src.services.calendar_service import CalendarEvent
 from src.services.convex_staff_memory_repository import (
     ConvexStaffMemoryRepository,
@@ -32,16 +32,12 @@ async def test_review_agent_translates_last_non_english_message_and_pushes_dm(
     buffer_service.store_message("group_G1", "ประชุมวันศุกร์", "U_OTHER")
 
     ai_review_service = AsyncMock()
-    ai_review_service.translate_and_summarize.return_value = (
-        "Friday meeting summary"
-    )
+    ai_review_service.translate_and_summarize.return_value = "Friday meeting summary"
 
     agent = ReviewAgent(
         ai_review_service=ai_review_service,
         message_buffer=buffer_service,
-        staff_memory_service=StaffMemoryService(
-            tmp_path / "staff_memory.json"
-        ),
+        staff_memory_service=StaffMemoryService(tmp_path / "staff_memory.json"),
     )
 
     handled = await agent.handle(
@@ -73,25 +69,19 @@ async def test_review_agent_ignores_bot_buffered_messages(tmp_path: Path):
     buffer_service.store_message("group_G1", "สรุปโดยบอท", "BOT")
 
     ai_review_service = AsyncMock()
-    ai_review_service.translate_and_summarize.return_value = (
-        "Friday meeting summary"
-    )
+    ai_review_service.translate_and_summarize.return_value = "Friday meeting summary"
 
     agent = ReviewAgent(
         ai_review_service=ai_review_service,
         message_buffer=buffer_service,
-        staff_memory_service=StaffMemoryService(
-            tmp_path / "staff_memory.json"
-        ),
+        staff_memory_service=StaffMemoryService(tmp_path / "staff_memory.json"),
         bot_user_id="BOT",
     )
 
     handled = await agent.handle(event, "Ms. Green review", line_api)
 
     assert handled is True
-    ai_review_service.translate_and_summarize.assert_awaited_once_with(
-        "ประชุมวันศุกร์"
-    )
+    ai_review_service.translate_and_summarize.assert_awaited_once_with("ประชุมวันศุกร์")
 
 
 @pytest.mark.asyncio
@@ -109,9 +99,7 @@ async def test_review_agent_answers_who_do_you_work_for(tmp_path: Path):
     agent = ReviewAgent(
         ai_review_service=AsyncMock(),
         message_buffer=MessageBufferService(),
-        staff_memory_service=StaffMemoryService(
-            tmp_path / "staff_memory.json"
-        ),
+        staff_memory_service=StaffMemoryService(tmp_path / "staff_memory.json"),
     )
 
     handled = await agent.handle(event, "Ms. Green who do you work for?", line_api)
@@ -119,11 +107,7 @@ async def test_review_agent_answers_who_do_you_work_for(tmp_path: Path):
     assert handled is True
     assert line_api.reply_message.called
     request = line_api.reply_message.call_args[0][0]
-    assert (
-        "I am purely a hardworking assistant and at the service of all KPS "
-        "employees."
-        in request.messages[0].text
-    )
+    assert "I am purely a hardworking assistant and at the service of all KPS employees." in request.messages[0].text
 
 
 @pytest.mark.asyncio
@@ -148,9 +132,7 @@ async def test_review_agent_keeps_existing_pending_review(tmp_path: Path):
     agent = ReviewAgent(
         ai_review_service=ai_review_service,
         message_buffer=buffer_service,
-        staff_memory_service=StaffMemoryService(
-            tmp_path / "staff_memory.json"
-        ),
+        staff_memory_service=StaffMemoryService(tmp_path / "staff_memory.json"),
     )
 
     first_handled = await agent.handle(event, "Ms. Green review", line_api)
@@ -160,15 +142,10 @@ async def test_review_agent_keeps_existing_pending_review(tmp_path: Path):
     second_handled = await agent.handle(event, "Ms. Green review", line_api)
 
     assert second_handled is True
-    ai_review_service.translate_and_summarize.assert_awaited_once_with(
-        "ข้อความแรก"
-    )
+    ai_review_service.translate_and_summarize.assert_awaited_once_with("ข้อความแรก")
     assert agent._pending_reviews["U_REQ"].summary == "First summary"
     latest_reply = line_api.reply_message.call_args[0][0]
-    assert (
-        latest_reply.messages[0].text
-        == "Please finish the pending review in your DM before starting a new one."
-    )
+    assert latest_reply.messages[0].text == "Please finish the pending review in your DM before starting a new one."
 
 
 @pytest.mark.asyncio
@@ -196,9 +173,7 @@ async def test_review_agent_saves_memory_choice_through_convex_repository(
     buffer_service.store_message("group_G1", "ประชุมวันศุกร์", "U_OTHER")
 
     ai_review_service = AsyncMock()
-    ai_review_service.translate_and_summarize.return_value = (
-        "Friday meeting summary"
-    )
+    ai_review_service.translate_and_summarize.return_value = "Friday meeting summary"
 
     convex_client = AsyncMock()
     created_payload = {}
@@ -261,9 +236,7 @@ async def test_review_agent_reports_memory_save_failures_and_keeps_pending_revie
     buffer_service.store_message("group_G1", "ประชุมวันศุกร์", "U_OTHER")
 
     ai_review_service = AsyncMock()
-    ai_review_service.translate_and_summarize.return_value = (
-        "Friday meeting summary"
-    )
+    ai_review_service.translate_and_summarize.return_value = "Friday meeting summary"
 
     staff_memory_service = StaffMemoryService(tmp_path / "staff_memory.json")
     staff_memory_service.add_item_async = AsyncMock(  # type: ignore[method-assign]
@@ -283,9 +256,7 @@ async def test_review_agent_reports_memory_save_failures_and_keeps_pending_revie
     assert second_handled is True
     assert "U_REQ" in agent._pending_reviews
     latest_reply = line_api.reply_message.call_args[0][0]
-    assert latest_reply.messages[0].text == (
-        "I couldn\'t save that to memory right now. Please try again."
-    )
+    assert latest_reply.messages[0].text == ("I couldn't save that to memory right now. Please try again.")
 
 
 @pytest.mark.asyncio
@@ -310,9 +281,7 @@ async def test_review_agent_prunes_stale_pending_reviews(tmp_path: Path):
     agent = ReviewAgent(
         ai_review_service=ai_review_service,
         message_buffer=buffer_service,
-        staff_memory_service=StaffMemoryService(
-            tmp_path / "staff_memory.json"
-        ),
+        staff_memory_service=StaffMemoryService(tmp_path / "staff_memory.json"),
     )
 
     # Manually add a stale pending review
@@ -367,17 +336,19 @@ async def test_review_agent_summarizes_weekly_priorities(
     )
 
     calendar_service = Mock()
-    calendar_service.get_user_events_async = AsyncMock(return_value=[
-        CalendarEvent(
-            event_id="1",
-            user_id="U_REQ",
-            chat_id="user_U_REQ",
-            title="Exam papers due",
-            event_date=today,
-            reminder_days=[1, 0],
-            is_friend=True,
-        )
-    ])
+    calendar_service.get_user_events_async = AsyncMock(
+        return_value=[
+            CalendarEvent(
+                event_id="1",
+                user_id="U_REQ",
+                chat_id="user_U_REQ",
+                title="Exam papers due",
+                event_date=today,
+                reminder_days=[1, 0],
+                is_friend=True,
+            )
+        ]
+    )
 
     agent = ReviewAgent(
         ai_review_service=AsyncMock(),

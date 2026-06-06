@@ -2,10 +2,9 @@
 
 import asyncio
 import logging
-from threading import Lock
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
 from collections import defaultdict
+from datetime import datetime, timedelta
+from threading import Lock
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +31,14 @@ class RateLimiter:
 
         # Chat-based rate limiting (existing)
         # Dictionary: {chat_id: [timestamp1, timestamp2, ...]}
-        self._request_history: Dict[str, List[datetime]] = defaultdict(list)
-        
+        self._request_history: dict[str, list[datetime]] = defaultdict(list)
+
         # Calendar operation rate limiting
         # Dictionary: {user_id: [timestamps]}
-        self._calendar_user_limits: Dict[str, List[datetime]] = defaultdict(list)
+        self._calendar_user_limits: dict[str, list[datetime]] = defaultdict(list)
         # Dictionary: {chat_id: [timestamps]}
-        self._calendar_chat_limits: Dict[str, List[datetime]] = defaultdict(list)
-        
+        self._calendar_chat_limits: dict[str, list[datetime]] = defaultdict(list)
+
         # Calendar limits configuration
         self.calendar_user_limit = 10  # 10 operations per minute per user
         self.calendar_user_window = timedelta(minutes=1)
@@ -47,26 +46,24 @@ class RateLimiter:
         self.calendar_chat_window = timedelta(minutes=1)
 
         # Destructive admin request limiting
-        self._admin_destructive_history: Dict[str, List[datetime]] = defaultdict(list)
-        self._admin_destructive_targets: Dict[str, Dict[str, datetime | str]] = {}
+        self._admin_destructive_history: dict[str, list[datetime]] = defaultdict(list)
+        self._admin_destructive_targets: dict[str, dict[str, datetime | str]] = {}
         self._admin_destructive_lock = Lock()
         self.admin_destructive_limit = 3  # 3 destructive requests per 10 minutes per admin
         self.admin_destructive_window = timedelta(minutes=10)
 
         # User-based rate limiting for authenticated users
         # Dictionary: {user_id: {"daily": [timestamps], "burst": [timestamps]}}
-        self._user_limits: Dict[str, Dict[str, List[datetime]]] = defaultdict(
-            lambda: {"daily": [], "burst": []}
-        )
+        self._user_limits: dict[str, dict[str, list[datetime]]] = defaultdict(lambda: {"daily": [], "burst": []})
 
         # User-based limits configuration
         self.daily_limit = 3  # 3 interactions per day
         self.daily_window = timedelta(days=1)
         self.burst_limit = 1  # 1 interaction per 60 seconds
         self.burst_window = timedelta(seconds=60)
-        
+
         # Cleanup task
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
         self._cleanup_interval_seconds = 300  # Run cleanup every 5 minutes
 
         logger.info(
@@ -77,7 +74,7 @@ class RateLimiter:
     def _admin_utcnow(self) -> datetime:
         return datetime.utcnow()
 
-    def is_allowed(self, chat_id: str, user_id: Optional[str] = None) -> bool:
+    def is_allowed(self, chat_id: str, user_id: str | None = None) -> bool:
         """
         Check if a request is allowed for the given chat and user.
 
@@ -105,25 +102,20 @@ class RateLimiter:
         """Check chat-based rate limits."""
         # Clean up old timestamps outside the time window
         cutoff_time = now - self.time_window
-        self._request_history[chat_id] = [
-            ts for ts in self._request_history[chat_id] if ts > cutoff_time
-        ]
+        self._request_history[chat_id] = [ts for ts in self._request_history[chat_id] if ts > cutoff_time]
 
         # Check if under the limit
         request_count = len(self._request_history[chat_id])
 
         if request_count >= self.max_requests:
             logger.warning(
-                f"⚠️  Chat rate limit exceeded for {chat_id}: "
-                f"{request_count}/{self.max_requests} requests in time window"
+                f"⚠️  Chat rate limit exceeded for {chat_id}: {request_count}/{self.max_requests} requests in time window"
             )
             return False
 
         # Record this request
         self._request_history[chat_id].append(now)
-        logger.debug(
-            f"✅ Chat rate limit check passed for {chat_id}: {request_count + 1}/{self.max_requests}"
-        )
+        logger.debug(f"✅ Chat rate limit check passed for {chat_id}: {request_count + 1}/{self.max_requests}")
         return True
 
     def _is_user_in_secrets_group(self, user_id: str) -> bool:
@@ -139,8 +131,7 @@ class RateLimiter:
 
         if len(user_data["daily"]) >= self.daily_limit:
             logger.warning(
-                f"⚠️  User daily limit exceeded for {user_id}: "
-                f"{len(user_data['daily'])}/{self.daily_limit} interactions today"
+                f"⚠️  User daily limit exceeded for {user_id}: {len(user_data['daily'])}/{self.daily_limit} interactions today"
             )
             return False
 
@@ -180,13 +171,11 @@ class RateLimiter:
         cutoff_time = now - self.time_window
 
         # Clean up old timestamps
-        self._request_history[chat_id] = [
-            ts for ts in self._request_history[chat_id] if ts > cutoff_time
-        ]
+        self._request_history[chat_id] = [ts for ts in self._request_history[chat_id] if ts > cutoff_time]
 
         return max(0, self.max_requests - len(self._request_history[chat_id]))
 
-    def get_reset_time(self, chat_id: str, user_id: Optional[str] = None) -> int:
+    def get_reset_time(self, chat_id: str, user_id: str | None = None) -> int:
         """
         Get seconds until rate limit resets for a chat or user.
 
@@ -280,7 +269,7 @@ class RateLimiter:
 
         for user_id in users_to_remove:
             del self._user_limits[user_id]
-        
+
         # Clean up calendar limits
         calendar_users_to_remove = []
         for user_id, timestamps in self._calendar_user_limits.items():
@@ -289,10 +278,10 @@ class RateLimiter:
                 calendar_users_to_remove.append(user_id)
             else:
                 self._calendar_user_limits[user_id] = valid
-        
+
         for user_id in calendar_users_to_remove:
             del self._calendar_user_limits[user_id]
-        
+
         calendar_chats_to_remove = []
         for chat_id, timestamps in self._calendar_chat_limits.items():
             valid = [ts for ts in timestamps if ts > now - self.calendar_chat_window]
@@ -300,14 +289,16 @@ class RateLimiter:
                 calendar_chats_to_remove.append(chat_id)
             else:
                 self._calendar_chat_limits[chat_id] = valid
-        
+
         for chat_id in calendar_chats_to_remove:
             del self._calendar_chat_limits[chat_id]
 
         with self._admin_destructive_lock:
             self._cleanup_admin_destructive_limits(self._admin_utcnow())
 
-        total_cleaned = len(chats_to_remove) + len(users_to_remove) + len(calendar_users_to_remove) + len(calendar_chats_to_remove)
+        total_cleaned = (
+            len(chats_to_remove) + len(users_to_remove) + len(calendar_users_to_remove) + len(calendar_chats_to_remove)
+        )
         if total_cleaned > 0:
             logger.debug(
                 f"🧹 Cleaned up {len(chats_to_remove)} inactive chat(s), "
@@ -340,65 +331,56 @@ class RateLimiter:
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
             logger.info("✅ Rate limiter cleanup task stopped")
-    
-    def is_calendar_operation_allowed(
-        self,
-        user_id: str,
-        chat_id: str,
-        is_admin: bool = False
-    ) -> bool:
+
+    def is_calendar_operation_allowed(self, user_id: str, chat_id: str, is_admin: bool = False) -> bool:
         """
         Check if a calendar operation is allowed.
-        
+
         Args:
             user_id: User identifier
             chat_id: Chat identifier
             is_admin: Whether user is an admin (bypasses limits)
-            
+
         Returns:
             True if operation is allowed, False if rate limited
         """
         # Admins bypass rate limits
         if is_admin:
             return True
-        
+
         now = datetime.now()
-        
+
         # Check user limit
         user_cutoff = now - self.calendar_user_window
-        self._calendar_user_limits[user_id] = [
-            ts for ts in self._calendar_user_limits[user_id] if ts > user_cutoff
-        ]
-        
+        self._calendar_user_limits[user_id] = [ts for ts in self._calendar_user_limits[user_id] if ts > user_cutoff]
+
         if len(self._calendar_user_limits[user_id]) >= self.calendar_user_limit:
             logger.warning(
                 f"⚠️ Calendar rate limit exceeded for user {user_id}: "
                 f"{len(self._calendar_user_limits[user_id])}/{self.calendar_user_limit} operations"
             )
             return False
-        
+
         # Check chat limit
         chat_cutoff = now - self.calendar_chat_window
-        self._calendar_chat_limits[chat_id] = [
-            ts for ts in self._calendar_chat_limits[chat_id] if ts > chat_cutoff
-        ]
-        
+        self._calendar_chat_limits[chat_id] = [ts for ts in self._calendar_chat_limits[chat_id] if ts > chat_cutoff]
+
         if len(self._calendar_chat_limits[chat_id]) >= self.calendar_chat_limit:
             logger.warning(
                 f"⚠️ Calendar rate limit exceeded for chat {chat_id}: "
                 f"{len(self._calendar_chat_limits[chat_id])}/{self.calendar_chat_limit} operations"
             )
             return False
-        
+
         # Record this operation
         self._calendar_user_limits[user_id].append(now)
         self._calendar_chat_limits[chat_id].append(now)
-        
+
         return True
 
     def _cleanup_admin_destructive_limits(
         self,
-        now: Optional[datetime] = None,
+        now: datetime | None = None,
     ) -> None:
         current_time = now or self._admin_utcnow()
         user_cutoff = current_time - self.admin_destructive_window
@@ -469,7 +451,7 @@ class RateLimiter:
 
     def _rollback_admin_destructive_history(
         self,
-        reservation: Dict[str, datetime | str] | None,
+        reservation: dict[str, datetime | str] | None,
     ) -> None:
         if reservation is None:
             return

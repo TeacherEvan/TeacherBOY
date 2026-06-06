@@ -2,6 +2,7 @@
 Debrief Extraction Service - Parses journal images into structured data.
 Includes local OCR fallback and Maton API calendar cross-validation.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -9,9 +10,8 @@ import base64
 import json
 import logging
 import re
-from typing import Any, Callable, Dict, Optional
-
-import httpx
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -29,35 +29,33 @@ If a field cannot be determined from the image, use null. Return ONLY the JSON o
 
 
 class DebriefExtractionService:
-    def __init__(
-        self, 
-        llm_vision_fn: Optional[Callable] = None, 
-        maton_api_key_path: str = "~/.secrets/maton.txt"
-    ):
+    def __init__(self, llm_vision_fn: Callable | None = None, maton_api_key_path: str = "~/.secrets/maton.txt"):
         self.llm_vision_fn = llm_vision_fn
         self.maton_api_key_path = maton_api_key_path
-        self._maton_key: Optional[str] = None
+        self._maton_key: str | None = None
 
-    def _get_maton_key(self) -> Optional[str]:
+    def _get_maton_key(self) -> str | None:
         if self._maton_key is not None:
             return self._maton_key
         import os
+
         path = os.path.expanduser(self.maton_api_key_path)
         try:
-            with open(path, "r") as f:
+            with open(path) as f:
                 self._maton_key = f.read().strip()
             return self._maton_key
         except Exception as e:
             logger.warning(f"Could not read Maton API key: {e}")
             return None
 
-    def _run_local_ocr_sync(self, image_source: str) -> Optional[str]:
+    def _run_local_ocr_sync(self, image_source: str) -> str | None:
         """Lightweight EasyOCR fallback for messy handwriting. MUST be run via asyncio.to_thread."""
         try:
-            import easyocr
-            import cv2
-            import numpy as np
             import urllib.request
+
+            import cv2
+            import easyocr
+            import numpy as np
 
             if isinstance(image_source, str) and image_source.startswith("data:image"):
                 header, encoded = image_source.split(",", 1)
@@ -65,21 +63,21 @@ class DebriefExtractionService:
                 arr = np.asarray(bytearray(img_bytes), dtype=np.uint8)
                 img = cv2.imdecode(arr, -1)
             elif isinstance(image_source, str) and image_source.startswith("http"):
-                req = urllib.request.Request(image_source, headers={'User-Agent': 'Mozilla/5.0'})
+                req = urllib.request.Request(image_source, headers={"User-Agent": "Mozilla/5.0"})
                 with urllib.request.urlopen(req) as response:
                     arr = np.asarray(bytearray(response.read()), dtype=np.uint8)
                     img = cv2.imdecode(arr, -1)
             else:
                 return None
 
-            reader = easyocr.Reader(['en', 'th'], gpu=False)
+            reader = easyocr.Reader(["en", "th"], gpu=False)
             result = reader.readtext(img, detail=0)
             return " ".join(result)
         except Exception as e:
             logger.warning(f"Local OCR fallback failed: {e}")
             return None
 
-    async def extract_from_image(self, image_url_or_base64: str, chat_id: str, date_str: str) -> Dict[str, Any]:
+    async def extract_from_image(self, image_url_or_base64: str, chat_id: str, date_str: str) -> dict[str, Any]:
         """
         Extracts structured debrief data from an image.
         Falls back to local OCR if LLM vision fails to return valid JSON.
@@ -91,12 +89,12 @@ class DebriefExtractionService:
         # 1. Initial LLM Vision Extraction
         messages = [
             {"role": "system", "content": DEBRIEF_EXTRACTION_PROMPT + " \n\nReturn ONLY valid JSON."},
-            {"role": "user", "content": [{"type": "image_url", "image_url": {"url": image_url_or_base64}}]}
+            {"role": "user", "content": [{"type": "image_url", "image_url": {"url": image_url_or_base64}}]},
         ]
-        
+
         raw_response = await self.llm_vision_fn(messages, max_tokens=500, temperature=0.1)
         extracted_data = self._parse_json_response(raw_response)
-        
+
         # 2. Local OCR Fallback (if LLM returned empty or invalid JSON) - Run in thread to avoid blocking
         if not extracted_data.get("observations"):
             logger.info("LLM extraction weak, attempting local OCR fallback in background thread...")
@@ -116,24 +114,23 @@ class DebriefExtractionService:
                 validated = True
                 logger.info("Maton API successfully validated/filled missing debrief fields.")
 
-        return {
-            **extracted_data,
-            "validatedByCalendar": validated
-        }
+        return {**extracted_data, "validatedByCalendar": validated}
 
-    def _parse_json_response(self, raw_response: Optional[str]) -> Dict[str, Any]:
+    def _parse_json_response(self, raw_response: str | None) -> dict[str, Any]:
         if not raw_response:
             return {}
         # Clean markdown code blocks if present
-        cleaned = re.sub(r'^```json\s*', '', raw_response, flags=re.IGNORECASE)
-        cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.IGNORECASE).strip()
+        cleaned = re.sub(r"^```json\s*", "", raw_response, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.IGNORECASE).strip()
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError:
             logger.warning(f"Failed to parse LLM JSON response: {raw_response[:200]}")
             return {}
 
-    async def _validate_with_maton_calendar(self, date_str: str, time_period: Optional[str], chat_id: str) -> Optional[Dict[str, str]]:
+    async def _validate_with_maton_calendar(
+        self, date_str: str, time_period: str | None, chat_id: str
+    ) -> dict[str, str] | None:
         """Queries Maton API to infer teacher/subject from Google Calendar."""
         # CRITICAL: TeacherBOY project constraint: Maton AI API key is ignored in this codebase/HF Space.
         return None

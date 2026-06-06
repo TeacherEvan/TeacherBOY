@@ -5,12 +5,13 @@ This module provides type-safe, validated configuration for the TeacherBOY/Ms. G
 following production best practices for environment-based configuration management.
 """
 
-from pydantic_settings import BaseSettings
-from pydantic import Field, field_validator, HttpUrl, AliasChoices
-from typing import Optional, Dict, Any
 import json
 import logging
 import os
+from typing import Any
+
+from pydantic import AliasChoices, Field, HttpUrl, field_validator
+from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +27,12 @@ class Settings(BaseSettings):
     # ============================================================================
     # LINE Bot Configuration - Primary Agent (Ms. Green)
     # ============================================================================
-    line_channel_secret: Optional[str] = Field(
+    line_channel_secret: str | None = Field(
         default=None,
         min_length=10,
         description="LINE Bot channel secret for webhook signature verification",
     )
-    line_channel_access_token: Optional[str] = Field(
+    line_channel_access_token: str | None = Field(
         default=None,
         min_length=10,
         description="LINE Bot channel access token for API authentication",
@@ -40,19 +41,14 @@ class Settings(BaseSettings):
     # ============================================================================
     # Multi-Agent Configuration (Optional)
     # ============================================================================
-    additional_agents: Optional[str] = Field(
-        default=None, description="JSON string with additional agent configurations"
-    )
+    additional_agents: str | None = Field(default=None, description="JSON string with additional agent configurations")
 
     # ============================================================================
     # Admin Control Configuration
     # ============================================================================
-    admin_user_ids: Optional[str] = Field(
-        default=None, 
-        description="Comma-separated list of LINE user IDs authorized as admins"
-    )
+    admin_user_ids: str | None = Field(default=None, description="Comma-separated list of LINE user IDs authorized as admins")
 
-    admin_setup_key: Optional[str] = Field(
+    admin_setup_key: str | None = Field(
         default=None,
         description=(
             "Optional one-time admin bootstrap key. If set, a user can run '/admin claim <key>' "
@@ -60,9 +56,8 @@ class Settings(BaseSettings):
         ),
     )
 
-    moderator_user_ids: Optional[str] = Field(
-        default=None,
-        description="Comma-separated list of LINE user IDs authorized as moderators (can access news directly)"
+    moderator_user_ids: str | None = Field(
+        default=None, description="Comma-separated list of LINE user IDs authorized as moderators (can access news directly)"
     )
 
     bot_identity_storage_path: str = Field(
@@ -81,7 +76,7 @@ class Settings(BaseSettings):
     # ============================================================================
     # Translation Service Configuration
     # ============================================================================
-    google_translate_api_key: Optional[str] = Field(
+    google_translate_api_key: str | None = Field(
         default=None,
         description="Google Translate API key retained for startup compatibility.",
     )
@@ -104,12 +99,12 @@ class Settings(BaseSettings):
         description="Auto-detect incomplete sentences and append '...' to prevent hallucination",
     )
 
-    libretranslate_api_url: Optional[str] = Field(
+    libretranslate_api_url: str | None = Field(
         default=None,
         description="LibreTranslate API endpoint URL",
         validation_alias=AliasChoices("LIBRETRANSLATE_API_URL"),
     )
-    libretranslate_api_key: Optional[str] = Field(
+    libretranslate_api_key: str | None = Field(
         default=None,
         description="LibreTranslate API key",
         validation_alias=AliasChoices("LIBRETRANSLATE_API_KEY"),
@@ -118,7 +113,7 @@ class Settings(BaseSettings):
     # ============================================================================
     # News Agent Configuration
     # ============================================================================
-    news_api_key: Optional[str] = Field(
+    news_api_key: str | None = Field(
         default=None,
         description="DEPRECATED: NewsAPI.org key (now using RSS feeds)",
     )
@@ -138,11 +133,11 @@ class Settings(BaseSettings):
     # ============================================================================
     # Extended News Agent Configuration (Optional APIs)
     # ============================================================================
-    exchange_rate_api_key: Optional[str] = Field(
+    exchange_rate_api_key: str | None = Field(
         default=None,
         description="ExchangeRate-API key for currency conversion (optional; 1500 req/mo free)",
     )
-    tat_api_key: Optional[str] = Field(
+    tat_api_key: str | None = Field(
         default=None,
         description="Tourism Authority of Thailand (TAT) API key for events/festivals",
     )
@@ -150,15 +145,15 @@ class Settings(BaseSettings):
     # ============================================================================
     # Hermes / OpenAI-compatible fallback Configuration
     # ============================================================================
-    hermes_api_key: Optional[str] = Field(
+    hermes_api_key: str | None = Field(
         default=None,
         description="Hermes / OpenAI-compatible provider API key (Bearer token)",
     )
-    hermes_base_url: Optional[str] = Field(
+    hermes_base_url: str | None = Field(
         default=None,
         description="Base URL for Hermes/OpenAI-compatible provider API (e.g., https://your-hermes-host/v1)",
     )
-    hermes_model: Optional[str] = Field(
+    hermes_model: str | None = Field(
         default=None,
         description="Fallback Hermes/OpenAI-compatible model identifier",
     )
@@ -178,7 +173,7 @@ class Settings(BaseSettings):
     # ============================================================================
     # OpenRouter Configuration (LLM)
     # ============================================================================
-    openrouter_api_key: Optional[str] = Field(
+    openrouter_api_key: str | None = Field(
         default=None,
         description="OpenRouter API key for LLM access",
     )
@@ -211,30 +206,21 @@ class Settings(BaseSettings):
     # AI group access control (group/room). Private chats are always allowed.
     zeus_group_access_mode: str = Field(
         default="all",
-        description=(
-            "Group/room access mode for group command usage. "
-            "Options: 'all' (default), 'allowlist', 'denylist'."
-        ),
+        description=("Group/room access mode for group command usage. Options: 'all' (default), 'allowlist', 'denylist'."),
     )
-    zeus_allowed_group_ids: Optional[str] = Field(
+    zeus_allowed_group_ids: str | None = Field(
         default=None,
-        description=(
-            "Comma-separated list of allowed group_id/room_id values in allowlist mode. "
-            "Example: 'C123,R456'."
-        ),
+        description=("Comma-separated list of allowed group_id/room_id values in allowlist mode. Example: 'C123,R456'."),
     )
-    zeus_denied_group_ids: Optional[str] = Field(
+    zeus_denied_group_ids: str | None = Field(
         default=None,
-        description=(
-            "Comma-separated list of denied group_id/room_id values in denylist mode. "
-            "Example: 'C123,R456'."
-        ),
+        description=("Comma-separated list of denied group_id/room_id values in denylist mode. Example: 'C123,R456'."),
     )
 
     # ============================================================================
     # Search Agent Configuration
     # ============================================================================
-    brave_search_api_key: Optional[str] = Field(
+    brave_search_api_key: str | None = Field(
         default=None,
         description="Brave Search API key for web search capabilities",
     )
@@ -242,14 +228,14 @@ class Settings(BaseSettings):
     # ============================================================================
     # Conversation Memory Configuration (HF Hub Persistence)
     # ============================================================================
-    hf_memory_token: Optional[str] = Field(
+    hf_memory_token: str | None = Field(
         default=None,
         description=(
             "Hugging Face API token for conversation memory persistence. "
             "Create at https://huggingface.co/settings/tokens with 'write' scope."
         ),
     )
-    hf_memory_repo_id: Optional[str] = Field(
+    hf_memory_repo_id: str | None = Field(
         default=None,
         description=(
             "Hugging Face dataset repo ID for storing conversation memory. "
@@ -296,7 +282,7 @@ class Settings(BaseSettings):
         default="./data/documents",
         description="Local directory for document storage.",
     )
-    document_hf_repo_id: Optional[str] = Field(
+    document_hf_repo_id: str | None = Field(
         default=None,
         description=(
             "Hugging Face dataset repo ID for document storage. "
@@ -327,14 +313,14 @@ class Settings(BaseSettings):
         default="./data/logs",
         description="Local directory for storing history logs.",
     )
-    history_log_encryption_key: Optional[str] = Field(
+    history_log_encryption_key: str | None = Field(
         default=None,
         description=(
             "Optional encryption key for sensitive log data. "
             "When set, logs are encrypted using AES (requires 'cryptography' package)."
         ),
     )
-    history_log_hf_repo_id: Optional[str] = Field(
+    history_log_hf_repo_id: str | None = Field(
         default=None,
         description=(
             "Hugging Face dataset repo ID for cloud log backup. "
@@ -355,7 +341,7 @@ class Settings(BaseSettings):
     # ============================================================================
     # GitHub Models Configuration (Alternative to OpenRouter)
     # ============================================================================
-    github_models_pat: Optional[str] = Field(
+    github_models_pat: str | None = Field(
         default=None,
         description=(
             "GitHub Personal Access Token (PAT) with 'models:read' scope for GitHub Models API. "
@@ -499,7 +485,7 @@ class Settings(BaseSettings):
         default="./data/calendar",
         description="Local directory for storing calendar data (legacy).",
     )
-    calendar_hf_repo_id: Optional[str] = Field(
+    calendar_hf_repo_id: str | None = Field(
         default=None,
         description=(
             "Hugging Face dataset repo ID for calendar data backup. "
@@ -512,7 +498,7 @@ class Settings(BaseSettings):
         le=3600,
         description="Interval in seconds for syncing calendar to HF Hub (default: 5 minutes).",
     )
-    calendar_encryption_key: Optional[str] = Field(
+    calendar_encryption_key: str | None = Field(
         default=None,
         description=(
             "AES encryption key for local calendar data (32 bytes base64). "
@@ -569,11 +555,11 @@ class Settings(BaseSettings):
         default="local",
         description="Persistence backend selection: local or convex.",
     )
-    convex_deployment_url: Optional[HttpUrl] = Field(
+    convex_deployment_url: HttpUrl | None = Field(
         default=None,
         description="Convex HTTP deployment URL for structured persistence.",
     )
-    convex_sync_token: Optional[str] = Field(
+    convex_sync_token: str | None = Field(
         default=None,
         description="Bearer token used for Convex HTTP sync requests.",
     )
@@ -591,32 +577,20 @@ class Settings(BaseSettings):
     # ============================================================================
     # HTTP Client Configuration
     # ============================================================================
-    http_client_timeout_seconds: int = Field(
-        default=30, ge=5, le=300, description="HTTP client timeout in seconds"
-    )
-    http_client_max_connections: int = Field(
-        default=100, ge=10, le=1000, description="Maximum concurrent HTTP connections"
-    )
-    http_client_max_keepalive: int = Field(
-        default=20, ge=5, le=100, description="Maximum keep-alive connections"
-    )
+    http_client_timeout_seconds: int = Field(default=30, ge=5, le=300, description="HTTP client timeout in seconds")
+    http_client_max_connections: int = Field(default=100, ge=10, le=1000, description="Maximum concurrent HTTP connections")
+    http_client_max_keepalive: int = Field(default=20, ge=5, le=100, description="Maximum keep-alive connections")
 
     # ============================================================================
     # Server Configuration
     # ============================================================================
     host: str = Field(default="0.0.0.0", description="Server bind host address")
     port: int = Field(default=8000, ge=1024, le=65535, description="Server bind port")
-    debug: bool = Field(
-        default=False, description="Enable debug mode (DO NOT use in production)"
-    )
+    debug: bool = Field(default=False, description="Enable debug mode (DO NOT use in production)")
 
     # Performance and monitoring
-    enable_request_logging: bool = Field(
-        default=True, description="Enable detailed request/response logging"
-    )
-    enable_performance_metrics: bool = Field(
-        default=True, description="Enable performance metrics collection"
-    )
+    enable_request_logging: bool = Field(default=True, description="Enable detailed request/response logging")
+    enable_performance_metrics: bool = Field(default=True, description="Enable performance metrics collection")
 
     # ============================================================================
     # Tracing / Observability (OpenTelemetry)
@@ -633,17 +607,13 @@ class Settings(BaseSettings):
 
     otel_exporter_otlp_endpoint: str = Field(
         default="http://localhost:4318",
-        description=(
-            "OTLP endpoint for exporting traces. AI Toolkit trace collector defaults to http://localhost:4318"
-        ),
+        description=("OTLP endpoint for exporting traces. AI Toolkit trace collector defaults to http://localhost:4318"),
     )
 
     # ============================================================================
     # MCP Configuration (Model Context Protocol)
     # ============================================================================
-    mcp_server_url: Optional[str] = Field(
-        default=None, description="MCP server URL for extended bot capabilities"
-    )
+    mcp_server_url: str | None = Field(default=None, description="MCP server URL for extended bot capabilities")
 
     class Config:
         env_file = ".env"
@@ -653,27 +623,27 @@ class Settings(BaseSettings):
 
     @field_validator("line_channel_secret")
     @classmethod
-    def reject_placeholder_secret(cls, value: Optional[str]) -> Optional[str]:
+    def reject_placeholder_secret(cls, value: str | None) -> str | None:
         if isinstance(value, str) and value.startswith("test_"):
             raise ValueError("LINE channel secret appears to be a placeholder; set a real value in environment config")
         return value
 
     @field_validator("line_channel_access_token")
     @classmethod
-    def reject_placeholder_token(cls, value: Optional[str]) -> Optional[str]:
+    def reject_placeholder_token(cls, value: str | None) -> str | None:
         if isinstance(value, str) and value.startswith("test_"):
             raise ValueError("LINE channel access token appears to be a placeholder; set a real value in environment config")
         return value
 
-    @field_validator("debug", mode='before')
+    @field_validator("debug", mode="before")
     @classmethod
     def validate_debug(cls, v) -> bool:
         """Convert string values to boolean for debug field."""
         if isinstance(v, str):
             # Handle common string representations of boolean
-            if v.upper() in ('TRUE', '1', 'YES', 'ON', 'WARN'):
+            if v.upper() in ("TRUE", "1", "YES", "ON", "WARN"):
                 return True
-            elif v.upper() in ('FALSE', '0', 'NO', 'OFF'):
+            elif v.upper() in ("FALSE", "0", "NO", "OFF"):
                 return False
             else:
                 # Default to False for unrecognized strings
@@ -683,7 +653,7 @@ class Settings(BaseSettings):
 
     @field_validator("additional_agents")
     @classmethod
-    def validate_additional_agents_json(cls, v: Optional[str]) -> Optional[str]:
+    def validate_additional_agents_json(cls, v: str | None) -> str | None:
         """Validate that additional_agents is valid JSON if provided."""
         if v is None or v.strip() == "":
             return None
@@ -714,7 +684,7 @@ class Settings(BaseSettings):
             return normalized or None
         return v
 
-    def parse_additional_agents(self) -> Dict[str, Dict[str, str]]:
+    def parse_additional_agents(self) -> dict[str, dict[str, str]]:
         """
         Parse additional agents configuration from JSON string.
 
@@ -740,9 +710,7 @@ class Settings(BaseSettings):
 
     def is_google_translate_configured(self) -> bool:
         """Check if the legacy Google Translate configuration is available."""
-        return bool(
-            self.google_translate_api_key and len(self.google_translate_api_key) > 10
-        )
+        return bool(self.google_translate_api_key and len(self.google_translate_api_key) > 10)
 
     def is_openrouter_configured(self) -> bool:
         """Check if OpenRouter is properly configured."""
@@ -852,8 +820,8 @@ class Settings(BaseSettings):
 
     def is_zeus_allowed_in_group(
         self,
-        group_id: Optional[str],
-        room_id: Optional[str],
+        group_id: str | None,
+        room_id: str | None,
         user_is_admin: bool,
     ) -> bool:
         """Return True when Zeus features should be available in a group/room.
@@ -878,46 +846,11 @@ class Settings(BaseSettings):
 
     def is_history_log_hf_configured(self) -> bool:
         """Check if HF Hub backup for history logs is configured."""
-        return bool(
-            self.history_log_enabled
-            and self.hf_memory_token
-            and self.history_log_hf_repo_id
-        )
+        return bool(self.history_log_enabled and self.hf_memory_token and self.history_log_hf_repo_id)
 
     def is_profiler_configured(self) -> bool:
         """Check if the psychological profiler feature is enabled."""
         return bool(self.profiler_enabled)
-        """Return a mapping of user aliases to LINE user IDs from environment variables.
-
-        This supports admin-safe outbound messaging to known recipients.
-
-        Format:
-            USER_<ALIAS>=<LINE_USER_ID>
-
-        Example:
-            USER_BOSS=U1234567890abcdef
-
-        Notes:
-        - Aliases are stored case-insensitively (lowercased).
-        - Values are trimmed and may be quoted.
-        - Only variables with names starting with the prefix are considered.
-        """
-        result: Dict[str, str] = {}
-        for key, value in os.environ.items():
-            if not key.startswith(prefix):
-                continue
-
-            alias = key[len(prefix) :].strip()
-            if not alias:
-                continue
-
-            user_id = (value or "").strip().strip("\"'")
-            if not user_id:
-                continue
-
-            result[alias.lower()] = user_id
-
-        return result
 
     def is_calendar_configured(self) -> bool:
         """Check if calendar feature is enabled."""
@@ -933,10 +866,7 @@ class Settings(BaseSettings):
 
     def is_google_calendar_configured(self) -> bool:
         """Check if Google Calendar integration is enabled and configured."""
-        return bool(
-            self.google_calendar_enabled
-            and os.path.exists(self.google_calendar_credentials_file)
-        )
+        return bool(self.google_calendar_enabled and os.path.exists(self.google_calendar_credentials_file))
 
     def is_convex_configured(self) -> bool:
         """Check if Convex structured persistence is configured."""
@@ -946,11 +876,11 @@ class Settings(BaseSettings):
         """Check if Convex is the selected primary persistence backend."""
         return self.persistence_backend == "convex"
 
-    def get_mcp_server_url(self) -> Optional[str]:
+    def get_mcp_server_url(self) -> str | None:
         url = (self.mcp_server_url or "").strip()
         return url or None
 
-    def get_http_client_config(self) -> Dict[str, Any]:
+    def get_http_client_config(self) -> dict[str, Any]:
         """
         Get HTTP client configuration for httpx.AsyncClient.
 

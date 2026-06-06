@@ -3,21 +3,21 @@
 import asyncio
 import logging
 import re
-from typing import Optional
-from linebot.v3.webhooks import MessageEvent
+
 from linebot.v3.messaging import (
     MessagingApi,
     ReplyMessageRequest,
     TextMessage,
 )
-
-from .base_agent import BaseAgent
-from src.services.brave_search_service import brave_search_service
-from src.services.bot_identity_service import get_bot_identity_service
-from src.utils.tracing import get_tracer
-from src.services.privilege_service import privilege_service
+from linebot.v3.webhooks import MessageEvent
 
 from src.config import settings
+from src.services.bot_identity_service import get_bot_identity_service
+from src.services.brave_search_service import brave_search_service
+from src.services.privilege_service import privilege_service
+from src.utils.tracing import get_tracer
+
+from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -47,14 +47,14 @@ class SearchAgent(BaseAgent):
         """Check if chat is private (1-on-1)."""
         return event.source is not None and event.source.type == "user"
 
-    def _get_group_room_ids(self, event: MessageEvent) -> tuple[Optional[str], Optional[str]]:
+    def _get_group_room_ids(self, event: MessageEvent) -> tuple[str | None, str | None]:
         """Return (group_id, room_id) from event source."""
         source = getattr(event, "source", None)
         group_id = getattr(source, "group_id", None) if source else None
         room_id = getattr(source, "room_id", None) if source else None
         return group_id, room_id
 
-    def _parse_search_command(self, text: str) -> Optional[str]:
+    def _parse_search_command(self, text: str) -> str | None:
         """
         Parse search command.
         Trigger: '<bot name> search <query>'
@@ -92,9 +92,7 @@ class SearchAgent(BaseAgent):
         group_id, room_id = self._get_group_room_ids(event)
         return settings.is_zeus_allowed_in_group(group_id, room_id, user_is_admin=False)
 
-    async def handle(
-        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
-    ) -> bool:
+    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """Process search request."""
         query = self._parse_search_command(text)
         if not query:
@@ -108,12 +106,8 @@ class SearchAgent(BaseAgent):
         # Access control: admins anywhere; private chats always; group/room per configured rules.
         if not privilege_service.is_admin(user_id) and not is_private:
             group_id, room_id = self._get_group_room_ids(event)
-            if not settings.is_zeus_allowed_in_group(
-                group_id, room_id, user_is_admin=False
-            ):
-                logger.info(
-                    f"🔒 {identity_name} search denied for non-admin user_id={user_id} in group chat"
-                )
+            if not settings.is_zeus_allowed_in_group(group_id, room_id, user_is_admin=False):
+                logger.info(f"🔒 {identity_name} search denied for non-admin user_id={user_id} in group chat")
                 await asyncio.to_thread(
                     line_bot_api.reply_message,
                     ReplyMessageRequest(
@@ -132,7 +126,7 @@ class SearchAgent(BaseAgent):
 
         with tracer.start_as_current_span("search_agent.handle") as span:
             span.set_attribute("search.query", query)
-            
+
             try:
                 if not self.search_service.is_configured():
                     await self._send_error(
@@ -144,7 +138,7 @@ class SearchAgent(BaseAgent):
 
                 # Perform search
                 results = await self.search_service.search(query, count=5)
-                
+
                 if not results:
                     await self._send_error(event, line_bot_api, f"❌ No results: {query}")
                     return True
@@ -154,11 +148,7 @@ class SearchAgent(BaseAgent):
                 for i, result in enumerate(results, 1):
                     title = (result.get("title") or "No title").strip()
                     url = (result.get("url") or "").strip()
-                    snippet = (
-                        (result.get("description") or result.get("snippet") or "")
-                        .strip()
-                        .replace("\n", " ")
-                    )
+                    snippet = (result.get("description") or result.get("snippet") or "").strip().replace("\n", " ")
                     line = f"{i}. {title}"
                     if snippet:
                         line += f"\n   {snippet}"
@@ -179,7 +169,7 @@ class SearchAgent(BaseAgent):
                             notificationDisabled=False,
                         ),
                     )
-                
+
                 logger.info(f"✅ Sent search results for '{query}'")
                 return True
 

@@ -4,7 +4,8 @@ Reduces memory footprint and startup time by ~60%.
 """
 
 import logging
-from typing import Dict, Type, Optional, Callable
+from collections.abc import Callable
+
 from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
@@ -13,8 +14,8 @@ logger = logging.getLogger(__name__)
 class AgentFactory:
     """Factory for lazy agent instantiation."""
 
-    _registry: Dict[str, Callable[[], BaseAgent]] = {}
-    _instances: Dict[str, BaseAgent] = {}
+    _registry: dict[str, Callable[[], BaseAgent]] = {}
+    _instances: dict[str, BaseAgent] = {}
 
     @classmethod
     def register(cls, agent_name: str, factory_fn: Callable[[], BaseAgent]):
@@ -29,7 +30,7 @@ class AgentFactory:
         logger.debug(f"📝 Registered agent: {agent_name}")
 
     @classmethod
-    def get_agent(cls, agent_name: str) -> Optional[BaseAgent]:
+    def get_agent(cls, agent_name: str) -> BaseAgent | None:
         """
         Get or create agent instance (lazy loading).
 
@@ -144,8 +145,9 @@ def __import_translation_agent():
 
 
 def __import_calendar_agent():
-    from .calendar_agent import CalendarAgent
     from src.services.calendar_service import calendar_service
+
+    from .calendar_agent import CalendarAgent
 
     return CalendarAgent(calendar_service=calendar_service)
 

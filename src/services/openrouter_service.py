@@ -3,8 +3,9 @@ OpenRouter Service - LLM access via OpenRouter API.
 """
 
 import logging
+from typing import Any
+
 import httpx
-from typing import Any, Dict, List, Optional
 
 from src.config import settings
 
@@ -14,17 +15,17 @@ logger = logging.getLogger(__name__)
 class OpenRouterService:
     """Service for interacting with OpenRouter API."""
 
-    def __init__(self, http_client: Optional[httpx.AsyncClient] = None) -> None:
+    def __init__(self, http_client: httpx.AsyncClient | None = None) -> None:
         self.client = http_client
         self.api_url = "https://openrouter.ai/api/v1/chat/completions"
         self.api_key = settings.openrouter_api_key
         self.default_model = settings.openrouter_default_model
 
-        self._last_error: Optional[str] = None
-        self._last_status_code: Optional[int] = None
-        self._last_model: Optional[str] = None
+        self._last_error: str | None = None
+        self._last_status_code: int | None = None
+        self._last_model: str | None = None
 
-    def get_last_error(self) -> tuple[Optional[int], Optional[str], Optional[str]]:
+    def get_last_error(self) -> tuple[int | None, str | None, str | None]:
         return self._last_status_code, self._last_error, self._last_model
 
     def set_client(self, client: httpx.AsyncClient) -> None:
@@ -35,10 +36,10 @@ class OpenRouterService:
 
     async def chat_completion(
         self,
-        messages: List[Dict[str, str]],
-        model: Optional[str] = None,
+        messages: list[dict[str, str]],
+        model: str | None = None,
         temperature: float = 0.7,
-    ) -> Optional[str]:
+    ) -> str | None:
         if not self.is_configured():
             logger.warning("⚠️ OpenRouter API key not configured")
             return None
@@ -66,9 +67,7 @@ class OpenRouterService:
                 "temperature": temperature,
             }
 
-            response = await self.client.post(
-                self.api_url, headers=headers, json=payload, timeout=30.0
-            )
+            response = await self.client.post(self.api_url, headers=headers, json=payload, timeout=30.0)
 
             if response.status_code != 200:
                 err_text = (response.text or "").strip()
@@ -101,11 +100,11 @@ class OpenRouterService:
 
     async def chat_completion_with_vision(
         self,
-        messages: List[Dict[str, Any]],
-        model: Optional[str] = None,
+        messages: list[dict[str, Any]],
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
-    ) -> Optional[str]:
+        max_tokens: int | None = None,
+    ) -> str | None:
         if not self.is_configured():
             logger.warning("⚠️ OpenRouter API key not configured")
             return None
@@ -127,7 +126,7 @@ class OpenRouterService:
                 "Content-Type": "application/json",
             }
 
-            payload: Dict[str, Any] = {
+            payload: dict[str, Any] = {
                 "model": target_model,
                 "messages": messages,
                 "temperature": temperature,
@@ -136,9 +135,7 @@ class OpenRouterService:
             if max_tokens:
                 payload["max_tokens"] = max_tokens
 
-            response = await self.client.post(
-                self.api_url, headers=headers, json=payload, timeout=30.0
-            )
+            response = await self.client.post(self.api_url, headers=headers, json=payload, timeout=30.0)
 
             if response.status_code != 200:
                 err_text = (response.text or "").strip()

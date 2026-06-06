@@ -4,19 +4,20 @@ Extracted from calendar_agent.py for modular architecture.
 """
 
 import logging
-from datetime import datetime, date
-from typing import Optional, Any, Dict
+from datetime import date, datetime
+from typing import Any
 from zoneinfo import ZoneInfo
 
-from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import MessagingApi
+from linebot.v3.webhooks import MessageEvent
 
-from .base_flow import CalendarFlowBase
-from src.services.calendar_session_manager import calendar_session_manager
 from src.services.calendar_access_control import calendar_access_control
+from src.services.calendar_session_manager import calendar_session_manager
+from src.services.history_log_service import EventType, LogLevel, get_history_log
 from src.services.privilege_service import privilege_service
 from src.services.rate_limiter import rate_limiter
-from src.services.history_log_service import EventType, LogLevel, get_history_log
+
+from .base_flow import CalendarFlowBase
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 class InlineAddFlow(CalendarFlowBase):
     """
     Handler for inline add syntax: "zeus add [date] [title]".
-    
+
     This flow skips the interactive date/title prompts since both
     are provided in the command. Only asks for reminder preference.
     """
@@ -37,8 +38,8 @@ class InlineAddFlow(CalendarFlowBase):
         event: MessageEvent,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
-        parsed_data: Dict[str, Any],
+        user_id: str | None,
+        parsed_data: dict[str, Any],
     ) -> bool:
         """
         Handle "zeus add [date] [title]" inline trigger.
@@ -54,32 +55,21 @@ class InlineAddFlow(CalendarFlowBase):
             True if handled successfully
         """
         if not user_id:
-            await self.send_message(
-                event, line_bot_api,
-                "❌ Cannot identify user."
-            )
+            await self.send_message(event, line_bot_api, "❌ Cannot identify user.")
             return True
 
         # Check access control
-        can_create = await calendar_access_control.can_create_event(
-            user_id, chat_id, line_bot_api
-        )
+        can_create = await calendar_access_control.can_create_event(user_id, chat_id, line_bot_api)
         if not can_create:
             logger.warning(f"❌ Access denied: {user_id} cannot create events in {chat_id}")
             await self._log_access_denied(chat_id, user_id, "create_event_inline")
-            await self.send_message(
-                event, line_bot_api,
-                "❌ You don't have permission to create events in this chat."
-            )
+            await self.send_message(event, line_bot_api, "❌ You don't have permission to create events in this chat.")
             return True
 
         # Check rate limiting
         is_admin = privilege_service.is_admin(user_id)
         if not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin):
-            await self.send_message(
-                event, line_bot_api,
-                "⏳ Calendar rate limit exceeded. Please try again later."
-            )
+            await self.send_message(event, line_bot_api, "⏳ Calendar rate limit exceeded. Please try again later.")
             return True
 
         event_date: date = parsed_data["date"]
@@ -89,10 +79,9 @@ class InlineAddFlow(CalendarFlowBase):
         today = datetime.now(BANGKOK_TZ).date()
         if event_date < today:
             await self.send_message(
-                event, line_bot_api,
-                "❌ That date is in the past!\n\n"
-                "Please use a future date.\n\n"
-                "วันที่ที่ระบุผ่านไปแล้ว กรุณาใส่วันที่ในอนาคต"
+                event,
+                line_bot_api,
+                "❌ That date is in the past!\n\nPlease use a future date.\n\nวันที่ที่ระบุผ่านไปแล้ว กรุณาใส่วันที่ในอนาคต",
             )
             return True
 
@@ -119,7 +108,7 @@ class InlineAddFlow(CalendarFlowBase):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         """
         Handle reminder days selection for inline add.
@@ -140,23 +129,16 @@ class InlineAddFlow(CalendarFlowBase):
         reminder_days = self._parse_reminder_selection(text_lower)
         if reminder_days is None:
             await self.send_message(
-                event, line_bot_api,
-                "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\n"
-                "กรุณาเลือก 7, 3, 1 หรือ all"
+                event, line_bot_api, "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\nกรุณาเลือก 7, 3, 1 หรือ all"
             )
             return True
 
         # Store reminder days (moves to CONFIRMING state)
-        event_data = calendar_session_manager.set_inline_reminder_days(
-            chat_id, reminder_days
-        )
+        event_data = calendar_session_manager.set_inline_reminder_days(chat_id, reminder_days)
 
         if not event_data:
             calendar_session_manager.end_session(chat_id)
-            await self.send_message(
-                event, line_bot_api,
-                "❌ Something went wrong. Please try again."
-            )
+            await self.send_message(event, line_bot_api, "❌ Something went wrong. Please try again.")
             return True
 
         # Show confirmation prompt
@@ -169,7 +151,7 @@ class InlineAddFlow(CalendarFlowBase):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         """
         Handle confirmation for inline add.
@@ -192,26 +174,20 @@ class InlineAddFlow(CalendarFlowBase):
         elif text_lower in ["no", "n", "ไม่"]:
             calendar_session_manager.end_session(chat_id)
             await self.send_message(
-                event, line_bot_api,
-                "❌ Event creation cancelled.\n\n"
-                "Say 'Ms. Green add [date] [title]' to try again.\n\n"
-                "ยกเลิกแล้ว"
+                event,
+                line_bot_api,
+                "❌ Event creation cancelled.\n\nSay 'Ms. Green add [date] [title]' to try again.\n\nยกเลิกแล้ว",
             )
             return True
         else:
-            await self.send_message(
-                event, line_bot_api,
-                "Please answer yes or no.\n\nกรุณาตอบ yes หรือ no"
-            )
+            await self.send_message(event, line_bot_api, "Please answer yes or no.\n\nกรุณาตอบ yes หรือ no")
             return True
 
     # =========================================================================
     # Private Helpers
     # =========================================================================
 
-    async def _log_access_denied(
-        self, chat_id: str, user_id: str, operation: str
-    ) -> None:
+    async def _log_access_denied(self, chat_id: str, user_id: str, operation: str) -> None:
         """Log access denied event."""
         history_log = get_history_log()
         if history_log:
@@ -231,8 +207,9 @@ class InlineAddFlow(CalendarFlowBase):
         line_bot_api: MessagingApi,
     ) -> bool:
         """Check if user is a friend of the bot."""
-        from linebot.v3.messaging.exceptions import ApiException
         import asyncio
+
+        from linebot.v3.messaging.exceptions import ApiException
 
         user_id = self.get_user_id(event)
         if not user_id:
@@ -276,7 +253,7 @@ class InlineAddFlow(CalendarFlowBase):
         ]
         await self.send_message_with_quick_reply(event, line_bot_api, msg, actions)
 
-    def _parse_reminder_selection(self, text: str) -> Optional[list[int]]:
+    def _parse_reminder_selection(self, text: str) -> list[int] | None:
         """
         Parse reminder days from user input.
 
@@ -301,14 +278,13 @@ class InlineAddFlow(CalendarFlowBase):
         self,
         event: MessageEvent,
         line_bot_api: MessagingApi,
-        event_data: Dict[str, Any],
+        event_data: dict[str, Any],
     ) -> None:
         """Send confirmation prompt."""
         date_str = event_data["date"].strftime("%B %d, %Y")
-        reminder_str = ", ".join([
-            f"{d} days" if d > 0 else "day-of"
-            for d in sorted(event_data["reminder_days"], reverse=True)
-        ])
+        reminder_str = ", ".join(
+            [f"{d} days" if d > 0 else "day-of" for d in sorted(event_data["reminder_days"], reverse=True)]
+        )
 
         msg = (
             "📝 Confirm event:\n\n"
@@ -326,21 +302,13 @@ class InlineAddFlow(CalendarFlowBase):
         event: MessageEvent,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         """Create the calendar event."""
         session = calendar_session_manager.get_session(chat_id)
 
-        if (
-            not session
-            or not session.inline_event_data
-            or not self._calendar_service
-            or not user_id
-        ):
-            await self.send_message(
-                event, line_bot_api,
-                "❌ Something went wrong. Please try again."
-            )
+        if not session or not session.inline_event_data or not self._calendar_service or not user_id:
+            await self.send_message(event, line_bot_api, "❌ Something went wrong. Please try again.")
             calendar_session_manager.end_session(chat_id)
             return True
 
@@ -358,9 +326,7 @@ class InlineAddFlow(CalendarFlowBase):
         calendar_session_manager.end_session(chat_id)
 
         date_str = new_event.event_date.strftime("%B %d, %Y")
-        reminder_str = ", ".join(
-            [f"{d}d" for d in sorted(new_event.reminder_days, reverse=True)]
-        )
+        reminder_str = ", ".join([f"{d}d" for d in sorted(new_event.reminder_days, reverse=True)])
 
         msg = (
             "✅ Event created!\n\n"
@@ -376,7 +342,7 @@ class InlineAddFlow(CalendarFlowBase):
 
 
 # Lazy loader for on-demand instantiation
-_inline_add_flow_instance: Optional[InlineAddFlow] = None
+_inline_add_flow_instance: InlineAddFlow | None = None
 
 
 def get_inline_add_flow(calendar_service: Any) -> InlineAddFlow:

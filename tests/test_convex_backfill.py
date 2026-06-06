@@ -3,9 +3,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.services.staff_memory_service import StaffMemoryItem
-
 from scripts import convex_backfill
+from src.services.staff_memory_service import StaffMemoryItem
 
 
 @pytest.mark.asyncio
@@ -33,14 +32,12 @@ async def test_apply_backfill_uses_idempotent_staff_memory_upsert() -> None:
     async_client.__aenter__.return_value = async_client
     async_client.__aexit__.return_value = False
 
-    with patch.object(convex_backfill.httpx, "AsyncClient", return_value=async_client), patch.object(
-        convex_backfill, "ConvexClient", return_value=convex_client
-    ), patch.object(
-        convex_backfill, "StructuredRecordsService", return_value=records_service
-    ), patch.object(
-        convex_backfill, "ConvexStaffMemoryRepository", return_value=staff_repository
-    ), patch.object(
-        convex_backfill, "ConvexCalendarRepository", return_value=calendar_repository
+    with (
+        patch.object(convex_backfill.httpx, "AsyncClient", return_value=async_client),
+        patch.object(convex_backfill, "ConvexClient", return_value=convex_client),
+        patch.object(convex_backfill, "StructuredRecordsService", return_value=records_service),
+        patch.object(convex_backfill, "ConvexStaffMemoryRepository", return_value=staff_repository),
+        patch.object(convex_backfill, "ConvexCalendarRepository", return_value=calendar_repository),
     ):
         result = await convex_backfill.apply_backfill([staff_item], [])
 

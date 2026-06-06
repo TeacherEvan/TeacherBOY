@@ -1,9 +1,10 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from linebot.v3.messaging import FlexMessage
 
 from src.agents.special_news_agent import SpecialNewsAgent
 from src.services.special_news_service import SpecialNewsService
-from linebot.v3.messaging import FlexMessage
 
 
 @pytest.fixture
@@ -83,11 +84,13 @@ async def test_private_friend_success_returns_flex_carousel(special_news_agent, 
     mock_line_bot_api.get_profile = MagicMock(return_value={"userId": "U_test_private"})
 
     # Stub service methods to avoid network
-    special_news_agent._service.fetch_rss_items = AsyncMock(side_effect=[
-        [{"title": f"T{i}", "url": f"https://t/{i}"} for i in range(1, 6)],
-        [{"title": f"S{i}", "url": f"https://s/{i}"} for i in range(1, 6)],
-        [{"title": f"W{i}", "url": f"https://w/{i}"} for i in range(1, 6)],
-    ])
+    special_news_agent._service.fetch_rss_items = AsyncMock(
+        side_effect=[
+            [{"title": f"T{i}", "url": f"https://t/{i}"} for i in range(1, 6)],
+            [{"title": f"S{i}", "url": f"https://s/{i}"} for i in range(1, 6)],
+            [{"title": f"W{i}", "url": f"https://w/{i}"} for i in range(1, 6)],
+        ]
+    )
 
     handled = await special_news_agent.handle(mock_event_private, "/special news", mock_line_bot_api)
     assert handled is True
@@ -109,7 +112,7 @@ async def test_private_friend_success_returns_flex_carousel(special_news_agent, 
     for bubble in bubbles:
         body_items = bubble["body"]["contents"]
         assert len(body_items) == 5
-        
+
         for i, item in enumerate(body_items, start=1):
             title_text = item["contents"][0]["text"]
             assert title_text.startswith(f"{i}."), f"Expected item {i} to start with '{i}.', got '{title_text}'"

@@ -3,37 +3,39 @@
 import asyncio
 import logging
 import re
-from datetime import datetime, timezone
-from typing import Optional, TYPE_CHECKING
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Optional
+
 import httpx
-from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
-    MessagingApi,
-    ReplyMessageRequest,
-    PushMessageRequest,
-    TextMessage,
-    FlexMessage,
     FlexContainer,
+    FlexMessage,
+    MessagingApi,
+    PushMessageRequest,
+    ReplyMessageRequest,
+    TextMessage,
 )
+from linebot.v3.webhooks import MessageEvent
 
 if TYPE_CHECKING:
     from src.services.news_data_service import NewsDataService
 
-from .base_agent import BaseAgent
+from src.config import settings
+from src.services.admin_confirmation_service import admin_confirmation_service
+from src.services.bot_identity_service import get_bot_identity_service
+from src.services.metrics_service import metrics_service
+from src.services.openrouter_service import openrouter_service
+from src.services.privilege_service import privilege_service
+from src.services.rate_limiter import rate_limiter
+from src.services.session_manager import session_manager
+
 from .admin.dashboard_builder import (
     build_admin_dashboard,
     build_dashboard_delivery_failure_message,
     build_dashboard_handoff_message,
 )
 from .admin.destructive_action_flow import DestructiveActionFlow
-from src.services.session_manager import session_manager
-from src.services.rate_limiter import rate_limiter
-from src.services.metrics_service import metrics_service
-from src.services.admin_confirmation_service import admin_confirmation_service
-from src.services.privilege_service import privilege_service
-from src.services.openrouter_service import openrouter_service
-from src.services.bot_identity_service import get_bot_identity_service
-from src.config import settings
+from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +45,7 @@ class AdminAgent(BaseAgent):
 
     def __init__(
         self,
-        http_client: Optional[httpx.AsyncClient] = None,
+        http_client: httpx.AsyncClient | None = None,
         news_api_key: str | None = None,
         news_data_service: Optional["NewsDataService"] = None,
     ):
@@ -54,22 +56,14 @@ class AdminAgent(BaseAgent):
         self._http_client = http_client
         self._news_data_service = news_data_service
         self._admin_user_ids = settings.get_admin_user_ids()
-        self._admin_setup_key = (
-            settings.admin_setup_key.strip()
-            if isinstance(settings.admin_setup_key, str)
-            else None
-        )
+        self._admin_setup_key = settings.admin_setup_key.strip() if isinstance(settings.admin_setup_key, str) else None
         self._claimed_admin_user_id: str | None = None
         self._destructive_action_flow: DestructiveActionFlow | None = None
 
         if self._admin_user_ids:
-            logger.info(
-                f"✅ AdminAgent initialized with {len(self._admin_user_ids)} authorized admin(s)"
-            )
+            logger.info(f"✅ AdminAgent initialized with {len(self._admin_user_ids)} authorized admin(s)")
         else:
-            logger.warning(
-                "⚠️  AdminAgent initialized but no admin users configured (ADMIN_USER_IDS)"
-            )
+            logger.warning("⚠️  AdminAgent initialized but no admin users configured (ADMIN_USER_IDS)")
 
     def get_priority(self) -> int:
         """Admin commands have highest priority (lower number = higher priority)."""
@@ -165,9 +159,7 @@ class AdminAgent(BaseAgent):
 
         return self._is_admin(user_id)
 
-    async def handle(
-        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
-    ) -> bool:
+    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """Process admin command."""
         chat_id = self._get_chat_id(event)
         user_id = getattr(event.source, "user_id", None) if event.source else None
@@ -200,7 +192,7 @@ class AdminAgent(BaseAgent):
                 elif command == "stats":
                     # Stats returns FlexMessage (v3.4.3 enhancement)
                     flex_stats = await self._get_stats_message(line_bot_api)
-                    
+
                     # Send FlexMessage immediately
                     if event.reply_token:
                         await asyncio.to_thread(
@@ -223,9 +215,7 @@ class AdminAgent(BaseAgent):
                     )
                     if dashboard_handled:
                         metrics_service.record_admin_command()
-                        logger.info(
-                            f"🔧 Admin dashboard executed by {user_id} in chat {chat_id}"
-                        )
+                        logger.info(f"🔧 Admin dashboard executed by {user_id} in chat {chat_id}")
                         return True
                     return False
                 elif command == "send":
@@ -263,13 +253,9 @@ class AdminAgent(BaseAgent):
                         arg=arg,
                     )
                 elif command == "purge":
-                    response = await self._request_confirm_purge(
-                        event, line_bot_api, chat_id, user_id, arg
-                    )
+                    response = await self._request_confirm_purge(event, line_bot_api, chat_id, user_id, arg)
                 elif command == "leave":
-                    response = await self._request_confirm_leave(
-                        event, line_bot_api, chat_id, user_id, arg
-                    )
+                    response = await self._request_confirm_leave(event, line_bot_api, chat_id, user_id, arg)
                 elif command == "sessions":
                     response = self._list_sessions()
                 else:
@@ -284,18 +270,14 @@ class AdminAgent(BaseAgent):
                     line_bot_api.reply_message,
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
-                        messages=[
-                            TextMessage(text=response, quickReply=None, quoteToken=None)
-                        ],
+                        messages=[TextMessage(text=response, quickReply=None, quoteToken=None)],
                         notificationDisabled=False,
                     ),
                 )
 
             # Record admin command execution
             metrics_service.record_admin_command()
-            logger.info(
-                f"🔧 Admin command executed by {user_id} in chat {chat_id}: {text}"
-            )
+            logger.info(f"🔧 Admin command executed by {user_id} in chat {chat_id}: {text}")
             return True
 
         except Exception as e:
@@ -323,8 +305,7 @@ class AdminAgent(BaseAgent):
         """Allow one-time admin bootstrap using ADMIN_SETUP_KEY."""
         if not self._admin_setup_key:
             return (
-                "❌ Admin bootstrap is not enabled.\n\n"
-                "Ask the deployer to set ADMIN_SETUP_KEY, then run: /admin claim <key>"
+                "❌ Admin bootstrap is not enabled.\n\nAsk the deployer to set ADMIN_SETUP_KEY, then run: /admin claim <key>"
             )
 
         if not user_id:
@@ -335,9 +316,7 @@ class AdminAgent(BaseAgent):
             return "Usage: /admin claim <ADMIN_SETUP_KEY>"
 
         if provided_key != self._admin_setup_key:
-            logger.warning(
-                f"⚠️  Invalid admin claim attempt from user {user_id} in {chat_id}"
-            )
+            logger.warning(f"⚠️  Invalid admin claim attempt from user {user_id} in {chat_id}")
             return "❌ Invalid claim key."
 
         if self._claimed_admin_user_id and self._claimed_admin_user_id != user_id:
@@ -383,10 +362,8 @@ class AdminAgent(BaseAgent):
             "    → List all active sessions\n\n"
             "  /admin confirmations\n"
             "    → List your pending destructive previews (private chat only)\n\n"
-
             "  /admin whoami\n"
             "    → Show your LINE user_id + admin detection (debug)\n\n"
-
             "━━━━━━━━━━━━━━━━\n"
             "📨 Outbound Messaging (named recipients)\n"
             "━━━━━━━━━━━━━━━━\n"
@@ -515,10 +492,7 @@ class AdminAgent(BaseAgent):
 
         target_user_id = self._resolve_named_user_id(alias)
         if not target_user_id:
-            return (
-                f"❌ Unknown alias: {alias}\n\n"
-                "Configure a recipient as USER_<ALIAS>=<LINE_USER_ID> in your environment."
-            )
+            return f"❌ Unknown alias: {alias}\n\nConfigure a recipient as USER_<ALIAS>=<LINE_USER_ID> in your environment."
 
         msg = self._truncate_for_line(text)
         pushed = await asyncio.to_thread(self._push_text, line_bot_api, target_user_id, msg)
@@ -537,10 +511,7 @@ class AdminAgent(BaseAgent):
 
         target_user_id = self._resolve_named_user_id(alias)
         if not target_user_id:
-            return (
-                f"❌ Unknown alias: {alias}\n\n"
-                "Configure a recipient as USER_<ALIAS>=<LINE_USER_ID> in your environment."
-            )
+            return f"❌ Unknown alias: {alias}\n\nConfigure a recipient as USER_<ALIAS>=<LINE_USER_ID> in your environment."
 
         if not openrouter_service.is_configured():
             return "❌ OpenRouter is not configured (missing OPENROUTER_API_KEY)."
@@ -554,20 +525,14 @@ class AdminAgent(BaseAgent):
             {"role": "user", "content": prompt},
         ]
 
-        drafted = await openrouter_service.chat_completion(
-            messages, temperature=settings.llm_temperature
-        )
+        drafted = await openrouter_service.chat_completion(messages, temperature=settings.llm_temperature)
         if not drafted:
             status_code, err_text, model_used = openrouter_service.get_last_error()
             if status_code:
                 detail = (err_text or "").strip()
                 if len(detail) > 200:
                     detail = detail[:200] + "..."
-                return (
-                    f"❌ OpenRouter error ({status_code}).\n"
-                    f"Model: {model_used or 'unknown'}\n"
-                    f"Details: {detail}"
-                )
+                return f"❌ OpenRouter error ({status_code}).\nModel: {model_used or 'unknown'}\nDetails: {detail}"
             return "❌ LLM failed to generate a message."
 
         msg = self._truncate_for_line(drafted)
@@ -582,10 +547,7 @@ class AdminAgent(BaseAgent):
 
         target_user_id = self._resolve_named_user_id(alias)
         if not target_user_id:
-            return (
-                f"❌ Unknown alias: {alias}\n\n"
-                "Configure a recipient as USER_<ALIAS>=<LINE_USER_ID> in your environment."
-            )
+            return f"❌ Unknown alias: {alias}\n\nConfigure a recipient as USER_<ALIAS>=<LINE_USER_ID> in your environment."
 
         if not self._http_client:
             return "❌ Weather send unavailable (HTTP client not initialized)."
@@ -593,21 +555,14 @@ class AdminAgent(BaseAgent):
         try:
             from src.services.news_data_service import NewsDataService
 
-            service = self._news_data_service or NewsDataService(
-                http_client=self._http_client, news_api_key=None
-            )
+            service = self._news_data_service or NewsDataService(http_client=self._http_client, news_api_key=None)
             data = await service.get_weather_data()
             temp = data.get("temperature", "N/A")
             pm25 = data.get("pm25", "N/A")
             will_rain = data.get("will_rain")
             rain_text = "Yes" if will_rain else "No" if will_rain is not None else "N/A"
 
-            msg = (
-                "🌡️ Bangkok weather\n"
-                f"Temp: {temp}°C\n"
-                f"PM2.5: {pm25}\n"
-                f"Next 5h rain: {rain_text}"
-            )
+            msg = f"🌡️ Bangkok weather\nTemp: {temp}°C\nPM2.5: {pm25}\nNext 5h rain: {rain_text}"
             pushed = await asyncio.to_thread(self._push_text, line_bot_api, target_user_id, msg)
             if pushed:
                 return f"✅ Weather sent to {alias} ({self._mask_user_id(target_user_id)})"
@@ -616,9 +571,7 @@ class AdminAgent(BaseAgent):
             logger.error(f"❌ send_weather failed: {e}", exc_info=True)
             return "❌ Failed to fetch/send weather."
 
-    def _push_to_admin(
-        self, line_bot_api: MessagingApi, user_id: str, text: str
-    ) -> bool:
+    def _push_to_admin(self, line_bot_api: MessagingApi, user_id: str, text: str) -> bool:
         """Best-effort push message to admin's private chat."""
         try:
             if not hasattr(line_bot_api, "push_message"):
@@ -658,11 +611,7 @@ class AdminAgent(BaseAgent):
             return False
 
     def _build_dashboard(self, target_chat_id: str, user_id: str | None) -> FlexMessage:
-        pending_confirmations = (
-            len(admin_confirmation_service.list_pending_for_user(user_id))
-            if user_id
-            else 0
-        )
+        pending_confirmations = len(admin_confirmation_service.list_pending_for_user(user_id)) if user_id else 0
         return build_admin_dashboard(
             target_chat_id=target_chat_id,
             persistence_backend=settings.persistence_backend,
@@ -701,11 +650,7 @@ class AdminAgent(BaseAgent):
             user_id,
             dashboard,
         )
-        response_text = (
-            build_dashboard_handoff_message()
-            if pushed
-            else build_dashboard_delivery_failure_message()
-        )
+        response_text = build_dashboard_handoff_message() if pushed else build_dashboard_delivery_failure_message()
 
         if not event.reply_token:
             return pushed
@@ -733,9 +678,7 @@ class AdminAgent(BaseAgent):
 
         lines = ["🔐 Pending destructive previews"]
         for pending in pending_items:
-            target_chat_id = pending.preview_fields.get("target_chat_id") or pending.payload.get(
-                "chat_id"
-            )
+            target_chat_id = pending.preview_fields.get("target_chat_id") or pending.payload.get("chat_id")
             effect_summary = pending.preview_fields.get("effect_summary") or pending.preview_text
             expires_at = pending.expires_at.strftime("%Y-%m-%d %H:%M UTC")
             lines.extend(
@@ -757,9 +700,7 @@ class AdminAgent(BaseAgent):
         group_id = getattr(source, "group_id", None) if source else None
         room_id = getattr(source, "room_id", None) if source else None
 
-        is_claimed = bool(
-            privilege_service.is_claimed_admin(user_id) if user_id else False
-        )
+        is_claimed = bool(privilege_service.is_claimed_admin(user_id) if user_id else False)
         is_env_admin = bool(user_id and user_id in (self._admin_user_ids or []))
         is_admin = self._is_admin(user_id)
 
@@ -783,9 +724,7 @@ class AdminAgent(BaseAgent):
             lines.append("Try this command in a 1-on-1 chat with the bot.")
         else:
             lines.append("")
-            lines.append(
-                "If you should be admin, ensure ADMIN_USER_IDS includes EXACTLY this user_id, then restart the app."
-            )
+            lines.append("If you should be admin, ensure ADMIN_USER_IDS includes EXACTLY this user_id, then restart the app.")
 
         return "\n".join(lines)
 
@@ -866,9 +805,7 @@ class AdminAgent(BaseAgent):
                     await asyncio.to_thread(line_bot_api.leave_room, target_id)
                 return f"✅ Left {kind} {target_id}."
             except Exception as e:
-                logger.error(
-                    f"❌ Failed to leave {kind} {target_id}: {e}", exc_info=True
-                )
+                logger.error(f"❌ Failed to leave {kind} {target_id}: {e}", exc_info=True)
                 return f"❌ Failed to leave {kind} {target_id}."
 
         if action == "purge":
@@ -890,7 +827,7 @@ class AdminAgent(BaseAgent):
     async def _get_stats_message(self, line_bot_api: MessagingApi) -> FlexMessage:
         """
         Generate comprehensive admin statistics dashboard using Flex Message.
-        
+
         Features:
         - System health indicators with visual status
         - Usage metrics with trends and percentages
@@ -909,7 +846,7 @@ class AdminAgent(BaseAgent):
         monthly_left = None
         quota_status_emoji = "✅"
         quota_color = "#10B981"  # Green
-        
+
         try:
             quota = None
             if hasattr(line_bot_api, "get_message_quota"):
@@ -975,9 +912,9 @@ class AdminAgent(BaseAgent):
         profiler_sessions = 0
         image_analyzer_sessions = 0
         try:
-            from src.services.profiler_session_manager import profiler_session_manager
             from src.services.image_analyzer_session_manager import image_analyzer_session_manager
-            
+            from src.services.profiler_session_manager import profiler_session_manager
+
             if hasattr(profiler_session_manager, "_sessions"):
                 profiler_sessions = len(profiler_session_manager._sessions)
             if hasattr(image_analyzer_session_manager, "_sessions"):
@@ -990,7 +927,7 @@ class AdminAgent(BaseAgent):
         # ====================================================================
         last_friend = "N/A"
         if snap.last_friend_added_at:
-            time_ago = datetime.now(timezone.utc) - snap.last_friend_added_at
+            time_ago = datetime.now(UTC) - snap.last_friend_added_at
             if time_ago.total_seconds() < 3600:
                 minutes_ago = int(time_ago.total_seconds() // 60)
                 time_ago_str = f"{minutes_ago}m ago"
@@ -1010,10 +947,10 @@ class AdminAgent(BaseAgent):
         hit_rate = 0
         cache_quality_emoji = "⚪"
         cache_quality_color = "#9CA3AF"
-        
+
         if total_cache_ops > 0:
-            hit_rate = (snap.cache_hits_total / total_cache_ops * 100)
-            
+            hit_rate = snap.cache_hits_total / total_cache_ops * 100
+
             # Cache quality indicator
             if hit_rate >= 80:
                 cache_quality_emoji = "🟢"
@@ -1028,7 +965,7 @@ class AdminAgent(BaseAgent):
         # ====================================================================
         # BUILD FLEX MESSAGE DASHBOARD
         # ====================================================================
-        
+
         # Uptime display
         if uptime_days > 0:
             uptime_str = f"{uptime_days}d {uptime_hours_remaining}h {uptime_minutes}m"
@@ -1059,24 +996,18 @@ class AdminAgent(BaseAgent):
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
+                    {"type": "text", "text": "📊 ADMIN DASHBOARD", "weight": "bold", "size": "xl", "color": "#FFFFFF"},
                     {
                         "type": "text",
-                        "text": "📊 ADMIN DASHBOARD",
-                        "weight": "bold",
-                        "size": "xl",
-                        "color": "#FFFFFF"
-                    },
-                    {
-                        "type": "text",
-                        "text": datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
+                        "text": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
                         "size": "xs",
                         "color": "#FFFFFF",
                         "margin": "sm",
-                        "opacity": "0.8"
-                    }
+                        "opacity": "0.8",
+                    },
                 ],
                 "backgroundColor": "#667EEA",
-                "paddingAll": "20px"
+                "paddingAll": "20px",
             },
             "body": {
                 "type": "box",
@@ -1087,13 +1018,7 @@ class AdminAgent(BaseAgent):
                         "type": "box",
                         "layout": "vertical",
                         "contents": [
-                            {
-                                "type": "text",
-                                "text": "🖥️ SYSTEM STATUS",
-                                "weight": "bold",
-                                "size": "md",
-                                "color": "#1F2937"
-                            },
+                            {"type": "text", "text": "🖥️ SYSTEM STATUS", "weight": "bold", "size": "md", "color": "#1F2937"},
                             {"type": "separator", "margin": "md", "color": "#E5E7EB"},
                             # Uptime
                             {
@@ -1101,10 +1026,24 @@ class AdminAgent(BaseAgent):
                                 "layout": "baseline",
                                 "contents": [
                                     {"type": "text", "text": "⏱️", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "Uptime", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": uptime_str, "flex": 3, "size": "sm", "align": "end", "weight": "bold"}
+                                    {
+                                        "type": "text",
+                                        "text": "Uptime",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "color": "#6B7280",
+                                        "margin": "sm",
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": uptime_str,
+                                        "flex": 3,
+                                        "size": "sm",
+                                        "align": "end",
+                                        "weight": "bold",
+                                    },
                                 ],
-                                "margin": "md"
+                                "margin": "md",
                             },
                             # LINE Quota
                             {
@@ -1112,30 +1051,38 @@ class AdminAgent(BaseAgent):
                                 "layout": "baseline",
                                 "contents": [
                                     {"type": "text", "text": quota_status_emoji, "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "LINE Quota", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": quota_str, "flex": 3, "size": "sm", "align": "end", "weight": "bold", "color": quota_color}
+                                    {
+                                        "type": "text",
+                                        "text": "LINE Quota",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "color": "#6B7280",
+                                        "margin": "sm",
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": quota_str,
+                                        "flex": 3,
+                                        "size": "sm",
+                                        "align": "end",
+                                        "weight": "bold",
+                                        "color": quota_color,
+                                    },
                                 ],
-                                "margin": "md"
-                            }
+                                "margin": "md",
+                            },
                         ],
                         "backgroundColor": "#F9FAFB",
                         "cornerRadius": "8px",
                         "paddingAll": "16px",
-                        "margin": "none"
+                        "margin": "none",
                     },
-                    
                     # Usage Metrics Section
                     {
                         "type": "box",
                         "layout": "vertical",
                         "contents": [
-                            {
-                                "type": "text",
-                                "text": "📈 USAGE METRICS",
-                                "weight": "bold",
-                                "size": "md",
-                                "color": "#1F2937"
-                            },
+                            {"type": "text", "text": "📈 USAGE METRICS", "weight": "bold", "size": "md", "color": "#1F2937"},
                             {"type": "separator", "margin": "md", "color": "#E5E7EB"},
                             # Translations
                             {
@@ -1143,17 +1090,31 @@ class AdminAgent(BaseAgent):
                                 "layout": "baseline",
                                 "contents": [
                                     {"type": "text", "text": "🔤", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "Translations", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"{snap.translation_requests_total:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                    {
+                                        "type": "text",
+                                        "text": "Translations",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "color": "#6B7280",
+                                        "margin": "sm",
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"{snap.translation_requests_total:,}",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "align": "end",
+                                        "weight": "bold",
+                                    },
                                 ],
-                                "margin": "md"
+                                "margin": "md",
                             },
                             {
                                 "type": "text",
                                 "text": f"   └─ {provider_str}",
                                 "size": "xs",
                                 "color": "#9CA3AF",
-                                "margin": "xs"
+                                "margin": "xs",
                             },
                             # News
                             {
@@ -1161,10 +1122,24 @@ class AdminAgent(BaseAgent):
                                 "layout": "baseline",
                                 "contents": [
                                     {"type": "text", "text": "📰", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "News", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"{snap.news_requests_total:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                    {
+                                        "type": "text",
+                                        "text": "News",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "color": "#6B7280",
+                                        "margin": "sm",
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"{snap.news_requests_total:,}",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "align": "end",
+                                        "weight": "bold",
+                                    },
                                 ],
-                                "margin": "md"
+                                "margin": "md",
                             },
                             # Admin
                             {
@@ -1172,30 +1147,37 @@ class AdminAgent(BaseAgent):
                                 "layout": "baseline",
                                 "contents": [
                                     {"type": "text", "text": "🔧", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "Admin", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"{snap.admin_commands_total:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                    {
+                                        "type": "text",
+                                        "text": "Admin",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "color": "#6B7280",
+                                        "margin": "sm",
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"{snap.admin_commands_total:,}",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "align": "end",
+                                        "weight": "bold",
+                                    },
                                 ],
-                                "margin": "md"
-                            }
+                                "margin": "md",
+                            },
                         ],
                         "backgroundColor": "#F9FAFB",
                         "cornerRadius": "8px",
                         "paddingAll": "16px",
-                        "margin": "md"
+                        "margin": "md",
                     },
-                    
                     # User Engagement Section
                     {
                         "type": "box",
                         "layout": "vertical",
                         "contents": [
-                            {
-                                "type": "text",
-                                "text": "👥 USER ENGAGEMENT",
-                                "weight": "bold",
-                                "size": "md",
-                                "color": "#1F2937"
-                            },
+                            {"type": "text", "text": "👥 USER ENGAGEMENT", "weight": "bold", "size": "md", "color": "#1F2937"},
                             {"type": "separator", "margin": "md", "color": "#E5E7EB"},
                             # Users
                             {
@@ -1203,10 +1185,24 @@ class AdminAgent(BaseAgent):
                                 "layout": "baseline",
                                 "contents": [
                                     {"type": "text", "text": "👤", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "Users", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"{snap.unique_users_count:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                    {
+                                        "type": "text",
+                                        "text": "Users",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "color": "#6B7280",
+                                        "margin": "sm",
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"{snap.unique_users_count:,}",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "align": "end",
+                                        "weight": "bold",
+                                    },
                                 ],
-                                "margin": "md"
+                                "margin": "md",
                             },
                             # Groups
                             {
@@ -1214,10 +1210,24 @@ class AdminAgent(BaseAgent):
                                 "layout": "baseline",
                                 "contents": [
                                     {"type": "text", "text": "👥", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "Groups", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"{snap.unique_groups_count:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                    {
+                                        "type": "text",
+                                        "text": "Groups",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "color": "#6B7280",
+                                        "margin": "sm",
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"{snap.unique_groups_count:,}",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "align": "end",
+                                        "weight": "bold",
+                                    },
                                 ],
-                                "margin": "md"
+                                "margin": "md",
                             },
                             # Friends
                             {
@@ -1225,37 +1235,44 @@ class AdminAgent(BaseAgent):
                                 "layout": "baseline",
                                 "contents": [
                                     {"type": "text", "text": "🤝", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "Friends", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"+{snap.friends_follow_events_total} / -{snap.friends_unfollow_events_total}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                    {
+                                        "type": "text",
+                                        "text": "Friends",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "color": "#6B7280",
+                                        "margin": "sm",
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"+{snap.friends_follow_events_total} / -{snap.friends_unfollow_events_total}",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "align": "end",
+                                        "weight": "bold",
+                                    },
                                 ],
-                                "margin": "md"
+                                "margin": "md",
                             },
                             {
                                 "type": "text",
                                 "text": f"   └─ Last: {last_friend}",
                                 "size": "xs",
                                 "color": "#9CA3AF",
-                                "margin": "xs"
-                            }
+                                "margin": "xs",
+                            },
                         ],
                         "backgroundColor": "#F9FAFB",
                         "cornerRadius": "8px",
                         "paddingAll": "16px",
-                        "margin": "md"
+                        "margin": "md",
                     },
-                    
                     # Active Sessions Section
                     {
                         "type": "box",
                         "layout": "vertical",
                         "contents": [
-                            {
-                                "type": "text",
-                                "text": "💬 ACTIVE SESSIONS",
-                                "weight": "bold",
-                                "size": "md",
-                                "color": "#1F2937"
-                            },
+                            {"type": "text", "text": "💬 ACTIVE SESSIONS", "weight": "bold", "size": "md", "color": "#1F2937"},
                             {"type": "separator", "margin": "md", "color": "#E5E7EB"},
                             # Translation
                             {
@@ -1263,10 +1280,24 @@ class AdminAgent(BaseAgent):
                                 "layout": "baseline",
                                 "contents": [
                                     {"type": "text", "text": "✅", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "Translation", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"{active_sessions:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                    {
+                                        "type": "text",
+                                        "text": "Translation",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "color": "#6B7280",
+                                        "margin": "sm",
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"{active_sessions:,}",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "align": "end",
+                                        "weight": "bold",
+                                    },
                                 ],
-                                "margin": "md"
+                                "margin": "md",
                             },
                             # News
                             {
@@ -1274,10 +1305,24 @@ class AdminAgent(BaseAgent):
                                 "layout": "baseline",
                                 "contents": [
                                     {"type": "text", "text": "📰", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "News", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"{news_sessions:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                    {
+                                        "type": "text",
+                                        "text": "News",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "color": "#6B7280",
+                                        "margin": "sm",
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"{news_sessions:,}",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "align": "end",
+                                        "weight": "bold",
+                                    },
                                 ],
-                                "margin": "md"
+                                "margin": "md",
                             },
                             # Profiler
                             {
@@ -1285,10 +1330,24 @@ class AdminAgent(BaseAgent):
                                 "layout": "baseline",
                                 "contents": [
                                     {"type": "text", "text": "🔬", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "Profiler", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"{profiler_sessions:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                    {
+                                        "type": "text",
+                                        "text": "Profiler",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "color": "#6B7280",
+                                        "margin": "sm",
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"{profiler_sessions:,}",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "align": "end",
+                                        "weight": "bold",
+                                    },
                                 ],
-                                "margin": "md"
+                                "margin": "md",
                             },
                             # Image Analyzer
                             {
@@ -1296,10 +1355,24 @@ class AdminAgent(BaseAgent):
                                 "layout": "baseline",
                                 "contents": [
                                     {"type": "text", "text": "🖼️", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "Analyzer", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"{image_analyzer_sessions:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                    {
+                                        "type": "text",
+                                        "text": "Analyzer",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "color": "#6B7280",
+                                        "margin": "sm",
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"{image_analyzer_sessions:,}",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "align": "end",
+                                        "weight": "bold",
+                                    },
                                 ],
-                                "margin": "md"
+                                "margin": "md",
                             },
                             # Sleeping
                             {
@@ -1307,103 +1380,184 @@ class AdminAgent(BaseAgent):
                                 "layout": "baseline",
                                 "contents": [
                                     {"type": "text", "text": "😴", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "Sleeping", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"{sleeping_chats:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold"}
+                                    {
+                                        "type": "text",
+                                        "text": "Sleeping",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "color": "#6B7280",
+                                        "margin": "sm",
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"{sleeping_chats:,}",
+                                        "flex": 2,
+                                        "size": "sm",
+                                        "align": "end",
+                                        "weight": "bold",
+                                    },
                                 ],
-                                "margin": "md"
-                            }
+                                "margin": "md",
+                            },
                         ],
                         "backgroundColor": "#F9FAFB",
-                        "cornerRadius": "8px",
-                        "paddingAll": "16px",
-                        "margin": "md"
-                    },
-                    
-                    # Cache Performance Section (only if cache is used)
-                    *([{
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "💾 CACHE PERFORMANCE",
-                                "weight": "bold",
-                                "size": "md",
-                                "color": "#1F2937"
-                            },
-                            {"type": "separator", "margin": "md", "color": "#E5E7EB"},
-                            # Hit Rate
-                            {
-                                "type": "box",
-                                "layout": "baseline",
-                                "contents": [
-                                    {"type": "text", "text": cache_quality_emoji, "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "Hit Rate", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"{hit_rate:.1f}%", "flex": 2, "size": "sm", "align": "end", "weight": "bold", "color": cache_quality_color}
-                                ],
-                                "margin": "md"
-                            },
-                            # Details
-                            {
-                                "type": "text",
-                                "text": f"   └─ Hits: {snap.cache_hits_total:,} / Misses: {snap.cache_misses_total:,}",
-                                "size": "xs",
-                                "color": "#9CA3AF",
-                                "margin": "xs"
-                            }
-                        ],
-                        "backgroundColor": "#F9FAFB",
-                        "cornerRadius": "8px",
-                        "paddingAll": "16px",
-                        "margin": "md"
-                    }] if total_cache_ops > 0 else []),
-                    
-                    # Error Metrics (only if errors exist)
-                    *([{
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "⚠️ ERROR METRICS",
-                                "weight": "bold",
-                                "size": "md",
-                                "color": "#DC2626"
-                            },
-                            {"type": "separator", "margin": "md", "color": "#FEE2E2"},
-                            # Failed translations
-                            *([{
-                                "type": "box",
-                                "layout": "baseline",
-                                "contents": [
-                                    {"type": "text", "text": "❌", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "Failed Trans.", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"{snap.failed_translations:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold", "color": "#DC2626"}
-                                ],
-                                "margin": "md"
-                            }] if snap.failed_translations > 0 else []),
-                            # Rate limited
-                            *([{
-                                "type": "box",
-                                "layout": "baseline",
-                                "contents": [
-                                    {"type": "text", "text": "⏳", "flex": 0, "size": "sm"},
-                                    {"type": "text", "text": "Rate Limited", "flex": 2, "size": "sm", "color": "#6B7280", "margin": "sm"},
-                                    {"type": "text", "text": f"{snap.rate_limited_requests:,}", "flex": 2, "size": "sm", "align": "end", "weight": "bold", "color": "#DC2626"}
-                                ],
-                                "margin": "md"
-                            }] if snap.rate_limited_requests > 0 else [])
-                        ],
-                        "backgroundColor": "#FEF2F2",
                         "cornerRadius": "8px",
                         "paddingAll": "16px",
                         "margin": "md",
-                        "borderColor": "#FCA5A5",
-                        "borderWidth": "1px"
-                    }] if snap.failed_translations > 0 or snap.rate_limited_requests > 0 else [])
+                    },
+                    # Cache Performance Section (only if cache is used)
+                    *(
+                        [
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "💾 CACHE PERFORMANCE",
+                                        "weight": "bold",
+                                        "size": "md",
+                                        "color": "#1F2937",
+                                    },
+                                    {"type": "separator", "margin": "md", "color": "#E5E7EB"},
+                                    # Hit Rate
+                                    {
+                                        "type": "box",
+                                        "layout": "baseline",
+                                        "contents": [
+                                            {"type": "text", "text": cache_quality_emoji, "flex": 0, "size": "sm"},
+                                            {
+                                                "type": "text",
+                                                "text": "Hit Rate",
+                                                "flex": 2,
+                                                "size": "sm",
+                                                "color": "#6B7280",
+                                                "margin": "sm",
+                                            },
+                                            {
+                                                "type": "text",
+                                                "text": f"{hit_rate:.1f}%",
+                                                "flex": 2,
+                                                "size": "sm",
+                                                "align": "end",
+                                                "weight": "bold",
+                                                "color": cache_quality_color,
+                                            },
+                                        ],
+                                        "margin": "md",
+                                    },
+                                    # Details
+                                    {
+                                        "type": "text",
+                                        "text": f"   └─ Hits: {snap.cache_hits_total:,} / Misses: {snap.cache_misses_total:,}",
+                                        "size": "xs",
+                                        "color": "#9CA3AF",
+                                        "margin": "xs",
+                                    },
+                                ],
+                                "backgroundColor": "#F9FAFB",
+                                "cornerRadius": "8px",
+                                "paddingAll": "16px",
+                                "margin": "md",
+                            }
+                        ]
+                        if total_cache_ops > 0
+                        else []
+                    ),
+                    # Error Metrics (only if errors exist)
+                    *(
+                        [
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "⚠️ ERROR METRICS",
+                                        "weight": "bold",
+                                        "size": "md",
+                                        "color": "#DC2626",
+                                    },
+                                    {"type": "separator", "margin": "md", "color": "#FEE2E2"},
+                                    # Failed translations
+                                    *(
+                                        [
+                                            {
+                                                "type": "box",
+                                                "layout": "baseline",
+                                                "contents": [
+                                                    {"type": "text", "text": "❌", "flex": 0, "size": "sm"},
+                                                    {
+                                                        "type": "text",
+                                                        "text": "Failed Trans.",
+                                                        "flex": 2,
+                                                        "size": "sm",
+                                                        "color": "#6B7280",
+                                                        "margin": "sm",
+                                                    },
+                                                    {
+                                                        "type": "text",
+                                                        "text": f"{snap.failed_translations:,}",
+                                                        "flex": 2,
+                                                        "size": "sm",
+                                                        "align": "end",
+                                                        "weight": "bold",
+                                                        "color": "#DC2626",
+                                                    },
+                                                ],
+                                                "margin": "md",
+                                            }
+                                        ]
+                                        if snap.failed_translations > 0
+                                        else []
+                                    ),
+                                    # Rate limited
+                                    *(
+                                        [
+                                            {
+                                                "type": "box",
+                                                "layout": "baseline",
+                                                "contents": [
+                                                    {"type": "text", "text": "⏳", "flex": 0, "size": "sm"},
+                                                    {
+                                                        "type": "text",
+                                                        "text": "Rate Limited",
+                                                        "flex": 2,
+                                                        "size": "sm",
+                                                        "color": "#6B7280",
+                                                        "margin": "sm",
+                                                    },
+                                                    {
+                                                        "type": "text",
+                                                        "text": f"{snap.rate_limited_requests:,}",
+                                                        "flex": 2,
+                                                        "size": "sm",
+                                                        "align": "end",
+                                                        "weight": "bold",
+                                                        "color": "#DC2626",
+                                                    },
+                                                ],
+                                                "margin": "md",
+                                            }
+                                        ]
+                                        if snap.rate_limited_requests > 0
+                                        else []
+                                    ),
+                                ],
+                                "backgroundColor": "#FEF2F2",
+                                "cornerRadius": "8px",
+                                "paddingAll": "16px",
+                                "margin": "md",
+                                "borderColor": "#FCA5A5",
+                                "borderWidth": "1px",
+                            }
+                        ]
+                        if snap.failed_translations > 0 or snap.rate_limited_requests > 0
+                        else []
+                    ),
                 ],
                 "paddingAll": "20px",
-                "spacing": "none"
+                "spacing": "none",
             },
             "footer": {
                 "type": "box",
@@ -1416,12 +1570,12 @@ class AdminAgent(BaseAgent):
                         "size": "xs",
                         "color": "#9CA3AF",
                         "align": "center",
-                        "margin": "md"
-                    }
+                        "margin": "md",
+                    },
                 ],
                 "paddingAll": "12px",
-                "backgroundColor": "#F9FAFB"
-            }
+                "backgroundColor": "#F9FAFB",
+            },
         }
 
         return FlexMessage(
@@ -1429,49 +1583,6 @@ class AdminAgent(BaseAgent):
             contents=FlexContainer.from_dict(flex_dict),
             quickReply=None,
         )
-
-        # Tourism News Section (New)
-        if tourism_headlines:
-            msg += "🧳 **CURRENT TOURISM NEWS**\n" + "─" * 32 + "\n"
-            for i, headline in enumerate(tourism_headlines, 1):
-                msg += f"{i}. {headline}\n"
-            msg += "\n"
-
-        # Active Sessions Section (Enhanced)
-        msg += "💬 **ACTIVE SESSIONS**\n" + "─" * 32 + "\n"
-        msg += f"✅ Translation sessions: {active_sessions:,}\n"
-        msg += f"📰 News flows: {news_sessions:,}\n"
-        msg += f"😴 Sleeping chats: {sleeping_chats:,}\n"
-        msg += f"🔐 Pending confirmations: {pending_confirms:,}\n"
-        
-        # Total active indicator (only show if there are active sessions)
-        total_active = active_sessions + news_sessions
-        if total_active > 0:
-            msg += f"📊 Total active: {total_active:,} sessions\n"
-
-        # Cache Performance Section (Enhanced)
-        total_cache_ops = snap.cache_hits_total + snap.cache_misses_total
-        if total_cache_ops > 0:
-            hit_rate = (
-                (snap.cache_hits_total / total_cache_ops * 100)
-                if total_cache_ops > 0
-                else 0
-            )
-            
-            # Cache quality indicator
-            cache_quality_emoji = "🟢" if hit_rate >= 80 else "🟡" if hit_rate >= 60 else "🔴"
-            
-            msg += "\n"
-            msg += "💾 **CACHE PERFORMANCE**\n" + "─" * 32 + "\n"
-            msg += f"✅ Hits: {snap.cache_hits_total:,}\n"
-            msg += f"❌ Misses: {snap.cache_misses_total:,}\n"
-            msg += f"{cache_quality_emoji} Hit rate: {hit_rate:.1f}%\n"
-
-        # Footer with timestamp
-        msg += "\n" + "─" * 32 + "\n"
-        msg += f"🕐 Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC"
-
-        return msg
 
     def _purge_chat(self, current_chat_id: str, target_chat_id: str | None = None) -> str:
         """Clear bot internal history/state for a chat (best-effort)."""
@@ -1530,9 +1641,7 @@ class AdminAgent(BaseAgent):
         status += "Note: Bots cannot delete/unsend existing LINE chat messages via API."
         return status
 
-    def _parse_leave_target(
-        self, current_chat_id: str, arg: str | None
-    ) -> tuple[str | None, str | None, str | None]:
+    def _parse_leave_target(self, current_chat_id: str, arg: str | None) -> tuple[str | None, str | None, str | None]:
         """Parse leave target; returns (kind, raw_id, error). kind is 'group' or 'room'."""
         if not arg or not arg.strip():
             if current_chat_id.startswith("group_"):
@@ -1590,9 +1699,7 @@ class AdminAgent(BaseAgent):
                     line_bot_api.reply_message,
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
-                        messages=[
-                            TextMessage(text=message, quickReply=None, quoteToken=None)
-                        ],
+                        messages=[TextMessage(text=message, quickReply=None, quoteToken=None)],
                         notificationDisabled=False,
                     ),
                 )
@@ -1605,9 +1712,7 @@ class AdminAgent(BaseAgent):
                 line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
-                    messages=[
-                        TextMessage(text=leaving_msg, quickReply=None, quoteToken=None)
-                    ],
+                    messages=[TextMessage(text=leaving_msg, quickReply=None, quoteToken=None)],
                     notificationDisabled=False,
                 ),
             )
@@ -1621,9 +1726,7 @@ class AdminAgent(BaseAgent):
         except Exception as e:
             logger.error(f"❌ Failed to leave {kind} {target_id}: {e}", exc_info=True)
 
-    def _get_status_message(
-        self, current_chat_id: str, target_chat_id: str | None = None
-    ) -> str:
+    def _get_status_message(self, current_chat_id: str, target_chat_id: str | None = None) -> str:
         """Get status information for a chat."""
         chat_id = target_chat_id or current_chat_id
 
@@ -1638,10 +1741,10 @@ class AdminAgent(BaseAgent):
         status += f"Chat ID: {chat_id}\n\n"
 
         if is_sleeping:
-            status += f"😴 Status: SLEEPING\n"
+            status += "😴 Status: SLEEPING\n"
             status += f"⏰ Wake in: {sleep_remaining} hour(s)\n"
         elif is_active:
-            status += f"✅ Status: ACTIVE\n"
+            status += "✅ Status: ACTIVE\n"
             if session_info:
                 status += f"👤 User: {session_info.get('user_id', 'unknown')}\n"
                 status += f"📝 Messages: {session_info.get('message_count', 0)}\n"
@@ -1649,7 +1752,7 @@ class AdminAgent(BaseAgent):
                 if started:
                     status += f"🕐 Started: {started.strftime('%Y-%m-%d %H:%M:%S')}\n"
         else:
-            status += f"⏸️  Status: INACTIVE\n"
+            status += "⏸️  Status: INACTIVE\n"
 
         return status
 
@@ -1689,9 +1792,7 @@ class AdminAgent(BaseAgent):
 
         # Validate hours
         if hours < 1 or hours > 168:  # Max 1 week
-            return (
-                f"❌ Invalid hours: {hours}\n\nHours must be between 1 and 168 (1 week)."
-            )
+            return f"❌ Invalid hours: {hours}\n\nHours must be between 1 and 168 (1 week)."
 
         session_manager.sleep_chat(chat_id, hours)
         logger.info(f"🔧 Admin put chat {chat_id} to sleep for {hours} hours")
@@ -1716,7 +1817,7 @@ class AdminAgent(BaseAgent):
         status += f"Chat ID: {chat_id}\n\n"
         status += f"{'✅' if had_session else '⏸️'} Session: {'Ended' if had_session else 'Was inactive'}\n"
         status += f"{'☀️' if was_sleeping else '⏸️'} Sleep: {'Woken up' if was_sleeping else 'Was awake'}\n"
-        status += f"🧹 History: Cleared\n\n"
+        status += "🧹 History: Cleared\n\n"
         status += "The chat is now in fresh state!"
 
         return status

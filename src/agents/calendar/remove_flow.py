@@ -5,24 +5,21 @@ Extracted from calendar_agent.py for modular architecture.
 
 import logging
 import re
-from datetime import datetime
-from typing import Optional, Any, List, Dict
+from typing import Any
 from zoneinfo import ZoneInfo
 
-from linebot.v3.webhooks import MessageEvent
 from linebot.v3.messaging import (
     MessagingApi,
-    QuickReply,
-    QuickReplyItem,
-    MessageAction,
 )
+from linebot.v3.webhooks import MessageEvent
 
-from .base_flow import CalendarFlowBase
-from src.services.calendar_session_manager import calendar_session_manager
 from src.services.calendar_access_control import calendar_access_control
+from src.services.calendar_session_manager import calendar_session_manager
+from src.services.history_log_service import EventType, LogLevel, get_history_log
 from src.services.privilege_service import privilege_service
 from src.services.rate_limiter import rate_limiter
-from src.services.history_log_service import EventType, LogLevel, get_history_log
+
+from .base_flow import CalendarFlowBase
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +49,7 @@ class RemoveFlow(CalendarFlowBase):
         event: MessageEvent,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         """
         Start the remove event flow.
@@ -67,58 +64,38 @@ class RemoveFlow(CalendarFlowBase):
             True if handled successfully
         """
         if not self._calendar_service or not user_id:
-            await self.send_message(
-                event, line_bot_api,
-                "❌ Calendar service not available."
-            )
+            await self.send_message(event, line_bot_api, "❌ Calendar service not available.")
             return True
 
         # Check access control
-        can_view = await calendar_access_control.can_view_events(
-            user_id, chat_id, line_bot_api
-        )
+        can_view = await calendar_access_control.can_view_events(user_id, chat_id, line_bot_api)
         if not can_view:
             logger.warning(f"❌ Access denied: {user_id} cannot view events in {chat_id}")
             await self._log_access_denied(chat_id, user_id, "remove_events")
-            await self.send_message(
-                event, line_bot_api,
-                "❌ You don't have permission to view events in this chat."
-            )
+            await self.send_message(event, line_bot_api, "❌ You don't have permission to view events in this chat.")
             return True
 
         # Check rate limiting
         is_admin = privilege_service.is_admin(user_id)
         if not rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin):
-            await self.send_message(
-                event, line_bot_api,
-                "⏳ Calendar rate limit exceeded. Please try again later."
-            )
+            await self.send_message(event, line_bot_api, "⏳ Calendar rate limit exceeded. Please try again later.")
             return True
 
         # CRITICAL PRIVACY: Use get_chat_events() for isolation
-        events = await self._calendar_service.get_chat_events_async(
-            chat_id, requesting_user_id=user_id
-        )
+        events = await self._calendar_service.get_chat_events_async(chat_id, requesting_user_id=user_id)
 
-        removable_events = [
-            evt for evt in events if getattr(evt, "user_id", None) == user_id
-        ]
+        removable_events = [evt for evt in events if getattr(evt, "user_id", None) == user_id]
 
         if not removable_events:
             is_group = chat_id.startswith("group_") or chat_id.startswith("room_")
             if is_group:
-                message = (
-                    "📅 No events you can remove in this group.\n\n"
-                    "คุณไม่มีกิจกรรมของตัวเองในกลุ่มนี้ให้ลบ"
-                )
+                message = "📅 No events you can remove in this group.\n\nคุณไม่มีกิจกรรมของตัวเองในกลุ่มนี้ให้ลบ"
             else:
-                message = (
-                    "📅 No events in your calendar to remove.\n\n"
-                    "คุณไม่มีกิจกรรมที่จะลบ"
-                )
+                message = "📅 No events in your calendar to remove.\n\nคุณไม่มีกิจกรรมที่จะลบ"
 
             await self.send_message(
-                event, line_bot_api,
+                event,
+                line_bot_api,
                 message,
             )
             return True
@@ -146,7 +123,7 @@ class RemoveFlow(CalendarFlowBase):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         """
         Handle event selection for removal.
@@ -195,9 +172,10 @@ class RemoveFlow(CalendarFlowBase):
         updated_session = calendar_session_manager.apply_remove_selection(chat_id, text_lower)
         if updated_session is None:
             await self.send_message(
-                event, line_bot_api,
+                event,
+                line_bot_api,
                 "❌ Invalid selection. Use exact commands: all, none, done, cancel, or numbers like 1,3.\n\n"
-                "กรุณาใช้คำสั่งที่รองรับเท่านั้น เช่น all, none, done, cancel หรือ 1,3"
+                "กรุณาใช้คำสั่งที่รองรับเท่านั้น เช่น all, none, done, cancel หรือ 1,3",
             )
             return True
 
@@ -216,7 +194,7 @@ class RemoveFlow(CalendarFlowBase):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         """
         Handle removal confirmation.
@@ -235,26 +213,18 @@ class RemoveFlow(CalendarFlowBase):
 
         if text_lower in self._CANCEL_ALIASES:
             calendar_session_manager.end_session(chat_id)
-            await self.send_message(
-                event, line_bot_api,
-                "✅ No events were removed.\n\nไม่มีกิจกรรมถูกลบ"
-            )
+            await self.send_message(event, line_bot_api, "✅ No events were removed.\n\nไม่มีกิจกรรมถูกลบ")
             return True
 
         if text_lower in self._LEGACY_PREVIEW_RESPONSES:
             await self.send_message(
-                event,
-                line_bot_api,
-                "Reply with the preview action 'delete <code>' to confirm, or 'cancel' to stop."
+                event, line_bot_api, "Reply with the preview action 'delete <code>' to confirm, or 'cancel' to stop."
             )
             return True
 
         match = self._DELETE_COMMAND_PATTERN.fullmatch(text_lower)
         if not match:
-            await self.send_message(
-                event, line_bot_api,
-                "Reply with the preview action 'delete <code>' or 'cancel'."
-            )
+            await self.send_message(event, line_bot_api, "Reply with the preview action 'delete <code>' or 'cancel'.")
             return True
 
         confirmation = calendar_session_manager.validate_remove_confirmation(
@@ -304,9 +274,7 @@ class RemoveFlow(CalendarFlowBase):
     # Private Helpers
     # =========================================================================
 
-    async def _log_access_denied(
-        self, chat_id: str, user_id: str, operation: str
-    ) -> None:
+    async def _log_access_denied(self, chat_id: str, user_id: str, operation: str) -> None:
         """Log access denied event."""
         history_log = get_history_log()
         if history_log:
@@ -320,7 +288,7 @@ class RemoveFlow(CalendarFlowBase):
                 metadata={"operation": operation},
             )
 
-    def _format_removal_selection(self, events_data: List[Dict[str, Any]]) -> str:
+    def _format_removal_selection(self, events_data: list[dict[str, Any]]) -> str:
         """Format the removal selection message."""
         msg_lines = [
             "🗑️ Select events to remove:",
@@ -330,23 +298,23 @@ class RemoveFlow(CalendarFlowBase):
         for i, evt in enumerate(events_data, 1):
             msg_lines.append(f"{i}. {evt['title']} ({evt['date']})")
 
-        msg_lines.extend([
-            "",
-            "Use numbers like 1,3 to select events.",
-            "Commands: all, none, done, cancel.",
-            "",
-            "พิมพ์เลขที่ต้องการลบ เช่น 1,3",
-            "คำสั่งที่รองรับ: all, none, done, cancel",
-            "",
-            "💡 Say 'cancel' to stop"
-        ])
+        msg_lines.extend(
+            [
+                "",
+                "Use numbers like 1,3 to select events.",
+                "Commands: all, none, done, cancel.",
+                "",
+                "พิมพ์เลขที่ต้องการลบ เช่น 1,3",
+                "คำสั่งที่รองรับ: all, none, done, cancel",
+                "",
+                "💡 Say 'cancel' to stop",
+            ]
+        )
 
         return "\n".join(msg_lines)
 
     def _format_selected_items(self, session: Any) -> str:
-        selected = {
-            event_id for event_id in session.selected_event_ids
-        }
+        selected = {event_id for event_id in session.selected_event_ids}
         if not selected:
             return "No events selected yet."
 
@@ -356,22 +324,24 @@ class RemoveFlow(CalendarFlowBase):
                 lines.append(f"{index}. {event['title']} ({event['date']})")
         return "\n".join(lines)
 
-    def _format_removal_preview(self, items: List[Dict[str, Any]]) -> str:
+    def _format_removal_preview(self, items: list[dict[str, Any]]) -> str:
         lines = [
             f"⚠️ Review the {len(items)} event{'s' if len(items) != 1 else ''} selected for deletion:",
             "",
         ]
         for index, item in enumerate(items, start=1):
             lines.append(f"{index}. {item['title']} ({item['date']})")
-        lines.extend([
-            "",
-            "Reply with the Delete button to remove exactly these events, or Cancel to keep them.",
-        ])
+        lines.extend(
+            [
+                "",
+                "Reply with the Delete button to remove exactly these events, or Cancel to keep them.",
+            ]
+        )
         return "\n".join(lines)
 
 
 # Lazy loader for on-demand instantiation
-_remove_flow_instance: Optional[RemoveFlow] = None
+_remove_flow_instance: RemoveFlow | None = None
 
 
 def get_remove_flow(calendar_service: Any) -> RemoveFlow:

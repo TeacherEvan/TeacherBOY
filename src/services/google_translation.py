@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from src.services.ai_translation_service import ai_translation_service
 
@@ -10,7 +10,7 @@ from src.services.ai_translation_service import ai_translation_service
 class GoogleTranslationService:
     def __init__(self, delegate=ai_translation_service):
         self.delegate = delegate
-        self.api_key: Optional[str] = None
+        self.api_key: str | None = None
         self.client: Any = None
 
     def set_client(self, client: Any) -> None:

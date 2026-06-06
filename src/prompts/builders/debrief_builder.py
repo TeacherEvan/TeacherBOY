@@ -6,7 +6,6 @@ analysis using the shared VisionPromptBuilder infrastructure.
 
 from src.prompts.builders.vision_builder import VisionPromptBuilder
 
-
 DEBRIEF_SECTIONS = [
     "SCENE OVERVIEW",
     "SUBJECTS",

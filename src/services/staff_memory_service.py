@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import asyncio
+import json
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import date, timedelta
@@ -23,9 +23,7 @@ class StaffMemoryItem:
 class StaffMemoryRepository(Protocol):
     async def save_item(self, item: StaffMemoryItem) -> StaffMemoryItem: ...
 
-    async def get_items_for_week(
-        self, week_start: date, week_end: date
-    ) -> list[StaffMemoryItem]: ...
+    async def get_items_for_week(self, week_start: date, week_end: date) -> list[StaffMemoryItem]: ...
 
 
 class StaffMemoryService:
@@ -70,7 +68,7 @@ class StaffMemoryService:
                     due_date=due_date,
                     source_chat_id=source_chat_id,
                     created_by=created_by,
-                )
+                ),
             )
 
         item = self._build_item(
@@ -139,15 +137,11 @@ class StaffMemoryService:
         week_end = week_start + timedelta(days=6)
         return self._sort_items(self._merge_items(self._get_local_items_for_week(week_start, week_end), []))
 
-    async def get_items_for_week_async(
-        self, week_start: date
-    ) -> list[StaffMemoryItem]:
+    async def get_items_for_week_async(self, week_start: date) -> list[StaffMemoryItem]:
         week_end = week_start + timedelta(days=6)
         remote_items: list[StaffMemoryItem] = []
         if self._repository is not None:
-            remote_items = await self._repository.get_items_for_week(
-                week_start, week_end
-            )
+            remote_items = await self._repository.get_items_for_week(week_start, week_end)
 
         return self._sort_items(
             self._merge_items(
@@ -156,9 +150,7 @@ class StaffMemoryService:
             )
         )
 
-    def _get_local_items_for_week(
-        self, week_start: date, week_end: date
-    ) -> list[StaffMemoryItem]:
+    def _get_local_items_for_week(self, week_start: date, week_end: date) -> list[StaffMemoryItem]:
         ranked: list[StaffMemoryItem] = []
         for item in self._items:
             if not item.due_date:
@@ -175,9 +167,7 @@ class StaffMemoryService:
         local_items: list[StaffMemoryItem],
         remote_items: list[StaffMemoryItem],
     ) -> list[StaffMemoryItem]:
-        merged: dict[str, StaffMemoryItem] = {
-            item.item_id: item for item in local_items
-        }
+        merged: dict[str, StaffMemoryItem] = {item.item_id: item for item in local_items}
         for item in remote_items:
             merged[item.item_id] = item
         return list(merged.values())

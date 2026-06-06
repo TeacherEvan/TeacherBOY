@@ -17,7 +17,6 @@ import asyncio
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +37,10 @@ class ImageAnalyzerSession:
         self.user_id = user_id
         self.state = AnalyzerState.WAITING_FOR_IMAGE
         self.mode = "standard"
-        self.image_data: Optional[str] = None  # Base64 encoded image
-        self.last_image_data: Optional[str] = None  # Most recently analyzed image
-        self.question: Optional[str] = None
-        self.detected_dates: List[Dict[str, str]] = []  # Dates found in image
+        self.image_data: str | None = None  # Base64 encoded image
+        self.last_image_data: str | None = None  # Most recently analyzed image
+        self.question: str | None = None
+        self.detected_dates: list[dict[str, str]] = []  # Dates found in image
         self.created_at = datetime.now()
         self.updated_at = datetime.now()
 
@@ -62,7 +61,7 @@ class ImageAnalyzerSession:
         self.question = question
         self.updated_at = datetime.now()
 
-    def set_detected_dates(self, dates: List[Dict[str, str]]) -> None:
+    def set_detected_dates(self, dates: list[dict[str, str]]) -> None:
         """Store detected dates and set state to waiting for calendar confirmation."""
         self.detected_dates = dates
         self.state = AnalyzerState.WAITING_FOR_CALENDAR_CONFIRMATION
@@ -79,16 +78,16 @@ class ImageAnalyzerSessionManager:
 
     def __init__(self):
         """Initialize image analyzer session manager."""
-        self._sessions: Dict[str, ImageAnalyzerSession] = {}
-        self._last_images: Dict[str, str] = {}
+        self._sessions: dict[str, ImageAnalyzerSession] = {}
+        self._last_images: dict[str, str] = {}
         self._session_ttl_seconds = 60  # Each step has 60 seconds
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
         self._cleanup_interval_seconds = 30  # Cleanup every 30 seconds
 
     def start_session(
         self,
         chat_id: str,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         analysis_mode: str = "standard",
     ) -> None:
         """
@@ -101,15 +100,13 @@ class ImageAnalyzerSessionManager:
         """
         self._sessions[chat_id] = ImageAnalyzerSession(user_id or "unknown")
         self._sessions[chat_id].mode = analysis_mode
-        logger.info(
-            f"🖼️ Image analysis session started for chat {chat_id} (mode={analysis_mode})"
-        )
+        logger.info(f"🖼️ Image analysis session started for chat {chat_id} (mode={analysis_mode})")
 
     def start_session_with_image(
         self,
         chat_id: str,
-        user_id: Optional[str] = None,
-        image_data: Optional[str] = None,
+        user_id: str | None = None,
+        image_data: str | None = None,
         analysis_mode: str = "standard",
     ) -> None:
         """Start a session that already has an image available."""
@@ -119,19 +116,15 @@ class ImageAnalyzerSessionManager:
             self._sessions[chat_id].image_data = image_data
             self._sessions[chat_id].last_image_data = image_data
             self._sessions[chat_id].state = AnalyzerState.WAITING_FOR_QUESTION
-        logger.info(
-            f"🖼️ Image analysis session started for chat {chat_id} with preloaded image (mode={analysis_mode})"
-        )
+        logger.info(f"🖼️ Image analysis session started for chat {chat_id} with preloaded image (mode={analysis_mode})")
 
-    def start_analysis_choice(
-        self, chat_id: str, user_id: Optional[str] = None
-    ) -> None:
+    def start_analysis_choice(self, chat_id: str, user_id: str | None = None) -> None:
         """Start a session that asks the user whether to analyze a new or last image."""
         self._sessions[chat_id] = ImageAnalyzerSession(user_id or "unknown")
         self._sessions[chat_id].set_analysis_choice()
         logger.info(f"🖼️ Image analysis choice session started for chat {chat_id}")
 
-    def get_session(self, chat_id: str) -> Optional[ImageAnalyzerSession]:
+    def get_session(self, chat_id: str) -> ImageAnalyzerSession | None:
         """
         Get session for a chat if it exists and hasn't expired.
 
@@ -154,7 +147,7 @@ class ImageAnalyzerSessionManager:
 
         return session
 
-    def is_waiting_for_image(self, chat_id: str, user_id: Optional[str] = None) -> bool:
+    def is_waiting_for_image(self, chat_id: str, user_id: str | None = None) -> bool:
         """
         Check if session is in WAITING_FOR_IMAGE state.
 
@@ -171,32 +164,24 @@ class ImageAnalyzerSessionManager:
 
         # Check user match (in groups, ensure same user)
         if user_id and session.user_id != "unknown" and user_id != session.user_id:
-            logger.debug(
-                f"🖼️ User mismatch: session owner {session.user_id}, image from {user_id}"
-            )
+            logger.debug(f"🖼️ User mismatch: session owner {session.user_id}, image from {user_id}")
             return False
 
         return session.state == AnalyzerState.WAITING_FOR_IMAGE
 
-    def is_waiting_for_analysis_choice(
-        self, chat_id: str, user_id: Optional[str] = None
-    ) -> bool:
+    def is_waiting_for_analysis_choice(self, chat_id: str, user_id: str | None = None) -> bool:
         """Check if session is waiting for a New/Last selection."""
         session = self.get_session(chat_id)
         if not session:
             return False
 
         if user_id and session.user_id != "unknown" and user_id != session.user_id:
-            logger.debug(
-                f"🖼️ User mismatch: session owner {session.user_id}, choice from {user_id}"
-            )
+            logger.debug(f"🖼️ User mismatch: session owner {session.user_id}, choice from {user_id}")
             return False
 
         return session.state == AnalyzerState.WAITING_FOR_ANALYSIS_CHOICE
 
-    def is_waiting_for_question(
-        self, chat_id: str, user_id: Optional[str] = None
-    ) -> bool:
+    def is_waiting_for_question(self, chat_id: str, user_id: str | None = None) -> bool:
         """
         Check if session is in WAITING_FOR_QUESTION state.
 
@@ -213,9 +198,7 @@ class ImageAnalyzerSessionManager:
 
         # Check user match
         if user_id and session.user_id != "unknown" and user_id != session.user_id:
-            logger.debug(
-                f"🖼️ User mismatch: session owner {session.user_id}, question from {user_id}"
-            )
+            logger.debug(f"🖼️ User mismatch: session owner {session.user_id}, question from {user_id}")
             return False
 
         return session.state == AnalyzerState.WAITING_FOR_QUESTION
@@ -240,9 +223,7 @@ class ImageAnalyzerSessionManager:
         logger.info(f"🖼️ Image stored for chat {chat_id}, waiting for question")
         return True
 
-    def get_image_and_question(
-        self, chat_id: str, question: str
-    ) -> Tuple[Optional[str], Optional[str], str]:
+    def get_image_and_question(self, chat_id: str, question: str) -> tuple[str | None, str | None, str]:
         """
         Get stored image and set question, then clear session.
 
@@ -267,7 +248,7 @@ class ImageAnalyzerSessionManager:
 
         return image_data, question, analysis_mode
 
-    def get_last_image(self, chat_id: str) -> Optional[str]:
+    def get_last_image(self, chat_id: str) -> str | None:
         """Get the most recently analyzed image for this chat, if available."""
         session = self._sessions.get(chat_id)
         if not session:
@@ -285,7 +266,7 @@ class ImageAnalyzerSessionManager:
             del self._sessions[chat_id]
             logger.info(f"🖼️ Cleared image analysis session for chat {chat_id}")
 
-    def store_detected_dates(self, chat_id: str, dates: List[Dict[str, str]]) -> bool:
+    def store_detected_dates(self, chat_id: str, dates: list[dict[str, str]]) -> bool:
         """
         Store detected dates from image analysis.
 
@@ -309,7 +290,7 @@ class ImageAnalyzerSessionManager:
         logger.info(f"📅 Stored {len(dates)} detected dates for chat {chat_id}")
         return True
 
-    def get_detected_dates(self, chat_id: str) -> List[Dict[str, str]]:
+    def get_detected_dates(self, chat_id: str) -> list[dict[str, str]]:
         """
         Get stored detected dates for a chat.
 
@@ -324,9 +305,7 @@ class ImageAnalyzerSessionManager:
             return []
         return session.detected_dates
 
-    def is_waiting_for_calendar_confirmation(
-        self, chat_id: str, user_id: Optional[str] = None
-    ) -> bool:
+    def is_waiting_for_calendar_confirmation(self, chat_id: str, user_id: str | None = None) -> bool:
         """
         Check if session is waiting for calendar confirmation.
 
@@ -349,11 +328,7 @@ class ImageAnalyzerSessionManager:
 
     def cleanup_expired(self) -> None:
         """Remove expired sessions."""
-        expired = [
-            chat_id
-            for chat_id, session in self._sessions.items()
-            if session.is_expired(self._session_ttl_seconds)
-        ]
+        expired = [chat_id for chat_id, session in self._sessions.items() if session.is_expired(self._session_ttl_seconds)]
 
         for chat_id in expired:
             del self._sessions[chat_id]
@@ -363,9 +338,7 @@ class ImageAnalyzerSessionManager:
 
     async def _cleanup_loop(self) -> None:
         """Background task to periodically clean up expired sessions."""
-        logger.info(
-            f"🖼️ Starting image analyzer session cleanup loop (every {self._cleanup_interval_seconds}s)"
-        )
+        logger.info(f"🖼️ Starting image analyzer session cleanup loop (every {self._cleanup_interval_seconds}s)")
         try:
             while True:
                 await asyncio.sleep(self._cleanup_interval_seconds)

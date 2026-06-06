@@ -35,11 +35,7 @@ def build_admin_dashboard(
     is_sleeping: bool,
     pending_confirmations: int,
 ) -> FlexMessage:
-    toggle_text = (
-        f"/admin wake {target_chat_id}"
-        if is_sleeping
-        else f"/admin sleep {target_chat_id} 24"
-    )
+    toggle_text = f"/admin wake {target_chat_id}" if is_sleeping else f"/admin sleep {target_chat_id} 24"
 
     risky_rows = [
         _button_row(
@@ -202,7 +198,4 @@ def build_dashboard_handoff_message() -> str:
 
 
 def build_dashboard_delivery_failure_message() -> str:
-    return (
-        "⚠️ The private dashboard could not be delivered. "
-        "Start a private chat with the bot and try again."
-    )
+    return "⚠️ The private dashboard could not be delivered. Start a private chat with the bot and try again."

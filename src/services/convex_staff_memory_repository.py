@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import date
 from typing import Any, TypeVar
 
@@ -27,9 +26,7 @@ class ConvexStaffMemoryRepository:
         )
         return self._deserialize_item(self._unwrap_data(response))
 
-    async def get_items_for_week(
-        self, week_start: date, week_end: date
-    ) -> list[StaffMemoryItem]:
+    async def get_items_for_week(self, week_start: date, week_end: date) -> list[StaffMemoryItem]:
         response = await self._convex_client.post(
             "/records/listStaffMemoryItemsForWeek",
             {

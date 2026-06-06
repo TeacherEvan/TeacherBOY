@@ -12,25 +12,25 @@ Token estimates:
 
 class NavarroBodyLanguageFramework:
     """Joe Navarro's FBI body language analysis framework."""
-    
+
     VERSION = "2.0"
     CATEGORY = "vision"
-    
+
     # Token estimates for each version
     TOKENS_SHORT = 250
     TOKENS_STANDARD = 500
     TOKENS_FULL = 800
-    
+
     @staticmethod
     def get_short() -> str:
         """
         Brief version - key body language indicators.
-        
+
         Use for:
         - Quick posture assessment
         - General comfort/discomfort detection
         - Token-constrained scenarios
-        
+
         Estimated tokens: ~250
         """
         return """
@@ -57,17 +57,17 @@ class NavarroBodyLanguageFramework:
    - Neck touching = insecurity
    - Exposed neck = comfort/confidence
 """
-    
+
     @staticmethod
     def get_standard() -> str:
         """
         Standard version - comprehensive body language analysis.
-        
+
         Use for:
         - Professional profiling
         - Standard analysis depth
         - Balanced token usage
-        
+
         Estimated tokens: ~500
         """
         return """
@@ -113,17 +113,17 @@ class NavarroBodyLanguageFramework:
 - Nose touching: anxiety indicator
 - Eye blocking: hand to eyes = disbelief or stress
 """
-    
+
     @staticmethod
     def get_full() -> str:
         """
         Full version - complete framework with all details.
-        
+
         Use for:
         - Deep psychological analysis
         - Professional forensic profiling
         - Maximum accuracy requirements
-        
+
         Estimated tokens: ~800
         """
         return """

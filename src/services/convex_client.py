@@ -40,9 +40,7 @@ class ConvexClient:
         )
 
         if response.status_code != 200:
-            raise ConvexApiError(
-                f"Convex API request failed with status {response.status_code}: {response.text}"
-            )
+            raise ConvexApiError(f"Convex API request failed with status {response.status_code}: {response.text}")
 
         return response.json()
 
@@ -55,9 +53,7 @@ class ConvexClient:
         )
 
         if response.status_code != 200:
-            raise ConvexApiError(
-                f"Convex API request failed with status {response.status_code}: {response.text}"
-            )
+            raise ConvexApiError(f"Convex API request failed with status {response.status_code}: {response.text}")
 
         return response.json()
 
@@ -70,9 +66,7 @@ class ConvexClient:
         )
 
         if response.status_code != 200:
-            raise ConvexApiError(
-                f"Convex API request failed with status {response.status_code}: {response.text}"
-            )
+            raise ConvexApiError(f"Convex API request failed with status {response.status_code}: {response.text}")
 
         return response.json()
 
@@ -85,9 +79,7 @@ class ConvexClient:
         )
 
         if response.status_code != 200:
-            raise ConvexApiError(
-                f"Convex API request failed with status {response.status_code}: {response.text}"
-            )
+            raise ConvexApiError(f"Convex API request failed with status {response.status_code}: {response.text}")
 
         return response.json()
 

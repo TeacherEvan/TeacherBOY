@@ -6,80 +6,77 @@ high-performance async I/O, and production-ready error handling.
 
 import asyncio
 import logging
-import httpx
-from datetime import datetime
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException, Response
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict, Any, Optional
+from datetime import datetime
+from typing import Any
+
+import httpx
 
 # LINE Bot SDK v3 imports
 import linebot.v3
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from linebot.v3.exceptions import InvalidSignatureError
+from linebot.v3.messaging import (
+    ApiClient,
+    Configuration,
+    MessagingApi,
+    PushMessageRequest,  # For FollowEvent welcome message (push to user)
+    TextMessage,
+)
 from linebot.v3.webhooks import (
-    MessageEvent,
-    TextMessageContent,
-    ImageMessageContent,
     FollowEvent,
-    UnfollowEvent,
+    ImageMessageContent,
     JoinEvent,
     LeaveEvent,
     MemberJoinedEvent,
     MemberLeftEvent,
+    MessageEvent,
+    TextMessageContent,
+    UnfollowEvent,
 )
-from linebot.v3.messaging import (
-    Configuration,
-    ApiClient,
-    MessagingApi,
-    ReplyMessageRequest,
-    PushMessageRequest,  # For FollowEvent welcome message (push to user)
-    TextMessage,
-    FlexMessage,
-    FlexBubble,
-)
-from linebot.v3.exceptions import InvalidSignatureError
 
-from src.config import settings
-from src.services.translation_service import translation_service
-from src.services.google_translation import google_translation_service
-from src.services.scheduler_service import scheduler_service
-from src.services.profiler_session_manager import profiler_session_manager
-from src.services.news_session_manager import news_session_manager
-from src.services.image_analyzer_session_manager import image_analyzer_session_manager
-from src.services.rate_limiter import rate_limiter
 from src.agents.agent_router import AgentRouter
-from src.services.openrouter_service import openrouter_service
-from src.services.calendar_service import calendar_service
-from src.services.calendar_session_manager import calendar_session_manager
-from src.services.reminder_service import reminder_service
-from src.services.message_buffer_service import message_buffer_service
-from src.services.brave_search_service import brave_search_service
-from src.services.github_models_service import github_models_service
-from src.services.nous_service import nous_inference_service
-from src.services.ai_translation_service import ai_translation_service
+from src.config import settings
 from src.handlers.message_handler import (
     handle_join_event,
     handle_leave_event,
     handle_member_joined_event,
     handle_member_left_event,
 )
-from src.services.metrics_service import metrics_service
+from src.services.bot_identity_service import get_bot_identity_service
+from src.services.brave_search_service import brave_search_service
+from src.services.calendar_service import calendar_service
+from src.services.calendar_session_manager import calendar_session_manager
 from src.services.conversation_memory_service import (
-    init_conversation_memory,
     get_conversation_memory,
+    init_conversation_memory,
 )
 from src.services.document_memory_service import (
-    init_document_memory,
     get_document_memory,
+    init_document_memory,
 )
+from src.services.github_models_service import github_models_service
+from src.services.google_translation import google_translation_service
 from src.services.history_log_service import (
-    init_history_log,
-    get_history_log,
     EventType,
     LogLevel,
+    get_history_log,
+    init_history_log,
 )
+from src.services.image_analyzer_session_manager import image_analyzer_session_manager
+from src.services.message_buffer_service import message_buffer_service
+from src.services.metrics_service import metrics_service
+from src.services.news_session_manager import news_session_manager
+from src.services.nous_service import nous_inference_service
+from src.services.openrouter_service import openrouter_service
+from src.services.profiler_session_manager import profiler_session_manager
+from src.services.rate_limiter import rate_limiter
+from src.services.reminder_service import reminder_service
+from src.services.scheduler_service import scheduler_service
 from src.services.startup_data_loader import startup_loader
-from src.services.bot_identity_service import get_bot_identity_service
+from src.services.translation_service import translation_service
 from src.utils.tracing import setup_tracing
 
 # ============================================================================
@@ -96,6 +93,7 @@ def _service_display_name() -> str:
     """Return the public-facing service name for logs and health endpoints."""
     return get_bot_identity_service().get_profile().display_name
 
+
 # ============================================================================
 # LINE Bot SDK Configuration
 # ============================================================================
@@ -108,7 +106,7 @@ webhook_parser = linebot.v3.WebhookParser(settings.line_channel_secret)
 agent_router = AgentRouter()
 
 # Bot's own user ID for self-message detection (prevents infinite loops)
-bot_user_id: Optional[str] = None
+bot_user_id: str | None = None
 
 
 def create_optimized_http_client() -> httpx.AsyncClient:
@@ -168,9 +166,7 @@ async def lifespan(app: FastAPI):
             # Get bot's own profile to extract user ID
             bot_info = await asyncio.to_thread(line_bot_api.get_bot_info)
             bot_user_id = bot_info.user_id
-            logger.info(
-                f"🤖 Bot User ID: {bot_user_id} (self-message detection enabled)"
-            )
+            logger.info(f"🤖 Bot User ID: {bot_user_id} (self-message detection enabled)")
     except Exception as e:
         logger.error(f"❌ Failed to get bot user ID: {e}", exc_info=True)
         logger.warning("⚠️  Bot will operate without self-message detection (RISKY!)")
@@ -196,9 +192,7 @@ async def lifespan(app: FastAPI):
                 hf_token=settings.hf_memory_token,
                 hf_repo_id=settings.hf_memory_repo_id,
             )
-            logger.info(
-                f"💭 Conversation memory enabled (HF Hub: {settings.hf_memory_repo_id})"
-            )
+            logger.info(f"💭 Conversation memory enabled (HF Hub: {settings.hf_memory_repo_id})")
         else:
             memory_service = init_conversation_memory()  # In-memory only
             logger.info("💭 Conversation memory enabled (in-memory only)")
@@ -217,9 +211,7 @@ async def lifespan(app: FastAPI):
                 max_file_size_mb=settings.document_max_file_size_mb,
                 max_text_chars=settings.document_max_text_chars,
             )
-            logger.info(
-                f"📄 Document memory enabled (HF Hub: {settings.document_hf_repo_id})"
-            )
+            logger.info(f"📄 Document memory enabled (HF Hub: {settings.document_hf_repo_id})")
         else:
             document_service = init_document_memory(
                 storage_path=settings.document_storage_path,
@@ -236,9 +228,7 @@ async def lifespan(app: FastAPI):
     if settings.is_history_log_configured():
         history_log = init_history_log(
             storage_path=settings.history_log_path,
-            hf_token=settings.hf_memory_token
-            if settings.is_history_log_hf_configured()
-            else None,
+            hf_token=settings.hf_memory_token if settings.is_history_log_hf_configured() else None,
             hf_repo_id=settings.history_log_hf_repo_id,
             encryption_key=settings.history_log_encryption_key,
         )
@@ -253,9 +243,7 @@ async def lifespan(app: FastAPI):
         )
 
         if settings.is_history_log_hf_configured():
-            logger.info(
-                f"☁️ History log HF sync enabled: {settings.history_log_hf_repo_id}"
-            )
+            logger.info(f"☁️ History log HF sync enabled: {settings.history_log_hf_repo_id}")
         if settings.history_log_encryption_key:
             logger.info("🔐 History log encryption enabled")
     else:
@@ -267,9 +255,7 @@ async def lifespan(app: FastAPI):
     if settings.is_calendar_configured():
         calendar_service.configure(
             storage_path=settings.calendar_data_path,
-            hf_token=settings.hf_memory_token
-            if settings.is_calendar_hf_configured()
-            else None,
+            hf_token=settings.hf_memory_token if settings.is_calendar_hf_configured() else None,
             hf_repo_id=settings.calendar_hf_repo_id,
             sync_interval_seconds=settings.calendar_sync_interval_seconds,
         )
@@ -282,9 +268,7 @@ async def lifespan(app: FastAPI):
         reminder_service.configure(
             reminder_hour=settings.calendar_reminder_hour,
         )
-        logger.info(
-            f"⏰ Reminder service configured (daily at {settings.calendar_reminder_hour}:00 Bangkok)"
-        )
+        logger.info(f"⏰ Reminder service configured (daily at {settings.calendar_reminder_hour}:00 Bangkok)")
     else:
         logger.info("📅 Calendar service disabled")
 
@@ -296,15 +280,9 @@ async def lifespan(app: FastAPI):
     # because CommitScheduler downloads async in the background.
     logger.info("🔄 Loading persistent data from HF Hub...")
     load_results = await startup_loader.ensure_data_loaded(
-        calendar_service=calendar_service
-        if settings.is_calendar_configured()
-        else None,
-        memory_service=get_conversation_memory()
-        if settings.conversation_memory_enabled
-        else None,
-        document_service=get_document_memory()
-        if settings.document_memory_enabled
-        else None,
+        calendar_service=calendar_service if settings.is_calendar_configured() else None,
+        memory_service=get_conversation_memory() if settings.conversation_memory_enabled else None,
+        document_service=get_document_memory() if settings.document_memory_enabled else None,
         history_log=get_history_log() if settings.is_history_log_configured() else None,
     )
     if load_results["calendar"]:
@@ -322,9 +300,7 @@ async def lifespan(app: FastAPI):
         google_translation_service.set_client(http_client_pool)
         logger.info("✅ Google Cloud Translation API configured (PRIMARY)")
     else:
-        logger.warning(
-            "⚠️  Google Translate API not configured - using LibreTranslate only"
-        )
+        logger.warning("⚠️  Google Translate API not configured - using LibreTranslate only")
 
     logger.info("✅ LibreTranslate configured (FALLBACK)")
 
@@ -339,9 +315,7 @@ async def lifespan(app: FastAPI):
         model=settings.hermes_model,
     )
     if _hermes_service.is_configured():
-        logger.info(
-            f"🔁 Hermes fallback initialized (model={settings.hermes_model})"
-        )
+        logger.info(f"🔁 Hermes fallback initialized (model={settings.hermes_model})")
     else:
         logger.info("ℹ️ Hermes fallback not configured (skipped)")
 
@@ -351,17 +325,17 @@ async def lifespan(app: FastAPI):
     logger.info("📋 Registering intelligent agents...")
 
     # Import agents here (after HTTP client is ready)
-    from src.agents.help_agent import HelpAgent
     from src.agents.admin_agent import AdminAgent
-    from src.agents.translation_agent import TranslationAgent
     from src.agents.calendar_agent import CalendarAgent
     from src.agents.document_memory_agent import DocumentMemoryAgent
-    from src.agents.profiler_agent import ProfilerAgent
+    from src.agents.help_agent import HelpAgent
     from src.agents.image_analyzer_agent import ImageAnalyzerAgent
-    from src.agents.search_agent import SearchAgent
     from src.agents.llm_agent import LLMAgent
     from src.agents.news_agent import NewsAgent
+    from src.agents.profiler_agent import ProfilerAgent
+    from src.agents.search_agent import SearchAgent
     from src.agents.special_news_agent import SpecialNewsAgent
+    from src.agents.translation_agent import TranslationAgent
     from src.services.news_data_service import NewsDataService
     from src.services.special_news_service import SpecialNewsService
 
@@ -384,18 +358,12 @@ async def lifespan(app: FastAPI):
         admin_setup_key = None
 
     if admin_user_ids or admin_setup_key:
-        admin_agent = AdminAgent(
-            http_client=http_client_pool, news_api_key=settings.news_api_key
-        )
+        admin_agent = AdminAgent(http_client=http_client_pool, news_api_key=settings.news_api_key)
         agent_router.register_agent(admin_agent)
         if admin_user_ids:
-            logger.info(
-                f"🔧 Admin Agent registered with {len(admin_user_ids)} authorized admin(s)"
-            )
+            logger.info(f"🔧 Admin Agent registered with {len(admin_user_ids)} authorized admin(s)")
         else:
-            logger.info(
-                "🔧 Admin Agent registered (bootstrap enabled via ADMIN_SETUP_KEY)"
-            )
+            logger.info("🔧 Admin Agent registered (bootstrap enabled via ADMIN_SETUP_KEY)")
     else:
         logger.info("🔧 Admin Agent not registered (no ADMIN_USER_IDS configured)")
 
@@ -427,9 +395,7 @@ async def lifespan(app: FastAPI):
         agent_router.register_agent(hannibal_agent)
         logger.info("🎭 Hannibal Profile Agent registered (message history analysis)")
     else:
-        logger.info(
-            "🎭 Hannibal Profile Agent not registered (GitHub Models not configured)"
-        )
+        logger.info("🎭 Hannibal Profile Agent not registered (GitHub Models not configured)")
 
     # Register Profiler Agent (Priority: 7 - Handles image messages for psychological profiling)
     if settings.is_profiler_configured():
@@ -445,9 +411,7 @@ async def lifespan(app: FastAPI):
         agent_router.register_agent(image_analyzer_agent)
         logger.info("🖼️ Image Analyzer Agent registered (general image Q&A)")
     else:
-        logger.info(
-            "🖼️ Image Analyzer Agent not registered (GitHub Models not configured)"
-        )
+        logger.info("🖼️ Image Analyzer Agent not registered (GitHub Models not configured)")
 
     # Register Search Agent (Priority: 8)
     search_agent = SearchAgent()
@@ -455,17 +419,13 @@ async def lifespan(app: FastAPI):
     if settings.is_brave_search_configured():
         logger.info("🔍 Search Agent registered (Brave Search enabled)")
     else:
-        logger.info(
-            "🔍 Search Agent registered but DISABLED until BRAVE_SEARCH_API_KEY is set"
-        )
+        logger.info("🔍 Search Agent registered but DISABLED until BRAVE_SEARCH_API_KEY is set")
 
     # Register LLM Agent (Priority: 9)
     llm_agent = LLMAgent()
     agent_router.register_agent(llm_agent)
     if settings.is_openrouter_configured():
-        logger.info(
-            f"🤖 LLM Agent registered (Model: {settings.openrouter_default_model})"
-        )
+        logger.info(f"🤖 LLM Agent registered (Model: {settings.openrouter_default_model})")
     else:
         logger.info("🤖 LLM Agent registered (API key missing - will return errors)")
 
@@ -481,14 +441,10 @@ async def lifespan(app: FastAPI):
     )
     special_news_agent = SpecialNewsAgent(news_service=special_news_service)
     agent_router.register_agent(special_news_agent)
-    logger.info(
-        "📰 Special News Agent registered (Thailand tourism, sports, international)"
-    )
+    logger.info("📰 Special News Agent registered (Thailand tourism, sports, international)")
 
     # Register News Agent (Priority: 15)
-    news_data_service = NewsDataService(
-        http_client=http_client_pool, news_api_key=settings.news_api_key
-    )
+    news_data_service = NewsDataService(http_client=http_client_pool, news_api_key=settings.news_api_key)
     news_agent = NewsAgent(news_data_service=news_data_service)
     agent_router.register_agent(news_agent)
     if settings.is_news_api_configured():
@@ -507,10 +463,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"✅ Registered {len(agents_info)} agent(s):")
     for agent_info in agents_info:
         status = "🟢 ENABLED" if agent_info["enabled"] else "🔴 DISABLED"
-        logger.info(
-            f"   {status} | {agent_info['name']}: {agent_info['description']} "
-            f"(priority: {agent_info['priority']})"
-        )
+        logger.info(f"   {status} | {agent_info['name']}: {agent_info['description']} (priority: {agent_info['priority']})")
 
     # ========================================================================
     # PHASE 6: Start Background Cleanup Tasks
@@ -617,7 +570,7 @@ if settings.debug:
 
 
 @app.get("/", tags=["Health"])
-async def root() -> Dict[str, Any]:
+async def root() -> dict[str, Any]:
     """
     Root endpoint with service information.
 
@@ -636,7 +589,7 @@ async def root() -> Dict[str, Any]:
 
 
 @app.get("/health", tags=["Health"])
-async def health_check() -> Dict[str, Any]:
+async def health_check() -> dict[str, Any]:
     """
     Liveness-only health check endpoint.
 
@@ -656,7 +609,7 @@ async def health_check() -> Dict[str, Any]:
 
 
 @app.get("/readiness", tags=["Health"])
-async def readiness_check(response: Response) -> Dict[str, Any]:
+async def readiness_check(response: Response) -> dict[str, Any]:
     """
     Readiness probe for orchestration systems.
 
@@ -727,11 +680,7 @@ async def webhook(request: Request) -> JSONResponse:
             for event in events:
                 try:
                     if isinstance(event, MessageEvent):
-                        user_id = (
-                            getattr(event.source, "user_id", None)
-                            if event.source
-                            else None
-                        )
+                        user_id = getattr(event.source, "user_id", None) if event.source else None
 
                         if isinstance(event.message, TextMessageContent):
                             # Store message in buffer for "zeus scrape" feature
@@ -751,17 +700,13 @@ async def webhook(request: Request) -> JSONResponse:
                                     chat_id=chat_id,
                                     text=event.message.text,
                                     user_id=user_id,
-                                    message_id=event.message.id
-                                    if hasattr(event.message, "id")
-                                    else None,
+                                    message_id=event.message.id if hasattr(event.message, "id") else None,
                                 )
 
                             # CRITICAL: Check if message is from bot itself (prevent infinite loop)
                             # Skip agent routing for bot's own messages to prevent responding to itself
                             if bot_user_id and user_id == bot_user_id:
-                                logger.debug(
-                                    f"🔒 Skipping agent routing for bot's own message (stored in buffer only)"
-                                )
+                                logger.debug("🔒 Skipping agent routing for bot's own message (stored in buffer only)")
                                 continue
 
                             # Route text message to appropriate agent
@@ -778,11 +723,7 @@ async def webhook(request: Request) -> JSONResponse:
 
                     elif isinstance(event, FollowEvent):
                         # User added bot as friend
-                        user_id = (
-                            getattr(event.source, "user_id", None)
-                            if getattr(event, "source", None)
-                            else None
-                        )
+                        user_id = getattr(event.source, "user_id", None) if getattr(event, "source", None) else None
                         metrics_service.record_friend_added(user_id)
                         logger.info("➕ Follow event received (friend added)")
 
@@ -798,19 +739,13 @@ async def webhook(request: Request) -> JSONResponse:
                                         customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
                                     ),
                                 )
-                                logger.info(
-                                    f"✅ Sent welcome message to new friend {user_id}"
-                                )
+                                logger.info(f"✅ Sent welcome message to new friend {user_id}")
                             except Exception as e:
                                 logger.error(f"❌ Failed to send welcome message: {e}")
 
                     elif isinstance(event, UnfollowEvent):
                         # User blocked/removed bot
-                        user_id = (
-                            getattr(event.source, "user_id", None)
-                            if getattr(event, "source", None)
-                            else None
-                        )
+                        user_id = getattr(event.source, "user_id", None) if getattr(event, "source", None) else None
                         metrics_service.record_friend_removed(user_id)
                         logger.info("➖ Unfollow event received")
 
@@ -841,9 +776,7 @@ async def webhook(request: Request) -> JSONResponse:
 
     except InvalidSignatureError:
         logger.error("❌ Invalid LINE signature - possible security threat!")
-        raise HTTPException(
-            status_code=400, detail="Invalid signature. Request rejected for security."
-        )
+        raise HTTPException(status_code=400, detail="Invalid signature. Request rejected for security.")
 
     except Exception as e:
         logger.error(f"❌ Webhook processing error: {str(e)}", exc_info=True)
@@ -856,6 +789,4 @@ async def webhook(request: Request) -> JSONResponse:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(
-        "src.main:app", host=settings.host, port=settings.port, reload=settings.debug
-    )
+    uvicorn.run("src.main:app", host=settings.host, port=settings.port, reload=settings.debug)

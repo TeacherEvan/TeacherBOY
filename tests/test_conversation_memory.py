@@ -1,14 +1,14 @@
 """Tests for conversation memory service."""
 
 import sys
+from unittest.mock import MagicMock
+
 import pytest
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.services.conversation_memory_service import (
     ConversationMemoryService,
-    init_conversation_memory,
     get_conversation_memory,
+    init_conversation_memory,
 )
 
 
@@ -28,16 +28,16 @@ class TestConversationMemoryService:
     async def test_add_and_get_messages(self, memory_service):
         """Test adding and retrieving messages."""
         chat_id = "test_chat_123"
-        
+
         # Add user message
         await memory_service.add_message(chat_id, "user", "Hello Zeus!")
-        
+
         # Add assistant response
         await memory_service.add_message(chat_id, "assistant", "Greetings, mortal!")
-        
+
         # Get context
         context = await memory_service.get_context_messages(chat_id)
-        
+
         assert len(context) == 2
         assert context[0]["role"] == "user"
         assert context[0]["content"] == "Hello Zeus!"
@@ -48,14 +48,14 @@ class TestConversationMemoryService:
     async def test_clear_conversation(self, memory_service):
         """Test clearing conversation memory."""
         chat_id = "test_chat_456"
-        
+
         # Add messages
         await memory_service.add_message(chat_id, "user", "Test message")
         await memory_service.add_message(chat_id, "assistant", "Response")
-        
+
         # Clear
         await memory_service.clear_conversation(chat_id)
-        
+
         # Verify empty
         context = await memory_service.get_context_messages(chat_id)
         assert len(context) == 0
@@ -64,11 +64,11 @@ class TestConversationMemoryService:
     async def test_max_messages_limit(self, memory_service):
         """Test that old messages are trimmed when max is reached."""
         chat_id = "test_chat_789"
-        
+
         # Add more than max_messages (10)
         for i in range(15):
             await memory_service.add_message(chat_id, "user", f"Message {i}")
-        
+
         # Get context - should have at most max_messages
         context = await memory_service.get_context_messages(chat_id)
         assert len(context) <= 10
@@ -85,13 +85,13 @@ class TestConversationMemoryService:
     async def test_conversation_summary(self, memory_service):
         """Test getting conversation summary."""
         chat_id = "test_chat_summary"
-        
+
         # Add messages
         await memory_service.add_message(chat_id, "user", "Hello", "user_123")
         await memory_service.add_message(chat_id, "assistant", "Hi there!")
-        
+
         summary = await memory_service.get_conversation_summary(chat_id)
-        
+
         assert summary["message_count"] == 2
         assert summary["unique_users"] >= 1  # At least one user
         assert summary["last_activity"] is not None
@@ -100,10 +100,10 @@ class TestConversationMemoryService:
     async def test_hash_chat_id_consistency(self, memory_service):
         """Test that chat ID hashing is consistent."""
         chat_id = "user_U1234567890abcdef"
-        
+
         hash1 = memory_service._hash_chat_id(chat_id)
         hash2 = memory_service._hash_chat_id(chat_id)
-        
+
         assert hash1 == hash2
         assert len(hash1) == 16  # Truncated SHA256
 
@@ -112,7 +112,7 @@ class TestConversationMemoryService:
         """Test that different chat IDs get different hashes."""
         hash1 = memory_service._hash_chat_id("user_123")
         hash2 = memory_service._hash_chat_id("user_456")
-        
+
         assert hash1 != hash2
 
     @pytest.mark.asyncio
@@ -121,10 +121,10 @@ class TestConversationMemoryService:
         # Simple text should estimate ~1 token per 4 chars
         short_text = "Hello"  # 5 chars
         long_text = "A" * 400  # 400 chars
-        
+
         short_estimate = memory_service._estimate_tokens(short_text)
         long_estimate = memory_service._estimate_tokens(long_text)
-        
+
         assert short_estimate < long_estimate
         assert short_estimate >= 1  # At least 1 token
         assert long_estimate >= 100  # ~100 tokens for 400 chars
@@ -153,9 +153,7 @@ class TestConversationMemorySingleton:
 
         assert service.local_storage_path == storage_path
 
-    def test_init_conversation_memory_uses_configured_default_storage_path(
-        self, tmp_path, monkeypatch
-    ):
+    def test_init_conversation_memory_uses_configured_default_storage_path(self, tmp_path, monkeypatch):
         """Test that initialization uses settings.conversation_storage_path by default."""
         storage_path = tmp_path / "configured-conversations"
 
@@ -168,9 +166,7 @@ class TestConversationMemorySingleton:
 
         assert service.local_storage_path == storage_path
 
-    def test_init_conversation_memory_hf_uses_configured_storage_path(
-        self, tmp_path, monkeypatch
-    ):
+    def test_init_conversation_memory_hf_uses_configured_storage_path(self, tmp_path, monkeypatch):
         """Test HF initialization uses the configured storage path for local sync cache."""
 
         class FakeHfApi:
@@ -222,7 +218,7 @@ class TestConversationMemorySingleton:
     def test_init_without_hf_creates_inmemory(self):
         """Test initialization without HF credentials uses in-memory storage."""
         service = init_conversation_memory()
-        
+
         assert service is not None
         assert service._hf_enabled is False
 
@@ -230,10 +226,10 @@ class TestConversationMemorySingleton:
         """Test that get_conversation_memory returns the initialized service."""
         # Initialize first
         init_service = init_conversation_memory()
-        
+
         # Get should return same instance
         get_service = get_conversation_memory()
-        
+
         assert get_service is init_service
 
 
@@ -244,9 +240,9 @@ class TestLLMAgentMemoryIntegration:
     async def test_ms_green_clear_command_recognized(self):
         """Test that Ms. Green clear command is recognized."""
         from src.agents.llm_agent import LLMAgent
-        
+
         agent = LLMAgent()
-        
+
         # These should be recognized as clear commands
         assert agent._parse_command("Ms. Green clear") == "clear"
         assert agent._parse_command("Ms. Green forget") == "forget"
@@ -255,26 +251,27 @@ class TestLLMAgentMemoryIntegration:
     @pytest.mark.asyncio
     async def test_get_chat_id_formats(self):
         """Test chat ID extraction from various event sources."""
-        from src.agents.llm_agent import LLMAgent
         from unittest.mock import MagicMock
-        
+
+        from src.agents.llm_agent import LLMAgent
+
         agent = LLMAgent()
-        
+
         # Test user chat
         event = MagicMock()
         event.source = MagicMock()
         event.source.user_id = "U123"
         event.source.group_id = None
         event.source.room_id = None
-        
+
         chat_id = agent._get_chat_id(event)
         assert chat_id == "user_U123"
-        
+
         # Test group chat
         event.source.group_id = "G456"
         chat_id = agent._get_chat_id(event)
         assert chat_id == "group_G456"
-        
+
         # Test room chat
         event.source.group_id = None
         event.source.room_id = "R789"

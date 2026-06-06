@@ -4,27 +4,30 @@ Scrape Handler - Extracts dates from recent chat messages.
 This handler scans recent messages to find event-like content and proposes
 adding them to the calendar.
 """
+
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
-from linebot.v3.webhooks import MessageEvent
-from linebot.v3.messaging import MessagingApi, QuickReply, QuickReplyItem, MessageAction
-from linebot.v3.messaging.exceptions import ApiException
+from typing import Any
 
-from ..base_handler import CalendarHandler
-from src.services.calendar_session_manager import (
-    calendar_session_manager,
-    CalendarState,
-)
+from linebot.v3.messaging import MessageAction, MessagingApi, QuickReply, QuickReplyItem
+from linebot.v3.messaging.exceptions import ApiException
+from linebot.v3.webhooks import MessageEvent
+
+from src.config import settings
 from src.services.calendar_access_control import calendar_access_control
-from src.services.privilege_service import privilege_service
-from src.services.rate_limiter import rate_limiter
-from src.services.message_buffer_service import message_buffer_service
+from src.services.calendar_service import CalendarService
+from src.services.calendar_session_manager import (
+    CalendarState,
+    calendar_session_manager,
+)
 from src.services.date_extraction_service import date_extraction_service
 from src.services.history_log_service import EventType, LogLevel, get_history_log
-from src.services.calendar_service import CalendarService
-from src.config import settings
+from src.services.message_buffer_service import message_buffer_service
+from src.services.privilege_service import privilege_service
+from src.services.rate_limiter import rate_limiter
+
+from ..base_handler import CalendarHandler
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +46,7 @@ class ScrapeHandler(CalendarHandler):
             name="ScrapeHandler",
             description="Scrapes calendar events from recent messages",
         )
-        self._friend_cache: Dict[str, tuple[bool, Any]] = {}
+        self._friend_cache: dict[str, tuple[bool, Any]] = {}
 
     def get_triggers(self) -> list:
         return TRIGGERS_SCRAPE
@@ -65,29 +68,23 @@ class ScrapeHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
         context: dict,
     ) -> bool:
-        calendar_service: Optional[CalendarService] = context.get("calendar_service")
+        calendar_service: CalendarService | None = context.get("calendar_service")
         session = calendar_session_manager.get_session(chat_id)
 
         if self._is_trigger(text, TRIGGERS_SCRAPE):
-            return await self._handle_scrape_trigger(
-                event, line_bot_api, chat_id, user_id
-            )
+            return await self._handle_scrape_trigger(event, line_bot_api, chat_id, user_id)
 
         if not session:
             return False
 
         if session.state == CalendarState.SCRAPE_REVIEWING:
-            return await self._handle_scrape_review_response(
-                event, text, line_bot_api, chat_id, user_id
-            )
+            return await self._handle_scrape_review_response(event, text, line_bot_api, chat_id, user_id)
 
         if session.state == CalendarState.SCRAPE_REMINDER_DAYS:
-            return await self._handle_scrape_reminder_response(
-                event, text, line_bot_api, chat_id, user_id, calendar_service
-            )
+            return await self._handle_scrape_reminder_response(event, text, line_bot_api, chat_id, user_id, calendar_service)
 
         return False
 
@@ -96,19 +93,15 @@ class ScrapeHandler(CalendarHandler):
         event: MessageEvent,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         if not user_id:
             await self._send_message(event, line_bot_api, "❌ Cannot identify user.")
             return True
 
-        can_create = await calendar_access_control.can_create_event(
-            user_id, chat_id, line_bot_api
-        )
+        can_create = await calendar_access_control.can_create_event(user_id, chat_id, line_bot_api)
         if not can_create:
-            logger.warning(
-                f"❌ Access denied: {user_id} cannot create events in {chat_id}"
-            )
+            logger.warning(f"❌ Access denied: {user_id} cannot create events in {chat_id}")
             history_log = get_history_log()
             if history_log:
                 await history_log.log(
@@ -161,8 +154,7 @@ class ScrapeHandler(CalendarHandler):
             await self._send_message(
                 event,
                 line_bot_api,
-                "❌ Failed to scan messages. Please try again.\n\n"
-                "สแกนข้อความไม่สำเร็จ กรุณาลองใหม่",
+                "❌ Failed to scan messages. Please try again.\n\nสแกนข้อความไม่สำเร็จ กรุณาลองใหม่",
             )
             return True
 
@@ -215,7 +207,7 @@ class ScrapeHandler(CalendarHandler):
         self,
         event: MessageEvent,
         line_bot_api: MessagingApi,
-        event_data: Dict[str, Any],
+        event_data: dict[str, Any],
         current: int,
         total: int,
         header: str = "",
@@ -226,15 +218,11 @@ class ScrapeHandler(CalendarHandler):
         confidence = event_data.get("confidence", "medium")
 
         date_str = date_obj.strftime("%B %d, %Y") if date_obj else "Unknown"
-        msg = header + (
-            f"📅 Event {current}/{total}:\n\n"
-            f"📌 {title}\n"
-            f"📆 {date_str}\n"
-        )
+        msg = header + (f"📅 Event {current}/{total}:\n\n📌 {title}\n📆 {date_str}\n")
 
         if source:
             source_preview = source[:50] + "..." if len(source) > 50 else source
-            msg += f"📝 From: \"{source_preview}\"\n"
+            msg += f'📝 From: "{source_preview}"\n'
 
         msg += f"🎯 Confidence: {confidence}\n\n"
         msg += "Add this to calendar? (yes/no/skip all)"
@@ -254,7 +242,7 @@ class ScrapeHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
+        user_id: str | None,
     ) -> bool:
         text_lower = text.lower().strip()
 
@@ -291,24 +279,19 @@ class ScrapeHandler(CalendarHandler):
                 next_event = calendar_session_manager.get_current_scraped_event(chat_id)
                 if next_event:
                     current, total = calendar_session_manager.get_scrape_progress(chat_id)
-                    await self._prompt_scraped_event(
-                        event, line_bot_api, next_event, current, total
-                    )
+                    await self._prompt_scraped_event(event, line_bot_api, next_event, current, total)
             else:
                 calendar_session_manager.end_session(chat_id)
                 await self._send_message(
                     event,
                     line_bot_api,
-                    "✅ Finished processing scraped events.\n\n"
-                    "เสร็จสิ้นการประมวลผลกิจกรรมที่สแกน",
+                    "✅ Finished processing scraped events.\n\nเสร็จสิ้นการประมวลผลกิจกรรมที่สแกน",
                 )
             return True
 
         if text_lower in ["done", "skip all", "finish", "เสร็จ"]:
             calendar_session_manager.end_session(chat_id)
-            await self._send_message(
-                event, line_bot_api, "✅ Scrape session ended.\n\nเสร็จสิ้นการสแกน"
-            )
+            await self._send_message(event, line_bot_api, "✅ Scrape session ended.\n\nเสร็จสิ้นการสแกน")
             return True
 
         return False
@@ -319,8 +302,8 @@ class ScrapeHandler(CalendarHandler):
         text: str,
         line_bot_api: MessagingApi,
         chat_id: str,
-        user_id: Optional[str],
-        calendar_service: Optional[CalendarService],
+        user_id: str | None,
+        calendar_service: CalendarService | None,
     ) -> bool:
         text_lower = text.lower().strip()
 
@@ -336,8 +319,7 @@ class ScrapeHandler(CalendarHandler):
             await self._send_message(
                 event,
                 line_bot_api,
-                "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\n"
-                "กรุณาเลือก 7, 3, 1 หรือ all",
+                "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\nกรุณาเลือก 7, 3, 1 หรือ all",
             )
             return True
 
@@ -361,21 +343,13 @@ class ScrapeHandler(CalendarHandler):
             next_event = calendar_session_manager.get_current_scraped_event(chat_id)
             if next_event:
                 current, total = calendar_session_manager.get_scrape_progress(chat_id)
-                header = (
-                    f"✅ Added: {added_title}\nเพิ่มแล้ว: {added_title}\n\n"
-                    if added_title
-                    else ""
-                )
-                await self._prompt_scraped_event(
-                    event, line_bot_api, next_event, current, total, header=header
-                )
+                header = f"✅ Added: {added_title}\nเพิ่มแล้ว: {added_title}\n\n" if added_title else ""
+                await self._prompt_scraped_event(event, line_bot_api, next_event, current, total, header=header)
             else:
                 await self._send_message(
                     event,
                     line_bot_api,
-                    f"✅ Added: {added_title}\n\nเพิ่มแล้ว: {added_title}"
-                    if added_title
-                    else "✅ Done",
+                    f"✅ Added: {added_title}\n\nเพิ่มแล้ว: {added_title}" if added_title else "✅ Done",
                 )
         else:
             calendar_session_manager.end_session(chat_id)
@@ -383,12 +357,9 @@ class ScrapeHandler(CalendarHandler):
                 event,
                 line_bot_api,
                 (
-                    f"✅ Added: {added_title}\n\n"
-                    f"เพิ่มกิจกรรมทั้งหมดเรียบร้อยแล้ว!\n"
-                    "Finished adding all scraped events!"
+                    f"✅ Added: {added_title}\n\nเพิ่มกิจกรรมทั้งหมดเรียบร้อยแล้ว!\nFinished adding all scraped events!"
                     if added_title
-                    else "✅ Finished adding all scraped events!\n\n"
-                    "เพิ่มกิจกรรมทั้งหมดเรียบร้อยแล้ว"
+                    else "✅ Finished adding all scraped events!\n\nเพิ่มกิจกรรมทั้งหมดเรียบร้อยแล้ว"
                 ),
             )
 
@@ -418,9 +389,9 @@ class ScrapeHandler(CalendarHandler):
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         if event.source and getattr(event.source, "group_id", None):
-            return f"group_{getattr(event.source, 'group_id')}"
+            return f"group_{event.source.group_id}"
         if event.source and getattr(event.source, "room_id", None):
-            return f"room_{getattr(event.source, 'room_id')}"
+            return f"room_{event.source.room_id}"
         if event.source and getattr(event.source, "user_id", None):
-            return f"user_{getattr(event.source, 'user_id')}"
+            return f"user_{event.source.user_id}"
         return "user_unknown"

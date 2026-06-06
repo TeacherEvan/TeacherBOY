@@ -6,10 +6,9 @@ recent timestamps useful for operational visibility.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Set
 from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 
 
 @dataclass
@@ -19,8 +18,8 @@ class MetricsSnapshot:
     translation_google_total: int
     translation_libre_total: int
     news_requests_total: int
-    last_friend_added_at: Optional[datetime]
-    last_friend_added_user_id: Optional[str]
+    last_friend_added_at: datetime | None
+    last_friend_added_user_id: str | None
     friends_follow_events_total: int
     friends_unfollow_events_total: int
     # New metrics
@@ -29,7 +28,7 @@ class MetricsSnapshot:
     admin_commands_total: int
     unique_users_count: int
     unique_groups_count: int
-    peak_hour: Optional[int]
+    peak_hour: int | None
     peak_hour_requests: int
     cache_hits_total: int
     cache_misses_total: int
@@ -37,7 +36,7 @@ class MetricsSnapshot:
 
 @dataclass
 class MetricsService:
-    _started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    _started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     _translation_requests_total: int = 0
     _translation_google_total: int = 0
@@ -45,8 +44,8 @@ class MetricsService:
 
     _news_requests_total: int = 0
 
-    _last_friend_added_at: Optional[datetime] = None
-    _last_friend_added_user_id: Optional[str] = None
+    _last_friend_added_at: datetime | None = None
+    _last_friend_added_user_id: str | None = None
 
     _friends_follow_events_total: int = 0
     _friends_unfollow_events_total: int = 0
@@ -55,13 +54,13 @@ class MetricsService:
     _rate_limited_requests: int = 0
     _failed_translations: int = 0
     _admin_commands_total: int = 0
-    _unique_users: Set[str] = field(default_factory=set)
-    _unique_groups: Set[str] = field(default_factory=set)
+    _unique_users: set[str] = field(default_factory=set)
+    _unique_groups: set[str] = field(default_factory=set)
     _hourly_requests: dict = field(default_factory=lambda: defaultdict(int))
     _cache_hits_total: int = 0
     _cache_misses_total: int = 0
 
-    def record_translation(self, provider: str, chat_id: Optional[str] = None) -> None:
+    def record_translation(self, provider: str, chat_id: str | None = None) -> None:
         self._translation_requests_total += 1
         provider_lower = (provider or "").lower()
         if provider_lower == "google":
@@ -70,7 +69,7 @@ class MetricsService:
             self._translation_libre_total += 1
 
         # Track hourly usage
-        current_hour = datetime.now(timezone.utc).hour
+        current_hour = datetime.now(UTC).hour
         self._hourly_requests[current_hour] += 1
 
         # Track unique users/groups
@@ -80,11 +79,11 @@ class MetricsService:
             elif chat_id.startswith("group_"):
                 self._unique_groups.add(chat_id)
 
-    def record_news_request(self, chat_id: Optional[str] = None) -> None:
+    def record_news_request(self, chat_id: str | None = None) -> None:
         self._news_requests_total += 1
 
         # Track hourly usage
-        current_hour = datetime.now(timezone.utc).hour
+        current_hour = datetime.now(UTC).hour
         self._hourly_requests[current_hour] += 1
 
         # Track unique users/groups
@@ -94,12 +93,12 @@ class MetricsService:
             elif chat_id.startswith("group_"):
                 self._unique_groups.add(chat_id)
 
-    def record_friend_added(self, user_id: Optional[str]) -> None:
-        self._last_friend_added_at = datetime.now(timezone.utc)
+    def record_friend_added(self, user_id: str | None) -> None:
+        self._last_friend_added_at = datetime.now(UTC)
         self._last_friend_added_user_id = user_id
         self._friends_follow_events_total += 1
 
-    def record_friend_removed(self, user_id: Optional[str]) -> None:
+    def record_friend_removed(self, user_id: str | None) -> None:
         # LINE does not provide a way to query total friend count; this is a
         # process-local best-effort counter based on follow/unfollow events.
         self._friends_unfollow_events_total += 1
@@ -128,7 +127,7 @@ class MetricsService:
         return self._started_at
 
     def get_uptime(self) -> timedelta:
-        return datetime.now(timezone.utc) - self._started_at
+        return datetime.now(UTC) - self._started_at
 
     def snapshot(self) -> MetricsSnapshot:
         # Calculate peak hour

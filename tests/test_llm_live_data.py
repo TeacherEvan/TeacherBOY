@@ -1,8 +1,10 @@
 """Tests for LLM Agent live data detection and auto-search integration."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from src.agents.llm_agent import LLMAgent, _LIVE_DATA_REGEX
+
+import pytest
+
+from src.agents.llm_agent import _LIVE_DATA_REGEX, LLMAgent
 
 
 class TestLiveDataDetection:
@@ -119,7 +121,7 @@ class TestLLMAgentLiveDataMethods:
             {"title": "Another Place", "url": "https://test.com", "description": "Nice atmosphere"},
         ]
         context = agent._format_search_context(results, "restaurants in Bangkok")
-        
+
         assert "LIVE WEB SEARCH RESULTS" in context
         assert "restaurants in Bangkok" in context
         assert "Best Restaurant" in context
@@ -132,9 +134,9 @@ class TestLLMAgentLiveDataMethods:
         """Test auto-search when Brave Search is not configured."""
         with patch("src.agents.llm_agent.brave_search_service") as mock_service:
             mock_service.is_configured.return_value = False
-            
+
             results = await agent._auto_search("test query")
-            
+
             assert results == []
 
     @pytest.mark.asyncio
@@ -144,13 +146,13 @@ class TestLLMAgentLiveDataMethods:
             {"title": "Result 1", "url": "https://r1.com", "description": "Desc 1"},
             {"title": "Result 2", "url": "https://r2.com", "description": "Desc 2"},
         ]
-        
+
         with patch("src.agents.llm_agent.brave_search_service") as mock_service:
             mock_service.is_configured.return_value = True
             mock_service.search = AsyncMock(return_value=mock_results)
-            
+
             results = await agent._auto_search("restaurants near me")
-            
+
             assert results == mock_results
             mock_service.search.assert_called_once_with("restaurants near me", count=5)
 
@@ -179,29 +181,28 @@ class TestLLMAgentIntegration:
     async def test_query_triggers_live_search(self, mock_event, mock_line_api):
         """Test that business queries trigger auto-search before LLM."""
         agent = LLMAgent()
-        
-        with patch.object(agent, "_auto_search", new_callable=AsyncMock) as mock_search, \
-             patch.object(agent, "github_service") as mock_github, \
-             patch.object(agent, "openrouter_service") as mock_openrouter, \
-             patch("src.agents.llm_agent.settings") as mock_settings:
-            
+
+        with (
+            patch.object(agent, "_auto_search", new_callable=AsyncMock) as mock_search,
+            patch.object(agent, "github_service") as mock_github,
+            patch.object(agent, "openrouter_service") as mock_openrouter,
+            patch("src.agents.llm_agent.settings") as mock_settings,
+        ):
             # Configure mocks
             mock_settings.llm_system_prompt = "Test prompt"
             mock_settings.llm_temperature = 0.7
             mock_settings.conversation_memory_enabled = False
             mock_settings.is_zeus_allowed_in_group.return_value = True
             mock_settings.get_llm_provider_priority.return_value = ["github"]
-            
+
             mock_github.is_configured.return_value = True
             mock_github.chat_completion = AsyncMock(return_value="Here's what I found...")
             mock_openrouter.is_configured.return_value = False
-            
-            mock_search.return_value = [
-                {"title": "Result", "url": "https://test.com", "description": "Test"}
-            ]
-            
+
+            mock_search.return_value = [{"title": "Result", "url": "https://test.com", "description": "Test"}]
+
             # Process a query that needs live data
             await agent.handle(mock_event, "Ms. Green restaurants in Bangkok", mock_line_api)
-            
+
             # Verify auto-search was called
             mock_search.assert_called_once()

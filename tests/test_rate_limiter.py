@@ -1,8 +1,10 @@
 """Tests for rate limiter service."""
 
-import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import patch
+
+import pytest
+
 from src.services.rate_limiter import RateLimiter
 
 
