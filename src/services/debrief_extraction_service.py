@@ -28,6 +28,16 @@ Fields:
 If a field cannot be determined from the image, use null. Return ONLY the JSON object."""
 
 
+from pydantic import BaseModel, Field
+from typing import Optional
+class DebriefSchema(BaseModel):
+    topics_covered: list[str] = Field(min_length=1, description="List of topics covered in the lesson")
+    comprehension_level: str = Field(description="low, medium, or high")
+    key_phrases_learned: list[str] = Field(default_factory=list, description="Key phrases the student practiced")
+    suggested_review: list[str] = Field(default_factory=list, description="Topics to review next session")
+    confidence_score: float = Field(default=0.5, ge=0.0, le=1.0, description="Overall confidence 0-1")
+    notes: Optional[str] = Field(default=None, description="Additional observations")
+
 class DebriefExtractionService:
     def __init__(self, llm_vision_fn: Callable | None = None, maton_api_key_path: str = "~/.secrets/maton.txt"):
         self.llm_vision_fn = llm_vision_fn
