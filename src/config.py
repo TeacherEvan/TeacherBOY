@@ -187,6 +187,22 @@ class Settings(BaseSettings):
         description="Optional OpenRouter model override for translation fallback only",
     )
 
+    # ============================================================================
+    # Ollama Configuration (Local LLM Provider)
+    # ============================================================================
+    ollama_enabled: bool = Field(
+        default=False,
+        description="Enable Ollama as a local LLM provider in the fallback chain.",
+    )
+    ollama_base_url: str = Field(
+        default="http://localhost:11434",
+        description="Base URL for local Ollama instance (OpenAI-compatible endpoint).",
+    )
+    ollama_default_model: str = Field(
+        default="hermes2:latest",
+        description="Default model tag to use from Ollama.",
+    )
+
     llm_system_prompt: str = Field(
         default=(
             "You are Ms. Green, a gentle and exceptionally wise assistant. Speak with calm authority, "
@@ -364,7 +380,7 @@ class Settings(BaseSettings):
         default="hermes,openrouter,github",
         description=(
             "Comma-separated priority list for LLM providers. "
-            "Options: 'hermes', 'openrouter', 'github'. First configured provider is used."
+            "Options: 'hermes', 'openrouter', 'github', 'ollama'. First configured provider is used."
         ),
     )
 
