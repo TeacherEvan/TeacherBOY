@@ -3,9 +3,8 @@ Measure startup performance before/after modularization.
 Run this to verify lazy loading improvements.
 """
 
-import time
 import sys
-import os
+import time
 from pathlib import Path
 
 # Add project root to path
@@ -53,16 +52,12 @@ def main():
     # Measure agent factory (should be very fast)
     factory_time = measure_import_time("src.agents.agent_factory")
     factory_modules = get_module_count()
-    print(
-        f"src.agents.agent_factory: {factory_time:>8.2f}ms  (Δ {factory_modules - config_modules} modules)"
-    )
+    print(f"src.agents.agent_factory: {factory_time:>8.2f}ms  (Δ {factory_modules - config_modules} modules)")
 
     # Measure agent router
     router_time = measure_import_time("src.agents.agent_router")
     router_modules = get_module_count()
-    print(
-        f"src.agents.agent_router: {router_time:>8.2f}ms  (Δ {router_modules - factory_modules} modules)"
-    )
+    print(f"src.agents.agent_router: {router_time:>8.2f}ms  (Δ {router_modules - factory_modules} modules)")
 
     # Measure main app (this will trigger agent registration but NOT instantiation)
     main_time = measure_import_time("src.main")

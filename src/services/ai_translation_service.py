@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import logging
 from dataclasses import dataclass
 
@@ -30,6 +29,7 @@ class AITranslationResult:
 
 class _LazyGoogleTranslationProvider:
     """Adapter that exposes TranslateResult-compatible interface."""
+
     _service_name = "google_cloud_translation"
 
     def __init__(self, api_key: str) -> None:
@@ -61,7 +61,9 @@ class _LazyGoogleTranslationProvider:
                 try:
                     parts = line.split(" to ", 1)[1].split(":", 1)
                     target_lang = parts[0].strip().lower() if parts else target_lang
-                    source_lang = line.split(" from ", 1)[1].split(" to ", 1)[0].strip().lower() if " to " in line else source_lang
+                    source_lang = (
+                        line.split(" from ", 1)[1].split(" to ", 1)[0].strip().lower() if " to " in line else source_lang
+                    )
                 except Exception:
                     pass
                 break
@@ -118,6 +120,7 @@ class _LazyGoogleTranslationProvider:
 
 class _LazyGoogleTranslateProviderV2:
     """Thin adapter around google_translation.translate() when available."""
+
     _service_name = "google_cloud_translation_v2"
 
     def __init__(self, service) -> None:
@@ -148,7 +151,9 @@ class _LazyGoogleTranslateProviderV2:
                 try:
                     parts = line.split(" to ", 1)[1].split(":", 1)
                     target_lang = parts[0].strip().lower() if parts else target_lang
-                    source_lang = line.split(" from ", 1)[1].split(" to ", 1)[0].strip().lower() if " to " in line else source_lang
+                    source_lang = (
+                        line.split(" from ", 1)[1].split(" to ", 1)[0].strip().lower() if " to " in line else source_lang
+                    )
                 except Exception:
                     pass
                 break
@@ -349,23 +354,23 @@ class AITranslationService:
         if not self.hermes.is_configured():
             return []
         selected = settings.hermes_model or self.hermes.model or ""
-        items = [(
-            'hermes',
-            self.hermes,
-            self.hermes.chat_completion,
-            {'temperature': 0.2, 'model': selected} if selected else {'temperature': 0.2},
-        )]
-        fallback = getattr(settings, 'hermes_fallback_model', None) or getattr(self, '_hermes_fallback_model', None)
+        items = [
+            (
+                "hermes",
+                self.hermes,
+                self.hermes.chat_completion,
+                {"temperature": 0.2, "model": selected} if selected else {"temperature": 0.2},
+            )
+        ]
+        fallback = getattr(settings, "hermes_fallback_model", None) or getattr(self, "_hermes_fallback_model", None)
         if fallback and fallback != selected:
-            items.append(('hermes', self.hermes, self.hermes.chat_completion, {'temperature': 0.2, 'model': fallback}))
+            items.append(("hermes", self.hermes, self.hermes.chat_completion, {"temperature": 0.2, "model": fallback}))
         return items
 
     def _libre_providers(self):
         if not self.libre_translate.is_configured():
             return []
-        return [
-            ("libretranslate", self.libre_translate, self.libre_translate.chat_completion, {"temperature": 0.2})
-        ]
+        return [("libretranslate", self.libre_translate, self.libre_translate.chat_completion, {"temperature": 0.2})]
 
     def _build_provider_tuples(self):
         providers = []

@@ -92,6 +92,6 @@ async def test_llm_agent_replies_with_deterministic_identity_response() -> None:
     agent._send_reply.assert_awaited_once_with(
         event,
         line_bot_api,
-        "I am Ms. Green. I speak with calm judgment, gentle strength, and patient clarity. "
-        "I am here to answer carefully and without needless ornament.",
+        "I'm Ms. Green. I answer with calm judgment, genuine warmth, and unhurried clarity. "
+        "I don't perform wisdom; I just offer it plainly, with patience and a little lightness when it helps.",
     )

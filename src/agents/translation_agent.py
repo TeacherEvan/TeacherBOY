@@ -334,7 +334,6 @@ class TranslationAgent(BaseAgent):
             logger.error("Translation failed: %s", last)
             return f"[Translation failed] {text}"
 
-
         """Translate using the shared AI translation service."""
         source_lang = "th" if self.contains_thai(text) else "en"
         target_lang = "en" if source_lang == "th" else "th"

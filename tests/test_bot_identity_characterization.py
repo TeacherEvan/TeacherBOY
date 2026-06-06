@@ -6,11 +6,12 @@ from src.agents.translation_agent import TranslationAgent
 
 
 @pytest.mark.asyncio
-async def test_translation_agent_does_not_auto_handle_plain_thai_after_rework():
+async def test_translation_agent_auto_starts_session_on_thai_text():
+    """Thai text should auto-start a translation session (behavior restored Jun 2)."""
     agent = TranslationAgent()
     event = Mock()
     event.source = Mock()
     event.source.user_id = "U1"
     event.source.type = "group"
 
-    assert await agent.should_handle(event, "สวัสดีครับ") is False
+    assert await agent.should_handle(event, "สวัสดีครับ") is True

@@ -154,7 +154,7 @@ def print_plan(
 ) -> None:
     user_ids = collect_user_ids(staff_items, calendar_events)
     print("Convex backfill plan")
-    print(f"mode: dry-run")
+    print("mode: dry-run")
     print(f"staff memory path: {staff_path}")
     print(f"calendar path: {calendar_path}")
     print(f"users to upsert: {len(user_ids)}")
@@ -208,9 +208,7 @@ async def main() -> int:
         return 0
 
     if not settings.is_convex_configured():
-        raise RuntimeError(
-            "Convex is not configured. Set CONVEX_DEPLOYMENT_URL and CONVEX_SYNC_TOKEN first."
-        )
+        raise RuntimeError("Convex is not configured. Set CONVEX_DEPLOYMENT_URL and CONVEX_SYNC_TOKEN first.")
 
     result = await apply_backfill(staff_items, calendar_events)
     print("Convex backfill applied")

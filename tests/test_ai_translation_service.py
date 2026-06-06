@@ -8,7 +8,7 @@ from src.services.ai_translation_service import AITranslationService
 @pytest.mark.asyncio
 async def test_translate_uses_github_models_first_when_configured_without_google():
     """Without Google configured, GitHub Models should be used first."""
-    with patch('src.services.ai_translation_service.settings') as mock_settings:
+    with patch("src.services.ai_translation_service.settings") as mock_settings:
         mock_settings.google_translate_api_key = None
 
         github = Mock()
@@ -49,7 +49,7 @@ async def test_translate_uses_github_models_first_when_configured_without_google
 @pytest.mark.asyncio
 async def test_translate_falls_back_to_openrouter_when_github_models_returns_none():
     """Should fall back to OpenRouter when GitHub Models returns None."""
-    with patch('src.services.ai_translation_service.settings') as mock_settings:
+    with patch("src.services.ai_translation_service.settings") as mock_settings:
         mock_settings.google_translate_api_key = None
 
         github = Mock()

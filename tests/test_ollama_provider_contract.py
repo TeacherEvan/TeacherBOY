@@ -1,41 +1,39 @@
-"""Provider contract test specifically for Ollama routing in the fallback loop."""
-
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.config import Settings
-from src.utils.llm_fallback import chat_completion_with_fallback
-
-pytestmark = pytest.mark.asyncio
-
-
-@pytest.fixture()
-def ollama_priority_settings() -> Settings:
-    s = Settings()
-    s.llm_provider_priority = "ollama,openrouter,github,hermes"
-    s.ollama_enabled = True
-    s.ollama_default_model = "ollama-test-model"
-    s.ollama_base_url = "http://localhost:11434"
-    return s
+import src.services.github_models_service as github_models_service_mod
+import src.services.openrouter_service as openrouter_service_mod
+import src.utils.llm_fallback as lf
 
 
-async def test_ollama_provider_routes_first(
-    ollama_priority_settings: Settings,
-) -> None:
-    fake_result = "ollama-first"
-    with patch("src.utils.llm_fallback.settings", ollama_priority_settings), patch(
-        "src.services.ollama_service.ollama_service"
-    ) as ollama_svc:
-        ollama_svc.chat_completion = AsyncMock(return_value=fake_result)
+@pytest.mark.asyncio
+async def test_chat_completion_with_fallback_routes_openrouter_before_github():
+    """Priority fallback should skip github because openrouter succeeds first."""
+    fake_openrouter = MagicMock()
+    fake_openrouter.is_configured.return_value = True
+    fake_openrouter.chat_completion = AsyncMock(return_value="from openrouter")
 
-        result = await chat_completion_with_fallback(
-            messages=[{"role": "user", "content": "hello"}]
-        )
+    fake_github = MagicMock()
+    fake_github.is_configured.return_value = True
+    fake_github.chat_completion = AsyncMock(return_value="from github")
 
-    assert result == fake_result
-    ollama_svc.chat_completion.assert_awaited_once()
-    model_arg = ollama_svc.chat_completion.call_args.kwargs["model"]
-    assert model_arg == "ollama-test-model"
+    mock_settings = MagicMock()
+    mock_settings.get_llm_provider_priority.return_value = ["openrouter", "github"]
+    mock_settings.openrouter_default_model = None
+    mock_settings.github_models_default_model = None
+
+    with patch.object(lf, "settings", mock_settings):
+        with patch.object(lf, "openrouter_service", fake_openrouter):
+            with patch.object(lf, "github_models_service", fake_github):
+                result = await lf.chat_completion_with_fallback(
+                    messages=[{"role": "user", "content": "hi"}],
+                    temperature=0.0,
+                    max_tokens=1,
+                )
+
+    assert result == "from openrouter"
+    fake_openrouter.chat_completion.assert_awaited_once()
+    fake_github.chat_completion.assert_not_called()

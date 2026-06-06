@@ -39,8 +39,6 @@ from linebot.v3.webhooks import (
 
 from src.agents.agent_router import AgentRouter
 from src.config import settings
-from src.services.logging_service import logging_service
-from src.services.persistent_storage import is_persistent_storage_available
 from src.handlers.message_handler import (
     handle_join_event,
     handle_leave_event,
@@ -68,11 +66,13 @@ from src.services.history_log_service import (
     init_history_log,
 )
 from src.services.image_analyzer_session_manager import image_analyzer_session_manager
+from src.services.logging_service import logging_service
 from src.services.message_buffer_service import message_buffer_service
 from src.services.metrics_service import metrics_service
 from src.services.news_session_manager import news_session_manager
 from src.services.nous_service import nous_inference_service
 from src.services.openrouter_service import openrouter_service
+from src.services.persistent_storage import is_persistent_storage_available
 from src.services.profiler_session_manager import profiler_session_manager
 from src.services.rate_limiter import rate_limiter
 from src.services.reminder_service import reminder_service
@@ -312,7 +312,9 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("⚠️  Google Translate API not configured - using fallback providers")
 
-    libre_translate_configured = bool(getattr(settings, "libretranslate_api_url", None)) and bool(getattr(settings, "libretranslate_api_key", None))
+    libre_translate_configured = bool(getattr(settings, "libretranslate_api_url", None)) and bool(
+        getattr(settings, "libretranslate_api_key", None)
+    )
     if libre_translate_configured:
         logger.info("✅ LibreTranslate configured (FALLBACK)")
     else:

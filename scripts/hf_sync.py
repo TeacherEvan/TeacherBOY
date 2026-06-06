@@ -23,17 +23,14 @@ from __future__ import annotations
 
 import argparse
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
 def _require_env(name: str) -> str:
     value = (os.getenv(name) or "").strip()
     if not value:
-        raise SystemExit(
-            f"Missing required env var: {name}. "
-            f"Set it and re-run (PowerShell example: $env:{name} = '...')."
-        )
+        raise SystemExit(f"Missing required env var: {name}. Set it and re-run (PowerShell example: $env:{name} = '...').")
     return value
 
 
@@ -56,9 +53,7 @@ def _get_hf_token(explicit_token: str | None = None) -> str:
     except Exception:
         pass
 
-    raise SystemExit(
-        "No Hugging Face token found. Either run `huggingface-cli login` OR set HF_MEMORY_TOKEN."
-    )
+    raise SystemExit("No Hugging Face token found. Either run `huggingface-cli login` OR set HF_MEMORY_TOKEN.")
 
 
 def _ensure_folder(folder: Path) -> None:
@@ -72,10 +67,8 @@ def _ensure_nonempty(folder: Path, marker_name: str) -> None:
         return
 
     marker = folder / marker_name
-    stamp = datetime.now(timezone.utc).isoformat()
-    marker.write_text(
-        f"hf_sync_marker\ncreated_at_utc={stamp}\n", encoding="utf-8"
-    )
+    stamp = datetime.now(UTC).isoformat()
+    marker.write_text(f"hf_sync_marker\ncreated_at_utc={stamp}\n", encoding="utf-8")
 
 
 def _sync_folder(
@@ -187,9 +180,7 @@ def main() -> None:
     if do_memory:
         repo_id = (args.memory_repo or os.getenv("HF_MEMORY_REPO_ID") or "").strip()
         if not repo_id:
-            raise SystemExit(
-                "Missing memory repo id. Provide --memory-repo or set HF_MEMORY_REPO_ID."
-            )
+            raise SystemExit("Missing memory repo id. Provide --memory-repo or set HF_MEMORY_REPO_ID.")
         folder = root / "data" / "conversations"
         _ensure_folder(folder)
         _ensure_nonempty(folder, marker_name=".hf_sync_marker.txt")
@@ -197,16 +188,14 @@ def main() -> None:
             token=token,
             repo_id=repo_id,
             local_folder=folder,
-            commit_message=f"Sync conversations ({datetime.now(timezone.utc).date().isoformat()})",
+            commit_message=f"Sync conversations ({datetime.now(UTC).date().isoformat()})",
         )
         print(f"✅ Synced conversations to hf://datasets/{repo_id}")
 
     if do_logs:
         repo_id = (args.logs_repo or os.getenv("HISTORY_LOG_HF_REPO_ID") or "").strip()
         if not repo_id:
-            raise SystemExit(
-                "Missing logs repo id. Provide --logs-repo or set HISTORY_LOG_HF_REPO_ID."
-            )
+            raise SystemExit("Missing logs repo id. Provide --logs-repo or set HISTORY_LOG_HF_REPO_ID.")
         folder = root / "data" / "logs" / "hf_sync"
         _ensure_folder(folder)
 
@@ -223,7 +212,7 @@ def main() -> None:
             token=token,
             repo_id=repo_id,
             local_folder=folder,
-            commit_message=f"Sync logs ({datetime.now(timezone.utc).date().isoformat()})",
+            commit_message=f"Sync logs ({datetime.now(UTC).date().isoformat()})",
         )
         print(f"✅ Synced logs to hf://datasets/{repo_id}")
 
@@ -239,7 +228,7 @@ def main() -> None:
                 token=token,
                 repo_id=repo_id,
                 local_folder=folder,
-                commit_message=f"Sync calendar ({datetime.now(timezone.utc).date().isoformat()})",
+                commit_message=f"Sync calendar ({datetime.now(UTC).date().isoformat()})",
             )
             print(f"✅ Synced calendar to hf://datasets/{repo_id}")
 
@@ -255,7 +244,7 @@ def main() -> None:
                 token=token,
                 repo_id=repo_id,
                 local_folder=folder,
-                commit_message=f"Sync documents ({datetime.now(timezone.utc).date().isoformat()})",
+                commit_message=f"Sync documents ({datetime.now(UTC).date().isoformat()})",
             )
             print(f"✅ Synced documents to hf://datasets/{repo_id}")
 

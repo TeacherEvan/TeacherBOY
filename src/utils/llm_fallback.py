@@ -14,7 +14,6 @@ from typing import Any
 from src.config import settings
 from src.services.github_models_service import github_models_service
 from src.services.hermes_service import hermes_service
-from src.services.ollama_service import ollama_service
 from src.services.openrouter_service import openrouter_service
 
 logger = logging.getLogger(__name__)

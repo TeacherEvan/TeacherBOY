@@ -7,16 +7,16 @@ This script handles the one-time OAuth authorization flow for Google Calendar.
 Usage:
     1. Download OAuth client credentials from Google Cloud Console:
        https://console.cloud.google.com/apis/credentials
-       
+
     2. Save as data/google_credentials.json
-    
+
     3. Run this script:
        python scripts/setup_google_calendar.py
-       
+
     4. A browser will open for authorization
-    
+
     5. After authorization, data/google_token.json is created
-    
+
     6. Set GOOGLE_CALENDAR_ENABLED=true in your .env file
 
 Prerequisites:
@@ -24,7 +24,6 @@ Prerequisites:
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add project root to path for imports
@@ -54,6 +53,7 @@ def main():
     # Load configuration
     try:
         from src.config import settings
+
         credentials_file = settings.google_calendar_credentials_file
         token_file = settings.google_calendar_token_file
         calendar_id = settings.google_calendar_id
@@ -89,7 +89,7 @@ def main():
     if token_path.exists():
         print("⚠️  Token file already exists!")
         response = input("Re-authorize? [y/N]: ").strip().lower()
-        if response != 'y':
+        if response != "y":
             print("Keeping existing authorization.")
             return 0
         token_path.unlink()
@@ -117,7 +117,7 @@ def main():
         if not google_calendar_service.is_configured():
             google_calendar_service._credentials_path = credentials_path
             google_calendar_service._token_path = token_path
-            
+
             if not google_calendar_service.authorize_interactive():
                 print("❌ Authorization failed!")
                 return 1
@@ -142,9 +142,10 @@ def main():
     print("Testing connection...")
     try:
         import asyncio
+
         events = asyncio.run(google_calendar_service.get_upcoming_events(max_results=3))
         print(f"✅ Connection test successful! Found {len(events)} upcoming events.")
-        
+
         if events:
             print("\nUpcoming events:")
             for event in events[:3]:

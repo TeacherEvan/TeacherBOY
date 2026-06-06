@@ -27,6 +27,7 @@ class OllamaService:
 
     def _build_client(self):
         import httpx
+
         return httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout)
 
     def is_configured(self) -> bool:
@@ -41,6 +42,7 @@ class OllamaService:
         retry_on_rate_limit: bool = False,
     ) -> str | None:
         import time as _time
+
         payload: dict[str, Any] = {
             "model": model or self.default_model,
             "messages": messages,

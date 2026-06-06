@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from services.persistent_storage import get_persistent_path, is_persistent_storage_available, get_storage_subdir
+from services.persistent_storage import get_persistent_path, get_storage_subdir, is_persistent_storage_available
 
 
 def test_get_persistent_path_returns_data_dir():

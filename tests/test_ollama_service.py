@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from src.services.ollama_service import OllamaService
 
 pytestmark = pytest.mark.asyncio

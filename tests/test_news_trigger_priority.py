@@ -112,17 +112,17 @@ async def test_translation_agent_skips_news_even_with_active_session(translation
 
 
 @pytest.mark.asyncio
-async def test_translation_agent_skips_regular_thai_text_without_explicit_command(translation_agent, mock_event_group):
-    """Plain Thai should no longer auto-trigger translation after the KPS review rework."""
+async def test_translation_agent_auto_handles_thai_text(translation_agent, mock_event_group):
+    """Thai text should auto-start translation session (behavior restored Jun 2)."""
     chat_id = "group_test_group_456"
     session_manager.end_session(chat_id)
 
-    # TranslationAgent should not auto-handle plain Thai text anymore.
+    # TranslationAgent SHOULD handle plain Thai text (auto-translation enabled).
     should_handle = await translation_agent.should_handle(mock_event_group, "สวัสดี")
-    assert not should_handle, "TranslationAgent should skip regular Thai text without an explicit command"
+    assert should_handle, "TranslationAgent should handle Thai text to auto-start session"
 
     should_handle = await translation_agent.should_handle(mock_event_group, "ขอบคุณครับ")
-    assert not should_handle, "TranslationAgent should skip regular Thai text without an explicit command"
+    assert should_handle, "TranslationAgent should handle Thai text to auto-start session"
 
 
 @pytest.mark.asyncio

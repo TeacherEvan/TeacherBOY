@@ -1,6 +1,7 @@
 import json
 import sys
 from pathlib import Path
+
 from loguru import logger as _logger
 
 
@@ -19,7 +20,7 @@ class LoggingService:
             retention="7 days",
             format="{message}",
         )
-        if not getattr(LoggingService, '_stderr_handler_active', False):
+        if not getattr(LoggingService, "_stderr_handler_active", False):
             LoggingService._stderr_handler_active = True
             _logger.add(
                 sys.stderr,

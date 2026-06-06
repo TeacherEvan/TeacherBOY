@@ -27,8 +27,8 @@ Fields:
 
 If a field cannot be determined from the image, return an empty list or null where appropriate."""
 
+
 from pydantic import BaseModel, Field
-from typing import Optional
 
 
 class DebriefSchema(BaseModel):
@@ -37,7 +37,7 @@ class DebriefSchema(BaseModel):
     key_phrases_learned: list[str] = Field(default_factory=list, description="Key phrases the student practiced")
     suggested_review: list[str] = Field(default_factory=list, description="Topics to review next session")
     confidence_score: float = Field(default=0.5, ge=0.0, le=1.0, description="Overall confidence 0-1")
-    notes: Optional[str] = Field(default=None, description="Additional observations")
+    notes: str | None = Field(default=None, description="Additional observations")
 
 
 class DebriefExtractionService:
@@ -141,7 +141,9 @@ class DebriefExtractionService:
                     raw_response = (
                         structured_payload
                         if isinstance(structured_payload, str)
-                        else json.dumps(structured_payload) if isinstance(structured_payload, (dict, list)) else str(structured_payload)
+                        else json.dumps(structured_payload)
+                        if isinstance(structured_payload, (dict, list))
+                        else str(structured_payload)
                     )
                 except Exception:
                     raw_response = None

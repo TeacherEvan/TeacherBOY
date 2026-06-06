@@ -52,8 +52,24 @@ class DebriefPromptBuilder:
             .add_custom_instructions(DEBRIEF_CUSTOM_INSTRUCTIONS)
         )
 
-    def build(self) -> str:
+    def build(self, document_text: str | None = None) -> str:
         """Build the final debrief prompt."""
+        if document_text:
+            intro = (
+                "You are a teaching assistant analyzing a lesson document or journal text.\n"
+                "Extract the following fields STRICTLY as a valid JSON object. Do not include markdown formatting or explanations.\n"
+                "If a field cannot be determined from the text, return an empty list or null where appropriate.\n\n"
+                "Fields:\n"
+                '- "topics_covered": (list of strings)\n'
+                '- "comprehension_level": (string) "low", "medium", or "high"\n'
+                '- "key_phrases_learned": (list of strings)\n'
+                '- "suggested_review": (list of strings)\n'
+                '- "confidence_score": (float) 0-1\n'
+                '- "notes": (string or null)\n\n'
+                f"Document text:\n{document_text}\n"
+            )
+            return intro
+
         intro = "Analyze the image below using a structured debrief format."
         frameworks_section = "\n\n".join(self.builder._framework_content)
         instructions = self.builder._build_instructions()

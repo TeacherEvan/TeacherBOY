@@ -65,8 +65,10 @@ async def test_debrief_image_uses_debrief_prompt_builder(
     agent = ImageAnalyzerAgent()
 
     with (
-        patch("src.agents.image_analyzer_agent.settings") as mock_settings,
-        patch("src.agents.image_analyzer_agent.github_models_service") as mock_gms,
+        patch("src.utils.llm_fallback.settings") as mock_settings,
+        patch("src.utils.llm_fallback.github_models_service") as mock_gms,
+        patch("src.utils.llm_fallback.openrouter_service") as mock_ors,
+        patch("src.utils.llm_fallback.hermes_service") as mock_hermes,
         patch("src.agents.image_analyzer_agent.image_analyzer_session_manager") as mock_session,
         patch("src.agents.image_analyzer_agent.build_debrief_prompt", return_value="DEBRIEF_PROMPT") as mock_build_debrief,
         patch("src.agents.image_analyzer_agent.asyncio.to_thread"),
@@ -74,8 +76,13 @@ async def test_debrief_image_uses_debrief_prompt_builder(
         mock_settings.llm_temperature = 0.2
         mock_settings.profiler_model = "openai/gpt-4o"
         mock_settings.is_calendar_configured.return_value = False
+        mock_settings.get_llm_provider_priority.return_value = ["github"]
+        mock_hermes.is_vision_configured.return_value = False
+        mock_ors.is_configured.return_value = False
         mock_gms.is_configured.return_value = True
         mock_gms.chat_completion_with_vision = AsyncMock(return_value="debrief analysis")
+        mock_gms.get_last_error.return_value = (None, None, None)
+        mock_ors.get_last_error.return_value = (None, None, None)
         mock_session.get_image_and_question.return_value = (
             "data:image/jpeg;base64,abc",
             "What is happening here?",
