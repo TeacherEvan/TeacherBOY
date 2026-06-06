@@ -357,9 +357,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Modified: `src/services/translation_service.py`
 - Modified: `src/config.py`
 - Added: `tests/test_incomplete_sentence_detection.py`
-- Added: Documentation in `docs/INCOMPLETE_SENTENCE_FIX.md`
-- Added: Quick reference in `docs/INCOMPLETE_SENTENCE_FIX.md`
-- Added: Visual comparison (consolidated into docs; see `docs/INCOMPLETE_SENTENCE_FIX.md`)
+- Added: Documentation in `docs/guides/incomplete-sentences.md`
+- Added: Quick reference in `docs/guides/incomplete-sentences.md`
+- Added: Visual comparison (consolidated into docs; see `docs/guides/incomplete-sentences.md`)
 
 #### Impact
 

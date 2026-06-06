@@ -9,6 +9,7 @@ async def test_translate_message_uses_ai_translation_service():
     service = Mock()
     translation_result = Mock()
     translation_result.text = "สวัสดี"
+    translation_result.provider = "mock"
     service.translate = AsyncMock(
         return_value=translation_result
     )

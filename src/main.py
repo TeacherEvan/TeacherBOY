@@ -55,6 +55,8 @@ from src.services.reminder_service import reminder_service
 from src.services.message_buffer_service import message_buffer_service
 from src.services.brave_search_service import brave_search_service
 from src.services.github_models_service import github_models_service
+from src.services.nous_service import nous_inference_service
+from src.services.ai_translation_service import ai_translation_service
 from src.handlers.message_handler import (
     handle_join_event,
     handle_leave_event,
@@ -182,6 +184,7 @@ async def lifespan(app: FastAPI):
     openrouter_service.set_client(http_client_pool)
     brave_search_service.set_client(http_client_pool)
     github_models_service.set_client(http_client_pool)
+    nous_inference_service.set_client(http_client_pool)
     logger.info("✅ HTTP client pool ready with connection pooling enabled")
 
     # ========================================================================

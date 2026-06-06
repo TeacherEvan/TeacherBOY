@@ -24,8 +24,10 @@ from linebot.v3.messaging import (
 )
 
 from .base_agent import BaseAgent
-from src.services.profiler_service import profiler_service
+from src.services.hermes_service import hermes_service
+from src.services.openrouter_service import openrouter_service
 from src.services.github_models_service import github_models_service
+from src.services.profiler_service import profiler_service
 from src.services.profiler_session_manager import profiler_session_manager
 from src.services.rate_limiter import RateLimiter
 from src.services.metrics_service import metrics_service
@@ -35,6 +37,7 @@ from src.services.image_consent_service import image_consent_service
 from src.config import settings
 from src.utils.tracing import get_tracer
 from src.prompts.builders.vision_builder import VisionPromptBuilder
+from src.utils.llm_fallback import chat_completion_with_vision_fallback
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -109,9 +112,16 @@ class ProfilerAgent(BaseAgent):
         if not getattr(settings, 'profiler_enabled', True):
             return False
             
-        # Check if GitHub Models is configured (required for vision)
-        if not github_models_service.is_configured():
-            logger.debug("ProfilerAgent: GitHub Models not configured")
+        # Check if any vision provider is available
+        available = any(
+            [
+                hermes_service.is_vision_configured(),
+                openrouter_service.is_configured(),
+                github_models_service.is_configured(),
+            ]
+        )
+        if not available:
+            logger.debug("ProfilerAgent: No vision providers configured")
             return False
         
         message = getattr(event, 'message', None)
@@ -296,11 +306,11 @@ class ProfilerAgent(BaseAgent):
                     )
                     logger.info(f"📝 Using legacy monolithic prompt (analysis_type={analysis_type})")
 
-                # Get analysis from GPT-4o vision
-                logger.info(f"🔬 Sending to GPT-4o for psychological analysis...")
+                # Get analysis from vision providers with fallback
+                logger.info(f"🔬 Sending to vision model for psychological analysis...")
                 
                 model = getattr(settings, 'profiler_model', 'openai/gpt-4o')
-                analysis = await github_models_service.chat_completion_with_vision(
+                analysis = await chat_completion_with_vision_fallback(
                     messages=messages,
                     model=model,
                     temperature=0.3,  # Lower temperature for analytical tasks
@@ -314,12 +324,11 @@ class ProfilerAgent(BaseAgent):
                 del messages  # Clear vision API messages containing image
 
                 if not analysis:
-                    status_code, error, model_used = github_models_service.get_last_error()
-                    logger.error(f"❌ Vision API failed: {status_code} - {error}")
+                    logger.error("❌ Vision API failed across all providers")
                     
                     await self._send_error_message(
                         event, line_bot_api,
-                        f"Analysis failed: {error or 'Unknown error'}. Please try again later."
+                        "Analysis failed: Vision providers unavailable. Please try again later."
                     )
                     return False
 

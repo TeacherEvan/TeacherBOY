@@ -97,6 +97,18 @@ pytest tests/test_news_agent.py -v
 pytest
 ```
 
+## Language-Appropriate Headline Display
+
+When the request is triggered in Thai (`ข่าว`, `นิวส์`), the News Agent
+automatically translates English Bangkok Post headlines into Thai before
+displaying them. English triggers keep the original headlines. The flow is:
+
+- Parse Bangkok Post RSS.
+- If Thai UI requested, call the shared AI translation service.
+- Fall back gracefully to the original English text if translation fails.
+
+This is covered by tests in `tests/test_news_language_display.py`.
+
 ## Limitations
 
 - RSS-based headlines (best-effort; availability depends on feed uptime)
@@ -110,3 +122,45 @@ pytest
 - FlexMessage UI for richer display
 - Persistent session state (Redis)
 - Additional RSS feed fallback sources
+
+## Usage Examples
+
+Below are common interaction flows with the News Agent.
+
+### Thai Language Flow
+
+```text
+User: ข่าว
+
+Bot: 📰 Bangkok (อัปเดต: 12:34)
+
+🌡️ อุณหภูมิ: 32°C | 💨 PM2.5: 45 µg/m³ (ดี 🟢)
+🌧️ 5 ชม.ข้างหน้า: ไม่ (No)
+
+📅 วันหยุดถัดไป: Jan 01 - วันขึ้นปีใหม่
+📈 ดัชนี: S&P 500 4,700.00 (+0.50%) | DJIA 37,000.00 (-0.20%) | FTSE 7,500.00 (+0.10%)
+₿ Crypto: BTC $43,250.00 (+2.50%), ETH $2,300.00 (-0.10%), USDT $1.00 (+0.00%)
+💱 อัตราแลก (1 THB): USD 0.027, JPY 4.000, ZAR 0.490, AUD 0.041, GBP 0.021, RUB 2.400
+
+📰 หัวข้อข่าว (Thailand):
+1. รัฐบาลประกาศมาตรการใหม่เพื่อลดมลพิษ...
+2. กรุงเทพฯ เตรียมพร้อมรับมือฤดูฝน...
+3. ตลาดหุ้นไทยปิดบวก 15 จุด...
+4. ท่องเที่ยวไทยคาดนักท่องเที่ยวพุ่ง...
+5. การศึกษาไทยเตรียมปรับหลักสูตร...
+
+---
+
+User: 1
+
+Bot: 📰 รัฐบาลประกาศมาตรการใหม่เพื่อลดมลพิษในกรุงเทพมหานคร
+
+🔗 https://www.bangkokpost.com/...
+```
+
+### Edge Cases
+
+- **Ending the session:** User types "thanks teacherboy" or any text that doesn't match 1-5, which returns to the main menu.
+- **Invalid Input:** If the user types "abc" instead of 1-5, the bot replies: "❌ Please pick 1-5 (headlines)" and stays in the main menu step.
+- **Thai Numerals:** The bot accepts Thai numerals (e.g., ๑ for 1) naturally.
+- **Translation Priority:** While in the news flow, only 1-5 is accepted. If a user tries to translate a sentence (e.g., "ฉันต้องการข้อมูลข่าว"), the bot will reply with "❌ Please pick 1-5 (headlines)".

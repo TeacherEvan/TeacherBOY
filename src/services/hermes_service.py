@@ -1,9 +1,11 @@
-"""THIN Hermes/OpenAI-compatible fallback client.
+"""
+THIN Hermes/OpenAI-compatible fallback client.
 
 Toggle via env/config:
 - HERMES_API_KEY
 - HERMES_BASE_URL
 - HERMES_MODEL
+- HERMES_VISION_MODEL
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ class HermesService:
         self.api_key = ""
         self.base_url = ""
         self.model = ""
+        self.vision_model = ""
         self._client: Optional[httpx.AsyncClient] = None
 
     @property
@@ -33,19 +36,24 @@ class HermesService:
     def is_configured(self) -> bool:
         return bool(self.api_key and self.chat_url and self.model)
 
+    def is_vision_configured(self) -> bool:
+        return bool(self.api_key and self.chat_url and (self.vision_model or self.model))
+
     def set_client(self, client: Optional[httpx.AsyncClient]) -> None:
         self._client = client
 
     def configure(
         self,
         *,
-        api_key: Optional[str],
-        base_url: Optional[str],
-        model: Optional[str],
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        model: Optional[str] = None,
+        vision_model: Optional[str] = None,
     ) -> None:
         self.api_key = (api_key or "").strip()
         self.base_url = (base_url or "").strip()
         self.model = (model or "").strip()
+        self.vision_model = (vision_model or "").strip()
         if not self.is_configured():
             logger.warning("Hermes fallback config is incomplete")
 
@@ -101,6 +109,64 @@ class HermesService:
             return None
         except Exception as exc:  # pragma: no cover
             logger.warning("Hermes fallback request failed: %s", exc)
+            return None
+        finally:
+            if should_close:
+                await client.aclose()
+
+    async def chat_completion_with_vision(
+        self,
+        messages: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+    ) -> Optional[str]:
+        if not (self.api_key and self.chat_url and (self.vision_model or self.model)):
+            logger.warning("Hermes vision is not configured")
+            return None
+
+        target_model = model or self.vision_model or self.model or ""
+        if not target_model:
+            return None
+
+        client = self._client or httpx.AsyncClient(timeout=45.0)
+        should_close = self._client is None
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload: Dict[str, Any] = {
+            "model": target_model,
+            "messages": messages,
+            "temperature": temperature,
+        }
+        if max_tokens:
+            payload["max_tokens"] = max_tokens
+
+        try:
+            response = await client.post(
+                self.chat_url,
+                headers=headers,
+                json=payload,
+            )
+            if response.status_code != 200:
+                logger.warning(
+                    "Hermes vision error %s: %s",
+                    response.status_code,
+                    response.text[:220],
+                )
+                return None
+            data = response.json()
+            content = (
+                data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content")
+            )
+            if isinstance(content, str) and content.strip():
+                return content
+            return None
+        except Exception as exc:  # pragma: no cover
+            logger.warning("Hermes vision request failed: %s", exc)
             return None
         finally:
             if should_close:

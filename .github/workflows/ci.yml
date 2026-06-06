@@ -85,16 +85,12 @@ jobs:
           echo "EOF"
         } >> "${GITHUB_OUTPUT}"
 
-    - name: Check code formatting with Black
+    - name: Lint and format check with Ruff
       if: steps.changed-python.outputs.files != ''
       run: |
-        printf '%s\n' "${{ steps.changed-python.outputs.files }}" | xargs black --check
-    
-    - name: Lint with flake8
-      if: steps.changed-python.outputs.files != ''
-      run: |
-        printf '%s\n' "${{ steps.changed-python.outputs.files }}" | xargs flake8 --count --select=E9,F63,F7,F82 --show-source --statistics
-        printf '%s\n' "${{ steps.changed-python.outputs.files }}" | xargs flake8 --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        pip install ruff
+        ruff check src/ tests/
+        ruff format --check src/ tests/
 
   test:
     name: Run Tests
