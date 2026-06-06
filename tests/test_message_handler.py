@@ -91,3 +91,23 @@ class TestMessageHandler:
 
             # Verify session was auto-started
             mock_session.start_session.assert_called_once_with("test_user_123", "test_user_123")
+
+    @pytest.mark.asyncio
+    async def test_short_thai_still_translates(self, mock_event, mock_line_bot_api):
+        from src.handlers.message_handler import handle_text_message
+
+        with (
+            patch("src.handlers.message_handler.session_manager") as mock_session,
+            patch("src.handlers.message_handler.ai_translation_service") as mock_ai_translation_service,
+            patch("asyncio.to_thread") as mock_to_thread,
+        ):
+            mock_session.is_session_active.return_value = True
+            mock_ai_translation_service.translate = AsyncMock(return_value=MagicMock(text="Hello"))
+            mock_to_thread.return_value = None
+
+            await handle_text_message(mock_event, mock_line_bot_api)
+
+            assert mock_ai_translation_service.translate.call_count == 1
+            assert mock_ai_translation_service.translate.await_args[0] == ("สวัสดี",)
+            assert mock_ai_translation_service.translate.await_args[1]["source_lang"] == "th"
+            assert mock_ai_translation_service.translate.await_args[1]["target_lang"] == "en"
