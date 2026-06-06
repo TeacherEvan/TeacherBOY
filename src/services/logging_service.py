@@ -9,6 +9,7 @@ class LoggingService:
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.log_file = self.log_dir / log_file
+        self._stderr_handler_active = False
 
         _logger.remove()
         _logger.add(
@@ -18,29 +19,30 @@ class LoggingService:
             retention="7 days",
             format="{message}",
         )
-        _logger.add(
-            sys.stderr,
-            level="INFO",
-            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level} | {message}",
-        )
+        if not getattr(LoggingService, '_stderr_handler_active', False):
+            LoggingService._stderr_handler_active = True
+            _logger.add(
+                sys.stderr,
+                level="INFO",
+                format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level} | {message}",
+                colorize=True,
+            )
+
+    @staticmethod
+    def _build_payload(level: str, message: str, extra: dict | None = None) -> str:
+        payload: dict[str, object] = {"level": level, "message": message}
+        if extra:
+            payload["extra"] = extra
+        return json.dumps(payload, ensure_ascii=False)
 
     def info(self, message: str, extra: dict | None = None) -> None:
-        if extra:
-            _logger.bind(**extra).info(json.dumps({"level": "INFO", "message": message}, ensure_ascii=False))
-        else:
-            _logger.info(json.dumps({"level": "INFO", "message": message}, ensure_ascii=False))
+        _logger.info(self._build_payload("INFO", message, extra))
 
     def warning(self, message: str, extra: dict | None = None) -> None:
-        if extra:
-            _logger.bind(**extra).warning(json.dumps({"level": "WARNING", "message": message}, ensure_ascii=False))
-        else:
-            _logger.warning(json.dumps({"level": "WARNING", "message": message}, ensure_ascii=False))
+        _logger.warning(self._build_payload("WARNING", message, extra))
 
     def error(self, message: str, extra: dict | None = None) -> None:
-        if extra:
-            _logger.bind(**extra).error(json.dumps({"level": "ERROR", "message": message}, ensure_ascii=False))
-        else:
-            _logger.error(json.dumps({"level": "ERROR", "message": message}, ensure_ascii=False))
+        _logger.error(self._build_payload("ERROR", message, extra))
 
 
 logging_service = LoggingService()
