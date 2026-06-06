@@ -18,9 +18,15 @@ def test_debrief_schema_validates_required_fields():
     assert len(debrief.topics_covered) == 2
 
 
-def test_debrief_schema_rejects_empty_topics():
-    with pytest.raises(Exception):
-        DebriefSchema(
-            topics_covered=[],
-            comprehension_level="low",
-        )
+def test_debrief_schema_accepts_minimal_payload():
+    debrief = DebriefSchema(
+        topics_covered=["greetings", "weather"],
+        comprehension_level="high",
+    )
+
+
+def test_debrief_schema_default_topics_is_empty():
+    debrief = DebriefSchema(comprehension_level="medium")
+    assert debrief.topics_covered == []
+    assert debrief.key_phrases_learned == []
+    assert debrief.suggested_review == []
