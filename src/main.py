@@ -39,6 +39,8 @@ from linebot.v3.webhooks import (
 
 from src.agents.agent_router import AgentRouter
 from src.config import settings
+from src.services.logging_service import logging_service
+from src.services.persistent_storage import is_persistent_storage_available
 from src.handlers.message_handler import (
     handle_join_event,
     handle_leave_event,
@@ -147,8 +149,16 @@ async def lifespan(app: FastAPI):
     - Agent registration
     - Scheduler configuration
     - Graceful shutdown
+    - Observability initialization
     """
     global bot_user_id
+
+    logging_service.info("🚀 TeacherBOY starting up")
+
+    if is_persistent_storage_available():
+        logging_service.info("💾 Persistent HF storage detected at /data", extra={"path": "/data"})
+    else:
+        logging_service.info("⚠️ Persistent HF storage unavailable; using local ./data fallback", extra={"path": "./data"})
 
     logger.info("=" * 80)
     logger.info(f"🚀 {_service_display_name()} Multi-Agent System - Starting Up")
