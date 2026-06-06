@@ -182,7 +182,7 @@ class Settings(BaseSettings):
         description="OpenRouter API key for LLM access",
     )
     openrouter_default_model: str = Field(
-        default="qwen/qwen3-coder:free",
+        default="nvidia/nemotron-3-ultra-550b-a55b:free",
         description="Default model to use for OpenRouter (must be a free model)",
         validation_alias=AliasChoices("OPENROUTER_DEFAULT_MODEL", "DEFAULT_MODEL"),
     )
