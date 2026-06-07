@@ -21,6 +21,7 @@ class DebriefFormatter:
         # Try to parse and format date nicely
         try:
             from datetime import datetime
+
             dt = datetime.strptime(date_str, "%Y-%m-%d")
             formatted_date = dt.strftime("%A, %B %d, %Y")
         except Exception:
@@ -57,7 +58,9 @@ class DebriefFormatter:
         lines.append("")
 
         # Opening warmth
-        lines.append(f"On this wonderful {day_name}, our students embarked on a beautiful journey of learning and discovery! 🌈")
+        lines.append(
+            f"On this wonderful {day_name}, our students embarked on a beautiful journey of learning and discovery! 🌈"
+        )
         lines.append("")
 
         # Process each period
@@ -89,7 +92,9 @@ class DebriefFormatter:
                 lines.append(f"🗣️ Key words practiced: {phrases_str}")
 
             # Comprehension
-            comp_emoji = "🌟" if period.comprehension_level == "high" else "🌱" if period.comprehension_level == "medium" else "🌿"
+            comp_emoji = (
+                "🌟" if period.comprehension_level == "high" else "🌱" if period.comprehension_level == "medium" else "🌿"
+            )
             if period.comprehension_level == "high":
                 comp_text = f"{comp_emoji} Comprehension: *{period.comprehension_level.title()}* - All students participated actively and grasped concepts beautifully!"
             elif period.comprehension_level == "medium":
@@ -165,8 +170,7 @@ class DebriefFormatter:
         """Formats multiple sessions into a cohesive weekly summary."""
         if not sessions:
             return (
-                "📅 *Weekly Journal Summary*\n\n"
-                "No journal entries were recorded this week. Everyone had a restful break! 🌿"
+                "📅 *Weekly Journal Summary*\n\nNo journal entries were recorded this week. Everyone had a restful break! 🌿"
             )
 
         header = f"📅 *Weekly Journal Summary: {week_range}* ✨\n\n"

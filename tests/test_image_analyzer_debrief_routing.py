@@ -13,7 +13,7 @@ def mock_trigger_event():
     event.reply_token = "test_reply_token"
     event.source = MagicMock(spec=Source)
     event.source.user_id = "user123"
-    event.source.group_id = None
+    event.source.group_id = "group_123"
     event.source.room_id = None
     message = MagicMock(spec=TextMessageContent)
     message.type = "text"
@@ -28,7 +28,7 @@ def mock_image_event():
     event.reply_token = "test_reply_token"
     event.source = MagicMock(spec=Source)
     event.source.user_id = "user123"
-    event.source.group_id = None
+    event.source.group_id = "group_123"
     event.source.room_id = None
     message = MagicMock(spec=ImageMessageContent)
     message.type = "image"
@@ -55,44 +55,61 @@ async def test_debrief_trigger_is_recognized(mock_trigger_event):
 
 
 @pytest.mark.asyncio
-async def test_debrief_image_uses_debrief_prompt_builder(
+async def test_debrief_image_uses_debrief_extraction_service(
     mock_trigger_event,
     mock_image_event,
     mock_line_bot_api,
 ):
+    """Test that debrief mode uses DebriefExtractionService and DebriefFormatter."""
     from src.agents.image_analyzer_agent import ImageAnalyzerAgent
+    from src.services.debrief_extraction_service import DailyDebriefSchema, PeriodDebriefSchema
 
     agent = ImageAnalyzerAgent()
 
+    # Create a mock daily debrief schema
+    mock_debrief = DailyDebriefSchema(
+        date="2026-01-15",
+        day_name="Thursday",
+        periods=[
+            PeriodDebriefSchema(
+                period="Period 1",
+                subject="Science",
+                teacher="Teacher Evan",
+                lesson="Photosynthesis",
+                topics_covered=["plants", "light"],
+                comprehension_level="high",
+                key_phrases_learned=["photosynthesis", "chlorophyll"],
+                suggested_review=["review plant cells"],
+                observations="Students engaged well",
+            )
+        ],
+        general_observations="Good day overall",
+        confidence_score=0.9,
+        notes=None,
+    )
+
+    # Create a mock to_thread that actually executes the function
+    async def mock_to_thread(func, *args, **kwargs):
+        return await func(*args, **kwargs) if hasattr(func, "__await__") else func(*args, **kwargs)
+
     with (
-        patch("src.utils.llm_fallback.settings") as mock_settings,
-        patch("src.utils.llm_fallback.github_models_service") as mock_gms,
-        patch("src.utils.llm_fallback.openrouter_service") as mock_ors,
-        patch("src.utils.llm_fallback.hermes_service") as mock_hermes,
+        patch("src.agents.image_analyzer_agent._debrief_extraction_service") as mock_debrief_service,
+        patch("src.agents.image_analyzer_agent.DebriefFormatter") as mock_formatter,
         patch("src.agents.image_analyzer_agent.image_analyzer_session_manager") as mock_session,
-        patch("src.agents.image_analyzer_agent.build_debrief_prompt", return_value="DEBRIEF_PROMPT") as mock_build_debrief,
-        patch("src.agents.image_analyzer_agent.asyncio.to_thread"),
+        patch("src.agents.image_analyzer_agent.asyncio.to_thread", new=mock_to_thread),
+        patch("src.agents.image_analyzer_agent.datetime") as mock_datetime,
     ):
-        mock_settings.llm_temperature = 0.2
-        mock_settings.profiler_model = "openai/gpt-4o"
-        mock_settings.is_calendar_configured.return_value = False
-        mock_settings.get_llm_provider_priority.return_value = ["github"]
-        mock_hermes.is_vision_configured.return_value = False
-        mock_ors.is_configured.return_value = False
-        mock_gms.is_configured.return_value = True
-        mock_gms.chat_completion_with_vision = AsyncMock(return_value="debrief analysis")
-        mock_gms.get_last_error.return_value = (None, None, None)
-        mock_ors.get_last_error.return_value = (None, None, None)
+        mock_datetime.now.return_value.strftime.return_value = "2026-01-15"
         mock_session.get_image_and_question.return_value = (
             "data:image/jpeg;base64,abc",
             "What is happening here?",
             "debrief",
         )
+        mock_debrief_service.extract_from_image = AsyncMock(return_value=mock_debrief)
+        mock_formatter.format_daily_debrief.return_value = "FORMATTED DEBRIEF"
 
         agent._send_analyzing_message = AsyncMock()
         agent._send_error_message = AsyncMock()
-        agent._format_response = lambda analysis: analysis
-        agent._extract_dates_from_analysis = lambda analysis: []
 
         await agent._handle_question(
             mock_trigger_event,
@@ -103,5 +120,13 @@ async def test_debrief_image_uses_debrief_prompt_builder(
             MagicMock(),
         )
 
-        mock_build_debrief.assert_called_once()
-        assert mock_gms.chat_completion_with_vision.await_count == 1
+        # Verify DebriefExtractionService was called
+        mock_debrief_service.extract_from_image.assert_awaited_once_with(
+            image_url_or_base64="data:image/jpeg;base64,abc",
+            chat_id="group_123",
+            date_str="2026-01-15",
+        )
+        # Verify DebriefFormatter was called
+        mock_formatter.format_daily_debrief.assert_called_once_with(mock_debrief)
+        # Verify push_message was called with formatted debrief
+        mock_line_bot_api.push_message.assert_called_once()

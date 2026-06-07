@@ -42,6 +42,7 @@ Fields for the DAILY debrief:
 If a field cannot be determined from the image, return an empty list or null where appropriate.
 For periods array, include all periods visible in the journal."""
 
+
 class DebriefSchema(BaseModel):
     topics_covered: list[str] = Field(default_factory=list, description="List of topics covered in the lesson")
     comprehension_level: str = Field(description="low, medium, or high")
@@ -53,6 +54,7 @@ class DebriefSchema(BaseModel):
 
 class PeriodDebriefSchema(BaseModel):
     """Single period/session within a day journal."""
+
     period: str = Field(description="Period identifier (e.g., 'Period 1', 'Morning Session')")
     subject: str = Field(description="Subject name (e.g., 'Science', 'English')")
     teacher: str = Field(description="Teacher name")
@@ -66,6 +68,7 @@ class PeriodDebriefSchema(BaseModel):
 
 class DailyDebriefSchema(BaseModel):
     """Full day debrief with multiple periods."""
+
     date: str = Field(description="Date in YYYY-MM-DD format")
     day_name: str = Field(description="Day name (e.g., 'Friday')")
     periods: list[PeriodDebriefSchema] = Field(default_factory=list, description="List of periods/sessions")
@@ -153,6 +156,7 @@ class DebriefExtractionService:
 
         # 3. Final fallback - return an empty daily schema
         from datetime import datetime
+
         try:
             dt = datetime.strptime(date_str, "%Y-%m-%d")
             day_name = dt.strftime("%A")
