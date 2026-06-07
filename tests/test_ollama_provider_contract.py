@@ -4,8 +4,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import src.services.github_models_service as github_models_service_mod
-import src.services.openrouter_service as openrouter_service_mod
 import src.utils.llm_fallback as lf
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from services.debrief_extraction_service import DailyDebriefSchema, PeriodDebriefSchema, DebriefExtractionService
+from services.debrief_extraction_service import DailyDebriefSchema, PeriodDebriefSchema
 from services.debrief_formatter import DebriefFormatter
 
 

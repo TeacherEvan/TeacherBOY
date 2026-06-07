@@ -5,9 +5,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from unittest.mock import AsyncMock, patch
+
 import pytest
 
-from services.debrief_extraction_service import DebriefExtractionService, DebriefSchema, DailyDebriefSchema, PeriodDebriefSchema
+from services.debrief_extraction_service import (
+    DailyDebriefSchema,
+    DebriefExtractionService,
+    PeriodDebriefSchema,
+)
 
 
 @pytest.fixture
