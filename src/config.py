@@ -163,13 +163,29 @@ class Settings(BaseSettings):
     )
 
     # ============================================================================
+    # HuggingFace Inference API Configuration (Vision AI)
+    # ============================================================================
+    hf_inference_api_key: str | None = Field(
+        default=None,
+        description=(
+            "Hugging Face Inference API token for vision models. "
+            "Create at https://huggingface.co/settings/tokens with 'read' scope."
+        ),
+    )
+    hf_inference_vision_model: str = Field(
+        default="meta/llama-3.2-90b-vision-instruct",
+        description="HF Inference API model for vision tasks. Must support multimodal input.",
+        validation_alias=AliasChoices("HF_INFERENCE_VISION_MODEL"),
+    )
+
+    # ============================================================================
     # Fallback / provider priority Configuration (LLM)
     # ============================================================================
     llm_fallback_provider_priority: str = Field(
-        default="hermes,openrouter,github",
+        default="hermes,openrouter,hf_inference,github",
         description=(
             "Comma-separated priority list for LLM providers and fallback chain. "
-            "Options: hermes, openrouter, github. First configured provider is used; "
+            "Options: hermes, openrouter, hf_inference, github, ollama. First configured provider is used; "
             "if that fails, the next configured provider is tried."
         ),
     )
@@ -190,9 +206,9 @@ class Settings(BaseSettings):
         default=None,
         description="Optional OpenRouter model override for translation fallback only",
     )
-    openrouter_vision_model: str | None = Field(
-        default=None,
-        description="Optional OpenRouter model override for vision/image analysis tasks. Must support multimodal input.",
+    openrouter_vision_model: str = Field(
+        default="google/gemini-flash-1.5",
+        description="OpenRouter model for vision/image analysis tasks. Must support multimodal input.",
         validation_alias=AliasChoices("OPENROUTER_VISION_MODEL"),
     )
 
@@ -760,6 +776,10 @@ class Settings(BaseSettings):
             and (self.hermes_api_key or "").strip()
             and len((self.hermes_api_key or "").strip()) > 10
         )
+
+    def is_hf_inference_configured(self) -> bool:
+        """Check if HuggingFace Inference API is properly configured."""
+        return bool(self.hf_inference_api_key and len(self.hf_inference_api_key) > 10)
 
     def get_fallback_llm_providers(self) -> list[str]:
         """

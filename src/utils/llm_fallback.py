@@ -14,6 +14,7 @@ from typing import Any
 from src.config import settings
 from src.services.github_models_service import github_models_service
 from src.services.hermes_service import hermes_service
+from src.services.hf_inference_service import hf_inference_service
 from src.services.openrouter_service import openrouter_service
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ async def _run_one_vision_provider(
     wrapper = {
         "hermes": lambda: hermes_service.is_vision_configured(),
         "openrouter": lambda: openrouter_service.is_configured(),
+        "hf_inference": lambda: hf_inference_service.is_configured(),
         "github": lambda: github_models_service.is_configured(),
     }.get(provider)
 
@@ -52,6 +54,14 @@ async def _run_one_vision_provider(
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
+            )
+        if provider == "hf_inference":
+            return await hf_inference_service.chat_completion_with_vision(
+                messages=messages,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                retry_on_rate_limit=False,
             )
         if provider == "github":
             return await github_models_service.chat_completion_with_vision(

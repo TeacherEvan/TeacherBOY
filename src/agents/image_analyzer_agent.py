@@ -1398,21 +1398,27 @@ class ImageAnalyzerAgent(BaseAgent):
             return None
 
     async def _send_analyzing_message(self, event: MessageEvent, line_bot_api: MessagingApi):
-        """Send a message indicating analysis is in progress."""
+        """Send a message indicating analysis is in progress using push_message to avoid reply_token expiry."""
         msg = TextMessage(
             text="🔍 Examining thy image... One moment.\n\nกำลังวิเคราะห์ภาพ... กรุณารอสักครู่",
             quickReply=None,
             quoteToken=None,
         )
 
-        if event.reply_token:
+        user_id = getattr(event.source, "user_id", None) if event.source else None
+        group_id = getattr(event.source, "group_id", None) if event.source else None
+        room_id = getattr(event.source, "room_id", None) if event.source else None
+        target = group_id or room_id or user_id
+
+        if target:
             try:
                 await asyncio.to_thread(
-                    line_bot_api.reply_message,
-                    ReplyMessageRequest(
-                        replyToken=event.reply_token,
+                    line_bot_api.push_message,
+                    PushMessageRequest(
+                        to=target,
                         messages=[msg],
                         notificationDisabled=False,
+                        customAggregationUnits=None,
                     ),
                 )
             except Exception as e:
