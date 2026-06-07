@@ -3,8 +3,9 @@
 import asyncio
 import logging
 import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import httpx
 from linebot.v3.messaging import (
@@ -797,7 +798,7 @@ class AdminAgent(BaseAgent):
         self,
         action: str,
         line_bot_api: MessagingApi,
-        payload: dict[str, object],
+        payload: Mapping[str, Any],
     ) -> str:
         if action == "leave":
             kind = str(payload.get("kind"))
@@ -948,7 +949,7 @@ class AdminAgent(BaseAgent):
         # SECTION 6: Cache Performance
         # ====================================================================
         total_cache_ops = snap.cache_hits_total + snap.cache_misses_total
-        hit_rate = 0
+        hit_rate: float = 0.0
         cache_quality_emoji = "⚪"
         cache_quality_color = "#9CA3AF"
 

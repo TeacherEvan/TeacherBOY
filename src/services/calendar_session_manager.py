@@ -908,6 +908,111 @@ class CalendarSessionManager:
         logger.info(f"📅 Found {len(events)} events in scrape for chat {chat_id}")
         return session
 
+    def get_current_scraped_event(self, chat_id: str) -> dict[str, Any] | None:
+        """
+        Get the current scraped event being reviewed.
+
+        Returns:
+            Current event dict or None
+        """
+        session = self.get_session(chat_id)
+        if not session or session.state not in (
+            CalendarState.SCRAPE_SELECTING,
+            CalendarState.SCRAPE_REMINDER_DAYS,
+        ):
+            return None
+        if session.current_scrape_index >= len(session.scraped_events):
+            return None
+        return session.scraped_events[session.current_scrape_index]
+
+    def accept_scraped_event(self, chat_id: str) -> CalendarSession | None:
+        """
+        Accept the current scraped event and move to reminder days state.
+
+        Returns:
+            Updated session or None
+        """
+        session = self.get_session(chat_id)
+        if not session or session.state != CalendarState.SCRAPE_SELECTING:
+            return None
+        session.state = CalendarState.SCRAPE_REMINDER_DAYS
+        session.update()
+        return session
+
+    def skip_scraped_event(self, chat_id: str) -> bool:
+        """
+        Skip the current scraped event and return True if more remain.
+
+        Returns:
+            True if there are more events, False if done
+        """
+        session = self.get_session(chat_id)
+        if not session or session.state not in (
+            CalendarState.SCRAPE_SELECTING,
+            CalendarState.SCRAPE_REMINDER_DAYS,
+        ):
+            return False
+        session.current_scrape_index += 1
+        session.state = CalendarState.SCRAPE_SELECTING
+        session.update()
+        return session.current_scrape_index < len(session.scraped_events)
+
+    def get_scrape_progress(self, chat_id: str) -> tuple[int, int]:
+        """
+        Get the current scrape progress as (current, total).
+
+        Returns:
+            Tuple of (current_index_1_based, total_events)
+        """
+        session = self.get_session(chat_id)
+        if not session:
+            return (0, 0)
+        current = min(session.current_scrape_index + 1, len(session.scraped_events))
+        total = len(session.scraped_events)
+        return (current, total)
+
+    def set_scrape_reminder_days(self, chat_id: str, reminder_days: list[int]) -> dict[str, Any] | None:
+        """
+        Set reminder days for the current scraped event.
+
+        Returns:
+            Dict with full event data ready for creation
+        """
+        session = self.get_session(chat_id)
+        if not session or session.state != CalendarState.SCRAPE_REMINDER_DAYS:
+            return None
+
+        current = self.get_current_scraped_event(chat_id)
+        if not current:
+            return None
+
+        # Always include day-of
+        if 0 not in reminder_days:
+            reminder_days.append(0)
+
+        return {
+            "date": current.get("date"),
+            "title": current.get("title", "Event"),
+            "description": current.get("description", ""),
+            "reminder_days": reminder_days,
+            "is_friend": session.pending_is_friend,
+        }
+
+    def advance_scrape_index(self, chat_id: str) -> bool:
+        """
+        Advance to the next scraped event.
+
+        Returns:
+            True if there are more events, False if done
+        """
+        session = self.get_session(chat_id)
+        if not session or session.state != CalendarState.SCRAPE_REMINDER_DAYS:
+            return False
+        session.current_scrape_index += 1
+        session.state = CalendarState.SCRAPE_SELECTING
+        session.update()
+        return session.current_scrape_index < len(session.scraped_events)
+
     def apply_scrape_selection(
         self,
         chat_id: str,

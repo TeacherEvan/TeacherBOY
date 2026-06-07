@@ -352,12 +352,12 @@ class TranslationAgent(BaseAgent):
 
         metrics_service.record_failed_translation()
         provider_errors = []
-        for provider_name, provider_obj, _, _, _ in [
-            ("nous", self.ai_translation_service.nous),
-            ("github_models", self.ai_translation_service.github_models),
-            ("openrouter", self.ai_translation_service.openrouter),
-            ("libretranslate", self.ai_translation_service.libre_translate),
-            ("hermes", self.ai_translation_service.hermes),
+        for provider_name, provider_obj, _, _ in [
+            ("nous", self.ai_translation_service.nous, None, None),
+            ("github_models", self.ai_translation_service.github_models, None, None),
+            ("openrouter", self.ai_translation_service.openrouter, None, None),
+            ("libretranslate", self.ai_translation_service.libre_translate, None, None),
+            ("hermes", self.ai_translation_service.hermes, None, None),
         ]:
             if not provider_obj.is_configured():
                 continue

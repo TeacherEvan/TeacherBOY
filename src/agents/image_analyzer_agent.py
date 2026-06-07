@@ -970,7 +970,7 @@ class ImageAnalyzerAgent(BaseAgent):
                 continue
             if detail and detail[1]:
                 return detail
-        return None
+        return (None, None, None)
 
     def _format_response(self, analysis: str) -> str:
         """Format the analysis response for LINE (strip date detection section)."""
@@ -1259,6 +1259,9 @@ class ImageAnalyzerAgent(BaseAgent):
                     return True
 
                 # Start the extraction flow with detected dates
+                if not user_id:
+                    logger.error("Cannot start extraction flow: user_id is None")
+                    return True
                 await calendar_agent.start_extraction_flow_from_image(
                     chat_id=chat_id,
                     user_id=user_id,

@@ -195,7 +195,7 @@ class ConversationMemoryService:
             return []
 
         total_tokens = 0
-        trimmed = []
+        trimmed: list[dict[str, str]] = []
 
         # Process in reverse (most recent first)
         for msg in reversed(messages):

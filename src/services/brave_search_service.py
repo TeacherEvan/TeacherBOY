@@ -53,11 +53,11 @@ class BraveSearchService:
             return []
 
         try:
-            headers = {
-                "X-Subscription-Token": self.api_key,
+            headers: dict[str, str] = {
+                "X-Subscription-Token": self.api_key or "",
                 "Accept": "application/json",
             }
-            params = {
+            params: dict[str, str | int] = {
                 "q": query,
                 "count": min(count, 20),
                 "safesearch": "moderate",

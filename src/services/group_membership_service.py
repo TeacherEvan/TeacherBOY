@@ -2,7 +2,6 @@
 
 import json
 import logging
-from pathlib import Path
 from typing import Any
 
 from src.services.persistent_storage import get_storage_subdir

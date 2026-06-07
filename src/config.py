@@ -807,6 +807,22 @@ class Settings(BaseSettings):
             return []
         return [uid.strip() for uid in self.moderator_user_ids.split(",") if uid.strip()]
 
+    def get_named_user_ids(self) -> dict[str, str]:
+        """
+        Get mapping of alias -> LINE user ID from USER_<ALIAS> environment variables.
+
+        Returns:
+            Dict mapping alias (lowercase) to LINE user ID.
+        """
+        import os
+
+        result: dict[str, str] = {}
+        for key, value in os.environ.items():
+            if key.startswith("USER_") and value:
+                alias = key[5:].lower()  # Remove "USER_" prefix
+                result[alias] = value.strip()
+        return result
+
     def get_bot_identity_default_aliases(self) -> list[str]:
         """Return configured default bot aliases as a normalized list."""
         raw = (self.bot_identity_default_aliases or "").strip()

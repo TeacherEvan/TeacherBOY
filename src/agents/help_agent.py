@@ -391,7 +391,7 @@ class HelpAgent(BaseAgent):
             "margin": "md",
         }
 
-        command_contents = []
+        command_contents: list[dict[str, Any]] = []
         for cmd in commands:
             cmd_box_contents = [
                 {
@@ -430,7 +430,7 @@ class HelpAgent(BaseAgent):
 
             command_contents.append({"type": "box", "layout": "vertical", "contents": cmd_box_contents, "margin": "sm"})
 
-        category_box["contents"].extend(command_contents)
+        category_box["contents"].extend(command_contents)  # type: ignore[attr-defined]
         return category_box
 
     def _create_help_cards(
@@ -558,7 +558,7 @@ class HelpAgent(BaseAgent):
                     tip_contents.append(
                         {"type": "text", "text": tip, "size": "xs", "color": "#92400E", "wrap": True, "margin": "xs"}
                     )
-                tips_box["contents"].extend(tip_contents)
+                tips_box["contents"].extend(tip_contents)  # type: ignore[attr-defined]
                 body_contents.append(tips_box)
 
             body_contents.append(

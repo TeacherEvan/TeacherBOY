@@ -709,12 +709,12 @@ class NewsDataService:
                 open_raw = row.get("Open")
 
                 try:
-                    close_val = float(close_raw) if close_raw not in (None, "", "N/A") else None
+                    close_val = float(str(close_raw)) if close_raw not in (None, "", "N/A") else None
                 except ValueError:
                     close_val = None
 
                 try:
-                    open_val = float(open_raw) if open_raw not in (None, "", "N/A") else None
+                    open_val = float(str(open_raw)) if open_raw not in (None, "", "N/A") else None
                 except ValueError:
                     open_val = None
 

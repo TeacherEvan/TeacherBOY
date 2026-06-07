@@ -54,6 +54,7 @@ from src.services.conversation_memory_service import (
     init_conversation_memory,
 )
 from src.services.document_memory_service import (
+    DocumentMemoryService,
     get_document_memory,
     init_document_memory,
 )
@@ -393,9 +394,9 @@ async def lifespan(app: FastAPI):
 
     # Register Document Memory Agent (Priority: 8 - Handles PDF/DOCX uploads)
     if settings.document_memory_enabled:
-        document_service = get_document_memory()
-        if document_service:
-            document_agent = DocumentMemoryAgent(document_service=document_service)
+        document_service_opt: DocumentMemoryService | None = get_document_memory()
+        if document_service_opt is not None:
+            document_agent = DocumentMemoryAgent(document_service=document_service_opt)
             agent_router.register_agent(document_agent)
             logger.info("📄 Document Memory Agent registered (PDF/DOCX storage)")
         else:
