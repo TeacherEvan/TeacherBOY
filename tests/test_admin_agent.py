@@ -376,6 +376,26 @@ class TestAdminAgent:
             mock_line_bot_api.reply_message.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_handle_groups_command(self, admin_agent, mock_event, mock_line_bot_api):
+        """Test /admin groups command."""
+        with patch("src.services.group_membership_service.group_membership_service") as mock_group_mgr:
+            mock_group_mgr.get_groups_list.return_value = [
+                {"chat_id": "C123", "type": "group", "title": "Test Group"},
+                {"chat_id": "R456", "type": "room", "title": "Test Room"},
+            ]
+            mock_group_mgr.get_count.return_value = (1, 1)
+
+            result = await admin_agent.handle(mock_event, "/admin groups", mock_line_bot_api)
+
+            assert result is True
+            mock_line_bot_api.reply_message.assert_called_once()
+            message = _reply_message(mock_line_bot_api)
+            assert "Test Group" in message.text
+            assert "Test Room" in message.text
+            assert "group_C123" in message.text
+            assert "room_R456" in message.text
+
+    @pytest.mark.asyncio
     async def test_dashboard_in_private_chat_returns_flex_message(self, admin_agent, mock_event, mock_line_bot_api):
         ok = await admin_agent.handle(mock_event, "/admin dashboard", mock_line_bot_api)
 

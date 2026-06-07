@@ -24,9 +24,9 @@ def contains_thai(text: str) -> bool:
 
 
 def is_sleep_command(text: str) -> bool:
-    """Check if text is a sleep command (amen)."""
+    """Check if text is a sleep command (Thanks Ms Green!)."""
     text_lower = text.lower().strip()
-    sleep_pattern = r"^amen[\s.!]*$"
+    sleep_pattern = r"^thanks ms green[\s.!]*$"
     return bool(re.search(sleep_pattern, text_lower))
 
 
@@ -174,14 +174,18 @@ async def handle_join_event(event, line_bot_api: MessagingApi):
         event: LINE join event
         line_bot_api: MessagingApi instance (v3)
     """
+    from src.services.group_membership_service import group_membership_service
+
     source_type = event.source.type
 
     if source_type == "group":
         chat_id = event.source.group_id
         logger.info(f"Bot joined group: {chat_id}")
+        group_membership_service.add_group(chat_id, "group")
     elif source_type == "room":
         chat_id = event.source.room_id
         logger.info(f"Bot joined room: {chat_id}")
+        group_membership_service.add_group(chat_id, "room")
     else:
         chat_id = "unknown"
         logger.info(f"Bot joined unknown chat type: {source_type}")
@@ -192,11 +196,17 @@ async def handle_join_event(event, line_bot_api: MessagingApi):
 
 async def handle_leave_event(event, line_bot_api: MessagingApi):
     """Handle bot leaving a group."""
+    from src.services.group_membership_service import group_membership_service
+
     source_type = event.source.type
     if source_type == "group":
-        logger.info(f"Bot left group: {event.source.group_id}")
+        chat_id = event.source.group_id
+        logger.info(f"Bot left group: {chat_id}")
+        group_membership_service.remove_group(chat_id)
     elif source_type == "room":
-        logger.info(f"Bot left room: {event.source.room_id}")
+        chat_id = event.source.room_id
+        logger.info(f"Bot left room: {chat_id}")
+        group_membership_service.remove_group(chat_id)
 
 
 async def handle_member_joined_event(event, line_bot_api: MessagingApi):
@@ -231,8 +241,18 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
     source = event.source
     if source.type == "group":
         chat_id = source.group_id
+        # Auto-track group membership from incoming messages
+        from src.services.group_membership_service import group_membership_service
+
+        if not group_membership_service.is_member(chat_id):
+            group_membership_service.add_group(chat_id, "group")
     elif source.type == "room":
         chat_id = source.room_id
+        # Auto-track room membership from incoming messages
+        from src.services.group_membership_service import group_membership_service
+
+        if not group_membership_service.is_member(chat_id):
+            group_membership_service.add_group(chat_id, "room")
     else:
         chat_id = source.user_id
 
@@ -242,20 +262,7 @@ async def handle_text_message(event, line_bot_api: MessagingApi):
     if is_exit_command(text):
         if session_manager.is_session_active(chat_id):
             session_manager.end_session(chat_id)
-            goodbye_messages = [
-                TextMessage(text="ลาก่อน 👋 (Goodbye!)"),  # type: ignore[call-arg]
-                TextMessage(text="Translation mode ended. Send Thai text to start again!"),  # type: ignore[call-arg]
-            ]
-            try:
-                await asyncio.to_thread(
-                    line_bot_api.reply_message,
-                    ReplyMessageRequest(  # type: ignore[call-arg]
-                        replyToken=reply_token, messages=goodbye_messages
-                    ),
-                )
-                logger.info(f"Ended translation session for chat {chat_id}")
-            except Exception as e:
-                logger.error(f"Error sending goodbye: {str(e)}")
+            logger.info(f"Ended translation session for chat {chat_id}")
             return
         else:
             # Not in a session, just ignore

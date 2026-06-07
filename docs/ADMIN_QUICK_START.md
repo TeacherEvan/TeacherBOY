@@ -61,6 +61,7 @@ Try other commands:
 /admin dashboard
 /admin status
 /admin sessions
+/admin groups
 ```
 
 The dashboard is DM-first:
@@ -77,6 +78,7 @@ the action to apply, or pass an explicit chat ID:
 /admin reset
 /admin purge
 /admin leave
+/admin groups
 ```
 
 If you requested the action in a private chat with Ms. Green, the reply is:

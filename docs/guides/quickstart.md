@@ -63,7 +63,7 @@ Follow: [docs/guides/line-setup.md](line-setup.md)
 
 - Send a Thai message (e.g., `สวัสดีครับ`) to start translation mode.
 - Send English/Thai messages; the bot replies with translations.
-- Stop/sleep: `amen`
+- Stop/sleep: `Thanks Ms Green!`
 - Wake: `Dear Ms. Green`
 
 ### Optional: AI + Web Search (DM-only for regular users)

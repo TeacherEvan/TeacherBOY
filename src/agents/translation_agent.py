@@ -63,7 +63,7 @@ class TranslationAgent(BaseAgent):
 
         sleep_pattern = (
             rf"^(good\s*night\s*(?:{alias_pattern})|sleep\s*(?:{alias_pattern})|"
-            rf"(?:{alias_pattern})\s*sleep|amen|"
+            rf"(?:{alias_pattern})\s*sleep|thanks ms green|"
             rf"(?:{alias_pattern})\s*stop|thank\s*you\s*(?:{alias_pattern}))[\s.!]*$"
         )
         return bool(re.search(sleep_pattern, text_lower))
@@ -616,7 +616,7 @@ class TranslationAgent(BaseAgent):
                         "contents": [
                             {
                                 "type": "text",
-                                "text": '💡 Tip: Say "amen" to sleep for 24h',
+                                "text": '💡 Tip: Say "Thanks Ms Green!" to sleep for 24h',
                                 "size": "xxs",
                                 "color": text_muted,
                                 "align": "center",

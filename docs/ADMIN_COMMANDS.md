@@ -39,6 +39,7 @@ ADMIN_USER_IDS=U1234567890abcdef,U9876543210fedcba
 
 - `/admin status`
 - `/admin sessions`
+- `/admin groups`
 - `/admin dashboard`
 - `/admin sleep [chat_id] [hours]`
 - `/admin wake [chat_id]`
@@ -370,6 +371,41 @@ private preview.
 Effect: This will clear bot session state, message history, sleep state, and related flow state for user_U123456.
 ```
 
+#### `/admin groups`
+
+List all groups and rooms the bot is currently a member of. This is useful for emergency exits if the bot misbehaves.
+
+**Examples:**
+
+```text
+/admin groups
+```
+
+**Output example:**
+
+```text
+📋 Bot Group Membership (3 groups, 1 rooms)
+━━━━━━━━━━━━━━━━
+
+📍 GROUPS:
+
+• Project Team
+  ID: group_C1234567890
+  Leave: /admin leave group_C1234567890
+
+• Chefs Club
+  ID: group_C0987654321
+  Leave: /admin leave group_C0987654321
+
+🏠 ROOMS:
+
+• Kitchen Chat
+  ID: room_R1122334455
+  Leave: /admin leave room_R1122334455
+
+💡 Use '/admin leave <chat_id>' to leave a group/room (requires private confirmation).
+```
+
 #### `/admin leave [chat_id]`
 
 Request that the bot leave a group or room. This also uses the same private
@@ -570,9 +606,9 @@ If the bot is misbehaving in a specific chat:
 /admin sessions  # See all active chats and their message counts
 ```
 
-### Wake Bot After "amen"
+### Wake Bot After "Thanks Ms Green!"
 
-Users can put the bot to sleep with "amen". To override:
+Users can put the bot to sleep with "Thanks Ms Green!". To override:
 
 ```text
 /admin wake user_U123456

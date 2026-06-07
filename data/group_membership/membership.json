@@ -1,0 +1,12 @@
+{
+  "C123": {
+    "type": "group",
+    "title": "Test Group",
+    "joined_at": null
+  },
+  "R456": {
+    "type": "room",
+    "title": "Test Room",
+    "joined_at": null
+  }
+}

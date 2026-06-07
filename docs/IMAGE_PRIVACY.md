@@ -128,8 +128,8 @@ del messages           # Clear vision API messages
 - User can request deletion via shutdown phrase ("amen")
 - Image analysis is **opt-in** (user must trigger with commands)
 
-### Data Minimization
-
+- User can request deletion via shutdown phrase ("Thanks Ms Green!")
+- Image analysis is **opt-in** (user must trigger with commands)
 - Only image metadata logged (size, message_id)
 - No biometric data stored (analysis results are text-only)
 - Session cleanup removes all image references
@@ -137,7 +137,7 @@ del messages           # Clear vision API messages
 ### User Control
 
 - Users must **explicitly request** image analysis/profiling
-- Shutdown phrase ("amen") clears all active sessions
+- Shutdown phrase ("Thanks Ms Green!") clears all active sessions
 - Session expiration (60s) provides automatic cleanup
 
 ## Technical Implementation

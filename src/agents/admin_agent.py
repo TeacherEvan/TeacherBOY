@@ -258,6 +258,8 @@ class AdminAgent(BaseAgent):
                     response = await self._request_confirm_leave(event, line_bot_api, chat_id, user_id, arg)
                 elif command == "sessions":
                     response = self._list_sessions()
+                elif command == "groups":
+                    response = self._list_groups()
                 else:
                     response = (
                         f"❌ Unknown command: {command}\n\n"
@@ -349,21 +351,23 @@ class AdminAgent(BaseAgent):
             "You can run commands as:\n"
             "  Dear Ms. Green admin <command>\n"
             "  /admin <command>\n\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "📊 Status & Info:\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "  /admin status [chat_id]\n"
-            "    → Show current chat status\n\n"
-            "  /admin stats\n"
-            "    → Show service stats dashboard\n\n"
-            "  /admin dashboard\n"
-            "    → Open the DM-first admin dashboard\n\n"
-            "  /admin sessions\n"
-            "    → List all active sessions\n\n"
-            "  /admin confirmations\n"
-            "    → List your pending destructive previews (private chat only)\n\n"
-            "  /admin whoami\n"
-            "    → Show your LINE user_id + admin detection (debug)\n\n"
+            "━━━━━━━━━━━━━━━━\\n"
+            "📊 Status & Info:\\n"
+            "━━━━━━━━━━━━━━━━\\n"
+            "  /admin status [chat_id]\\n"
+            "    → Show current chat status\\n\\n"
+            "  /admin stats\\n"
+            "    → Show service stats dashboard\\n\\n"
+            "  /admin dashboard\\n"
+            "    → Open the DM-first admin dashboard\\n\\n"
+            "  /admin sessions\\n"
+            "    → List all active sessions\\n\\n"
+            "  /admin groups\\n"
+            "    → List all groups/rooms the bot is a member of\\n\\n"
+            "  /admin confirmations\\n"
+            "    → List your pending destructive previews (private chat only)\\n\\n"
+            "  /admin whoami\\n"
+            "    → Show your LINE user_id + admin detection (debug)\\n\\n"
             "━━━━━━━━━━━━━━━━\n"
             "📨 Outbound Messaging (named recipients)\n"
             "━━━━━━━━━━━━━━━━\n"
@@ -1846,6 +1850,37 @@ class AdminAgent(BaseAgent):
                 msg += f"\n• {chat_id}\n"
                 msg += f"  ⏰ Wake in: {remaining}h\n"
 
+        return msg
+
+    def _list_groups(self) -> str:
+        """List all groups/rooms the bot is a member of."""
+        from src.services.group_membership_service import group_membership_service
+
+        groups = group_membership_service.get_groups_list()
+        group_count, room_count = group_membership_service.get_count()
+
+        if not groups:
+            return "ℹ️  Bot is not a member of any groups or rooms."
+
+        msg = f"📋 Bot Group Membership ({group_count} groups, {room_count} rooms)\n━━━━━━━━━━━━━━━━\n\n"
+
+        current_type = None
+        for group in groups:
+            if group["type"] != current_type:
+                current_type = group["type"]
+                type_label = "📍 GROUPS" if current_type == "group" else "🏠 ROOMS"
+                msg += f"\n{type_label}:\n"
+
+            chat_id = group["chat_id"]
+            title = group["title"]
+            type_prefix = "group_" if group["type"] == "group" else "room_"
+            full_chat_id = f"{type_prefix}{chat_id}"
+
+            msg += f"\n• {title}\n"
+            msg += f"  ID: {full_chat_id}\n"
+            msg += f"  Leave: /admin leave {full_chat_id}\n"
+
+        msg += "\n\n💡 Use '/admin leave <chat_id>' to leave a group/room (requires private confirmation)."
         return msg
 
     def _get_chat_id(self, event: MessageEvent) -> str:

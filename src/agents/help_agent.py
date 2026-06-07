@@ -110,9 +110,9 @@ class HelpAgent(BaseAgent):
                     "available": True,
                 },
                 {
-                    "command": "amen",
+                    "command": "Thanks Ms Green!",
                     "description": "Put the bot to sleep for 24 hours",
-                    "examples": ["amen"],
+                    "examples": ["Thanks Ms Green!"],
                     "available": True,
                 },
             ],
@@ -221,6 +221,12 @@ class HelpAgent(BaseAgent):
                     "command": "/admin stats",
                     "description": "View bot usage statistics",
                     "examples": ["/admin stats"],
+                    "available": True,
+                },
+                {
+                    "command": "/admin groups",
+                    "description": "List all groups/rooms bot is in (emergency exit)",
+                    "examples": ["/admin groups"],
                     "available": True,
                 },
                 {
@@ -706,7 +712,7 @@ class HelpAgent(BaseAgent):
                             "Available commands:\n"
                             "• help - Show this menu\n"
                             "• Ms. Green - Wake from sleep\n"
-                            "• amen - Sleep for 24h\n"
+                            "• Thanks Ms Green! - Sleep for 24h\n"
                             "• Thai/English text - Auto-translate\n\n"
                             "For admin commands: /admin help"
                         ),

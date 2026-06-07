@@ -64,7 +64,7 @@ For the full variable reference and mounted-volume examples, see [Environment va
 ### Translation Agent (Primary)
 
 - **🔥 Smart Auto-Detection:** Automatically starts when Thai text is detected
-- **🔄 Continuous Mode:** Translates EVERY message until you say "amen"
+- **🔄 Continuous Mode:** Translates EVERY message until you say "Thanks Ms Green!"
 - **😴 Sleep Mode:** Bot sleeps for 24 hours - say "Dear Ms. Green" alone to wake up
 - **🌐 AI Translation:** Shared AI translation service with GitHub Models first and OpenRouter fallback
 - **🛡️ Hallucination Prevention:** Detects incomplete sentences and prevents unwanted context injection
@@ -260,10 +260,10 @@ ngrok http 8000
 - Send: `สวัสดีครับ` → Translation mode starts! 🔥
 - Send: `Hello` → Translates to Thai automatically
 - Send: `How are you?` → Keeps translating
-- Say: `amen` → Bot sleeps for 24 hours 😴
+- Say: `Thanks Ms Green!` → Bot sleeps for 24 hours 😴
 - Say: `Dear Ms. Green` → Bot wakes up! ☀️
 
-**The bot will translate EVERY message until you say "amen"!**
+**The bot will translate EVERY message until you say "Thanks Ms Green!"!**
 
 **Need help?** See **[Quick Start Guide](docs/guides/quickstart.md)** or **[Deployment Guide](docs/guides/deployment.md)**.
 
@@ -390,7 +390,7 @@ pytest --cov=src --cov-report=html
 - Continuous translation mode
 - Shared AI translation via GitHub Models with OpenRouter fallback
 - Session management per chat
-- "amen" sleep command (24h)
+- "Thanks Ms Green!" sleep command (24h)
 - "Dear Ms. Green" wake command
 - Rate limiting (10 translations/minute)
 

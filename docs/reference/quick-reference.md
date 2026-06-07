@@ -119,6 +119,7 @@ Quick summary:
 ```text
 /admin status          - Show bot status
 /admin sessions        - List active sessions
+/admin groups          - List groups/rooms bot is in
 /admin dashboard       - Open DM-first admin dashboard
 /admin sleep [hours]   - Put chat to sleep
 /admin wake            - Wake up chat
@@ -139,7 +140,7 @@ Quick summary:
 - ✅ Incomplete sentence detection (prevents hallucination) — [INCOMPLETE_SENTENCE_FIX.md](../INCOMPLETE_SENTENCE_FIX.md)
 - ✅ Parentheses preservation: `(Name)` stays as `(Name)`
 - ✅ Session management per chat
-- ✅ Sleep mode: "amen" → 24h sleep
+- ✅ Sleep mode: "Thanks Ms Green!" → 24h sleep
 - ✅ Wake command: "Dear Ms. Green" alone
 
 ## 📰 News Menu (Friends/Admins/Moderators)

@@ -147,6 +147,9 @@ def build_admin_dashboard(
                     _message_button("Open confirmations", "/admin confirmations"),
                     _message_button("View sessions", "/admin sessions"),
                 ),
+                _button_row(
+                    _message_button("View groups", "/admin groups"),
+                ),
                 {
                     "type": "separator",
                     "margin": "lg",
