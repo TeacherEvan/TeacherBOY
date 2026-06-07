@@ -1,5 +1,4 @@
-"""
-Debrief Extraction Service - Parses journal images into structured data.
+"""Debrief Extraction Service - Parses journal images into structured data.
 Includes local OCR fallback and Maton API calendar cross-validation.
 """
 
@@ -13,23 +12,35 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
-DEBRIEF_EXTRACTION_PROMPT = """You are a teaching assistant analyzing a daily journal image.
-Extract the following fields STRICTLY as a valid JSON object. Do not include markdown formatting or explanations.
-Fields:
-- "topics_covered": (list of strings) Topics covered in the lesson
-- "comprehension_level": (string) "low", "medium", or "high"
-- "key_phrases_learned": (list of strings) Key phrases the student practiced
-- "suggested_review": (list of strings) Topics to review next session
-- "confidence_score": (float) Overall confidence 0-1
-- "notes": (string or null) Additional observations
-
-If a field cannot be determined from the image, return an empty list or null where appropriate."""
-
-
 from pydantic import BaseModel, Field
 
+logger = logging.getLogger(__name__)
+
+DEBRIEF_EXTRACTION_PROMPT = """You are a teaching assistant analyzing a daily journal image from a school.
+Extract the following fields STRICTLY as a valid JSON object. Do not include markdown formatting or explanations.
+
+The journal may contain MULTIPLE periods/sessions in one day, each with different teachers, subjects, and activities.
+You MUST identify each period separately with its own teacher, subject, and details.
+
+Fields for the DAILY debrief:
+- "date": (string) Date in YYYY-MM-DD format
+- "day_name": (string) Day name (e.g., "Friday", "Monday")
+- "periods": (list of objects) Each period contains:
+  - "period": (string) Period identifier (e.g., "Period 1", "Morning Session")
+  - "subject": (string) Subject name (e.g., "Science", "English", "Mathematics")
+  - "teacher": (string) Teacher name
+  - "lesson": (string) Lesson topic/title
+  - "topics_covered": (list of strings) Specific topics in this period
+  - "comprehension_level": (string) "low", "medium", or "high" for this period
+  - "key_phrases_learned": (list of strings) Key phrases/words practiced
+  - "suggested_review": (list of strings) Topics to review for this period
+  - "observations": (string or null) Teacher observations for this period
+- "general_observations": (string or null) General day observations (behavior, snacks, outdoor play, etc.)
+- "confidence_score": (float) Overall confidence 0-1
+- "notes": (string or null) Additional notes
+
+If a field cannot be determined from the image, return an empty list or null where appropriate.
+For periods array, include all periods visible in the journal."""
 
 class DebriefSchema(BaseModel):
     topics_covered: list[str] = Field(default_factory=list, description="List of topics covered in the lesson")
@@ -38,6 +49,29 @@ class DebriefSchema(BaseModel):
     suggested_review: list[str] = Field(default_factory=list, description="Topics to review next session")
     confidence_score: float = Field(default=0.5, ge=0.0, le=1.0, description="Overall confidence 0-1")
     notes: str | None = Field(default=None, description="Additional observations")
+
+
+class PeriodDebriefSchema(BaseModel):
+    """Single period/session within a day journal."""
+    period: str = Field(description="Period identifier (e.g., 'Period 1', 'Morning Session')")
+    subject: str = Field(description="Subject name (e.g., 'Science', 'English')")
+    teacher: str = Field(description="Teacher name")
+    lesson: str = Field(description="Lesson topic/title")
+    topics_covered: list[str] = Field(default_factory=list, description="Topics covered in this period")
+    comprehension_level: str = Field(description="low, medium, or high")
+    key_phrases_learned: list[str] = Field(default_factory=list, description="Key phrases practiced")
+    suggested_review: list[str] = Field(default_factory=list, description="Topics to review")
+    observations: str | None = Field(default=None, description="Teacher observations for this period")
+
+
+class DailyDebriefSchema(BaseModel):
+    """Full day debrief with multiple periods."""
+    date: str = Field(description="Date in YYYY-MM-DD format")
+    day_name: str = Field(description="Day name (e.g., 'Friday')")
+    periods: list[PeriodDebriefSchema] = Field(default_factory=list, description="List of periods/sessions")
+    general_observations: str | None = Field(default=None, description="General day observations")
+    confidence_score: float = Field(default=0.5, ge=0.0, le=1.0, description="Overall confidence 0-1")
+    notes: str | None = Field(default=None, description="Additional notes")
 
 
 class DebriefExtractionService:
@@ -89,9 +123,9 @@ class DebriefExtractionService:
             logger.warning(f"Local OCR fallback failed: {e}")
             return None
 
-    async def extract_from_image(self, image_url_or_base64: str, chat_id: str, date_str: str) -> DebriefSchema:
+    async def extract_from_image(self, image_url_or_base64: str, chat_id: str, date_str: str) -> DailyDebriefSchema:
         """
-        Extracts validated structured debrief data from an image.
+        Extracts validated structured daily debrief data from an image.
         Uses instructor-based structured extraction when available.
         Falls back to local OCR if LLM vision fails to return valid JSON.
         Cross-validates with Google Calendar via Maton API if teacher/subject is missing.
@@ -117,59 +151,52 @@ class DebriefExtractionService:
             if debrief is not None:
                 return debrief
 
-        # 3. Final fallback - return an empty schema
-        return DebriefSchema(
-            topics_covered=[],
-            comprehension_level="low",
-            key_phrases_learned=[],
-            suggested_review=[],
+        # 3. Final fallback - return an empty daily schema
+        from datetime import datetime
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+            day_name = dt.strftime("%A")
+        except ValueError:
+            day_name = "Unknown"
+
+        return DailyDebriefSchema(
+            date=date_str,
+            day_name=day_name,
+            periods=[],
+            general_observations=None,
             confidence_score=0.0,
             notes="Extraction failed; manual review required.",
         )
 
-    async def _try_structured_extraction(self, messages: list[dict[str, Any]]) -> DebriefSchema | None:
+    async def _try_structured_extraction(self, messages: list[dict[str, Any]]) -> DailyDebriefSchema | None:
         raw_response = None
         structured_payload = None
 
-        # Path A: instructor-based structured extraction when a real callable is available.
+        # Use the vision function directly for structured extraction
         if self.llm_vision_fn is not None:
             try:
-                import instructor  # type: ignore
-
-                try:
-                    structured_payload = await self.llm_vision_fn(messages, max_tokens=500, temperature=0.1)
-                    raw_response = (
-                        structured_payload
-                        if isinstance(structured_payload, str)
-                        else json.dumps(structured_payload)
-                        if isinstance(structured_payload, (dict, list))
-                        else str(structured_payload)
-                    )
-                except Exception:
-                    raw_response = None
-            except ImportError:
+                structured_payload = await self.llm_vision_fn(messages, max_tokens=1000, temperature=0.1)
+                raw_response = (
+                    structured_payload
+                    if isinstance(structured_payload, str)
+                    else json.dumps(structured_payload)
+                    if isinstance(structured_payload, (dict, list))
+                    else str(structured_payload)
+                )
+            except Exception:
                 raw_response = None
-
-        if raw_response is None:
-            # Path B: legacy text-based vision function fallback
-            if self.llm_vision_fn is not None:
-                try:
-                    raw_response = await self.llm_vision_fn(messages, max_tokens=500, temperature=0.1)
-                except Exception as exc:
-                    logger.debug("Legacy vision fallback failed: %s", exc)
-                    return None
 
         if raw_response is None:
             return None
 
-        # Path C: validate the payload against the schema
-        if isinstance(structured_payload, DebriefSchema):
+        # Validate the payload against the schema
+        if isinstance(structured_payload, DailyDebriefSchema):
             return structured_payload
 
         try:
             parsed = self._parse_json_response(raw_response if isinstance(raw_response, str) else None)
             if parsed:
-                return DebriefSchema.model_validate(parsed)
+                return DailyDebriefSchema.model_validate(parsed)
         except Exception as exc:
             logger.debug("Schema validation failed: %s", exc)
 

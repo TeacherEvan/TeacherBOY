@@ -45,7 +45,6 @@ from linebot.v3.messaging.exceptions import ApiException
 from linebot.v3.webhooks import MessageEvent
 
 from src.config import settings
-from src.prompts.builders.debrief_builder import build_debrief_prompt
 from src.services.bot_identity_service import get_bot_identity_service
 from src.services.debrief_extraction_service import DebriefExtractionService
 from src.services.debrief_formatter import DebriefFormatter
@@ -64,7 +63,9 @@ from src.utils.tracing import get_tracer
 from .base_agent import BaseAgent
 
 # Instantiate debrief extraction service with the proper vision fallback
-_debrief_extraction_service = DebriefExtractionService(llm_vision_fn=chat_completion_with_vision_fallback)
+_debrief_extraction_service: DebriefExtractionService = DebriefExtractionService(
+    llm_vision_fn=chat_completion_with_vision_fallback
+)
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -360,52 +361,21 @@ class ImageAnalyzerAgent(BaseAgent):
 
         await self._send_analyzing_message(event, line_bot_api)
 
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": build_debrief_prompt()},
-                    {"type": "image_url", "image_url": {"url": image_data}},
-                ],
-            }
-        ]
-
-        model = getattr(settings, "profiler_model", "openai/gpt-4o")
-        analysis = await chat_completion_with_vision_fallback(
-            messages=messages,
-            model=model,
-            temperature=0.15,
-            max_tokens=500,
-        )
-
-        if not analysis:
+        # Use DebriefExtractionService for structured extraction
+        try:
+            debrief = await _debrief_extraction_service.extract_from_image(
+                image_url_or_base64=image_data,
+                chat_id=chat_id,
+                date_str=datetime.now().strftime("%Y-%m-%d"),
+            )
+        except Exception as e:
+            logger.error(f"❌ Debrief extraction failed: {e}")
             await self._send_error_message(event, line_bot_api, "Failed to analyze the image for debrief.")
             image_analyzer_session_manager.clear_session(chat_id)
             return False
 
-        # Parse the JSON response
-        import json
-        import re
-
-        cleaned = re.sub(r"^```json\s*", "", analysis, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.IGNORECASE).strip()
-
-        try:
-            debrief_data = json.loads(cleaned)
-        except json.JSONDecodeError:
-            debrief_data = {"observations": analysis}  # Fallback
-
-        # Format and send the parent-facing message
-        formatted_msg = DebriefFormatter.format_single_session(
-            {
-                "date": datetime.now().strftime("%Y-%m-%d"),
-                "timePeriod": debrief_data.get("timePeriod"),
-                "subject": debrief_data.get("subject"),
-                "lesson": debrief_data.get("lesson"),
-                "teacher": debrief_data.get("teacher"),
-                "observations": debrief_data.get("observations", "A wonderful day of learning!"),
-            }
-        )
+        # Format using the new daily debrief formatter
+        formatted_msg = DebriefFormatter.format_daily_debrief(debrief)
 
         response_msg = TextMessage(text=formatted_msg, quickReply=None, quoteToken=None)
         if event.reply_token:
@@ -780,15 +750,42 @@ class ImageAnalyzerAgent(BaseAgent):
 
         # Build vision message
         if analysis_mode == "debrief":
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": build_debrief_prompt()},
-                        {"type": "image_url", "image_url": {"url": image_data}},
-                    ],
-                }
-            ]
+            # Use DebriefExtractionService for structured extraction
+            try:
+                debrief = await _debrief_extraction_service.extract_from_image(
+                    image_url_or_base64=image_data,
+                    chat_id=chat_id,
+                    date_str=datetime.now().strftime("%Y-%m-%d"),
+                )
+            except Exception as e:
+                logger.error(f"❌ Debrief extraction failed: {e}")
+                await self._send_error_message(event, line_bot_api, "Failed to analyze the image for debrief.")
+                image_analyzer_session_manager.clear_session(chat_id)
+                return False
+
+            # Format using the new daily debrief formatter
+            formatted_msg = DebriefFormatter.format_daily_debrief(debrief)
+
+            # Send via push (reply token already used for "analyzing" message)
+            group_id = getattr(event.source, "group_id", None) if event.source else None
+            room_id = getattr(event.source, "room_id", None) if event.source else None
+            target = group_id or room_id or user_id
+
+            if target:
+                text_msg = TextMessage(text=formatted_msg, quickReply=None, quoteToken=None)
+                await asyncio.to_thread(
+                    line_bot_api.push_message,
+                    PushMessageRequest(
+                        to=target,
+                        messages=[text_msg],
+                        notificationDisabled=False,
+                        customAggregationUnits=None,
+                    ),
+                )
+
+            logger.info(f"✅ Debrief sent for chat {chat_id}")
+            image_analyzer_session_manager.clear_session(chat_id)
+            return True
         else:
             messages = self._build_vision_message(image_data, question, scene_mode=scene_mode)
 
