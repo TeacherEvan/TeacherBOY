@@ -190,6 +190,11 @@ class Settings(BaseSettings):
         default=None,
         description="Optional OpenRouter model override for translation fallback only",
     )
+    openrouter_vision_model: str | None = Field(
+        default=None,
+        description="Optional OpenRouter model override for vision/image analysis tasks. Must support multimodal input.",
+        validation_alias=AliasChoices("OPENROUTER_VISION_MODEL"),
+    )
 
     # ============================================================================
     # Ollama Configuration (Local LLM Provider)

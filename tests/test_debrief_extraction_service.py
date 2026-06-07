@@ -113,3 +113,96 @@ async def test_extract_from_image_returns_daily_debrief_schema_from_dict_payload
     assert len(result.periods) == 1
     assert result.periods[0].subject == "Science"
     assert result.periods[0].teacher == "Lea"
+
+
+@pytest.mark.asyncio()
+async def test_extract_from_image_passes_model_to_vision_function():
+    """Validate that the model parameter is passed through to llm_vision_fn."""
+    captured_kwargs = {}
+
+    async def capture_llm_fn(messages, **kwargs):
+        captured_kwargs.update(kwargs)
+        return json.dumps(
+            {
+                "date": "2025-01-01",
+                "day_name": "Wednesday",
+                "periods": [],
+                "general_observations": None,
+                "confidence_score": 0.5,
+                "notes": None,
+            }
+        )
+
+    service = DebriefExtractionService(llm_vision_fn=capture_llm_fn, default_vision_model="openai/gpt-4o")
+
+    # Call with explicit model parameter
+    await service.extract_from_image(
+        image_url_or_base64="data:image/png;base64,AAA",
+        chat_id="chat_1",
+        date_str="2025-01-01",
+        model="custom/vision-model",
+    )
+
+    # Verify the model was passed to the vision function
+    assert captured_kwargs.get("model") == "custom/vision-model"
+
+
+@pytest.mark.asyncio()
+async def test_extract_from_image_uses_default_model_when_none_provided():
+    """Validate that default_vision_model is used when model parameter is omitted."""
+    captured_kwargs = {}
+
+    async def capture_llm_fn(messages, **kwargs):
+        captured_kwargs.update(kwargs)
+        return json.dumps(
+            {
+                "date": "2025-01-01",
+                "day_name": "Wednesday",
+                "periods": [],
+                "general_observations": None,
+                "confidence_score": 0.5,
+                "notes": None,
+            }
+        )
+
+    service = DebriefExtractionService(llm_vision_fn=capture_llm_fn, default_vision_model="openai/gpt-4o")
+
+    # Call without model parameter
+    await service.extract_from_image(
+        image_url_or_base64="data:image/png;base64,AAA",
+        chat_id="chat_1",
+        date_str="2025-01-01",
+    )
+
+    # Verify the default model was used
+    assert captured_kwargs.get("model") == "openai/gpt-4o"
+
+
+@pytest.mark.asyncio()
+async def test_try_structured_extraction_passes_model_to_vision_fn():
+    """Validate _try_structured_extraction passes model to underlying function."""
+    captured_kwargs = {}
+
+    async def capture_llm_fn(messages, **kwargs):
+        captured_kwargs.update(kwargs)
+        return json.dumps(
+            {
+                "date": "2025-01-01",
+                "day_name": "Wednesday",
+                "periods": [],
+                "general_observations": None,
+                "confidence_score": 0.5,
+                "notes": None,
+            }
+        )
+
+    service = DebriefExtractionService(llm_vision_fn=capture_llm_fn, default_vision_model="fallback/model")
+
+    messages = [
+        {"role": "system", "content": "test"},
+        {"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,AAA"}}]},
+    ]
+
+    await service._try_structured_extraction(messages, model="explicit/model")
+
+    assert captured_kwargs.get("model") == "explicit/model"

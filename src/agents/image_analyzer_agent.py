@@ -64,7 +64,8 @@ from .base_agent import BaseAgent
 
 # Instantiate debrief extraction service with the proper vision fallback
 _debrief_extraction_service: DebriefExtractionService = DebriefExtractionService(
-    llm_vision_fn=chat_completion_with_vision_fallback
+    llm_vision_fn=chat_completion_with_vision_fallback,
+    default_vision_model="openai/gpt-4o",
 )
 
 logger = logging.getLogger(__name__)
@@ -363,10 +364,12 @@ class ImageAnalyzerAgent(BaseAgent):
 
         # Use DebriefExtractionService for structured extraction
         try:
+            vision_model = getattr(settings, "profiler_model", "openai/gpt-4o")
             debrief = await _debrief_extraction_service.extract_from_image(
                 image_url_or_base64=image_data,
                 chat_id=chat_id,
                 date_str=datetime.now().strftime("%Y-%m-%d"),
+                model=vision_model,
             )
         except Exception as e:
             logger.error(f"❌ Debrief extraction failed: {e}")
@@ -377,14 +380,21 @@ class ImageAnalyzerAgent(BaseAgent):
         # Format using the new daily debrief formatter
         formatted_msg = DebriefFormatter.format_daily_debrief(debrief)
 
-        response_msg = TextMessage(text=formatted_msg, quickReply=None, quoteToken=None)
-        if event.reply_token:
+        # Send via push (reply token already used for "analyzing" message)
+        group_id = getattr(event.source, "group_id", None) if event.source else None
+        room_id = getattr(event.source, "room_id", None) if event.source else None
+        user_id = getattr(event.source, "user_id", None) if event.source else None
+        target = group_id or room_id or user_id
+
+        if target:
+            text_msg = TextMessage(text=formatted_msg, quickReply=None, quoteToken=None)
             await asyncio.to_thread(
-                line_bot_api.reply_message,
-                ReplyMessageRequest(
-                    replyToken=event.reply_token,
-                    messages=[response_msg],
+                line_bot_api.push_message,
+                PushMessageRequest(
+                    to=target,
+                    messages=[text_msg],
                     notificationDisabled=False,
+                    customAggregationUnits=None,
                 ),
             )
 
@@ -752,10 +762,12 @@ class ImageAnalyzerAgent(BaseAgent):
         if analysis_mode == "debrief":
             # Use DebriefExtractionService for structured extraction
             try:
+                vision_model = getattr(settings, "profiler_model", "openai/gpt-4o")
                 debrief = await _debrief_extraction_service.extract_from_image(
                     image_url_or_base64=image_data,
                     chat_id=chat_id,
                     date_str=datetime.now().strftime("%Y-%m-%d"),
+                    model=vision_model,
                 )
             except Exception as e:
                 logger.error(f"❌ Debrief extraction failed: {e}")

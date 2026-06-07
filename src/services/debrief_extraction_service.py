@@ -78,10 +78,16 @@ class DailyDebriefSchema(BaseModel):
 
 
 class DebriefExtractionService:
-    def __init__(self, llm_vision_fn: Callable | None = None, maton_api_key_path: str = "~/.secrets/maton.txt"):
+    def __init__(
+        self,
+        llm_vision_fn: Callable | None = None,
+        maton_api_key_path: str = "~/.secrets/maton.txt",
+        default_vision_model: str | None = None,
+    ):
         self.llm_vision_fn = llm_vision_fn
         self.maton_api_key_path = maton_api_key_path
         self._maton_key: str | None = None
+        self.default_vision_model = default_vision_model or "openai/gpt-4o"
 
     def _get_maton_key(self) -> str | None:
         if self._maton_key is not None:
@@ -126,7 +132,9 @@ class DebriefExtractionService:
             logger.warning(f"Local OCR fallback failed: {e}")
             return None
 
-    async def extract_from_image(self, image_url_or_base64: str, chat_id: str, date_str: str) -> DailyDebriefSchema:
+    async def extract_from_image(
+        self, image_url_or_base64: str, chat_id: str, date_str: str, model: str | None = None
+    ) -> DailyDebriefSchema:
         """
         Extracts validated structured daily debrief data from an image.
         Uses instructor-based structured extraction when available.
@@ -136,12 +144,14 @@ class DebriefExtractionService:
         if not self.llm_vision_fn:
             raise RuntimeError("DebriefExtractionService.llm_vision_fn is not configured.")
 
+        vision_model = model or self.default_vision_model
+
         messages = [
             {"role": "system", "content": DEBRIEF_EXTRACTION_PROMPT},
             {"role": "user", "content": [{"type": "image_url", "image_url": {"url": image_url_or_base64}}]},
         ]
 
-        debrief = await self._try_structured_extraction(messages)
+        debrief = await self._try_structured_extraction(messages, vision_model)
         if debrief is not None:
             return debrief
 
@@ -150,7 +160,7 @@ class DebriefExtractionService:
         ocr_text = await asyncio.to_thread(self._run_local_ocr_sync, image_url_or_base64)
         if ocr_text:
             messages[1]["content"] = f"OCR detected this text in the image: {ocr_text}\n\nNow extract the JSON fields:"
-            debrief = await self._try_structured_extraction(messages)
+            debrief = await self._try_structured_extraction(messages, vision_model)
             if debrief is not None:
                 return debrief
 
@@ -172,14 +182,19 @@ class DebriefExtractionService:
             notes="Extraction failed; manual review required.",
         )
 
-    async def _try_structured_extraction(self, messages: list[dict[str, Any]]) -> DailyDebriefSchema | None:
+    async def _try_structured_extraction(
+        self, messages: list[dict[str, Any]], model: str | None = None
+    ) -> DailyDebriefSchema | None:
         raw_response = None
         structured_payload = None
 
         # Use the vision function directly for structured extraction
         if self.llm_vision_fn is not None:
             try:
-                structured_payload = await self.llm_vision_fn(messages, max_tokens=1000, temperature=0.1)
+                vision_model = model or self.default_vision_model
+                structured_payload = await self.llm_vision_fn(
+                    messages, max_tokens=1000, temperature=0.1, model=vision_model
+                )
                 raw_response = (
                     structured_payload
                     if isinstance(structured_payload, str)
