@@ -21,7 +21,8 @@ Goal: run Ms. Green locally (Docker) and connect it to LINE.
    - `LINE_CHANNEL_ACCESS_TOKEN`
 
 3. Recommended (better translation quality):
-   - `GOOGLE_TRANSLATE_API_KEY`
+   - `GITHUB_MODELS_PAT` (GitHub Models - preferred)
+   - `OPENROUTER_API_KEY` (fallback)
 
 ## 2) Run the bot
 

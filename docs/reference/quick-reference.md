@@ -113,22 +113,30 @@ Notes:
 
 ## 🛠️ Admin Commands
 
+See [ADMIN_COMMANDS.md](../ADMIN_COMMANDS.md) for complete documentation.
+
+Quick summary:
 ```text
 /admin status          - Show bot status
+/admin sessions        - List active sessions
+/admin dashboard       - Open DM-first admin dashboard
 /admin sleep [hours]   - Put chat to sleep
 /admin wake            - Wake up chat
-/admin reset           - Reset rate limiter
-/admin stats           - View session stats (includes tourism news)
-/admin send            - Push text to USER_<ALIAS>
-/admin llm_send        - Draft via LLM then push
-/admin send_weather    - Push Bangkok weather
+/admin reset           - Reset rate limiter (preview + confirm)
+/admin purge           - Purge session state (preview + confirm)
+/admin leave           - Leave group/room (preview + confirm)
+/admin confirm <token> - Confirm destructive action
+/admin cancel <token>  - Cancel destructive action
 /admin whoami          - Show your LINE user_id (debug)
+/admin send <alias> <text>       - Push to named recipient
+/admin llm_send <alias> <prompt> - LLM-drafted push
+/admin send_weather <alias>      - Push Bangkok weather
 ```
 
 ## 📋 Translation Features
 
 - ✅ Auto-detect Thai/English
-- ✅ Incomplete sentence detection (prevents hallucination)
+- ✅ Incomplete sentence detection (prevents hallucination) — [INCOMPLETE_SENTENCE_FIX.md](../INCOMPLETE_SENTENCE_FIX.md)
 - ✅ Parentheses preservation: `(Name)` stays as `(Name)`
 - ✅ Session management per chat
 - ✅ Sleep mode: "amen" → 24h sleep

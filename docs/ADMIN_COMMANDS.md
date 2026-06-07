@@ -8,6 +8,8 @@ issues without server access.
 
 ## Quick Start
 
+For a concise 5-minute setup guide, see [ADMIN_QUICK_START.md](ADMIN_QUICK_START.md).
+
 1. **Get your LINE user ID** — send any message to the bot and check logs for `User ID: U...`.
 2. **Set access** — add that ID to `.env` as `ADMIN_USER_IDS` or claim it with `/admin claim <ADMIN_SETUP_KEY>`.
 3. **Restart** — `docker-compose restart` or rerun `uvicorn src.main:app --reload`.
@@ -18,7 +20,7 @@ issues without server access.
 
 ## Configure Access Levels
 
-See also: [Environment reference](../reference/environment.md).
+See also: [Environment reference](reference/environment.md).
 
 ### Static admins
 ```bash
@@ -47,8 +49,6 @@ ADMIN_USER_IDS=U1234567890abcdef,U9876543210fedcba
 - `/admin cancel <token>`
 
 For the full command reference, usage details, and preview/confirmation flows, keep reading below.
-
-For first-time setup, start with [ADMIN_QUICK_START.md](ADMIN_QUICK_START.md).
 
 ## 👑 Privileged Access Levels
 

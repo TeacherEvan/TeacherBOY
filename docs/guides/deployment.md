@@ -41,7 +41,8 @@ Use this to validate your bot before deploying.
 4. Add env vars/secrets:
    - `LINE_CHANNEL_SECRET`
    - `LINE_CHANNEL_ACCESS_TOKEN`
-   - `GOOGLE_TRANSLATE_API_KEY` (recommended)
+   - `GITHUB_MODELS_PAT` (recommended)
+   - `OPENROUTER_API_KEY` (fallback)
    - Optional bootstrap: `ADMIN_SETUP_KEY`
 
 5. Deploy.

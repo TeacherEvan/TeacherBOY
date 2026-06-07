@@ -352,8 +352,8 @@ summary = await conversation_summarization_service.summarize_conversation(
 ## 📚 Additional Resources
 
 - [reference/maintainers.md](../reference/maintainers.md) - Active maintainer guidance
-- [GITHUB_MODELS.md](./GITHUB_MODELS.md) - LLM provider setup
-- [CONVERSATION_MEMORY.md](./CONVERSATION_MEMORY.md) - Memory management
+- [GITHUB_MODELS.md](../GITHUB_MODELS.md) - LLM provider setup
+- [CONVERSATION_MEMORY.md](../CONVERSATION_MEMORY.md) - Memory management
 
 ## 🎯 Best Practices
 

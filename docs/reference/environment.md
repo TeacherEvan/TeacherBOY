@@ -129,7 +129,6 @@ This returns the bot to the existing local/HF-backed path without deleting local
 - `HISTORY_LOG_ROTATION_DAYS`
 - `HISTORY_LOG_ENCRYPTION_KEY`
 - `HISTORY_LOG_HF_REPO_ID`
-- `ZEUS_ERROR_STYLE`
 
 ## Staff Memory
 
