@@ -16,6 +16,12 @@ from pydantic_settings import BaseSettings
 logger = logging.getLogger(__name__)
 
 
+def _validate_evilevan_repo(v: str | None) -> str | None:
+    if v and v.strip() and not v.strip().startswith("#") and not v.lower().startswith("evilevan/teacherboy-"):
+        raise ValueError("HF repo must be in EvilEvan/teacherboy-* namespace")
+    return v
+
+
 class Settings(BaseSettings):
     """
     Production-grade application settings with comprehensive validation.
@@ -553,6 +559,17 @@ class Settings(BaseSettings):
             "Example: 'username/teacherboy-calendar'. Uses hf_memory_token for auth."
         ),
     )
+    images_hf_repo_id: str | None = Field(
+        default=None,
+        description=(
+            "Hugging Face dataset repo ID for image analysis persistence. "
+            "Example: 'EvilEvan/teacherboy-images'. Will be created as private if it doesn't exist."
+        ),
+    )
+    images_hf_enabled: bool = Field(
+        default=False,
+        description="Enable image analysis persistence to HF Hub.",
+    )
     calendar_sync_interval_seconds: int = Field(
         default=300,
         ge=60,
@@ -724,6 +741,21 @@ class Settings(BaseSettings):
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in additional_agents: {e}")
             raise ValueError(f"additional_agents must be valid JSON: {e}")
+
+    @field_validator(
+        "hf_memory_repo_id",
+        "document_hf_repo_id",
+        "history_log_hf_repo_id",
+        "calendar_hf_repo_id",
+        "images_hf_repo_id",
+        mode="before",
+    )
+    @classmethod
+    def validate_evilevan_repo_namespace(cls, v: str | None) -> str | None:
+        """Validate that HF repo IDs use the EvilEvan/teacherboy-* namespace."""
+        if v and v.strip() and not v.strip().startswith("#") and not v.lower().startswith("evilevan/teacherboy-"):
+            raise ValueError("HF repo must be in EvilEvan/teacherboy-* namespace")
+        return v
 
     @field_validator("persistence_backend", mode="before")
     @classmethod
