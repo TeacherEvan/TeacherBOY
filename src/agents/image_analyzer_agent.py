@@ -74,6 +74,42 @@ tracer = get_tracer(__name__)
 # Rate limiter: 5 analyses per hour per chat (less expensive than profiler)
 image_analyzer_rate_limiter = RateLimiter(max_requests=5, time_window_seconds=3600)
 
+# Module-level constants for neutral scene detection (single source of truth)
+NEUTRAL_SCENE_TERMS = frozenset(
+    [
+        "baby",
+        "newborn",
+        "breastfeed",
+        "breast feeding",
+        "breastfeeding",
+        "family",
+        "mother",
+        "father",
+        "child",
+        "medical",
+        "hospital",
+        "food",
+        "menu",
+        "sign",
+        "document",
+        "receipt",
+        "package",
+        "product",
+        "pet",
+        "home",
+        "household",
+        "room",
+        "care",
+    ]
+)
+
+# Maximum image size (10MB) to prevent DoS via memory exhaustion
+MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
+
+# Retry configuration for LINE API calls
+LINE_API_MAX_RETRIES = 3
+LINE_API_BASE_DELAY = 1.0  # seconds
+
 
 class ImageAnalyzerAgent(BaseAgent):
     """
@@ -114,8 +150,9 @@ class ImageAnalyzerAgent(BaseAgent):
             description="General purpose image Q&A using vision AI",
         )
         self.http_client = http_client
-        # Cache for friend status checks
+        # Cache for friend status checks with thread-safe access
         self._friend_cache: dict[str, tuple[bool, datetime]] = {}
+        self._friend_cache_lock = asyncio.Lock()
 
     def _identity_name(self) -> str:
         return get_bot_identity_service().get_profile().display_name
@@ -170,6 +207,7 @@ class ImageAnalyzerAgent(BaseAgent):
 
         Uses LINE API get_profile() which returns error for non-friends.
         Results are cached for 1 minute (reduced from 5 minutes for security).
+        Thread-safe with asyncio.Lock and includes retry logic for transient failures.
 
         Args:
             event: LINE message event
@@ -183,30 +221,49 @@ class ImageAnalyzerAgent(BaseAgent):
             logger.warning("🖼️ No user_id found for friendship check")
             return False
 
-        # Check cache (1 minute TTL - reduced for security)
-        cached = self._friend_cache.get(user_id)
-        if cached:
-            is_friend, cached_at = cached
-            age = (datetime.now(UTC) - cached_at).total_seconds()
-            if age < 60:  # 1 minute cache
-                return is_friend
+        # Check cache with lock (1 minute TTL - reduced for security)
+        async with self._friend_cache_lock:
+            cached = self._friend_cache.get(user_id)
+            if cached:
+                is_friend, cached_at = cached
+                age = (datetime.now(UTC) - cached_at).total_seconds()
+                if age < 60:
+                    return is_friend
 
-        try:
-            await asyncio.to_thread(line_bot_api.get_profile, user_id)
-            self._friend_cache[user_id] = (True, datetime.now(UTC))
-            logger.info(f"🖼️ User {user_id} is a friend (verified via LINE API)")
-            return True
-        except ApiException as e:
-            status = getattr(e, "status_code", "unknown")
-            logger.info(
-                f"🖼️ User {user_id} is NOT a friend (ApiException: {status})",
-                exc_info=False,
-            )
-            self._friend_cache[user_id] = (False, datetime.now(UTC))
-            return False
-        except Exception as e:
-            logger.warning(f"🖼️ Friendship check failed for {user_id}: {e}", exc_info=False)
-            return False
+        # Retry logic for LINE API call
+        last_exception = None
+        for attempt in range(LINE_API_MAX_RETRIES):
+            try:
+                await asyncio.to_thread(line_bot_api.get_profile, user_id)
+                async with self._friend_cache_lock:
+                    self._friend_cache[user_id] = (True, datetime.now(UTC))
+                logger.info(f"🖼️ User {user_id} is a friend (verified via LINE API)")
+                return True
+            except ApiException as e:
+                status = getattr(e, "status_code", "unknown")
+                logger.info(
+                    f"🖼️ User {user_id} is NOT a friend (ApiException: {status})",
+                    exc_info=False,
+                )
+                async with self._friend_cache_lock:
+                    self._friend_cache[user_id] = (False, datetime.now(UTC))
+                return False
+            except Exception as e:
+                last_exception = e
+                if attempt < LINE_API_MAX_RETRIES - 1:
+                    delay = LINE_API_BASE_DELAY * (2**attempt)
+                    logger.warning(
+                        f"🖼️ Friendship check failed for {user_id} (attempt {attempt + 1}/{LINE_API_MAX_RETRIES}): {e}. Retrying in {delay}s"
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.warning(
+                        f"🖼️ Friendship check failed for {user_id} after {LINE_API_MAX_RETRIES} attempts: {last_exception}",
+                        exc_info=False,
+                    )
+                    return False
+
+        return False
 
     def invalidate_friend_cache(self, user_id: str) -> None:
         """Invalidate friend cache for a specific user (call when friend status may have changed)."""
@@ -282,22 +339,29 @@ class ImageAnalyzerAgent(BaseAgent):
 
         # Case 2: Image message when waiting for image
         if message_type == "image":
-            return image_analyzer_session_manager.is_waiting_for_image(chat_id, user_id)
+            return await image_analyzer_session_manager.is_waiting_for_image(chat_id, user_id)
 
         # Case 3: Text message when waiting for analysis choice
-        if message_type == "text" and text and image_analyzer_session_manager.is_waiting_for_analysis_choice(chat_id, user_id):
-            if any(choice in text.lower().strip() for choice in ["new", "last"]):
+        if (
+            message_type == "text"
+            and text
+            and await image_analyzer_session_manager.is_waiting_for_analysis_choice(chat_id, user_id)
+        ):
+            # Only accept 'new' or 'last' as valid choices
+            choice = text.strip().lower()
+            if choice in ("new", "last"):
                 return True
+            # Invalid choice - will re-prompt in handle()
             return True
 
         # Case 4: Text message when waiting for question
         if message_type == "text" and text:
-            if image_analyzer_session_manager.is_waiting_for_question(chat_id, user_id):
+            if await image_analyzer_session_manager.is_waiting_for_question(chat_id, user_id):
                 return True
 
             # Case 5: Calendar confirmation response
             text_lower = text.lower().strip()
-            if image_analyzer_session_manager.is_waiting_for_calendar_confirmation(chat_id, user_id):
+            if await image_analyzer_session_manager.is_waiting_for_calendar_confirmation(chat_id, user_id):
                 if any(kw in text_lower for kw in ["yes add", "no skip", "yes", "no", "ใช่", "ไม่"]):
                     return True
 
@@ -352,7 +416,7 @@ class ImageAnalyzerAgent(BaseAgent):
                 logger.error(f"❌ ImageAnalyzerAgent error: {e}", exc_info=True)
                 span.set_attribute("analyzer.error", str(e))
                 await self._send_error_message(event, line_bot_api, str(e))
-                image_analyzer_session_manager.clear_session(chat_id)
+                await image_analyzer_session_manager.clear_session(chat_id)
                 return False
 
     async def _process_direct_debrief(
@@ -380,7 +444,7 @@ class ImageAnalyzerAgent(BaseAgent):
         except Exception as e:
             logger.error(f"❌ Debrief extraction failed: {e}")
             await self._send_error_message(event, line_bot_api, "Failed to analyze the image for debrief.")
-            image_analyzer_session_manager.clear_session(chat_id)
+            await image_analyzer_session_manager.clear_session(chat_id)
             return False
 
         # Format using the new daily debrief formatter
@@ -405,7 +469,7 @@ class ImageAnalyzerAgent(BaseAgent):
             )
 
         logger.info(f"✅ Debrief sent for chat {chat_id}")
-        image_analyzer_session_manager.clear_session(chat_id)
+        await image_analyzer_session_manager.clear_session(chat_id)
         return True
 
     async def _handle_trigger(
@@ -442,7 +506,7 @@ class ImageAnalyzerAgent(BaseAgent):
 
         # If debrief trigger and we already have an image stored, process immediately
         if is_debrief:
-            session = image_analyzer_session_manager.get_session(chat_id)
+            session = await image_analyzer_session_manager.get_session(chat_id)
             if session and session.image_data:
                 logger.info(f"📖 Direct debrief trigger detected for chat {chat_id}")
                 return await self._process_direct_debrief(event, chat_id, user_id, line_bot_api, session.image_data)
@@ -450,7 +514,7 @@ class ImageAnalyzerAgent(BaseAgent):
         bare_analyze = command_text == "analyze"
 
         if bare_analyze:
-            image_analyzer_session_manager.start_analysis_choice(chat_id, user_id)
+            await image_analyzer_session_manager.start_analysis_choice(chat_id, user_id)
             quick_reply = QuickReply(
                 items=[
                     QuickReplyItem(
@@ -483,7 +547,7 @@ class ImageAnalyzerAgent(BaseAgent):
             return True
 
         analysis_mode = "debrief" if is_debrief else "standard"
-        image_analyzer_session_manager.start_session(chat_id, user_id, analysis_mode=analysis_mode)
+        await image_analyzer_session_manager.start_session(chat_id, user_id, analysis_mode=analysis_mode)
 
         prompt_text = (
             "🖼️ Please send the image you'd like me to analyze.\n\n"
@@ -523,7 +587,7 @@ class ImageAnalyzerAgent(BaseAgent):
         choice = re.sub(r"\s+", " ", (text or "").strip().lower())
 
         if choice == "new":
-            image_analyzer_session_manager.start_session(chat_id, user_id, analysis_mode="standard")
+            await image_analyzer_session_manager.start_session(chat_id, user_id, analysis_mode="standard")
             prompt_msg = TextMessage(
                 text=(
                     "🖼️ Please send the image you'd like me to analyze.\n\n"
@@ -545,7 +609,7 @@ class ImageAnalyzerAgent(BaseAgent):
             return True
 
         if choice == "last":
-            last_image = image_analyzer_session_manager.get_last_image(chat_id)
+            last_image = await image_analyzer_session_manager.get_last_image(chat_id)
             if not last_image:
                 msg = TextMessage(
                     text=(
@@ -565,10 +629,10 @@ class ImageAnalyzerAgent(BaseAgent):
                             notificationDisabled=False,
                         ),
                     )
-                image_analyzer_session_manager.clear_session(chat_id)
+                await image_analyzer_session_manager.clear_session(chat_id)
                 return True
 
-            image_analyzer_session_manager.start_session_with_image(
+            await image_analyzer_session_manager.start_session_with_image(
                 chat_id,
                 user_id,
                 image_data=last_image,
@@ -642,7 +706,7 @@ class ImageAnalyzerAgent(BaseAgent):
 
         if not image_bytes:
             await self._send_error_message(event, line_bot_api, "Failed to download image. Please try again.")
-            image_analyzer_session_manager.clear_session(chat_id)
+            await image_analyzer_session_manager.clear_session(chat_id)
             return False
 
         span.set_attribute("image.size_bytes", len(image_bytes))
@@ -655,7 +719,7 @@ class ImageAnalyzerAgent(BaseAgent):
         del image_bytes  # Remove binary data from memory
         del image_base64  # Remove base64 string (data URL is kept in session)
 
-        if not image_analyzer_session_manager.store_image(chat_id, image_data_url):
+        if not await image_analyzer_session_manager.store_image(chat_id, image_data_url):
             await self._send_error_message(
                 event,
                 line_bot_api,
@@ -712,32 +776,7 @@ class ImageAnalyzerAgent(BaseAgent):
     def _is_low_risk_scene_question(self, question: str) -> bool:
         """Return True when the user is asking about a neutral everyday scene."""
         question_lower = (question or "").lower().strip()
-        neutral_scene_terms = [
-            "baby",
-            "newborn",
-            "breastfeed",
-            "breast feeding",
-            "breastfeeding",
-            "family",
-            "mother",
-            "father",
-            "child",
-            "medical",
-            "hospital",
-            "food",
-            "menu",
-            "sign",
-            "document",
-            "receipt",
-            "package",
-            "product",
-            "pet",
-            "home",
-            "household",
-            "room",
-            "care",
-        ]
-        return any(term in question_lower for term in neutral_scene_terms)
+        return any(term in question_lower for term in NEUTRAL_SCENE_TERMS)
 
     async def _handle_question(
         self,
@@ -755,7 +794,7 @@ class ImageAnalyzerAgent(BaseAgent):
             image_data,
             _,
             analysis_mode,
-        ) = image_analyzer_session_manager.get_image_and_question(chat_id, question)
+        ) = await image_analyzer_session_manager.get_image_and_question(chat_id, question)
 
         if not image_data:
             await self._send_error_message(
@@ -778,20 +817,44 @@ class ImageAnalyzerAgent(BaseAgent):
             # Use DebriefExtractionService for structured extraction
             try:
                 vision_model = getattr(settings, "profiler_model", "openai/gpt-4o")
+                start_time = datetime.now(UTC)
                 debrief = await _debrief_extraction_service.extract_from_image(
                     image_url_or_base64=image_data,
                     chat_id=chat_id,
                     date_str=datetime.now().strftime("%Y-%m-%d"),
                     model=vision_model,
                 )
+                duration_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
             except Exception as e:
                 logger.error(f"❌ Debrief extraction failed: {e}")
                 await self._send_error_message(event, line_bot_api, "Failed to analyze the image for debrief.")
-                image_analyzer_session_manager.clear_session(chat_id)
+                await image_analyzer_session_manager.clear_session(chat_id)
                 return False
 
             # Format using the new daily debrief formatter
             formatted_msg = DebriefFormatter.format_daily_debrief(debrief)
+
+            # Save image metadata to HF (if enabled)
+            if hasattr(image_analyzer_session_manager, "save_image_metadata"):
+                try:
+                    # Calculate approximate image size from base64 string
+                    image_size_bytes = 0
+                    if image_data and image_data.startswith("data:image"):
+                        base64_part = image_data.split(",", 1)[1] if "," in image_data else ""
+                        image_size_bytes = len(base64_part) * 3 // 4
+
+                    await image_analyzer_session_manager.save_image_metadata(
+                        chat_id=chat_id,
+                        image_base64=image_data,
+                        prompt=question,
+                        response=formatted_msg,
+                        analysis_mode=analysis_mode,
+                        duration_ms=duration_ms,
+                        image_size_bytes=image_size_bytes,
+                        model_used=vision_model,
+                    )
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to save image metadata: {e}")
 
             # Send via push (reply token already used for "analyzing" message)
             group_id = getattr(event.source, "group_id", None) if event.source else None
@@ -811,7 +874,7 @@ class ImageAnalyzerAgent(BaseAgent):
                 )
 
             logger.info(f"✅ Debrief sent for chat {chat_id}")
-            image_analyzer_session_manager.clear_session(chat_id)
+            await image_analyzer_session_manager.clear_session(chat_id)
             return True
         else:
             messages = self._build_vision_message(image_data, question, scene_mode=scene_mode)
@@ -819,6 +882,7 @@ class ImageAnalyzerAgent(BaseAgent):
         # Call vision via provider-agnostic fallback
         logger.info(f"🖼️ Analyzing image with question: {question[:50]}...")
 
+        start_time = datetime.now(UTC)
         model = getattr(settings, "profiler_model", "openai/gpt-4o")
         analysis = await chat_completion_with_vision_fallback(
             messages=messages,
@@ -826,6 +890,7 @@ class ImageAnalyzerAgent(BaseAgent):
             temperature=0.15 if low_risk_scene else settings.llm_temperature,
             max_tokens=2000,
         )
+        duration_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
 
         if not analysis:
             status_code, error_detail, model_used = self._get_vision_error_detail() or (
@@ -854,6 +919,8 @@ class ImageAnalyzerAgent(BaseAgent):
 
         # CRITICAL: Clear image data from memory after vision API call
         # This prevents sensitive image data from lingering in memory/logs
+        # Save image_data for metadata persistence before clearing
+        saved_image_data = image_data
         del image_data  # Clear base64 data URL
         del messages  # Clear vision API messages containing image
 
@@ -872,6 +939,29 @@ class ImageAnalyzerAgent(BaseAgent):
 
         span.set_attribute("analyzer.success", True)
         span.set_attribute("analysis.length", len(analysis))
+
+        # Save image metadata to HF (if enabled)
+        if hasattr(image_analyzer_session_manager, "save_image_metadata"):
+            try:
+                # Calculate approximate image size from base64 string
+                image_size_bytes = 0
+                if saved_image_data and saved_image_data.startswith("data:image"):
+                    # Extract base64 part and calculate original byte size
+                    base64_part = saved_image_data.split(",", 1)[1] if "," in saved_image_data else ""
+                    image_size_bytes = len(base64_part) * 3 // 4
+
+                await image_analyzer_session_manager.save_image_metadata(
+                    chat_id=chat_id,
+                    image_base64=saved_image_data,
+                    prompt=question,
+                    response=analysis,
+                    analysis_mode=analysis_mode,
+                    duration_ms=duration_ms,
+                    image_size_bytes=image_size_bytes,
+                    model_used=model,
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to save image metadata: {e}")
 
         # Extract detected dates before formatting (which strips them)
         detected_dates = self._extract_dates_from_analysis(analysis)
@@ -906,7 +996,7 @@ class ImageAnalyzerAgent(BaseAgent):
             await self._offer_calendar_integration(event, line_bot_api, detected_dates, user_id, chat_id)
 
         # Explicitly clear session to prevent memory leaks
-        image_analyzer_session_manager.clear_session(chat_id)
+        await image_analyzer_session_manager.clear_session(chat_id)
         return True
 
     def _build_vision_message(self, image_data_url: str, question: str, scene_mode: str = "standard") -> list:
@@ -919,34 +1009,8 @@ class ImageAnalyzerAgent(BaseAgent):
         current_year = today.year
         question_lower = (question or "").lower().strip()
 
-        neutral_scene_terms = [
-            "baby",
-            "newborn",
-            "breastfeed",
-            "breast feeding",
-            "breastfeeding",
-            "family",
-            "mother",
-            "father",
-            "child",
-            "medical",
-            "hospital",
-            "food",
-            "menu",
-            "sign",
-            "document",
-            "receipt",
-            "package",
-            "product",
-            "pet",
-            "home",
-            "household",
-            "room",
-            "care",
-        ]
-
         extra_conservative_instruction = ""
-        if scene_mode == "literal" or any(term in question_lower for term in neutral_scene_terms):
+        if scene_mode == "literal" or any(term in question_lower for term in NEUTRAL_SCENE_TERMS):
             extra_conservative_instruction = (
                 "This looks like a normal everyday scene. "
                 "Stay extremely literal and calm; do not sexualize, sensationalize, or assume hidden intent. "
@@ -1088,7 +1152,7 @@ class ImageAnalyzerAgent(BaseAgent):
         dates_text = "\n".join(dates_summary)
 
         # Store dates in session for later retrieval
-        image_analyzer_session_manager.store_detected_dates(chat_id, detected_dates)
+        await image_analyzer_session_manager.store_detected_dates(chat_id, detected_dates)
 
         # Create message with quick reply
         msg_text = (
@@ -1206,12 +1270,12 @@ class ImageAnalyzerAgent(BaseAgent):
                             notificationDisabled=False,
                         ),
                     )
-                image_analyzer_session_manager.clear_session(chat_id)
+                await image_analyzer_session_manager.clear_session(chat_id)
                 logger.info(f"🖼️ Non-friend {user_id} ({display_name}) denied calendar access")
                 return True
 
             # Get detected dates from session
-            detected_dates = image_analyzer_session_manager.get_detected_dates(chat_id)
+            detected_dates = await image_analyzer_session_manager.get_detected_dates(chat_id)
 
             if not detected_dates:
                 # Session expired or no dates found
@@ -1229,11 +1293,8 @@ class ImageAnalyzerAgent(BaseAgent):
                             notificationDisabled=False,
                         ),
                     )
-                image_analyzer_session_manager.clear_session(chat_id)
+                await image_analyzer_session_manager.clear_session(chat_id)
                 return True
-
-            # Clear the image analyzer session first
-            image_analyzer_session_manager.clear_session(chat_id)
 
             # Import and call calendar agent to start extraction flow
             try:
@@ -1283,11 +1344,13 @@ class ImageAnalyzerAgent(BaseAgent):
                                 notificationDisabled=False,
                             ),
                         )
+                    await image_analyzer_session_manager.clear_session(chat_id)
                     return True
 
                 # Start the extraction flow with detected dates
                 if not user_id:
                     logger.error("Cannot start extraction flow: user_id is None")
+                    await image_analyzer_session_manager.clear_session(chat_id)
                     return True
                 await calendar_agent.start_extraction_flow_from_image(
                     chat_id=chat_id,
@@ -1297,6 +1360,9 @@ class ImageAnalyzerAgent(BaseAgent):
                     event=event,
                     line_bot_api=line_bot_api,
                 )
+
+                # Clear session AFTER calendar flow starts successfully
+                await image_analyzer_session_manager.clear_session(chat_id)
 
                 logger.info(f"📅 Started calendar extraction flow for {len(extracted_dates)} dates in chat {chat_id}")
                 return True
@@ -1319,12 +1385,13 @@ class ImageAnalyzerAgent(BaseAgent):
                             notificationDisabled=False,
                         ),
                     )
+                await image_analyzer_session_manager.clear_session(chat_id)
                 return True
 
         # Check for "no" response
         elif "no" in text_lower or "skip" in text_lower:
             # Clear session and acknowledge
-            image_analyzer_session_manager.clear_session(chat_id)
+            await image_analyzer_session_manager.clear_session(chat_id)
 
             msg = TextMessage(
                 text="👍 Understood. Calendar skipped.\n\nเข้าใจแล้ว ไม่เพิ่มลงปฏิทิน",
@@ -1376,41 +1443,63 @@ class ImageAnalyzerAgent(BaseAgent):
             return True
 
     async def _download_image(self, message_id: str) -> bytes | None:
-        """Download image content from LINE servers."""
-        try:
-            configuration = Configuration(access_token=settings.line_channel_access_token)
+        """Download image content from LINE servers with size limit and retry logic."""
+        last_exception = None
 
-            with ApiClient(configuration) as api_client:
-                blob_api = MessagingApiBlob(api_client)
+        for attempt in range(LINE_API_MAX_RETRIES):
+            try:
+                configuration = Configuration(access_token=settings.line_channel_access_token)
 
-                response = await asyncio.to_thread(blob_api.get_message_content, message_id)
+                with ApiClient(configuration) as api_client:
+                    blob_api = MessagingApiBlob(api_client)
 
-                # Handle None response explicitly
-                if response is None:
-                    logger.warning("❌ Response is None from LINE API")
-                    return None
+                    response = await asyncio.to_thread(blob_api.get_message_content, message_id)
 
-                if isinstance(response, bytes):
-                    return response
-                elif isinstance(response, bytearray):
-                    return bytes(response)
-                elif hasattr(response, "read") and callable(getattr(response, "read", None)):
-                    return response.read()
-                else:
-                    # Try to iterate as generator/stream
-                    # Type checker: response could be an iterator/generator we haven't explicitly typed
-                    chunks = []
-                    try:
-                        for chunk in response:  # type: ignore[union-attr]
-                            chunks.append(chunk)
-                        return b"".join(chunks)
-                    except TypeError:
-                        logger.error(f"❌ Unexpected response type: {type(response)}")
+                    # Handle None response explicitly
+                    if response is None:
+                        logger.warning("❌ Response is None from LINE API")
                         return None
 
-        except Exception as e:
-            logger.error(f"❌ Failed to download image {message_id}: {e}", exc_info=True)
-            return None
+                    if isinstance(response, bytes):
+                        image_bytes = response
+                    elif isinstance(response, bytearray):
+                        image_bytes = bytes(response)
+                    elif hasattr(response, "read") and callable(getattr(response, "read", None)):
+                        image_bytes = response.read()
+                    else:
+                        # Try to iterate as generator/stream
+                        chunks = []
+                        try:
+                            for chunk in response:  # type: ignore[union-attr]
+                                chunks.append(chunk)
+                            image_bytes = b"".join(chunks)
+                        except TypeError:
+                            logger.error(f"❌ Unexpected response type: {type(response)}")
+                            return None
+
+                # Validate image size to prevent DoS via memory exhaustion
+                if len(image_bytes) > MAX_IMAGE_SIZE_BYTES:
+                    logger.warning(f"🖼️ Image too large: {len(image_bytes)} bytes (max {MAX_IMAGE_SIZE_BYTES})")
+                    return None
+
+                return image_bytes
+
+            except Exception as e:
+                last_exception = e
+                if attempt < LINE_API_MAX_RETRIES - 1:
+                    delay = LINE_API_BASE_DELAY * (2**attempt)
+                    logger.warning(
+                        f"🖼️ Failed to download image {message_id} (attempt {attempt + 1}/{LINE_API_MAX_RETRIES}): {e}. Retrying in {delay}s"
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        f"❌ Failed to download image {message_id} after {LINE_API_MAX_RETRIES} attempts: {last_exception}",
+                        exc_info=True,
+                    )
+                    return None
+
+        return None
 
     async def _send_analyzing_message(self, event: MessageEvent, line_bot_api: MessagingApi):
         """Send a message indicating analysis is in progress using push_message to avoid reply_token expiry."""
