@@ -182,10 +182,10 @@ class Settings(BaseSettings):
     # Fallback / provider priority Configuration (LLM)
     # ============================================================================
     llm_fallback_provider_priority: str = Field(
-        default="hermes,openrouter,hf_inference,github",
+        default="gemini,hermes,openrouter,hf_inference,github",
         description=(
             "Comma-separated priority list for LLM providers and fallback chain. "
-            "Options: hermes, openrouter, hf_inference, github, ollama. First configured provider is used; "
+            "Options: gemini, hermes, openrouter, hf_inference, github, ollama. First configured provider is used; "
             "if that fails, the next configured provider is tried."
         ),
     )
@@ -226,6 +226,29 @@ class Settings(BaseSettings):
     ollama_default_model: str = Field(
         default="hermes2:latest",
         description="Default model tag to use from Ollama.",
+    )
+
+    # ============================================================================
+    # Gemini Configuration (Google AI Studio / Vertex AI)
+    # ============================================================================
+    gemini_api_key: str | None = Field(
+        default=None,
+        description="Google AI Studio API key for Gemini (GOOGLE_API_KEY or GEMINI_API_KEY)",
+        validation_alias=AliasChoices("GOOGLE_API_KEY", "GEMINI_API_KEY"),
+    )
+    gemini_base_url: str = Field(
+        default="https://generativelanguage.googleapis.com/v1beta",
+        description="Base URL for Gemini API (OpenAI-compatible endpoint)",
+    )
+    gemini_model: str = Field(
+        default="gemini-2.5-flash",
+        description="Default Gemini model for chat/completion tasks",
+        validation_alias=AliasChoices("GEMINI_MODEL"),
+    )
+    gemini_vision_model: str = Field(
+        default="gemini-2.5-flash",
+        description="Gemini model for vision/image analysis tasks",
+        validation_alias=AliasChoices("GEMINI_VISION_MODEL"),
     )
 
     llm_system_prompt: str = Field(
@@ -402,10 +425,10 @@ class Settings(BaseSettings):
         ),
     )
     llm_provider_priority: str = Field(
-        default="hermes,openrouter,github",
+        default="gemini,hermes,openrouter,github",
         description=(
             "Comma-separated priority list for LLM providers. "
-            "Options: 'hermes', 'openrouter', 'github', 'ollama'. First configured provider is used."
+            "Options: 'gemini', 'hermes', 'openrouter', 'github', 'ollama'. First configured provider is used."
         ),
     )
 
@@ -781,10 +804,14 @@ class Settings(BaseSettings):
         """Check if HuggingFace Inference API is properly configured."""
         return bool(self.hf_inference_api_key and len(self.hf_inference_api_key) > 10)
 
+    def is_gemini_configured(self) -> bool:
+        """Check if Gemini API is properly configured."""
+        return bool(self.gemini_api_key and len(self.gemini_api_key) > 10)
+
     def get_fallback_llm_providers(self) -> list[str]:
         """
         Return provider order list with one highest-priority configured provider
-        selected from each configured group: github / openrouter / hermes.
+        selected from each configured group: github / openrouter / hermes / gemini.
         """
         configured: list[str] = []
         if self.is_github_models_configured() and "github" not in configured:
@@ -793,16 +820,18 @@ class Settings(BaseSettings):
             configured.append("openrouter")
         if self.is_hermes_configured() and "hermes" not in configured:
             configured.append("hermes")
-        return configured or ["github", "openrouter", "hermes"]
+        if self.is_gemini_configured() and "gemini" not in configured:
+            configured.append("gemini")
+        return configured or ["github", "openrouter", "hermes", "gemini"]
 
     def get_llm_provider_priority(self) -> list[str]:
         """
         Get ordered list of LLM providers to try.
 
         Returns:
-            List of provider names in priority order (e.g., ['github','openrouter','hermes'])
+            List of provider names in priority order (e.g., ['gemini','hermes','openrouter','github'])
         """
-        raw = (self.llm_fallback_provider_priority or "github,openrouter,hermes").strip()
+        raw = (self.llm_fallback_provider_priority or "gemini,hermes,openrouter,github").strip()
         order = [p.strip().lower() for p in raw.split(",") if p.strip()]
         seen: list[str] = []
         for p in order:

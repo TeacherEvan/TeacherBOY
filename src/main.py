@@ -80,6 +80,7 @@ from src.services.reminder_service import reminder_service
 from src.services.scheduler_service import scheduler_service
 from src.services.startup_data_loader import startup_loader
 from src.services.translation_service import translation_service
+from src.services.gemini_service import gemini_service
 from src.utils.tracing import setup_tracing
 
 # ============================================================================
@@ -192,6 +193,7 @@ async def lifespan(app: FastAPI):
     brave_search_service.set_client(http_client_pool)
     github_models_service.set_client(http_client_pool)
     nous_inference_service.set_client(http_client_pool)
+    gemini_service.set_client(http_client_pool)
     logger.info("✅ HTTP client pool ready with connection pooling enabled")
 
     # ========================================================================
@@ -199,13 +201,13 @@ async def lifespan(app: FastAPI):
     # ========================================================================
     if settings.conversation_memory_enabled:
         if settings.is_conversation_memory_configured():
-            memory_service = init_conversation_memory(
+            init_conversation_memory(
                 hf_token=settings.hf_memory_token,
                 hf_repo_id=settings.hf_memory_repo_id,
             )
             logger.info(f"💭 Conversation memory enabled (HF Hub: {settings.hf_memory_repo_id})")
         else:
-            memory_service = init_conversation_memory()  # In-memory only
+            init_conversation_memory()  # In-memory only
             logger.info("💭 Conversation memory enabled (in-memory only)")
     else:
         logger.info("💭 Conversation memory disabled")
@@ -215,7 +217,7 @@ async def lifespan(app: FastAPI):
     # ========================================================================
     if settings.document_memory_enabled:
         if settings.is_document_memory_configured():
-            document_service = init_document_memory(
+            init_document_memory(
                 hf_token=settings.hf_memory_token,
                 hf_repo_id=settings.document_hf_repo_id,
                 storage_path=settings.document_storage_path,
@@ -224,7 +226,7 @@ async def lifespan(app: FastAPI):
             )
             logger.info(f"📄 Document memory enabled (HF Hub: {settings.document_hf_repo_id})")
         else:
-            document_service = init_document_memory(
+            init_document_memory(
                 storage_path=settings.document_storage_path,
                 max_file_size_mb=settings.document_max_file_size_mb,
                 max_text_chars=settings.document_max_text_chars,
@@ -335,6 +337,20 @@ async def lifespan(app: FastAPI):
         logger.info(f"🔁 Hermes fallback initialized (model={settings.hermes_model})")
     else:
         logger.info("ℹ️ Hermes fallback not configured (skipped)")
+
+    # ========================================================================
+    # PHASE 2d: Gemini Provider Initialization
+    # ========================================================================
+    gemini_service.configure(
+        api_key=settings.gemini_api_key or "",
+        base_url=settings.gemini_base_url or "",
+        model=settings.gemini_model,
+        vision_model=settings.gemini_vision_model,
+    )
+    if gemini_service.is_configured():
+        logger.info(f"🤖 Gemini initialized (model={settings.gemini_model})")
+    else:
+        logger.info("ℹ️ Gemini not configured (skipped)")
 
     # ========================================================================
     # PHASE 3: Agent Registration

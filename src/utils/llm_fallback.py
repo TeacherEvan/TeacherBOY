@@ -1,5 +1,4 @@
-"""
-Optional centralized fallback dispatcher for TeacherBOY.
+"""Optional centralized fallback dispatcher for TeacherBOY.
 
 Prefers configured providers in priority order. Routing in the active code path
 is driven by LLMAgent; this module remains available for call sites that want
@@ -12,6 +11,7 @@ import logging
 from typing import Any
 
 from src.config import settings
+from src.services.gemini_service import gemini_service
 from src.services.github_models_service import github_models_service
 from src.services.hermes_service import hermes_service
 from src.services.hf_inference_service import hf_inference_service
@@ -31,6 +31,7 @@ async def _run_one_vision_provider(
     max_tokens: int | None,
 ) -> str | None:
     wrapper = {
+        "gemini": lambda: gemini_service.is_vision_configured(),
         "hermes": lambda: hermes_service.is_vision_configured(),
         "openrouter": lambda: openrouter_service.is_configured(),
         "hf_inference": lambda: hf_inference_service.is_configured(),
@@ -41,6 +42,13 @@ async def _run_one_vision_provider(
         return None
 
     try:
+        if provider == "gemini":
+            return await gemini_service.chat_completion_with_vision(
+                messages=messages,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
         if provider == "hermes":
             return await hermes_service.chat_completion_with_vision(
                 messages=messages,
@@ -85,6 +93,20 @@ async def chat_completion_with_fallback(
     priority = settings.get_llm_provider_priority()
 
     for provider in priority:
+        if provider == "gemini" and gemini_service.is_configured():
+            try:
+                result = await gemini_service.chat_completion(
+                    messages=messages,
+                    model=settings.gemini_model or None,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                if result:
+                    return result
+            except Exception as exc:
+                logger.warning("Gemini fallback failed: %s", exc)
+            continue
+
         if provider == "github" and github_models_service.is_configured():
             try:
                 result = await github_models_service.chat_completion(

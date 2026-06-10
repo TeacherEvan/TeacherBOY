@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import httpx
 
 from src.config import settings
+from src.services.gemini_service import gemini_service
 from src.services.github_models_service import github_models_service
 from src.services.hermes_service import hermes_service
 from src.services.nous_service import nous_inference_service
@@ -68,10 +69,6 @@ class _LazyGoogleTranslationProvider:
                     pass
                 break
 
-        payload = {
-            "contents": [{"parts": [{"text": user_text}]}],
-            "mimeType": "text/plain",
-        }
         url = (
             "https://translation.googleapis.com/language/translate/v2"
             if "translate/v2" not in str(self._api_key)
@@ -301,12 +298,14 @@ class AITranslationService:
         openrouter=openrouter_service,
         libre_translate: LibreTranslateProvider | None = None,
         hermes=hermes_service,
+        gemini=gemini_service,
         nous=nous_inference_service,
     ):
         self.github_models = github_models
         self.openrouter = openrouter
         self.libre_translate = libre_translate or LibreTranslateProvider()
         self.hermes = hermes
+        self.gemini = gemini
         self.nous = nous
 
     def _github_providers(self):
@@ -372,8 +371,14 @@ class AITranslationService:
             return []
         return [("libretranslate", self.libre_translate, self.libre_translate.chat_completion, {"temperature": 0.2})]
 
+    def _gemini_providers(self):
+        if not self.gemini.is_configured():
+            return []
+        return [("gemini", self.gemini, self.gemini.chat_completion, {"temperature": 0.2})]
+
     def _build_provider_tuples(self):
         providers = []
+        providers.extend(self._gemini_providers())
         providers.extend([(p._service_name, p, p.chat_completion, {"temperature": 0.2}) for p in self._google_providers()])
         providers.extend(self._github_providers())
         providers.extend(self._nous_providers())
