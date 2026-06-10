@@ -6,7 +6,6 @@ Provides shared message sending, date formatting, and validation.
 import asyncio
 import logging
 import re
-from abc import ABC
 from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -27,7 +26,7 @@ logger = logging.getLogger(__name__)
 BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 
 
-class CalendarFlowBase(ABC):
+class CalendarFlowBase:
     """Base class for calendar flow handlers with shared utilities."""
 
     def __init__(self, calendar_service: Any | None = None):

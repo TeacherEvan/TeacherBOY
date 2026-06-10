@@ -265,7 +265,7 @@ If HF Hub sync fails, Zeus LLM can read this file and restore events.
 """
             else:
                 event_list = []
-                for event_id, event in events.items():
+                for _event_id, event in events.items():
                     event_list.append(
                         {
                             "id": event.event_id,

@@ -192,9 +192,7 @@ class DebriefExtractionService:
         if self.llm_vision_fn is not None:
             try:
                 vision_model = model or self.default_vision_model
-                structured_payload = await self.llm_vision_fn(
-                    messages, max_tokens=1000, temperature=0.1, model=vision_model
-                )
+                structured_payload = await self.llm_vision_fn(messages, max_tokens=1000, temperature=0.1, model=vision_model)
                 raw_response = (
                     structured_payload
                     if isinstance(structured_payload, str)

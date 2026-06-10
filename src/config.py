@@ -182,7 +182,7 @@ class Settings(BaseSettings):
     # Fallback / provider priority Configuration (LLM)
     # ============================================================================
     llm_fallback_provider_priority: str = Field(
-        default="gemini,hermes,openrouter,hf_inference,github",
+        default="gemini,hermes,openrouter,hf_inference,github,ollama",
         description=(
             "Comma-separated priority list for LLM providers and fallback chain. "
             "Options: gemini, hermes, openrouter, hf_inference, github, ollama. First configured provider is used; "
@@ -422,13 +422,6 @@ class Settings(BaseSettings):
             "Default model for GitHub Models API. Options include: "
             "openai/gpt-4o, openai/gpt-4o-mini, xai/grok-3, deepseek/deepseek-r1, "
             "meta/llama-3.3-70b-instruct. See https://github.com/marketplace/models"
-        ),
-    )
-    llm_provider_priority: str = Field(
-        default="gemini,hermes,openrouter,github",
-        description=(
-            "Comma-separated priority list for LLM providers. "
-            "Options: 'gemini', 'hermes', 'openrouter', 'github', 'ollama'. First configured provider is used."
         ),
     )
 

@@ -169,7 +169,7 @@ class ImageAnalyzerAgent(BaseAgent):
         Check if user is a LINE friend of the bot.
 
         Uses LINE API get_profile() which returns error for non-friends.
-        Results are cached for 5 minutes.
+        Results are cached for 1 minute (reduced from 5 minutes for security).
 
         Args:
             event: LINE message event
@@ -183,12 +183,12 @@ class ImageAnalyzerAgent(BaseAgent):
             logger.warning("🖼️ No user_id found for friendship check")
             return False
 
-        # Check cache (5 minute TTL)
+        # Check cache (1 minute TTL - reduced for security)
         cached = self._friend_cache.get(user_id)
         if cached:
             is_friend, cached_at = cached
             age = (datetime.now(UTC) - cached_at).total_seconds()
-            if age < 300:  # 5 minute cache
+            if age < 60:  # 1 minute cache
                 return is_friend
 
         try:
@@ -207,6 +207,12 @@ class ImageAnalyzerAgent(BaseAgent):
         except Exception as e:
             logger.warning(f"🖼️ Friendship check failed for {user_id}: {e}", exc_info=False)
             return False
+
+    def invalidate_friend_cache(self, user_id: str) -> None:
+        """Invalidate friend cache for a specific user (call when friend status may have changed)."""
+        if user_id in self._friend_cache:
+            del self._friend_cache[user_id]
+            logger.info(f"🖼️ Invalidated friend cache for user {user_id}")
 
     async def _get_user_display_name(self, user_id: str, line_bot_api: MessagingApi) -> str:
         """
@@ -420,7 +426,16 @@ class ImageAnalyzerAgent(BaseAgent):
                 await self._send_rate_limit_message(event, line_bot_api, reset_seconds)
                 return True
         else:
-            logger.info(f"🔓 Admin {user_id} bypassed image analyzer rate limit")
+            # Structured audit log for admin rate limit bypass
+            logger.warning(
+                "SECURITY_AUDIT: Admin bypassed image analyzer rate limit",
+                extra={
+                    "event_type": "rate_limiter_bypass",
+                    "admin_user_id": user_id,
+                    "chat_id": chat_id,
+                    "service": "image_analyzer",
+                },
+            )
 
         command_text = self._strip_identity_prefix(text)
         is_debrief = "debrief" in command_text or command_text.strip().lower() == "m"
@@ -975,7 +990,7 @@ class ImageAnalyzerAgent(BaseAgent):
 
     def _get_vision_error_detail(self) -> tuple[int | None, str | None, str | None]:
         """Collect the most recent vision API error detail."""
-        for svc in (github_models_service, openrouter_service):
+        for svc in (hermes_service, github_models_service, openrouter_service):
             try:
                 detail = svc.get_last_error()
             except AttributeError:
@@ -1448,7 +1463,10 @@ class ImageAnalyzerAgent(BaseAgent):
             )
 
     async def _send_error_message(self, event: MessageEvent, line_bot_api: MessagingApi, error_detail: str):
-        """Send softer fallback message to user."""
+        """Send softer fallback message to user without exposing internal error details."""
+        # Log the actual error detail internally for debugging
+        logger.error(f"Image analysis error: {error_detail}")
+        # Send user-friendly message without internal error details
         msg = TextMessage(
             text=(
                 "⚡ I hit a snag while analyzing that image.\n\n"
@@ -1456,8 +1474,7 @@ class ImageAnalyzerAgent(BaseAgent):
                 "If you want, ask me to:\n"
                 "• describe the image plainly\n"
                 "• read any text in it\n"
-                "• summarize what objects are visible\n\n"
-                f"(Details: {error_detail})"
+                "• summarize what objects are visible"
             ),
             quickReply=None,
             quoteToken=None,

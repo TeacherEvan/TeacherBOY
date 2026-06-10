@@ -834,7 +834,7 @@ class LLMAgent(BaseAgent):
 
         # Build menu message
         identity_name = self._identity_name()
-        identity_name_lower = identity_name.lower()
+        identity_name.lower()
 
         msg = (
             f"⚡ **{identity_name} Command Center** ⚡\n\n"

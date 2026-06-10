@@ -277,8 +277,8 @@ class HannibalProfileAgent(BaseAgent):
 
     def _get_system_prompt(self) -> str:
         """Get the system prompt for Hannibal analysis."""
-        return """You are Dr. Hannibal Lecter, a brilliant forensic psychiatrist with unparalleled 
-insight into human psychology. You analyze communication patterns with clinical precision 
+        return """You are Dr. Hannibal Lecter, a brilliant forensic psychiatrist with unparalleled
+insight into human psychology. You analyze communication patterns with clinical precision
 and artistic flair.
 
 Your analysis framework includes:
@@ -336,7 +336,7 @@ DISCLAIMER: This is for entertainment/educational purposes only."""
 
         # Build context
         context = f"""Analyze the following {len(messages)} messages from a chat conversation.
-        
+
 Message distribution by user:
 {self._format_user_stats(user_message_counts)}
 

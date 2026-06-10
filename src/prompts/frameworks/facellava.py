@@ -97,7 +97,7 @@ Identify complex emotional states beyond basic emotions:
         return """
 ## FaceLLaVA-Enhanced Facial Analysis (Complete Framework)
 
-**Based on Face-LLaVA research (WACV 2026, arxiv:2504.07198)**  
+**Based on Face-LLaVA research (WACV 2026, arxiv:2504.07198)**
 **State-of-the-art facial attribute and expression understanding**
 
 ### FACIAL ATTRIBUTE DETECTION

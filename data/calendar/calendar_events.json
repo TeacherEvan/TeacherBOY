@@ -52,11 +52,11 @@
       "repository_event_id": null
     },
     {
-      "event_id": "25efcf55-156a-4347-8ba8-b32f5768fddf",
+      "event_id": "09a9cfa5-ec0d-45cc-85ed-2b819a19aa4d",
       "user_id": "test_user_deletion_123",
       "chat_id": "user_test_user_deletion_123",
       "title": "User 1 Event",
-      "event_date": "2026-06-08",
+      "event_date": "2026-06-09",
       "description": "",
       "reminder_days": [
         0,
@@ -65,9 +65,26 @@
       "is_friend": true,
       "notification_target_user_id": "test_user_deletion_123",
       "notified_dates": [],
-      "created_at": "2026-06-07T12:04:57.426757+00:00",
+      "created_at": "2026-06-08T14:52:46.993506+00:00",
+      "repository_event_id": null
+    },
+    {
+      "event_id": "4f57f78d-ac27-4a51-96b8-a8f950b2c90e",
+      "user_id": "test_user_deletion_123",
+      "chat_id": "user_test_user_deletion_123",
+      "title": "User 1 Event",
+      "event_date": "2026-06-12",
+      "description": "",
+      "reminder_days": [
+        0,
+        1
+      ],
+      "is_friend": true,
+      "notification_target_user_id": "test_user_deletion_123",
+      "notified_dates": [],
+      "created_at": "2026-06-10T20:43:24.513562+00:00",
       "repository_event_id": null
     }
   ],
-  "updated_at": "2026-06-07T12:04:57.426777+00:00"
+  "updated_at": "2026-06-10T20:43:24.513584+00:00"
 }

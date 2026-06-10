@@ -43,7 +43,7 @@ class NavarroBodyLanguageFramework:
    - Happy feet (bouncing) = positive emotion
    - Locked ankles = restraining negative emotions
 
-2. **Torso**: 
+2. **Torso**:
    - Facing toward = engagement
    - Turning away = discomfort
    - Arms crossed = barrier/self-soothing

@@ -230,7 +230,7 @@ def test_encrypted_storage_cycle(encrypted_calendar_service, tmp_path):
     encrypted_calendar_service.local_storage_path = tmp_path
 
     # Add event
-    event = encrypted_calendar_service.add_event(
+    encrypted_calendar_service.add_event(
         user_id="U001",
         chat_id="group_A",
         title="Encrypted Event",
@@ -246,7 +246,9 @@ def test_encrypted_storage_cycle(encrypted_calendar_service, tmp_path):
         raw_content = f.read()
 
     # Should not be valid JSON
-    with pytest.raises(Exception):
+    import json
+
+    with pytest.raises(json.JSONDecodeError):
         import json
 
         json.loads(raw_content)
@@ -276,7 +278,7 @@ def test_calendar_rate_limit_user(rate_limiter):
     chat_id = "group_A"
 
     # First 10 operations should succeed
-    for i in range(10):
+    for _i in range(10):
         assert rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin=False)
 
     # 11th operation should fail (limit is 10/minute)
@@ -302,7 +304,7 @@ def test_calendar_rate_limit_admin_bypass(rate_limiter):
     chat_id = "group_A"
 
     # Admin should be able to exceed limits
-    for i in range(50):
+    for _i in range(50):
         assert rate_limiter.is_calendar_operation_allowed(user_id, chat_id, is_admin=True)
 
 

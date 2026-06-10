@@ -90,13 +90,13 @@ Identify emotions using these core patterns:
 
 ### The 7 Universal Emotions with AU Signatures
 
-**Happiness**: AU6 + AU12 (Duchenne smile)  
-**Sadness**: AU1 + AU4 + AU15  
-**Fear**: AU1 + AU2 + AU4 + AU5 + AU20 + AU25/26  
-**Anger**: AU4 + AU5 + AU7 + AU23/24  
-**Surprise**: AU1 + AU2 + AU5 + AU26  
-**Disgust**: AU9 + AU10 + AU17  
-**Contempt**: AU14 (unilateral - key marker)  
+**Happiness**: AU6 + AU12 (Duchenne smile)
+**Sadness**: AU1 + AU4 + AU15
+**Fear**: AU1 + AU2 + AU4 + AU5 + AU20 + AU25/26
+**Anger**: AU4 + AU5 + AU7 + AU23/24
+**Surprise**: AU1 + AU2 + AU5 + AU26
+**Disgust**: AU9 + AU10 + AU17
+**Contempt**: AU14 (unilateral - key marker)
 
 ### Microexpression Detection
 - **Duration**: < 500ms indicates concealed emotion

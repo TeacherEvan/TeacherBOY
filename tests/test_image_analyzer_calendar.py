@@ -259,7 +259,7 @@ class TestImageAnalyzerDateDetection:
         """Test extracting dates from valid analysis response."""
         analysis = """
         Here is my analysis of the image.
-        
+
         ---DATES_DETECTED---
         [{"date": "2026-01-15", "title": "Meeting", "description": "Team sync"}]
         ---END_DATES---
@@ -275,7 +275,7 @@ class TestImageAnalyzerDateDetection:
         """Test extracting multiple dates."""
         analysis = """
         Analysis text here.
-        
+
         ---DATES_DETECTED---
         [
             {"date": "2026-01-15", "title": "Meeting 1", "description": "First"},
@@ -314,11 +314,11 @@ class TestImageAnalyzerDateDetection:
         """Test that dates section is stripped from user-visible response."""
         analysis = """
         Here is the analysis.
-        
+
         ---DATES_DETECTED---
         [{"date": "2026-01-15", "title": "Event"}]
         ---END_DATES---
-        
+
         More text here.
         """
 

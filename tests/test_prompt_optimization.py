@@ -298,7 +298,7 @@ def test_metrics_cost_estimation():
     metrics_collector.reset()
 
     # Simulate 10 vision API calls
-    for i in range(10):
+    for _i in range(10):
         metrics_collector.record(
             PromptExecution(
                 prompt_type="standard",
@@ -336,7 +336,7 @@ def test_full_optimization_workflow():
     # 1. Build optimized prompt
     builder = VisionPromptBuilder().set_analysis_type("standard").add_framework("ekman").add_framework("fbi")
 
-    prompt = builder.build()
+    builder.build()
     estimated_tokens = builder.estimate_tokens()
 
     # 2. Record metrics

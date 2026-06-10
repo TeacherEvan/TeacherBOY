@@ -34,7 +34,7 @@ import traceback
 from collections import OrderedDict
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -158,7 +158,7 @@ class ZeusErrorMessages:
 # ============================================================================
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """Types of events that can be logged."""
 
     # User interactions
@@ -213,7 +213,7 @@ class EventType(str, Enum):
     WARNING = "warning"
 
 
-class LogLevel(str, Enum):
+class LogLevel(StrEnum):
     """Log severity levels."""
 
     DEBUG = "debug"
@@ -223,7 +223,7 @@ class LogLevel(str, Enum):
     CRITICAL = "critical"
 
 
-class AccessLevel(str, Enum):
+class AccessLevel(StrEnum):
     """Access levels for log entries."""
 
     PUBLIC = "public"  # Can be viewed by users

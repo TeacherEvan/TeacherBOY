@@ -19,7 +19,7 @@ def test_debrief_schema_validates_required_fields():
 
 
 def test_debrief_schema_accepts_minimal_payload():
-    debrief = DebriefSchema(
+    DebriefSchema(
         topics_covered=["greetings", "weather"],
         comprehension_level="high",
     )

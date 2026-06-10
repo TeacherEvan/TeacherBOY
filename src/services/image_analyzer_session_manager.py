@@ -80,7 +80,10 @@ class ImageAnalyzerSessionManager:
         """Initialize image analyzer session manager."""
         self._sessions: dict[str, ImageAnalyzerSession] = {}
         self._last_images: dict[str, str] = {}
+        self._last_images_timestamps: dict[str, datetime] = {}  # Track when each image was stored
         self._session_ttl_seconds = 60  # Each step has 60 seconds
+        self._last_images_ttl_seconds = 3600  # Last images expire after 1 hour
+        self._max_last_images = 100  # Maximum number of last images to store
         self._cleanup_task: asyncio.Task | None = None
         self._cleanup_interval_seconds = 30  # Cleanup every 30 seconds
 
@@ -220,6 +223,12 @@ class ImageAnalyzerSessionManager:
 
         session.set_image(image_data)
         self._last_images[chat_id] = image_data
+        self._last_images_timestamps[chat_id] = datetime.now()
+
+        # Enforce size limit on _last_images
+        if len(self._last_images) > self._max_last_images:
+            self._purge_oldest_last_images()
+
         logger.info(f"🖼️ Image stored for chat {chat_id}, waiting for question")
         return True
 
@@ -327,14 +336,51 @@ class ImageAnalyzerSessionManager:
         return session.state == AnalyzerState.WAITING_FOR_CALENDAR_CONFIRMATION
 
     def cleanup_expired(self) -> None:
-        """Remove expired sessions."""
-        expired = [chat_id for chat_id, session in self._sessions.items() if session.is_expired(self._session_ttl_seconds)]
+        """Remove expired sessions and expired last images."""
+        now = datetime.now()
 
-        for chat_id in expired:
+        # Clean up expired sessions
+        expired_sessions = [
+            chat_id
+            for chat_id, session in self._sessions.items()
+            if session.is_expired(self._session_ttl_seconds)
+        ]
+
+        for chat_id in expired_sessions:
             del self._sessions[chat_id]
 
-        if expired:
-            logger.info(f"🖼️ Cleaned up {len(expired)} expired image analysis sessions")
+        # Clean up expired last images (TTL-based)
+        expired_last_images = [
+            chat_id
+            for chat_id, timestamp in self._last_images_timestamps.items()
+            if (now - timestamp).total_seconds() > self._last_images_ttl_seconds
+        ]
+
+        for chat_id in expired_last_images:
+            self._last_images.pop(chat_id, None)
+            self._last_images_timestamps.pop(chat_id, None)
+
+        total_cleaned = len(expired_sessions) + len(expired_last_images)
+        if total_cleaned:
+            logger.info(
+                f"🖼️ Cleaned up {len(expired_sessions)} expired sessions and {len(expired_last_images)} expired last images"
+            )
+
+    def _purge_oldest_last_images(self) -> None:
+        """Remove oldest last images when size limit is exceeded."""
+        if not self._last_images_timestamps:
+            return
+
+        # Sort by timestamp and remove oldest entries to get back under limit
+        sorted_chats = sorted(self._last_images_timestamps.items(), key=lambda x: x[1])
+        to_remove = len(self._last_images) - self._max_last_images + 10  # Remove extra to avoid frequent purges
+
+        for chat_id, _ in sorted_chats[:to_remove]:
+            self._last_images.pop(chat_id, None)
+            self._last_images_timestamps.pop(chat_id, None)
+
+        if to_remove > 0:
+            logger.info(f"🖼️ Purged {to_remove} oldest last images due to size limit")
 
     async def _cleanup_loop(self) -> None:
         """Background task to periodically clean up expired sessions."""

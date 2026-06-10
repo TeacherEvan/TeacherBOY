@@ -24,6 +24,7 @@ Prerequisites:
 """
 
 import sys
+from importlib.util import find_spec
 from pathlib import Path
 
 # Add project root to path for imports
@@ -39,10 +40,7 @@ def main():
     print()
 
     # Check for required libraries
-    try:
-        from google_auth_oauthlib.flow import InstalledAppFlow
-        from googleapiclient.discovery import build
-    except ImportError:
+    if find_spec("google_auth_oauthlib") is None or find_spec("googleapiclient") is None:
         print("❌ Required libraries not installed!")
         print()
         print("Run this command first:")

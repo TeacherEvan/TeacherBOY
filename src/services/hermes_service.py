@@ -165,4 +165,9 @@ class HermesService:
                 await client.aclose()
 
 
+    def get_last_error(self) -> tuple[int | None, str | None, str | None]:
+        """Return last error detail. HermesService doesn't track errors, returns None."""
+        return (None, None, None)
+
+
 hermes_service = HermesService()

@@ -347,7 +347,7 @@ class TestProfilerAgentHandle:
             patch("src.agents.profiler_agent.settings", mock_settings),
             patch("src.agents.profiler_agent.github_models_service") as mock_gms,
             patch("src.agents.profiler_agent.profiler_rate_limiter") as mock_limiter,
-            patch("src.agents.profiler_agent.profiler_service") as mock_profiler,
+            patch("src.agents.profiler_agent.profiler_service"),
             patch("src.agents.profiler_agent.privilege_service") as mock_priv,
             patch("src.agents.profiler_agent.profiler_session_manager") as mock_session,
         ):

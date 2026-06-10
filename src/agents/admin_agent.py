@@ -896,7 +896,6 @@ class AdminAgent(BaseAgent):
 
         active_sessions = len(session_manager.get_active_sessions())
         sleeping_chats = len(session_manager.get_sleeping_chats())
-        pending_confirms = admin_confirmation_service.count_pending()
 
         # ====================================================================
         # SECTION 3: News Session Analytics

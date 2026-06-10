@@ -12,13 +12,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import settings
-from src.services.calendar_service import CalendarEvent
-from src.services.convex_calendar_repository import ConvexCalendarRepository
-from src.services.convex_client import ConvexClient
-from src.services.convex_staff_memory_repository import ConvexStaffMemoryRepository
-from src.services.staff_memory_service import StaffMemoryItem
-from src.services.structured_records_service import StructuredRecordsService
+from src.config import settings  # noqa: E402
+from src.services.calendar_service import CalendarEvent  # noqa: E402
+from src.services.convex_calendar_repository import ConvexCalendarRepository  # noqa: E402
+from src.services.convex_client import ConvexClient  # noqa: E402
+from src.services.convex_staff_memory_repository import ConvexStaffMemoryRepository  # noqa: E402
+from src.services.staff_memory_service import StaffMemoryItem  # noqa: E402
+from src.services.structured_records_service import StructuredRecordsService  # noqa: E402
 
 DEFAULT_STAFF_MEMORY_PATH = PROJECT_ROOT / "data/staff_memory/staff_memory.json"
 DEFAULT_CALENDAR_PATH = PROJECT_ROOT / "data/calendar/calendar_events.json"

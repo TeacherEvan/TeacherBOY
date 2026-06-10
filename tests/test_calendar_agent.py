@@ -97,7 +97,7 @@ class TestCalendarService:
             title="Event 1",
             event_date=future_date_1,
         )
-        event2 = calendar_service.add_event(
+        calendar_service.add_event(
             user_id=user_id,
             chat_id=chat_id,
             title="Event 2",
@@ -1183,7 +1183,7 @@ class TestImageAnalyzerDateDetection:
         """Test extracting dates from analysis response."""
         analysis = """
         Here is what I see in the image: A school announcement with dates.
-        
+
         ---DATES_DETECTED---
         [{"date": "2025-06-09", "title": "Final Grades Due", "description": "Submit all grades"}]
         ---END_DATES---
@@ -1199,7 +1199,7 @@ class TestImageAnalyzerDateDetection:
         """Test extracting multiple dates."""
         analysis = """
         School calendar detected.
-        
+
         ---DATES_DETECTED---
         [
             {"date": "2025-06-09", "title": "Final Grades", "description": ""},
@@ -1226,7 +1226,7 @@ class TestImageAnalyzerDateDetection:
         """Test stripping dates section from response."""
         analysis = """
         Here is the content.
-        
+
         ---DATES_DETECTED---
         [{"date": "2025-06-09", "title": "Test", "description": ""}]
         ---END_DATES---

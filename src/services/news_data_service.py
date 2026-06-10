@@ -768,11 +768,6 @@ class NewsDataService:
 
             # TAT API Implementation (Placeholder - requires valid endpoint verification)
             # Endpoint: https://tatapi.tourismthailand.org/tat/api/v1/events
-            url = "https://tatapi.tourismthailand.org/tat/api/v1/events"
-            headers = {
-                "Authorization": f"Bearer {settings.tat_api_key}",
-                "Accept-Language": "en",
-            }
 
             # We would fetch here. For now, return fallback to avoid breaking if key is invalid.
             # response = await self.client.get(url, headers=headers, timeout=10.0)

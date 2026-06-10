@@ -138,8 +138,8 @@ class AgentRouter:
             source = getattr(event, "source", None)
             source_type = getattr(source, "type", None) if source else None
             user_id = getattr(source, "user_id", None) if source else None
-            group_id = getattr(source, "group_id", None) if source else None
-            room_id = getattr(source, "room_id", None) if source else None
+            getattr(source, "group_id", None) if source else None
+            getattr(source, "room_id", None) if source else None
 
             if message_type == "text":
                 logger.info(

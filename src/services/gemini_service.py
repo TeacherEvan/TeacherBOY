@@ -13,8 +13,6 @@ from typing import Any
 
 import httpx
 
-from src.config import settings
-
 logger = logging.getLogger(__name__)
 
 
@@ -33,17 +31,20 @@ class GeminiService:
 
     @property
     def chat_url(self) -> str:
-        base = (self.base_url or "").rstrip("/")
-        if not base:
-            return ""
-        return f"{base}/models/{self.model}:generateContent"
+        """Build chat URL for the default model (backward compatibility)."""
+        return self._build_url(self.model)
 
     @property
     def vision_url(self) -> str:
+        """Build vision URL for the default vision model (backward compatibility)."""
+        return self._build_url(self.vision_model)
+
+    def _build_url(self, model: str) -> str:
+        """Build API URL for a specific model."""
         base = (self.base_url or "").rstrip("/")
         if not base:
             return ""
-        return f"{base}/models/{self.vision_model}:generateContent"
+        return f"{base}/models/{model}:generateContent"
 
     def is_configured(self) -> bool:
         return bool(self.api_key and self.chat_url and self.model)
@@ -94,9 +95,43 @@ class GeminiService:
             if role == "system":
                 system_instruction = content
             elif role == "user":
-                contents.append({"role": "user", "parts": [{"text": content}]})
+                parts = []
+                if isinstance(content, str):
+                    # Simple text message
+                    parts.append({"text": content})
+                elif isinstance(content, list):
+                    # OpenAI format: list of text and image parts
+                    for item in content:
+                        if isinstance(item, dict):
+                            item_type = item.get("type", "text")
+                            if item_type == "text":
+                                text = item.get("text", "")
+                                if text:
+                                    parts.append({"text": text})
+                            elif item_type == "image_url":
+                                image_url = item.get("image_url", {})
+                                url = image_url.get("url", "")
+                                if url:
+                                    # Convert data URL to inline_data
+                                    if url.startswith("data:"):
+                                        # Format: data:image/jpeg;base64,<base64_data>
+                                        try:
+                                            header, b64_data = url.split(",", 1)
+                                            mime_type = header.split(":")[1].split(";")[0]
+                                            parts.append({
+                                                "inline_data": {
+                                                    "mime_type": mime_type,
+                                                    "data": b64_data
+                                                }
+                                            })
+                                        except Exception:
+                                            logger.warning("Failed to parse data URL: %s", url[:100])
+                if parts:
+                    contents.append({"role": "user", "parts": parts})
             elif role == "assistant":
-                contents.append({"role": "model", "parts": [{"text": content}]})
+                # Assistant messages are typically text only
+                if isinstance(content, str):
+                    contents.append({"role": "model", "parts": [{"text": content}]})
 
         payload: dict[str, Any] = {
             "contents": contents,
@@ -151,11 +186,6 @@ class GeminiService:
         self._last_status_code = None
         self._last_model = target_model
 
-        # Override model for this request if provided
-        original_model = self.model
-        if model:
-            self.model = model
-
         try:
             payload = self._build_payload(messages, temperature, max_tokens)
 
@@ -165,7 +195,7 @@ class GeminiService:
             }
 
             response = await self._client.post(
-                self.chat_url,
+                self._build_url(target_model),
                 headers=headers,
                 json=payload,
                 timeout=30.0,
@@ -199,10 +229,6 @@ class GeminiService:
             logger.error("❌ Gemini request failed: %s", exc, exc_info=True)
             self._last_error = str(exc)
             return None
-        finally:
-            # Restore original model
-            if model:
-                self.model = original_model
 
     async def chat_completion_with_vision(
         self,
@@ -224,10 +250,6 @@ class GeminiService:
         self._last_status_code = None
         self._last_model = target_model
 
-        original_model = self.vision_model
-        if model:
-            self.vision_model = model
-
         try:
             payload = self._build_payload(messages, temperature, max_tokens)
 
@@ -237,7 +259,7 @@ class GeminiService:
             }
 
             response = await self._client.post(
-                self.vision_url,
+                self._build_url(target_model),
                 headers=headers,
                 json=payload,
                 timeout=45.0,
@@ -271,9 +293,6 @@ class GeminiService:
             logger.error("❌ Gemini vision request failed: %s", exc, exc_info=True)
             self._last_error = str(exc)
             return None
-        finally:
-            if model:
-                self.vision_model = original_model
 
 
 gemini_service = GeminiService()

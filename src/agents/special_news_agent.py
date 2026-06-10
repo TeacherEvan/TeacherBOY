@@ -209,7 +209,7 @@ class SpecialNewsAgent(BaseAgent):
         lines: list[str] = [header, ""]  # Add blank line after header for better spacing
 
         valid_count = 0
-        for i, item in enumerate(items[:5], 1):
+        for _i, item in enumerate(items[:5], 1):
             title = (item.get("title") or "").strip()
             url = (item.get("url") or "").strip()
 
