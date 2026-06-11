@@ -1315,7 +1315,7 @@ class ImageAnalyzerAgent(BaseAgent):
 
                     try:
                         parsed_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
-                    except Exception:
+                    except ValueError:
                         continue
 
                     extracted_dates.append(

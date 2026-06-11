@@ -16,7 +16,7 @@ tracer = get_tracer(__name__)
 
 class VisionBaseAgent:
     def __init__(self, name: str, description: str, messaging_api_blob: MessagingApiBlob | None = None):
-        super().__init__(name, description)
+        super().__init__(name, description)  # type: ignore[call-arg]
         self.blob_api = messaging_api_blob
 
     def _get_chat_id(self, event: MessageEvent) -> str:
