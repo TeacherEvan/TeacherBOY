@@ -58,6 +58,7 @@ from src.services.document_memory_service import (
     get_document_memory,
     init_document_memory,
 )
+from src.services.gemini_service import gemini_service
 from src.services.github_models_service import github_models_service
 from src.services.google_translation import google_translation_service
 from src.services.history_log_service import (
@@ -80,7 +81,6 @@ from src.services.reminder_service import reminder_service
 from src.services.scheduler_service import scheduler_service
 from src.services.startup_data_loader import startup_loader
 from src.services.translation_service import translation_service
-from src.services.gemini_service import gemini_service
 from src.utils.tracing import setup_tracing
 
 # ============================================================================

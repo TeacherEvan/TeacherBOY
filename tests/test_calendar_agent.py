@@ -1239,52 +1239,55 @@ class TestImageAnalyzerDateDetection:
 
 
 class TestImageAnalyzerSessionManager:
-    """Tests for ImageAnalyzerSessionManager date storage."""
+    """Test ImageAnalyzerSessionManager integrated tests."""
 
     @pytest.fixture
     def session_manager(self):
-        """Create ImageAnalyzerSessionManager instance."""
-        from src.services.image_analyzer_session_manager import image_analyzer_session_manager
+        """Provide a clean session manager for each test."""
+        from src.services.image_analyzer_session_manager import ImageAnalyzerSessionManager
 
-        return image_analyzer_session_manager
+        return ImageAnalyzerSessionManager()
 
-    def test_store_detected_dates(self, session_manager):
+    @pytest.mark.asyncio
+    async def test_store_detected_dates(self, session_manager):
         """Test storing detected dates in session."""
         chat_id = "test_chat_dates"
         user_id = "U123456"
 
-        session_manager.start_session(chat_id, user_id)
+        await session_manager.start_session(chat_id, user_id)
 
         dates = [
             {"date": "2025-06-09", "title": "Event 1", "description": ""},
             {"date": "2025-07-03", "title": "Event 2", "description": ""},
         ]
 
-        session_manager.store_detected_dates(chat_id, dates)
+        await session_manager.store_detected_dates(chat_id, dates)
 
-        retrieved = session_manager.get_detected_dates(chat_id)
+        retrieved = await session_manager.get_detected_dates(chat_id)
         assert len(retrieved) == 2
         assert retrieved[0]["title"] == "Event 1"
 
-    def test_waiting_for_calendar_confirmation(self, session_manager):
+    @pytest.mark.asyncio
+    async def test_waiting_for_calendar_confirmation(self, session_manager):
         """Test calendar confirmation state."""
         chat_id = "test_chat_confirm"
         user_id = "U123456"
 
-        session_manager.start_session(chat_id, user_id)
-        session_manager.store_detected_dates(chat_id, [{"date": "2025-06-09", "title": "Test", "description": ""}])
+        await session_manager.start_session(chat_id, user_id)
+        await session_manager.store_detected_dates(chat_id, [{"date": "2025-06-09", "title": "Test", "description": ""}])
 
-        assert session_manager.is_waiting_for_calendar_confirmation(chat_id)
+        assert await session_manager.is_waiting_for_calendar_confirmation(chat_id)
 
-    def test_clear_session_clears_dates(self, session_manager):
+    @pytest.mark.asyncio
+    async def test_clear_session_clears_dates(self, session_manager):
         """Test that clearing session also clears detected dates."""
         chat_id = "test_chat_clear"
         user_id = "U123456"
 
-        session_manager.start_session(chat_id, user_id)
-        session_manager.store_detected_dates(chat_id, [{"date": "2025-06-09", "title": "Test", "description": ""}])
+        await session_manager.start_session(chat_id, user_id)
+        await session_manager.store_detected_dates(chat_id, [{"date": "2025-06-09", "title": "Test", "description": ""}])
 
-        session_manager.clear_session(chat_id)
+        await session_manager.clear_session(chat_id)
 
-        retrieved = session_manager.get_detected_dates(chat_id)
+        retrieved = await session_manager.get_detected_dates(chat_id)
         assert len(retrieved) == 0

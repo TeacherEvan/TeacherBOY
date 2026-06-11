@@ -118,12 +118,7 @@ class GeminiService:
                                         try:
                                             header, b64_data = url.split(",", 1)
                                             mime_type = header.split(":")[1].split(";")[0]
-                                            parts.append({
-                                                "inline_data": {
-                                                    "mime_type": mime_type,
-                                                    "data": b64_data
-                                                }
-                                            })
+                                            parts.append({"inline_data": {"mime_type": mime_type, "data": b64_data}})
                                         except Exception:
                                             logger.warning("Failed to parse data URL: %s", url[:100])
                 if parts:

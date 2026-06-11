@@ -365,7 +365,11 @@ class DateExtractionService:
             msg_lower = msg.lower()
 
             # Skip non-event-ish messages to reduce false positives.
-            if not any(k in msg_lower for k in event_keywords) and not weekday_pattern.search(msg_lower) and not month_pattern.search(msg_lower):
+            if (
+                not any(k in msg_lower for k in event_keywords)
+                and not weekday_pattern.search(msg_lower)
+                and not month_pattern.search(msg_lower)
+            ):
                 # Still allow strict date formats (e.g., 2025-01-15) even without keywords.
                 if not any(re.search(pat, msg) for pat, _fmt in date_patterns):
                     continue

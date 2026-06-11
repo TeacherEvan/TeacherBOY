@@ -100,11 +100,12 @@ async def test_debrief_image_uses_debrief_extraction_service(
         patch("src.agents.image_analyzer_agent.datetime") as mock_datetime,
     ):
         mock_datetime.now.return_value.strftime.return_value = "2026-01-15"
-        mock_session.get_image_and_question.return_value = (
+        mock_session.get_image_and_question = AsyncMock(return_value=(
             "data:image/jpeg;base64,abc",
             "What is happening here?",
             "debrief",
-        )
+        ))
+        mock_session.clear_session = AsyncMock()
         mock_debrief_service.extract_from_image = AsyncMock(return_value=mock_debrief)
         mock_formatter.format_daily_debrief.return_value = "FORMATTED DEBRIEF"
 

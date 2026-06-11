@@ -67,7 +67,9 @@ class TestImageAnalyzerCalendarFriendCheck:
         from src.services.image_analyzer_session_manager import image_analyzer_session_manager
 
         chat_id = "user_test_user_123"
-        image_analyzer_session_manager.store_detected_dates(
+        # Create a session first (required by new security check)
+        await image_analyzer_session_manager.start_session(chat_id, "test_user_123")
+        await image_analyzer_session_manager.store_detected_dates(
             chat_id, [{"date": "2026-01-15", "title": "Test Event", "description": "Test"}]
         )
         # Mark as waiting for calendar confirmation
@@ -114,7 +116,9 @@ class TestImageAnalyzerCalendarFriendCheck:
         from src.services.image_analyzer_session_manager import image_analyzer_session_manager
 
         chat_id = "user_test_user_123"
-        image_analyzer_session_manager.store_detected_dates(
+        # Create a session first (required by new security check)
+        await image_analyzer_session_manager.start_session(chat_id, "test_user_123")
+        await image_analyzer_session_manager.store_detected_dates(
             chat_id, [{"date": "2026-01-15", "title": "Test Event", "description": "Test"}]
         )
         from src.services.image_analyzer_session_manager import AnalyzerState
@@ -158,7 +162,9 @@ class TestImageAnalyzerCalendarFriendCheck:
         from src.services.image_analyzer_session_manager import image_analyzer_session_manager
 
         chat_id = "user_test_user_123"
-        image_analyzer_session_manager.store_detected_dates(
+        # Create a session first (required by new security check)
+        await image_analyzer_session_manager.start_session(chat_id, "test_user_123")
+        await image_analyzer_session_manager.store_detected_dates(
             chat_id, [{"date": "2026-01-15", "title": "Test Event", "description": "Test"}]
         )
         from src.services.image_analyzer_session_manager import AnalyzerState
@@ -224,7 +230,9 @@ class TestImageAnalyzerCalendarFriendCheck:
         from src.services.image_analyzer_session_manager import image_analyzer_session_manager
 
         chat_id = "user_test_user_123"
-        image_analyzer_session_manager.store_detected_dates(
+        # Create a session first (required by new security check)
+        await image_analyzer_session_manager.start_session(chat_id, "test_user_123")
+        await image_analyzer_session_manager.store_detected_dates(
             chat_id, [{"date": "2026-01-15", "title": "Test Event", "description": "Test"}]
         )
         from src.services.image_analyzer_session_manager import AnalyzerState

@@ -58,7 +58,7 @@ async def test_analyze_prompt_asks_new_or_last(mock_event, mock_line_bot_api):
         mock_gms.is_configured.return_value = True
         mock_privilege.is_admin.return_value = False
         mock_rl.is_allowed.return_value = True
-        mock_session.start_analysis_choice = MagicMock()
+        mock_session.start_analysis_choice = AsyncMock()
 
         handled = await agent.handle(mock_event, "Ms. Green analyze", mock_line_bot_api)
 
@@ -92,7 +92,7 @@ async def test_plain_analyze_keeps_new_or_last_prompt(mock_event, mock_line_bot_
         mock_gms.is_configured.return_value = True
         mock_privilege.is_admin.return_value = False
         mock_rl.is_allowed.return_value = True
-        mock_session.start_analysis_choice = MagicMock()
+        mock_session.start_analysis_choice = AsyncMock()
 
         handled = await agent.handle(mock_event, "analyze", mock_line_bot_api)
 
@@ -120,7 +120,8 @@ async def test_analysis_choice_last_uses_last_image(mock_event, mock_line_bot_ap
             new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
         ),
     ):
-        mock_session.get_last_image.return_value = "data:image/jpeg;base64,abc"
+        mock_session.get_last_image = AsyncMock(return_value="data:image/jpeg;base64,abc")
+        mock_session.start_session_with_image = AsyncMock()
 
         handled = await agent._handle_analysis_choice(
             mock_event,
@@ -158,7 +159,8 @@ async def test_analysis_choice_last_without_previous_image_returns_fallback(
             new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
         ),
     ):
-        mock_session.get_last_image.return_value = None
+        mock_session.get_last_image = AsyncMock(return_value=None)
+        mock_session.clear_session = AsyncMock()
 
         handled = await agent._handle_analysis_choice(
             mock_event,
