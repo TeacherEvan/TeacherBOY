@@ -236,6 +236,18 @@ async def lifespan(app: FastAPI):
         logger.info("📄 Document memory disabled")
 
     # ========================================================================
+    # PHASE 2a5: Image Analysis HF Persistence Initialization
+    # ========================================================================
+    if settings.images_hf_enabled and settings.images_hf_repo_id:
+        if not image_analyzer_session_manager._images_hf_enabled:
+            image_analyzer_session_manager._images_hf_token = settings.hf_memory_token
+            image_analyzer_session_manager._images_hf_repo_id = settings.images_hf_repo_id
+            image_analyzer_session_manager._setup_images_hf_storage()
+        logger.info(f"🖼️ Image analysis HF persistence enabled: {settings.images_hf_repo_id}")
+    else:
+        logger.info("🖼️ Image analysis HF persistence disabled")
+
+    # ========================================================================
     # PHASE 2a2: History Logging Initialization
     # ========================================================================
     if settings.is_history_log_configured():
