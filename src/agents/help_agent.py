@@ -206,6 +206,20 @@ class HelpAgent(BaseAgent):
                     "available": settings.is_github_models_configured(),
                 },
             ],
+            "Document Memory": [
+                {
+                    "command": f"{display_name} doc",
+                    "description": "Show your stored documents",
+                    "examples": [f"{display_name} doc", f"{display_name} docs"],
+                    "available": settings.document_memory_enabled,
+                },
+                {
+                    "command": f"{display_name} docs",
+                    "description": "List all documents in this chat",
+                    "examples": [f"{display_name} docs"],
+                    "available": settings.document_memory_enabled,
+                },
+            ],
         }
 
         # Admin-only commands
@@ -328,6 +342,9 @@ class HelpAgent(BaseAgent):
             "image": "Image Analysis",
             "photo": "Image Analysis",
             "profile": "Image Analysis",
+            "doc": "Document Memory",
+            "docs": "Document Memory",
+            "document": "Document Memory",
             "admin": "Admin Commands",
             display_name: "Core Commands",
         }

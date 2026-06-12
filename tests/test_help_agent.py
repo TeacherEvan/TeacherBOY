@@ -220,3 +220,34 @@ def test_help_flex_message_adds_quick_reply_shortcuts():
     assert any("Search" in label for label in labels)
     assert any("News" in label for label in labels)
     assert any("Image" in label for label in labels)
+
+
+def test_help_includes_document_memory_category():
+    agent = HelpAgent()
+    with patch("src.agents.help_agent.settings") as mock_settings:
+        mock_settings.is_calendar_configured.return_value = True
+        mock_settings.is_profiler_configured.return_value = True
+        mock_settings.is_github_models_configured.return_value = True
+        mock_settings.is_brave_search_configured.return_value = True
+        mock_settings.document_memory_enabled = True
+
+        categories = agent._get_command_categories(
+            is_admin=False,
+            chat_type="private chat",
+            zeus_available=True,
+            search_available=True,
+        )
+
+    # Should have Document Memory category
+    assert "Document Memory" in categories
+    doc_commands = categories["Document Memory"]
+    assert any(cmd["command"] == "Ms. Green doc" for cmd in doc_commands)
+    assert any(cmd["command"] == "Ms. Green docs" for cmd in doc_commands)
+
+
+def test_help_document_memory_topic_alias():
+    agent = HelpAgent()
+    categories = {"Document Memory": [{"command": "Ms. Green doc", "available": True}]}
+    assert agent._resolve_help_topic("doc", categories) == "Document Memory"
+    assert agent._resolve_help_topic("docs", categories) == "Document Memory"
+    assert agent._resolve_help_topic("document", categories) == "Document Memory"
