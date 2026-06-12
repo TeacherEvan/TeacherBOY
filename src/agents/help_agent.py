@@ -361,6 +361,9 @@ class HelpAgent(BaseAgent):
             "search": "Search",
             "hannibal": "Hannibal Profile",
             "profile messages": "Hannibal Profile",
+            "modmode": "Moderator Mode",
+            "mod mode": "Moderator Mode",
+            "moderator": "Moderator Mode",
             "admin": "Admin Commands",
             display_name: "Core Commands",
         }

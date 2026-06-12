@@ -337,3 +337,11 @@ def test_help_hannibal_topic_alias():
     categories = {"Hannibal Profile": [{"command": "hannibal profile", "examples": ["hannibal profile"], "available": True}]}
     assert agent._resolve_help_topic("hannibal", categories) == "Hannibal Profile"
     assert agent._resolve_help_topic("profile messages", categories) == "Hannibal Profile"
+
+
+def test_help_modmode_topic_alias():
+    agent = HelpAgent()
+    # Just ensure the alias exists in the mapping
+    assert "modmode" in agent._topic_aliases()
+    assert "mod mode" in agent._topic_aliases()
+    assert "moderator" in agent._topic_aliases()
