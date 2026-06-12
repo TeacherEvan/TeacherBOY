@@ -33,6 +33,7 @@ from linebot.v3.webhooks import (
     MemberJoinedEvent,
     MemberLeftEvent,
     MessageEvent,
+    PostbackEvent,
     TextMessageContent,
     UnfollowEvent,
 )
@@ -209,7 +210,7 @@ async def lifespan(app: FastAPI):
     # PHASE 2a: Conversation Memory Initialization
     # ========================================================================
     if settings.conversation_memory_enabled:
-        if settings.is_conversation_memory_configured():
+        if settings.is_conversation_memory_hf_configured():
             init_conversation_memory(
                 hf_token=settings.hf_memory_token,
                 hf_repo_id=settings.hf_memory_repo_id,
@@ -225,7 +226,7 @@ async def lifespan(app: FastAPI):
     # PHASE 2a1: Document Memory Initialization
     # ========================================================================
     if settings.document_memory_enabled:
-        if settings.is_document_memory_configured():
+        if settings.is_document_memory_hf_configured():
             init_document_memory(
                 hf_token=settings.hf_memory_token,
                 hf_repo_id=settings.document_hf_repo_id,
@@ -748,6 +749,109 @@ async def readiness_check(response: Response) -> dict[str, Any]:
     }
 
 
+async def handle_postback_event(event: PostbackEvent, line_bot_api: MessagingApi) -> None:
+    """
+    Handle LINE PostbackEvent for interactive features.
+
+    Routes to appropriate handlers based on postback data:
+    - Admin log viewer (logs_preset, logs_filter, logs_page, logs_custom_*)
+    - Mod mode dashboard actions
+    """
+    data = event.postback.data if event.postback else ""
+    user_id = getattr(event.source, "user_id", None) if event.source else None
+
+    # Admin log viewer postbacks
+    if data.startswith("logs_"):
+        from src.services.history_log_service import get_history_log, DatePreset
+        from linebot.v3.messaging import QuickReply, QuickReplyItem, FlexMessage, FlexContainer, ReplyMessageRequest
+        from src.config import settings
+
+        history_log = get_history_log()
+        if not history_log:
+            return
+
+        # Parse postback data
+        # Format: logs_preset=today, logs_filter=level=ERROR, logs_page=2, logs_custom_start=2026-01-15, etc.
+        chat_id = None
+        if event.source:
+            if getattr(event.source, "group_id", None):
+                chat_id = f"group_{event.source.group_id}"
+            elif getattr(event.source, "room_id", None):
+                chat_id = f"room_{event.source.room_id}"
+            elif getattr(event.source, "user_id", None):
+                chat_id = f"user_{event.source.user_id}"
+
+        if not chat_id or not user_id:
+            return
+
+        # Check if user is admin
+        admin_user_ids = settings.get_admin_user_ids()
+        if user_id not in admin_user_ids:
+            return
+
+        # Handle different postback types
+        if data == "logs_cancel":
+            # Return to default view
+            preset = DatePreset.LAST_7_DAYS
+        elif data.startswith("logs_preset="):
+            preset_str = data.split("=", 1)[1]
+            preset_map = {
+                "today": DatePreset.TODAY,
+                "yesterday": DatePreset.YESTERDAY,
+                "last_7_days": DatePreset.LAST_7_DAYS,
+                "last_30_days": DatePreset.LAST_30_DAYS,
+            }
+            preset = preset_map.get(preset_str, DatePreset.LAST_7_DAYS)
+        elif data == "logs_custom_apply":
+            # Custom range - would need stored start/end dates
+            # For now, return to default
+            preset = DatePreset.LAST_7_DAYS
+        else:
+            # Filter or page change - use default preset
+            preset = DatePreset.LAST_7_DAYS
+
+        # Query logs
+        logs = await history_log.query_logs_preset(preset, limit=20)
+        total_count = len(await history_log.query_logs_preset(preset, limit=1000))
+
+        # Build Flex bubble
+        bubble = history_log.build_log_flex_bubble(
+            logs=logs,
+            preset=preset,
+            filters={},
+            page=1,
+            total_pages=max(1, (total_count + 19) // 20),
+        )
+
+        # Get quick-reply items
+        quick_reply_items = history_log.get_log_quick_reply_items()
+
+        # Send updated Flex message
+        flex_message = FlexMessage(
+            alt_text=f"Admin Logs - {preset.value}",
+            contents=FlexContainer.from_dict(bubble),
+        )
+
+        if event.reply_token:
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[flex_message],
+                    quickReply=QuickReply(items=quick_reply_items) if quick_reply_items else None,
+                    notificationDisabled=False,
+                ),
+            )
+        return
+
+    # Mod mode postbacks (delegate to mod mode agent if available)
+    if data.startswith("action=mod_") or data.startswith("action=modmode_"):
+        # Try to find and delegate to ModModeAgent
+        from src.agents.agent_router import AgentRouter
+        # The agent router will handle this in its route_message if we add support
+        pass
+
+
 # ============================================================================
 # LINE Webhook Endpoint
 # ============================================================================
@@ -885,6 +989,10 @@ async def webhook(request: Request) -> JSONResponse:
                     elif isinstance(event, MemberLeftEvent):
                         # Member left group/room
                         await handle_member_left_event(event, line_bot_api)
+
+                    elif isinstance(event, PostbackEvent):
+                        # Handle postback events (admin log viewer, mod mode, etc.)
+                        await handle_postback_event(event, line_bot_api)
 
                     else:
                         logger.debug(f"Unhandled event type: {type(event).__name__}")

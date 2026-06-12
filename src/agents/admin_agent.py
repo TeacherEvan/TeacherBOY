@@ -16,7 +16,7 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     TextMessage,
 )
-from linebot.v3.webhooks import MessageEvent
+from linebot.v3.webhooks import MessageEvent, PostbackEvent
 
 if TYPE_CHECKING:
     from src.services.news_data_service import NewsDataService
@@ -29,6 +29,7 @@ from src.services.openrouter_service import openrouter_service
 from src.services.privilege_service import privilege_service
 from src.services.rate_limiter import rate_limiter
 from src.services.session_manager import session_manager
+from src.services.history_log_service import get_history_log, DatePreset
 
 from .admin.dashboard_builder import (
     build_admin_dashboard,
@@ -261,6 +262,9 @@ class AdminAgent(BaseAgent):
                     response = self._list_sessions()
                 elif command == "groups":
                     response = self._list_groups()
+                elif command == "logs":
+                    await self._handle_admin_logs(event, line_bot_api, arg)
+                    return True
                 else:
                     response = (
                         f"❌ Unknown command: {command}\n\n"
@@ -1882,6 +1886,78 @@ class AdminAgent(BaseAgent):
 
         msg += "\n\n💡 Use '/admin leave <chat_id>' to leave a group/room (requires private confirmation)."
         return msg
+
+    async def _handle_admin_logs(self, event: MessageEvent, line_bot_api: MessagingApi, arg: str | None) -> None:
+        """
+        Handle /admin logs command - show interactive log viewer with quick-replies.
+
+        Args:
+            event: The LINE message event
+            line_bot_api: LINE Bot API client
+            arg: Optional preset argument (today, yesterday, last_7_days, last_30_days)
+        """
+        history_log = get_history_log()
+        if not history_log:
+            if event.reply_token:
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[TextMessage(text="❌ History log service is not enabled.", quickReply=None, quoteToken=None)],
+                        notificationDisabled=False,
+                    ),
+                )
+            return
+
+        # Parse preset from arg
+        preset_map = {
+            "today": DatePreset.TODAY,
+            "yesterday": DatePreset.YESTERDAY,
+            "last_7_days": DatePreset.LAST_7_DAYS,
+            "last_7": DatePreset.LAST_7_DAYS,
+            "last_30_days": DatePreset.LAST_30_DAYS,
+            "last_30": DatePreset.LAST_30_DAYS,
+        }
+        preset = DatePreset.LAST_7_DAYS  # default
+        if arg:
+            arg_lower = arg.lower().strip()
+            if arg_lower in preset_map:
+                preset = preset_map[arg_lower]
+
+        # Query logs
+        logs = await history_log.query_logs_preset(preset, limit=20)
+        total_count = len(await history_log.query_logs_preset(preset, limit=1000))
+
+        # Build Flex bubble
+        bubble = history_log.build_log_flex_bubble(
+            logs=logs,
+            preset=preset,
+            filters={},
+            page=1,
+            total_pages=max(1, (total_count + 19) // 20),
+        )
+
+        # Get quick-reply items
+        quick_reply_items = history_log.get_log_quick_reply_items()
+
+        # Send Flex message with quick-replies
+        from linebot.v3.messaging import QuickReply, QuickReplyItem
+
+        flex_message = FlexMessage(
+            alt_text=f"Admin Logs - {preset.value}",
+            contents=FlexContainer.from_dict(bubble),
+        )
+
+        if event.reply_token:
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[flex_message],
+                    quickReply=QuickReply(items=quick_reply_items) if quick_reply_items else None,
+                    notificationDisabled=False,
+                ),
+            )
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         """Extract chat ID from event."""
