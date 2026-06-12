@@ -59,6 +59,6 @@ These are the active maintainability rules already enforced by project guidance:
 
 ---
 
-**Last Updated:** 2026-05-30  
+**Last Updated:** 2026-06-12  
 **Audience:** Developers  
 **Status:** Stable

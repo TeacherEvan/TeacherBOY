@@ -22,6 +22,7 @@
 
 ## Feature Documentation
 
+- **Moderator Mode:** [MODERATOR_MODE.md](MODERATOR_MODE.md) - Group moderation: kick, warn, ban, 3-strike, auto-kick, dashboard
 - **Calendar & Reminders:** [CALENDAR_REMINDERS.md](CALENDAR_REMINDERS.md) - Commands, reminders, chat-scoped events
 - **Google Calendar Backend:** [GOOGLE_CALENDAR.md](GOOGLE_CALENDAR.md) - Optional Google Calendar integration
 - **Conversation Memory:** [CONVERSATION_MEMORY.md](CONVERSATION_MEMORY.md) - Multi-turn memory with optional HF sync

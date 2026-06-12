@@ -18,6 +18,7 @@ TeacherBOY is a FastAPI webhook app for LINE.
 
 ## Agents
 
+- **ModModeAgent** (Priority 4): Group moderation — activation, modes (all/special), kick/warn/ban, 3-strike warnings, harmful content detection, ban list with auto-kick, Flex dashboard. Intercepts FIRST in mod-enabled groups.
 - Admin Agent (priority 5): in-chat operations, only registered when configured.
 - Search Agent (priority 8): Brave Search via `Ms. Green search ...` (DM-only for non-admins).
 - LLM Agent (priority 9): OpenRouter chat via `Ms. Green ...` (DM-only for non-admins).
@@ -27,6 +28,11 @@ TeacherBOY is a FastAPI webhook app for LINE.
 
 ## Services
 
+- **ModModeService** (`src/services/mod_mode_service.py`): Convex CRUD for modModeState; activation/deactivation; mode queries
+- **BanListService** (`src/services/ban_list_service.py`): Convex CRUD for banList; auto-kick on join; unban
+- **WarningService** (`src/services/warning_service.py`): Convex CRUD for userWarnings; 3-strike logic; read tracking
+- **HarmfulContentDetector** (`src/services/harmful_content_detector.py`): Keyword + optional LLM detection for harmful content
+- **ModAuditLog** (`src/services/mod_audit_log.py`): Append-only JSONL audit trail to Hugging Face Hub
 - Shared `httpx.AsyncClient` is created once and injected into translation services.
 - Translation providers:
   - Shared AI translation service

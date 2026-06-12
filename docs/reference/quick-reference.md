@@ -34,19 +34,20 @@ USER_BOSS=U1234567890abcdef
 ```
 
 ## 🤖 Agent Priority Order
-
-1. **HelpAgent** (Priority 5) - Comprehensive help system (`help`, `Dear Ms. Green help`, etc.)
-2. **AdminAgent** (Priority 5) - `/admin` commands
-3. **CalendarAgent** (Priority 6) - `Ms. Green calendar`, `Ms. Green add`, `Ms. Green events`
-4. **HannibalProfileAgent** (Priority 6) - Message-history profiling
-5. **ProfilerAgent** (Priority 7) - Image-based psychological profiling
-6. **ImageAnalyzerAgent** (Priority 7) - General image Q&A
-7. **DocumentMemoryAgent** (Priority 8) - PDF/DOCX storage and retrieval
-8. **SearchAgent** (Priority 8) - `Ms. Green search ...`
-9. **LLMAgent** (Priority 9) - `Ms. Green ...`
-10. **TranslationAgent** (Priority 10) - Thai ↔ English translation
-11. **SpecialNewsAgent** (Priority 12) - `/special news` command
-12. **NewsAgent** (Priority 15) - `news` or `ข่าว` trigger
+## 🤖 Agent Priority Order
+1. **ModModeAgent** (Priority 4) - Group moderation: `activate mod mode`, `/modmode ...` (intercepts first in mod-enabled groups)
+2. **HelpAgent** (Priority 5) - Comprehensive help system (`help`, `Dear Ms. Green help`, etc.)
+3. **AdminAgent** (Priority 5) - `/admin` commands
+4. **CalendarAgent** (Priority 6) - `Ms. Green calendar`, `Ms. Green add`, `Ms. Green events`
+5. **HannibalProfileAgent** (Priority 6) - Message-history profiling
+6. **ProfilerAgent** (Priority 7) - Image-based psychological profiling
+7. **ImageAnalyzerAgent** (Priority 7) - General image Q&A
+8. **DocumentMemoryAgent** (Priority 8) - PDF/DOCX storage and retrieval
+9. **SearchAgent** (Priority 8) - `Ms. Green search ...`
+10. **LLMAgent** (Priority 9) - `Ms. Green ...`
+11. **TranslationAgent** (Priority 10) - Thai ↔ English translation
+12. **SpecialNewsAgent** (Priority 12) - `/special news` command
+13. **NewsAgent** (Priority 15) - `news` or `ข่าว` trigger
 
 ## 🤖 AI & Search Commands (Ms. Green)
 
@@ -133,6 +134,28 @@ Quick summary:
 /admin llm_send <alias> <prompt> - LLM-drafted push
 /admin send_weather <alias>      - Push Bangkok weather
 ```
+
+## 🛡️ Moderator Mode Commands
+
+See [MODERATOR_MODE.md](../MODERATOR_MODE.md) for complete documentation.
+
+**Activation:** `activate mod mode` (admin only, in group)
+
+Quick summary:
+```text
+/modmode                    - Show current mode + dashboard
+/modmode dashboard          - Open Flex dashboard (quick-reply buttons)
+/modmode all                - Switch to ALL mode (open + harmful detection)
+/modmode special @user     - Switch to SPECIAL mode (restricted speakers)
+/modmode kick @user         - Kick user from group
+/modmode warn @user [reason] - Issue manual warning
+/modmode ban @user [reason]  - Ban user (adds to ban list + kicks)
+/modmode unban @user        - Remove from ban list
+/modmode banlist            - Show all banned users in this group
+/modmode deactivate         - Disable moderator mode for this group
+```
+
+> **Only works in groups where mod mode is active. Only for admins.**
 
 ## 📋 Translation Features
 

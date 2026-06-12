@@ -11,6 +11,7 @@ Registration happens in `src/main.py`, and some agents are conditional on config
 
 | Priority | Agent Class | Conditional | Trigger Pattern | Description |
 |----------|------------|-------------|-----------------|-------------|
+| 4 | `ModModeAgent` | Yes* | `activate mod mode`, `/modmode ...` | Group moderation: kick, warn, ban, 3-strike, auto-kick, harmful detection, Flex dashboard |
 | 5 | `HelpAgent` | No | `help`, `/help`, `Ms. Green help` | Interactive help and command discovery |
 | 5 | `AdminAgent` | Yes | `/admin`, `/mod` | Administrative commands and privileged control |
 | 6 | `CalendarAgent` | Yes | `Ms. Green calendar`, `Ms. Green add`, `Ms. Green events` | Event scheduling, reminders, scraping |
@@ -24,6 +25,8 @@ Registration happens in `src/main.py`, and some agents are conditional on config
 | 12 | `SpecialNewsAgent` | No | `/special news` | Tourism, sports, and international news |
 | 15 | `NewsAgent` | No | `news`, `ข่าว` | Weather, air quality, headlines, markets |
 
+* `ModModeAgent` only activates in groups where an admin has said `activate mod mode`. It intercepts ALL messages in that group before any other agent.
+
 <!-- markdownlint-enable MD060 -->
 
 ## Router contract
@@ -36,6 +39,7 @@ Key behaviors:
 - Image and file events can still be handled by agents that inspect non-text payloads.
 - Disabled agents are skipped.
 - Exceptions inside an agent do not crash the webhook; routing continues to the next agent.
+- **ModModeAgent (Priority 4) intercepts ALL messages in groups where mod mode is active** — it returns `True` from `should_handle()` for any message in a mod-enabled group, ensuring moderation runs before translation/LLM agents.
 
 ## Adding a new agent
 
