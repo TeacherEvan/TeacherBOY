@@ -2,18 +2,17 @@
 
 import logging
 import re
-from typing import Optional
 
 from linebot.v3.messaging import MessagingApi
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 from src.agents.base_agent import BaseAgent
+from src.agents.mod_mode.dashboard import ModDashboardBuilder
 from src.services.ban_list_service import BanListService
 from src.services.harmful_content_detector import HarmfulContentDetector
 from src.services.mod_audit_log import ModAuditLog
 from src.services.mod_mode_service import ModModeService
 from src.services.warning_service import WarningService
-from src.agents.mod_mode.dashboard import ModDashboardBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -133,10 +132,12 @@ class ModModeAgent(BaseAgent):
                 await self._reply(event, "❌ Usage: 'activate mod mode special @user'", line_bot_api)
                 return True
 
-        result = await self._mod_mode.activate_mod_mode(group_id, user_id, mode, special_user_id)
+        await self._mod_mode.activate_mod_mode(group_id, user_id, mode, special_user_id)
         await self._audit.log_mode_change(group_id, user_id, mode, True, special_user_id)
 
-        mode_msg = "ALL USERS (harmful content monitored)" if mode == "all" else f"SPECIAL MODE (only you + @{special_user_id})"
+        mode_msg = (
+            "ALL USERS (harmful content monitored)" if mode == "all" else f"SPECIAL MODE (only you + @{special_user_id})"
+        )
         await self._reply(
             f"🛡️ Moderator Mode ACTIVATED\nMode: {mode_msg}\nUse /modmode for dashboard",
             line_bot_api,
@@ -257,7 +258,7 @@ class ModModeAgent(BaseAgent):
         source = event.source
         group_id = source.group_id if source.type == "group" else source.room_id
         info = await self._mod_mode.get_mod_mode_info(group_id)
-        flex = self._dashboard.build_main_dashboard("Group", group_id, info or {})
+        _flex = self._dashboard.build_main_dashboard("Group", group_id, info or {})
         # Send Flex message
         return True
 
@@ -286,6 +287,7 @@ class ModModeAgent(BaseAgent):
 
     async def _is_admin(self, user_id: str) -> bool:
         from src.services.privilege_service import privilege_service
+
         return privilege_service.is_admin(user_id)
 
     async def _reply(self, text: str, line_bot_api: MessagingApi):

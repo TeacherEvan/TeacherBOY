@@ -217,6 +217,7 @@ async def handle_member_joined_event(event, line_bot_api: MessagingApi):
     if event.source.type == "group":
         group_id = event.source.group_id
         from src.services.ban_list_service import ban_list_service
+
         for member in event.joined.members:
             user_id = member.user_id
             if await ban_list_service.is_banned(group_id, user_id):

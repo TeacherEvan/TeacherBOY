@@ -8,6 +8,7 @@ from linebot.v3.messaging import MessagingApi
 @pytest.mark.asyncio
 async def test_handle_question_saves_metadata():
     from src.agents.image_analyzer_agent import ImageAnalyzerAgent
+
     agent = ImageAnalyzerAgent()
     mock_event = MagicMock()
     mock_event.source.user_id = "user_123"
@@ -19,9 +20,14 @@ async def test_handle_question_saves_metadata():
         mock_mgr.save_image_metadata = AsyncMock(return_value="img_123")
         mock_mgr.clear_session = AsyncMock()
 
-        with patch("src.agents.image_analyzer_agent.chat_completion_with_vision_fallback", new=AsyncMock(return_value="analysis result")):
+        with patch(
+            "src.agents.image_analyzer_agent.chat_completion_with_vision_fallback",
+            new=AsyncMock(return_value="analysis result"),
+        ):
             with patch("src.agents.image_analyzer_agent.asyncio.to_thread", new=AsyncMock()):
-                await agent._handle_question(mock_event, "test prompt", "group_123", "user_123", mock_line_bot_api, MagicMock())
+                await agent._handle_question(
+                    mock_event, "test prompt", "group_123", "user_123", mock_line_bot_api, MagicMock()
+                )
 
         mock_mgr.save_image_metadata.assert_awaited_once()
         call_kwargs = mock_mgr.save_image_metadata.call_args.kwargs

@@ -17,18 +17,15 @@ class TestGeminiService:
         service.configure(api_key="test-api-key-12345", model="gemini-2.5-flash")
 
         mock_client = Mock()
-        mock_client.post = AsyncMock(return_value=Mock(
-            status_code=200,
-            json=Mock(return_value={
-                "candidates": [{"content": {"parts": [{"text": "Hello from Gemini"}]}}]
-            })
-        ))
+        mock_client.post = AsyncMock(
+            return_value=Mock(
+                status_code=200,
+                json=Mock(return_value={"candidates": [{"content": {"parts": [{"text": "Hello from Gemini"}]}}]}),
+            )
+        )
         service.set_client(mock_client)
 
-        result = await service.chat_completion(
-            messages=[{"role": "user", "content": "Hello"}],
-            temperature=0.7
-        )
+        result = await service.chat_completion(messages=[{"role": "user", "content": "Hello"}], temperature=0.7)
 
         assert result == "Hello from Gemini"
 
@@ -40,10 +37,7 @@ class TestGeminiService:
         service = GeminiService()
         # Don't configure - api_key remains empty
 
-        result = await service.chat_completion(
-            messages=[{"role": "user", "content": "Hello"}],
-            temperature=0.7
-        )
+        result = await service.chat_completion(messages=[{"role": "user", "content": "Hello"}], temperature=0.7)
 
         assert result is None
 
@@ -56,20 +50,19 @@ class TestGeminiService:
         service.configure(api_key="test-api-key-12345", model="gemini-2.5-flash")
 
         mock_client = Mock()
-        mock_client.post = AsyncMock(return_value=Mock(
-            status_code=200,
-            json=Mock(return_value={
-                "candidates": [{"content": {"parts": [{"text": "สวัสดี"}]}}]
-            })
-        ))
+        mock_client.post = AsyncMock(
+            return_value=Mock(
+                status_code=200, json=Mock(return_value={"candidates": [{"content": {"parts": [{"text": "สวัสดี"}]}}]})
+            )
+        )
         service.set_client(mock_client)
 
         result = await service.chat_completion(
             messages=[
                 {"role": "system", "content": "Translate to Thai"},
-                {"role": "user", "content": "Translate from en to th: Hello"}
+                {"role": "user", "content": "Translate from en to th: Hello"},
             ],
-            temperature=0.2
+            temperature=0.2,
         )
 
         assert result == "\u0e2a\u0e27\u0e31\u0e2a\u0e14\u0e35"
@@ -102,16 +95,10 @@ class TestGeminiService:
         service.configure(api_key="test-key", model="gemini-2.5-flash")
 
         mock_client = Mock()
-        mock_client.post = AsyncMock(return_value=Mock(
-            status_code=400,
-            text="Bad Request"
-        ))
+        mock_client.post = AsyncMock(return_value=Mock(status_code=400, text="Bad Request"))
         service.set_client(mock_client)
 
-        result = await service.chat_completion(
-            messages=[{"role": "user", "content": "Hello"}],
-            temperature=0.7
-        )
+        result = await service.chat_completion(messages=[{"role": "user", "content": "Hello"}], temperature=0.7)
 
         assert result is None
         status, error, model = service.get_last_error()
@@ -135,21 +122,14 @@ class TestGeminiService:
         async def mock_post(url, **kwargs):
             called_urls.append(url)
             return Mock(
-                status_code=200,
-                json=Mock(return_value={
-                    "candidates": [{"content": {"parts": [{"text": "Response"}]}}]
-                })
+                status_code=200, json=Mock(return_value={"candidates": [{"content": {"parts": [{"text": "Response"}]}}]})
             )
 
         mock_client.post = mock_post
         service.set_client(mock_client)
 
         # Call with a different model
-        await service.chat_completion(
-            messages=[{"role": "user", "content": "Hello"}],
-            model="gemini-2.5-pro",
-            temperature=0.7
-        )
+        await service.chat_completion(messages=[{"role": "user", "content": "Hello"}], model="gemini-2.5-pro", temperature=0.7)
 
         # Verify the instance model was NOT mutated
         assert service.model == "gemini-2.5-flash"
@@ -188,9 +168,7 @@ class TestGeminiService:
 
             return Mock(
                 status_code=200,
-                json=Mock(return_value={
-                    "candidates": [{"content": {"parts": [{"text": "Image analysis result"}]}}]
-                })
+                json=Mock(return_value={"candidates": [{"content": {"parts": [{"text": "Image analysis result"}]}}]}),
             )
 
         mock_client.post = mock_post
@@ -198,14 +176,16 @@ class TestGeminiService:
 
         # OpenAI format with image_url
         result = await service.chat_completion_with_vision(
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "Describe this image"},
-                    {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,/9j/4AAQSkZJRg=="}}
-                ]
-            }],
-            temperature=0.7
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Describe this image"},
+                        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,/9j/4AAQSkZJRg=="}},
+                    ],
+                }
+            ],
+            temperature=0.7,
         )
 
         assert result == "Image analysis result"
@@ -226,9 +206,7 @@ class TestGeminiService:
             called_urls.append(url)
             return Mock(
                 status_code=200,
-                json=Mock(return_value={
-                    "candidates": [{"content": {"parts": [{"text": "Vision response"}]}}]
-                })
+                json=Mock(return_value={"candidates": [{"content": {"parts": [{"text": "Vision response"}]}}]}),
             )
 
         mock_client.post = mock_post
@@ -236,9 +214,7 @@ class TestGeminiService:
 
         # Call with a different vision model
         await service.chat_completion_with_vision(
-            messages=[{"role": "user", "content": "Describe image"}],
-            model="gemini-2.5-pro",
-            temperature=0.7
+            messages=[{"role": "user", "content": "Describe image"}], model="gemini-2.5-pro", temperature=0.7
         )
 
         # Verify the instance vision_model was NOT mutated

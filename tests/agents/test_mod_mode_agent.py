@@ -1,6 +1,8 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
+
 from src.agents.mod_mode_agent import ModModeAgent
 
 
@@ -13,12 +15,14 @@ def _make_async_mock(return_value):
 
 @pytest.fixture
 def mock_services():
-    with patch("src.agents.mod_mode_agent.ModModeService") as mm, \
-         patch("src.agents.mod_mode_agent.BanListService") as bl, \
-         patch("src.agents.mod_mode_agent.WarningService") as ws, \
-         patch("src.agents.mod_mode_agent.HarmfulContentDetector") as hc, \
-         patch("src.agents.mod_mode_agent.ModAuditLog") as al, \
-         patch("src.agents.mod_mode_agent.ModDashboardBuilder") as db:
+    with (
+        patch("src.agents.mod_mode_agent.ModModeService") as mm,
+        patch("src.agents.mod_mode_agent.BanListService") as bl,
+        patch("src.agents.mod_mode_agent.WarningService") as ws,
+        patch("src.agents.mod_mode_agent.HarmfulContentDetector") as hc,
+        patch("src.agents.mod_mode_agent.ModAuditLog") as al,
+        patch("src.agents.mod_mode_agent.ModDashboardBuilder") as db,
+    ):
         yield {
             "mod_mode": mm.return_value,
             "ban_list": bl.return_value,
@@ -58,6 +62,7 @@ def event_factory():
         event.source = source
         event.reply_token = "test_token"
         return event
+
     return _make
 
 
@@ -141,7 +146,7 @@ async def test_handle_activates_mod_mode(agent, mock_services, event_factory):
     mock_services["audit"].log_mode_change = _make_async_mock(None)
     event = event_factory("activate mod mode", user_id="U456", group_id="C123")
     with patch("src.services.privilege_service.privilege_service.is_admin", return_value=True):
-        with patch.object(agent, "_reply", new_callable=AsyncMock) as mock_reply:
+        with patch.object(agent, "_reply", new_callable=AsyncMock):
             result = await agent.handle(event, "activate mod mode", MagicMock())
             assert result is True
             mock_services["mod_mode"].activate_mod_mode.assert_called_once()

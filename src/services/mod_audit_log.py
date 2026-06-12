@@ -69,10 +69,16 @@ class ModAuditLog:
         reason: str,
         warning_count: int,
     ):
-        await self.log_action("warn", group_id, target_user_id, actor_user_id, {
-            "reason": reason,
-            "warningCount": warning_count,
-        })
+        await self.log_action(
+            "warn",
+            group_id,
+            target_user_id,
+            actor_user_id,
+            {
+                "reason": reason,
+                "warningCount": warning_count,
+            },
+        )
 
     async def log_ban(
         self,
@@ -99,11 +105,17 @@ class ModAuditLog:
         is_active: bool,
         special_user_id: str | None = None,
     ):
-        await self.log_action("mode_change", group_id, actor_user_id, actor_user_id, {
-            "mode": mode,
-            "isActive": is_active,
-            "specialUserId": special_user_id,
-        })
+        await self.log_action(
+            "mode_change",
+            group_id,
+            actor_user_id,
+            actor_user_id,
+            {
+                "mode": mode,
+                "isActive": is_active,
+                "specialUserId": special_user_id,
+            },
+        )
 
     def close(self):
         """Flush and close (placeholder for future CommitScheduler integration)."""

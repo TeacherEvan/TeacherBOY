@@ -38,6 +38,7 @@ from linebot.v3.webhooks import (
 )
 
 from src.agents.agent_router import AgentRouter
+from src.agents.mod_mode.dashboard import ModDashboardBuilder
 from src.config import settings
 from src.handlers.message_handler import (
     handle_join_event,
@@ -45,6 +46,7 @@ from src.handlers.message_handler import (
     handle_member_joined_event,
     handle_member_left_event,
 )
+from src.services.ban_list_service import ban_list_service, init_ban_list_service
 from src.services.bot_identity_service import get_bot_identity_service
 from src.services.brave_search_service import brave_search_service
 from src.services.calendar_service import calendar_service
@@ -61,6 +63,7 @@ from src.services.document_memory_service import (
 from src.services.gemini_service import gemini_service
 from src.services.github_models_service import github_models_service
 from src.services.google_translation import google_translation_service
+from src.services.harmful_content_detector import harmful_content_detector
 from src.services.history_log_service import (
     EventType,
     LogLevel,
@@ -71,6 +74,8 @@ from src.services.image_analyzer_session_manager import image_analyzer_session_m
 from src.services.logging_service import logging_service
 from src.services.message_buffer_service import message_buffer_service
 from src.services.metrics_service import metrics_service
+from src.services.mod_audit_log import init_mod_audit_log, mod_audit_log
+from src.services.mod_mode_service import init_mod_mode_service, mod_mode_service
 from src.services.news_session_manager import news_session_manager
 from src.services.nous_service import nous_inference_service
 from src.services.openrouter_service import openrouter_service
@@ -81,12 +86,7 @@ from src.services.reminder_service import reminder_service
 from src.services.scheduler_service import scheduler_service
 from src.services.startup_data_loader import startup_loader
 from src.services.translation_service import translation_service
-from src.services.warning_service import warning_service, init_warning_service
-from src.services.ban_list_service import ban_list_service, init_ban_list_service
-from src.services.harmful_content_detector import harmful_content_detector
-from src.services.mod_mode_service import mod_mode_service, init_mod_mode_service
-from src.services.mod_audit_log import mod_audit_log, init_mod_audit_log
-from src.agents.mod_mode.dashboard import ModDashboardBuilder
+from src.services.warning_service import init_warning_service, warning_service
 from src.utils.tracing import setup_tracing
 
 # ============================================================================

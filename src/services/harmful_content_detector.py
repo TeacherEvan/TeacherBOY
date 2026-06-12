@@ -10,13 +10,37 @@ class HarmfulContentDetector:
 
     DEFAULT_KEYWORDS = [
         # English
-        "spam", "scam", "fraud", "phishing", "malware", "virus",
-        "hate", "harassment", "threat", "violence", "illegal",
-        "drugs", "weapon", "bomb", "terrorist", "extremist",
+        "spam",
+        "scam",
+        "fraud",
+        "phishing",
+        "malware",
+        "virus",
+        "hate",
+        "harassment",
+        "threat",
+        "violence",
+        "illegal",
+        "drugs",
+        "weapon",
+        "bomb",
+        "terrorist",
+        "extremist",
         # Thai (common harmful terms)
-        "สแปม", "ฉ้อโกง", "หลอกลวง", "เกยหรือ", "วางไวรัส",
-        "เกลียด", "ข่มขู่", "คุกคาม", "ความรุนแรง", "ผิดกฎหมาย",
-        "ยาเสพติด", "อาวุธ", "ระเบิด", "ขบวนการสุดขั้ว",
+        "สแปม",
+        "ฉ้อโกง",
+        "หลอกลวง",
+        "เกยหรือ",
+        "วางไวรัส",
+        "เกลียด",
+        "ข่มขู่",
+        "คุกคาม",
+        "ความรุนแรง",
+        "ผิดกฎหมาย",
+        "ยาเสพติด",
+        "อาวุธ",
+        "ระเบิด",
+        "ขบวนการสุดขั้ว",
     ]
 
     def __init__(self, keywords: list[str] | None = None, llm_client=None):
