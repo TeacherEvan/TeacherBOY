@@ -30,6 +30,18 @@ from src.services.privilege_service import privilege_service
 from src.services.rate_limiter import rate_limiter
 from src.services.session_manager import session_manager
 from src.services.history_log_service import get_history_log, DatePreset
+from src.services.conversation_memory_service import (
+    get_conversation_memory,
+    FlushMode,
+    FlushParams,
+    FlushResult,
+)
+from src.services.document_memory_service import (
+    get_document_memory,
+    FlushMode as DocFlushMode,
+    FlushParams as DocFlushParams,
+    FlushResult as DocFlushResult,
+)
 
 from .admin.dashboard_builder import (
     build_admin_dashboard,
@@ -264,6 +276,9 @@ class AdminAgent(BaseAgent):
                     response = self._list_groups()
                 elif command == "logs":
                     await self._handle_admin_logs(event, line_bot_api, arg)
+                    return True
+                elif command == "memory":
+                    await self._handle_admin_memory(event, line_bot_api, arg)
                     return True
                 else:
                     response = (
@@ -1955,6 +1970,206 @@ class AdminAgent(BaseAgent):
                     replyToken=event.reply_token,
                     messages=[flex_message],
                     quickReply=QuickReply(items=quick_reply_items) if quick_reply_items else None,
+                    notificationDisabled=False,
+                ),
+            )
+
+    async def _handle_admin_memory(self, event: MessageEvent, line_bot_api: MessagingApi, arg: str | None) -> None:
+        """
+        Handle /admin memory command - show stats or flush memory.
+
+        Args:
+            event: The LINE message event
+            line_bot_api: LINE Bot API client
+            arg: Optional subcommand (stats, flush <mode> [params])
+        """
+        # Parse subcommand
+        parts = (arg or "").strip().split(None, 1)
+        subcommand = parts[0] if parts else "stats"
+        subarg = parts[1] if len(parts) > 1 else None
+
+        if subcommand == "stats":
+            await self._handle_memory_stats(event, line_bot_api)
+        elif subcommand == "flush":
+            await self._handle_memory_flush(event, line_bot_api, subarg)
+        else:
+            if event.reply_token:
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[TextMessage(text="❌ Unknown memory subcommand. Use: stats, flush", quickReply=None, quoteToken=None)],
+                        notificationDisabled=False,
+                    ),
+                )
+
+    async def _handle_memory_stats(self, event: MessageEvent, line_bot_api: MessagingApi) -> None:
+        """Show memory usage statistics."""
+        conv_memory = get_conversation_memory()
+        doc_memory = get_document_memory()
+
+        lines = ["📊 Memory Usage Statistics", "━━━━━━━━━━━━━━━━", ""]
+
+        if conv_memory:
+            conv_stats = conv_memory.get_stats()
+            lines.extend([
+                "💬 Conversation Memory:",
+                f"  Active chats: {conv_stats['active_conversations']}",
+                f"  Total messages: {conv_stats['total_messages']}",
+                f"  Max per session: {conv_stats['max_messages_per_session']}",
+                f"  Session TTL: {conv_stats['session_ttl_hours']:.1f}h",
+                f"  HF sync: {'Enabled' if conv_stats['hf_enabled'] else 'Disabled'}",
+                "",
+            ])
+
+        if doc_memory:
+            # Get document stats
+            total_docs = sum(len(docs) for docs in doc_memory._documents.values())
+            total_chats = len(doc_memory._documents)
+            lines.extend([
+                "📄 Document Memory:",
+                f"  Active chats: {total_chats}",
+                f"  Total documents: {total_docs}",
+                f"  Storage path: {doc_memory.storage_path}",
+                f"  HF sync: {'Enabled' if doc_memory._hf_enabled else 'Disabled'}",
+                f"  Max file size: {doc_memory.max_file_size_bytes / (1024*1024):.1f} MB",
+                f"  Max text chars: {doc_memory.max_text_chars:,}",
+                "",
+            ])
+
+        if not conv_memory and not doc_memory:
+            lines.append("⚠️ No memory services enabled.")
+
+        response = "\n".join(lines)
+
+        if event.reply_token:
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[TextMessage(text=response, quickReply=None, quoteToken=None)],
+                    notificationDisabled=False,
+                ),
+            )
+
+    async def _handle_memory_flush(self, event: MessageEvent, line_bot_api: MessagingApi, arg: str | None) -> None:
+        """
+        Handle memory flush with interactive mode selection.
+
+        Args:
+            event: The LINE message event
+            line_bot_api: LINE Bot API client
+            arg: Optional mode and params (e.g., "time_based 30")
+        """
+        parts = (arg or "").strip().split(None, 1)
+        mode_str = parts[0] if parts else None
+        mode_arg = parts[1] if len(parts) > 1 else None
+
+        if not mode_str:
+            # Show mode selection Flex bubble
+            await self._send_memory_flush_mode_selection(event, line_bot_api)
+            return
+
+        # Parse mode
+        mode_map = {
+            "time_based": FlushMode.TIME_BASED,
+            "time": FlushMode.TIME_BASED,
+            "size_based": FlushMode.SIZE_BASED,
+            "size": FlushMode.SIZE_BASED,
+            "manual": FlushMode.MANUAL_SELECTION,
+            "full": FlushMode.FULL_PURGE,
+        }
+
+        mode = mode_map.get(mode_str.lower())
+        if not mode:
+            if event.reply_token:
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[TextMessage(text=f"❌ Unknown mode: {mode_str}. Use: time_based, size_based, manual, full", quickReply=None, quoteToken=None)],
+                        notificationDisabled=False,
+                    ),
+                )
+            return
+
+        # For now, execute directly with default params (in production, show confirmation first)
+        params = FlushParams(dry_run=False)
+        if mode == FlushMode.TIME_BASED:
+            try:
+                params.older_than_days = int(mode_arg) if mode_arg else 30
+            except ValueError:
+                params.older_than_days = 30
+
+        # Execute flush
+        conv_memory = get_conversation_memory()
+        doc_memory = get_document_memory()
+
+        results = []
+        if conv_memory:
+            conv_result = await conv_memory.flush_memory(mode, params)
+            results.append(f"💬 Conversations: {conv_result}")
+
+        if doc_memory:
+            doc_params = DocFlushParams(dry_run=False, older_than_days=params.older_than_days)
+            doc_result = await doc_memory.purge_documents(DocFlushMode(mode.value), doc_params)
+            results.append(f"📄 Documents: {doc_result}")
+
+        response = "✅ Memory Flush Executed\n━━━━━━━━━━━━━━━━\n\n" + "\n".join(results)
+
+        if event.reply_token:
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[TextMessage(text=response, quickReply=None, quoteToken=None)],
+                    notificationDisabled=False,
+                ),
+            )
+
+    async def _send_memory_flush_mode_selection(self, event: MessageEvent, line_bot_api: MessagingApi) -> None:
+        """Send Flex bubble for memory flush mode selection."""
+        bubble = {
+            "type": "bubble",
+            "size": "giga",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {"type": "text", "text": "🧹 Memory Flush", "weight": "bold", "size": "xl", "color": "#FFFFFF"}
+                ],
+                "backgroundColor": "#E74C3C",
+                "paddingAll": "md",
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "md",
+                "contents": [
+                    {"type": "text", "text": "Choose cleanup mode:", "size": "md"},
+                    {"type": "button", "action": {"type": "postback", "label": "🕐 Time-based", "data": "flush_mode=time_based"}, "style": "primary", "color": "#3498DB"},
+                    {"type": "button", "action": {"type": "postback", "label": "📏 Size-based", "data": "flush_mode=size_based"}, "style": "primary", "color": "#2ECC71"},
+                    {"type": "button", "action": {"type": "postback", "label": "☑️ Manual Selection", "data": "flush_mode=manual"}, "style": "primary", "color": "#F39C12"},
+                    {"type": "button", "action": {"type": "postback", "label": "💀 Full Purge", "data": "flush_mode=full"}, "style": "primary", "color": "#E74C3C"},
+                    {"type": "separator"},
+                    {"type": "button", "action": {"type": "postback", "label": "❌ Cancel", "data": "flush_cancel"}, "style": "secondary"},
+                ],
+            },
+        }
+
+        from linebot.v3.messaging import FlexMessage, FlexContainer
+
+        flex_message = FlexMessage(
+            alt_text="Memory Flush - Select Mode",
+            contents=FlexContainer.from_dict(bubble),
+        )
+
+        if event.reply_token:
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[flex_message],
                     notificationDisabled=False,
                 ),
             )
