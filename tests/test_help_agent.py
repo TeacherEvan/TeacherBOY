@@ -308,3 +308,32 @@ def test_help_special_news_topic_alias():
     categories = {"Special News": [{"command": "/special news", "examples": ["/special news"], "available": True}]}
     assert agent._resolve_help_topic("special", categories) == "Special News"
     assert agent._resolve_help_topic("special news", categories) == "Special News"
+
+
+def test_help_includes_hannibal_category():
+    agent = HelpAgent()
+    with patch("src.agents.help_agent.settings") as mock_settings:
+        mock_settings.is_github_models_configured.return_value = True
+        mock_settings.is_calendar_configured.return_value = True
+        mock_settings.is_profiler_configured.return_value = True
+        mock_settings.is_brave_search_configured.return_value = True
+        mock_settings.document_memory_enabled = True
+        
+        categories = agent._get_command_categories(
+            is_admin=False,
+            chat_type="private chat",
+            zeus_available=True,
+            search_available=True,
+        )
+        
+    # Hannibal should appear when GitHub Models configured
+    assert "Hannibal Profile" in categories
+    hannibal_commands = categories["Hannibal Profile"]
+    assert any("hannibal profile" in cmd["command"].lower() for cmd in hannibal_commands)
+
+
+def test_help_hannibal_topic_alias():
+    agent = HelpAgent()
+    categories = {"Hannibal Profile": [{"command": "hannibal profile", "examples": ["hannibal profile"], "available": True}]}
+    assert agent._resolve_help_topic("hannibal", categories) == "Hannibal Profile"
+    assert agent._resolve_help_topic("profile messages", categories) == "Hannibal Profile"

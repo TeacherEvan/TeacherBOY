@@ -210,6 +210,14 @@ class HelpAgent(BaseAgent):
                     "available": settings.is_github_models_configured(),
                 },
             ],
+            "Hannibal Profile": [
+                {
+                    "command": "hannibal profile",
+                    "description": "Psychological profile from message history",
+                    "examples": ["hannibal profile", "analyze messages"],
+                    "available": settings.is_github_models_configured(),
+                },
+            ],
             "Document Memory": [
                 {
                     "command": f"{display_name} doc",
@@ -343,7 +351,6 @@ class HelpAgent(BaseAgent):
             "events": "Calendar & Reminders",
             "reminder": "Calendar & Reminders",
             "reminders": "Calendar & Reminders",
-            "search": "AI & Search",
             "ai": "AI & Search",
             "image": "Image Analysis",
             "photo": "Image Analysis",
@@ -352,6 +359,8 @@ class HelpAgent(BaseAgent):
             "docs": "Document Memory",
             "document": "Document Memory",
             "search": "Search",
+            "hannibal": "Hannibal Profile",
+            "profile messages": "Hannibal Profile",
             "admin": "Admin Commands",
             display_name: "Core Commands",
         }
