@@ -279,3 +279,32 @@ def test_help_search_topic_alias():
     agent = HelpAgent()
     categories = {"Search": [{"command": "Ms. Green search <query>", "examples": ["Ms. Green search test"], "available": True}]}
     assert agent._resolve_help_topic("search", categories) == "Search"
+
+
+def test_help_includes_special_news_category():
+    agent = HelpAgent()
+    with patch("src.agents.help_agent.settings") as mock_settings:
+        mock_settings.is_calendar_configured.return_value = True
+        mock_settings.is_profiler_configured.return_value = True
+        mock_settings.is_github_models_configured.return_value = True
+        mock_settings.is_brave_search_configured.return_value = True
+        mock_settings.document_memory_enabled = True
+        
+        categories = agent._get_command_categories(
+            is_admin=False,
+            chat_type="private chat",
+            zeus_available=True,
+            search_available=True,
+        )
+        
+    # Special News should appear in DM context
+    assert "Special News" in categories
+    special_news_commands = categories["Special News"]
+    assert any("special news" in cmd["command"].lower() for cmd in special_news_commands)
+
+
+def test_help_special_news_topic_alias():
+    agent = HelpAgent()
+    categories = {"Special News": [{"command": "/special news", "examples": ["/special news"], "available": True}]}
+    assert agent._resolve_help_topic("special", categories) == "Special News"
+    assert agent._resolve_help_topic("special news", categories) == "Special News"

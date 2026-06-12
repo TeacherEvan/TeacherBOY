@@ -146,13 +146,15 @@ class HelpAgent(BaseAgent):
                     "available": settings.is_brave_search_configured(),
                 },
             ],
-            "News & Information": [
+            "News": [
                 {
                     "command": "news",
                     "description": "Get latest news headlines",
                     "examples": ["news", "ข่าว"],
                     "available": True,
                 },
+            ],
+            "Special News": [
                 {
                     "command": "/special news",
                     "description": "Get specialized news (sports, tourism, etc.)",
@@ -333,7 +335,9 @@ class HelpAgent(BaseAgent):
             "sleep": "Core Commands",
             "translate": "Translation",
             "translation": "Translation",
-            "news": "News & Information",
+            "news": "News",
+            "special": "Special News",
+            "special news": "Special News",
             "calendar": "Calendar & Reminders",
             "event": "Calendar & Reminders",
             "events": "Calendar & Reminders",
