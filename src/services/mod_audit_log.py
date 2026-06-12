@@ -2,10 +2,9 @@
 
 import json
 import logging
-import time
 import os
+import time
 from datetime import datetime
-from typing import Any, Optional
 
 from huggingface_hub import HfApi
 
@@ -39,7 +38,7 @@ class ModAuditLog:
         group_id: str,
         target_user_id: str,
         actor_user_id: str,
-        details: Optional[dict] = None,
+        details: dict | None = None,
     ):
         """Log a moderation action."""
         entry = {
@@ -58,7 +57,7 @@ class ModAuditLog:
         group_id: str,
         target_user_id: str,
         actor_user_id: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ):
         await self.log_action("kick", group_id, target_user_id, actor_user_id, {"reason": reason})
 
@@ -80,7 +79,7 @@ class ModAuditLog:
         group_id: str,
         target_user_id: str,
         actor_user_id: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ):
         await self.log_action("ban", group_id, target_user_id, actor_user_id, {"reason": reason})
 
@@ -98,7 +97,7 @@ class ModAuditLog:
         actor_user_id: str,
         mode: str,
         is_active: bool,
-        special_user_id: Optional[str] = None,
+        special_user_id: str | None = None,
     ):
         await self.log_action("mode_change", group_id, actor_user_id, actor_user_id, {
             "mode": mode,
@@ -109,3 +108,20 @@ class ModAuditLog:
     def close(self):
         """Flush and close (placeholder for future CommitScheduler integration)."""
         logger.info("📜 ModAuditLog closed")
+
+
+# Singleton instance - used by main.py and other modules
+# Requires HF Hub to be configured
+mod_audit_log: ModAuditLog | None = None
+
+
+def get_mod_audit_log() -> ModAuditLog | None:
+    """Get the global mod audit log instance."""
+    return mod_audit_log
+
+
+def init_mod_audit_log(token: str, repo_id: str, local_path: str = "./data/mod_audit") -> ModAuditLog:
+    """Initialize the global mod audit log."""
+    global mod_audit_log
+    mod_audit_log = ModAuditLog(token, repo_id, local_path)
+    return mod_audit_log

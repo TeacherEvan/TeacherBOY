@@ -45,7 +45,7 @@ class ModModeAgent(BaseAgent):
         return 4  # Higher than AdminAgent (5)
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
-        """Intercept if group has active mod mode."""
+        """Intercept if group has active mod mode or for activation command."""
         if not isinstance(event.message, TextMessageContent):
             return False
 
@@ -58,32 +58,20 @@ class ModModeAgent(BaseAgent):
         if not user_id or not group_id:
             return False
 
+        # Check activation command (from admin) - allow even if mod mode not active
+        if self._is_activation_command(text):
+            return await self._is_admin(user_id)
+
         # Check if mod mode is active in this group
         if not await self._mod_mode.is_mod_mode_active(group_id):
             return False
-
-        # Check activation command (from admin)
-        if self._is_activation_command(text):
-            return await self._is_admin(user_id)
 
         # Check mod commands
         if self._is_mod_command(text):
             return await self._is_admin(user_id)
 
-        # Check if user is banned (auto-kick handled in handle)
-        if await self._ban_list.is_banned(group_id, user_id):
-            return True
-
-        # Check special mode: only admin + special user allowed
-        if not await self._mod_mode.is_user_allowed(group_id, user_id):
-            return True
-
-        # Check harmful content in "all" mode
-        if await self._should_detect_harmful(group_id, text):
-            return True
-
-        # Allow message through to other agents
-        return False
+        # Intercept message in mod-enabled group for processing
+        return True
 
     async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """Process mod mode message."""

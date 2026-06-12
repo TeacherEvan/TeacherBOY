@@ -1,7 +1,8 @@
 """Convex repository for Moderator Mode tables."""
 
-from typing import Any, Optional
 import time
+from typing import Any
+
 from src.services.convex_client import ConvexClient
 
 
@@ -13,12 +14,9 @@ class ConvexModRepository:
 
     # ===== modModeState =====
 
-    async def get_mod_mode_state(self, group_id: str) -> Optional[dict[str, Any]]:
+    async def get_mod_mode_state(self, group_id: str) -> dict[str, Any] | None:
         """Get mod mode state for a group."""
-        response = await self._client.get(
-            "/modModeState/getByGroup",
-            {"groupId": group_id}
-        )
+        response = await self._client.get("/modModeState/getByGroup", {"groupId": group_id})
         return response.get("data") if response else None
 
     async def set_mod_mode_state(
@@ -26,7 +24,7 @@ class ConvexModRepository:
         group_id: str,
         mode: str,
         activated_by: str,
-        special_user_id: Optional[str] = None,
+        special_user_id: str | None = None,
     ) -> dict[str, Any]:
         """Activate or update mod mode for a group."""
         payload = {
@@ -52,7 +50,7 @@ class ConvexModRepository:
         group_id: str,
         user_id: str,
         banned_by: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> dict[str, Any]:
         """Add user to ban list."""
         payload = {
@@ -68,10 +66,7 @@ class ConvexModRepository:
 
     async def is_user_banned(self, group_id: str, user_id: str) -> bool:
         """Check if user is banned in group."""
-        response = await self._client.get(
-            "/banList/getByGroupUser",
-            {"groupId": group_id, "userId": user_id}
-        )
+        response = await self._client.get("/banList/getByGroupUser", {"groupId": group_id, "userId": user_id})
         return response.get("data") is not None
 
     async def unban_user(self, group_id: str, user_id: str) -> bool:
@@ -91,7 +86,7 @@ class ConvexModRepository:
         group_id: str,
         user_id: str,
         warned_by: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> dict[str, Any]:
         """Increment warning count for user (3-strike)."""
         # Get current count
@@ -111,10 +106,7 @@ class ConvexModRepository:
 
     async def get_warning_count(self, group_id: str, user_id: str) -> int:
         """Get current warning count for user."""
-        response = await self._client.get(
-            "/userWarnings/getByGroupUser",
-            {"groupId": group_id, "userId": user_id}
-        )
+        response = await self._client.get("/userWarnings/getByGroupUser", {"groupId": group_id, "userId": user_id})
         data = response.get("data")
         return data.get("count", 0) if data else 0
 

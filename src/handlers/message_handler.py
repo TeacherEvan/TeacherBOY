@@ -213,8 +213,18 @@ async def handle_member_joined_event(event, line_bot_api: MessagingApi):
     """Handle new member joining the group."""
     logger.info(f"Member joined: {event.joined.members}")
 
-    # Silent join - only log
-    pass
+    # Auto-kick banned users on rejoin
+    if event.source.type == "group":
+        group_id = event.source.group_id
+        from src.services.ban_list_service import ban_list_service
+        for member in event.joined.members:
+            user_id = member.user_id
+            if await ban_list_service.is_banned(group_id, user_id):
+                try:
+                    await asyncio.to_thread(line_bot_api.kick_users, group_id, [user_id])
+                    logger.info(f"👢 Auto-kicked banned user {user_id} on rejoin to {group_id}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to auto-kick banned user: {e}")
 
 
 async def handle_member_left_event(event, line_bot_api: MessagingApi):

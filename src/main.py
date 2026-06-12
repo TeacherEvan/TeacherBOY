@@ -81,6 +81,12 @@ from src.services.reminder_service import reminder_service
 from src.services.scheduler_service import scheduler_service
 from src.services.startup_data_loader import startup_loader
 from src.services.translation_service import translation_service
+from src.services.warning_service import warning_service, init_warning_service
+from src.services.ban_list_service import ban_list_service, init_ban_list_service
+from src.services.harmful_content_detector import harmful_content_detector
+from src.services.mod_mode_service import mod_mode_service, init_mod_mode_service
+from src.services.mod_audit_log import mod_audit_log, init_mod_audit_log
+from src.agents.mod_mode.dashboard import ModDashboardBuilder
 from src.utils.tracing import setup_tracing
 
 # ============================================================================
@@ -111,6 +117,9 @@ agent_router = AgentRouter()
 
 # Bot's own user ID for self-message detection (prevents infinite loops)
 bot_user_id: str | None = None
+
+# Convex HTTP client for Mod Mode (separate from main pool)
+convex_http_client: httpx.AsyncClient | None = None
 
 
 def create_optimized_http_client() -> httpx.AsyncClient:
@@ -153,7 +162,7 @@ async def lifespan(app: FastAPI):
     - Graceful shutdown
     - Observability initialization
     """
-    global bot_user_id
+    global bot_user_id, convex_http_client
 
     logging_service.info("🚀 TeacherBOY starting up")
 
@@ -298,6 +307,46 @@ async def lifespan(app: FastAPI):
         logger.info("📅 Calendar service disabled")
 
     # ========================================================================
+    # PHASE 2a3b: Convex/Mod Mode Services Initialization
+    # ========================================================================
+    if settings.is_convex_configured():
+        logger.info("🔗 Initializing Convex client for Mod Mode...")
+        from src.services.convex_client import ConvexClient
+        from src.services.convex_mod_repository import ConvexModRepository
+
+        # Initialize Convex client
+        convex_http_client = create_optimized_http_client()
+        convex_client = ConvexClient(
+            base_url=str(settings.convex_deployment_url),
+            sync_token=settings.convex_sync_token or "",
+            http_client=convex_http_client,
+            timeout_seconds=settings.convex_request_timeout_seconds,
+        )
+
+        # Initialize Convex Mod Repository
+        convex_mod_repo = ConvexModRepository(convex_client)
+
+        # Initialize mod mode services
+        init_mod_mode_service(convex_mod_repo)
+        init_ban_list_service(convex_mod_repo)
+        init_warning_service(convex_mod_repo)
+        logger.info("✅ Mod Mode services initialized (ModModeService, BanListService, WarningService)")
+
+        # Initialize ModAuditLog if HF Hub configured
+        if settings.is_history_log_configured() and settings.hf_memory_token:
+            audit_repo_id = settings.history_log_hf_repo_id or settings.hf_memory_repo_id or "mod-audit-logs"
+            init_mod_audit_log(
+                token=settings.hf_memory_token,
+                repo_id=audit_repo_id,
+                local_path="./data/mod_audit",
+            )
+            logger.info("✅ ModAuditLog initialized (HF Hub audit trail)")
+        else:
+            logger.info("ℹ️ ModAuditLog not initialized (HF Hub not configured)")
+    else:
+        logger.info("ℹ️ Convex not configured - Mod Mode services disabled")
+
+    # ========================================================================
     # PHASE 2a4: Synchronous Data Load from HF Hub (CRITICAL)
     # ========================================================================
     # This ensures all data is downloaded BEFORE the app starts serving requests.
@@ -411,6 +460,25 @@ async def lifespan(app: FastAPI):
             logger.info("🔧 Admin Agent registered (bootstrap enabled via ADMIN_SETUP_KEY)")
     else:
         logger.info("🔧 Admin Agent not registered (no ADMIN_USER_IDS configured)")
+
+    # Register ModModeAgent (Priority: 4 - Intercepts messages in mod-enabled groups)
+    # Must be registered before AdminAgent to intercept mod commands first
+    if mod_mode_service and ban_list_service and warning_service:
+        from src.agents.mod_mode_agent import ModModeAgent
+
+        mod_dashboard = ModDashboardBuilder()
+        mod_agent = ModModeAgent(
+            mod_mode_service=mod_mode_service,
+            ban_list_service=ban_list_service,
+            warning_service=warning_service,
+            harmful_detector=harmful_content_detector,
+            audit_log=mod_audit_log,
+            dashboard_builder=mod_dashboard,
+        )
+        agent_router.register_agent(mod_agent)
+        logger.info("🛡️ ModModeAgent registered (Priority 4 - group moderation)")
+    else:
+        logger.info("🛡️ ModModeAgent not registered (Convex not configured)")
 
     # Register Calendar Agent (Priority: 6 - Handles calendar/reminder commands)
     if settings.is_calendar_configured():
@@ -581,6 +649,10 @@ async def lifespan(app: FastAPI):
 
     await http_client_pool.aclose()
     logger.info("✅ HTTP client pool closed")
+
+    if convex_http_client:
+        await convex_http_client.aclose()
+        logger.info("✅ Convex HTTP client pool closed")
 
     logger.info(f"👋 {_service_display_name()} shutdown complete. Goodbye!")
     logger.info("=" * 80)

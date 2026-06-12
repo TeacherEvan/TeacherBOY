@@ -1,6 +1,5 @@
 """3-strike warning system for Moderator Mode."""
 
-from typing import Optional
 from src.services.convex_mod_repository import ConvexModRepository
 
 
@@ -17,7 +16,7 @@ class WarningService:
         group_id: str,
         user_id: str,
         warned_by: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> dict:
         """Issue warning to user. Returns dict with count and should_ban flag."""
         result = await self._repo.add_warning(group_id, user_id, warned_by, reason)
@@ -45,3 +44,20 @@ class WarningService:
         # Convex upsert with count=0
         await self._repo.add_warning(group_id, user_id, "system", "reset")
         return True
+
+
+# Singleton instance - used by main.py and other modules
+# Requires Convex to be configured
+warning_service: WarningService | None = None
+
+
+def get_warning_service() -> WarningService | None:
+    """Get the global warning service instance."""
+    return warning_service
+
+
+def init_warning_service(repo: "ConvexModRepository") -> WarningService:
+    """Initialize the global warning service."""
+    global warning_service
+    warning_service = WarningService(repo)
+    return warning_service

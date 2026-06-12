@@ -1,6 +1,6 @@
 """LINE Flex Message dashboard for Moderator Mode."""
 
-from typing import Any, Optional
+from typing import Any
 
 
 class ModDashboardBuilder:
@@ -57,8 +57,22 @@ class ModDashboardBuilder:
                         "type": "box",
                         "layout": "horizontal",
                         "contents": [
-                            {"type": "text", "text": "Mode:", "weight": "bold", "size": "sm", "color": self.SECONDARY_COLOR, "flex": 1},
-                            {"type": "text", "text": mode_display, "size": "sm", "color": "#000000", "flex": 2, "align": "end"},
+                            {
+                                "type": "text",
+                                "text": "Mode:",
+                                "weight": "bold",
+                                "size": "sm",
+                                "color": self.SECONDARY_COLOR,
+                                "flex": 1,
+                            },
+                            {
+                                "type": "text",
+                                "text": mode_display,
+                                "size": "sm",
+                                "color": "#000000",
+                                "flex": 2,
+                                "align": "end",
+                            },
                         ],
                     },
                     {"type": "separator", "margin": "md"},
@@ -110,26 +124,35 @@ class ModDashboardBuilder:
             contents.append({"type": "text", "text": "No banned users.", "color": self.SECONDARY_COLOR})
         else:
             for ban in bans[:20]:  # Limit for Flex size
-                contents.append({
-                    "type": "box",
-                    "layout": "horizontal",
-                    "contents": [
-                        {"type": "text", "text": ban.get("userId", "?"), "size": "sm", "flex": 2},
-                        {"type": "text", "text": ban.get("reason", "No reason"), "size": "sm", "color": self.SECONDARY_COLOR, "flex": 3, "wrap": True},
-                        {
-                            "type": "button",
-                            "action": {
-                                "type": "postback",
-                                "label": "Unban",
-                                "data": f"action=mod_unban&user={ban.get('userId')}",
+                contents.append(
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {"type": "text", "text": ban.get("userId", "?"), "size": "sm", "flex": 2},
+                            {
+                                "type": "text",
+                                "text": ban.get("reason", "No reason"),
+                                "size": "sm",
+                                "color": self.SECONDARY_COLOR,
+                                "flex": 3,
+                                "wrap": True,
                             },
-                            "style": "secondary",
-                            "color": self.PRIMARY_COLOR,
-                            "flex": 1,
-                        },
-                    ],
-                    "margin": "sm",
-                })
+                            {
+                                "type": "button",
+                                "action": {
+                                    "type": "postback",
+                                    "label": "Unban",
+                                    "data": f"action=mod_unban&user={ban.get('userId')}",
+                                },
+                                "style": "secondary",
+                                "color": self.PRIMARY_COLOR,
+                                "flex": 1,
+                            },
+                        ],
+                        "margin": "sm",
+                    }
+                )
         return {"type": "bubble", "size": "giga", "body": {"type": "box", "layout": "vertical", "contents": contents}}
 
     def build_kick_confirm(self, group_id: str, user_id: str, display_name: str) -> dict[str, Any]:
@@ -146,8 +169,21 @@ class ModDashboardBuilder:
                         "type": "box",
                         "layout": "horizontal",
                         "contents": [
-                            {"type": "button", "action": {"type": "postback", "label": "Cancel", "data": "action=mod_cancel"}, "style": "secondary"},
-                            {"type": "button", "action": {"type": "postback", "label": "Confirm Kick", "data": f"action=mod_kick_confirm&user={user_id}"}, "style": "primary", "color": self.DANGER_COLOR},
+                            {
+                                "type": "button",
+                                "action": {"type": "postback", "label": "Cancel", "data": "action=mod_cancel"},
+                                "style": "secondary",
+                            },
+                            {
+                                "type": "button",
+                                "action": {
+                                    "type": "postback",
+                                    "label": "Confirm Kick",
+                                    "data": f"action=mod_kick_confirm&user={user_id}",
+                                },
+                                "style": "primary",
+                                "color": self.DANGER_COLOR,
+                            },
                         ],
                     },
                 ],
@@ -168,8 +204,21 @@ class ModDashboardBuilder:
                         "type": "box",
                         "layout": "horizontal",
                         "contents": [
-                            {"type": "button", "action": {"type": "postback", "label": "Cancel", "data": "action=mod_cancel"}, "style": "secondary"},
-                            {"type": "button", "action": {"type": "postback", "label": "Confirm Warn", "data": f"action=mod_warn_confirm&user={user_id}"}, "style": "primary", "color": self.WARNING_COLOR},
+                            {
+                                "type": "button",
+                                "action": {"type": "postback", "label": "Cancel", "data": "action=mod_cancel"},
+                                "style": "secondary",
+                            },
+                            {
+                                "type": "button",
+                                "action": {
+                                    "type": "postback",
+                                    "label": "Confirm Warn",
+                                    "data": f"action=mod_warn_confirm&user={user_id}",
+                                },
+                                "style": "primary",
+                                "color": self.WARNING_COLOR,
+                            },
                         ],
                     },
                 ],
@@ -184,7 +233,13 @@ class ModDashboardBuilder:
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
-                    {"type": "text", "text": "⚙️ MOD MODE SETTINGS", "weight": "bold", "size": "lg", "color": self.PRIMARY_COLOR},
+                    {
+                        "type": "text",
+                        "text": "⚙️ MOD MODE SETTINGS",
+                        "weight": "bold",
+                        "size": "lg",
+                        "color": self.PRIMARY_COLOR,
+                    },
                     {"type": "separator", "margin": "md"},
                     {"type": "text", "text": f"Current Mode: {mode.upper()}", "margin": "md"},
                     {
@@ -202,7 +257,11 @@ class ModDashboardBuilder:
                         "margin": "sm",
                     },
                     {"type": "separator", "margin": "md"},
-                    {"type": "button", "action": {"type": "postback", "label": "← Back to Dashboard", "data": "action=mod_dashboard"}, "style": "link"},
+                    {
+                        "type": "button",
+                        "action": {"type": "postback", "label": "← Back to Dashboard", "data": "action=mod_dashboard"},
+                        "style": "link",
+                    },
                 ],
             },
         }

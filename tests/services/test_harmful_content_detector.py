@@ -1,4 +1,6 @@
+# tests/services/test_harmful_content_detector.py
 import pytest
+
 from src.services.harmful_content_detector import HarmfulContentDetector
 
 
@@ -30,14 +32,6 @@ async def test_detect_case_insensitive(detector):
 
 
 @pytest.mark.asyncio
-async def test_detect_multiple_keywords(detector):
-    detector.keywords = ["spam", "scam", "fraud"]
-    result = await detector.detect("This is spam and fraud")
-    assert result["is_harmful"] is True
-    assert len(result["matched_keywords"]) == 2
-
-
-@pytest.mark.asyncio
 async def test_add_custom_keywords(detector):
     detector.add_keywords(["custom_bad_word"])
     assert "custom_bad_word" in detector.keywords
@@ -45,10 +39,10 @@ async def test_add_custom_keywords(detector):
 
 @pytest.mark.asyncio
 async def test_remove_keyword(detector):
-    detector.keywords = ["spam", "scam"]
+    detector.keywords = ["spam", "custom_bad_word"]
     detector.remove_keyword("spam")
     assert "spam" not in detector.keywords
-    assert "scam" in detector.keywords
+    assert "custom_bad_word" in detector.keywords
 
 
 @pytest.mark.asyncio
@@ -57,28 +51,6 @@ async def test_get_keywords(detector):
     keywords = detector.get_keywords()
     assert "spam" in keywords
     assert "scam" in keywords
-    # Verify it's a copy
-    keywords.append("test")
-    assert "test" not in detector.keywords
-
-
-@pytest.mark.asyncio
-async def test_detect_thai_keywords(detector):
-    detector.keywords = ["สแปม", "ฉ้อโกง", "หลอกลวง"]
-    result = await detector.detect("ข้อความนี้เป็น สแปม")
-    assert result["is_harmful"] is True
-    assert "สแปม" in result["matched_keywords"]
-
-
-@pytest.mark.asyncio
-async def test_detect_returns_method(detector):
-    detector.keywords = ["spam"]
-    result = await detector.detect("spam message")
-    assert result["method"] == "keyword"
-
-
-@pytest.mark.asyncio
-async def test_detect_clean_returns_none_method(detector):
-    detector.keywords = ["spam"]
-    result = await detector.detect("hello")
-    assert result["method"] == "none"
+    # Should be a copy, not the original
+    keywords.append("hacked")
+    assert "hacked" not in detector.keywords

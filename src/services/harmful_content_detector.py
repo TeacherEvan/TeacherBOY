@@ -1,7 +1,6 @@
 """Keyword + optional LLM harmful content detection."""
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -20,20 +19,20 @@ class HarmfulContentDetector:
         "ยาเสพติด", "อาวุธ", "ระเบิด", "ขบวนการสุดขั้ว",
     ]
 
-    def __init__(self, keywords: Optional[list[str]] = None, llm_client=None):
+    def __init__(self, keywords: list[str] | None = None, llm_client=None):
         self.keywords = keywords or self.DEFAULT_KEYWORDS.copy()
         self._llm_client = llm_client  # Optional: for LLM-based detection
         self._llm_enabled = llm_client is not None
 
     async def detect(self, text: str) -> dict:
         """Detect harmful content in text.
-        
+
         Returns:
             dict with: is_harmful (bool), matched_keywords (list), method (str), llm_result (optional)
         """
         text_lower = text.lower()
         matched = [kw for kw in self.keywords if kw.lower() in text_lower]
-        
+
         if matched:
             return {
                 "is_harmful": True,
@@ -75,3 +74,13 @@ class HarmfulContentDetector:
     def get_keywords(self) -> list[str]:
         """Get current keyword list."""
         return self.keywords.copy()
+
+
+# Singleton instance - used by main.py and other modules
+# No external dependencies needed
+harmful_content_detector = HarmfulContentDetector()
+
+
+def get_harmful_content_detector() -> HarmfulContentDetector:
+    """Get the global harmful content detector instance."""
+    return harmful_content_detector
