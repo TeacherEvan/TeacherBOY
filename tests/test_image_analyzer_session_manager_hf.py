@@ -1,9 +1,11 @@
 # tests/test_image_analyzer_session_manager_hf.py
 # tests/test_image_analyzer_session_manager_hf.py
-from unittest.mock import AsyncMock, MagicMock, patch
-import pytest
 import shutil
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
 
 @pytest.fixture(autouse=True)
 def clean_test_data():
@@ -105,8 +107,9 @@ async def test_save_image_metadata_idempotent_unique_ids():
 
 @pytest.mark.asyncio
 async def test_save_image_metadata_includes_all_fields():
-    from src.services.image_analyzer_session_manager import ImageAnalyzerSessionManager
     import json
+
+    from src.services.image_analyzer_session_manager import ImageAnalyzerSessionManager
     mgr = ImageAnalyzerSessionManager(hf_token="test_token", hf_repo_id="EvilEvan/teacherboy-images")
     with patch("huggingface_hub.HfApi"), patch("huggingface_hub.CommitScheduler"):
         mgr._setup_images_hf_storage()
@@ -138,6 +141,7 @@ async def test_save_image_metadata_includes_all_fields():
 @pytest.mark.asyncio
 async def test_thread_safety_concurrent_saves():
     import asyncio
+
     from src.services.image_analyzer_session_manager import ImageAnalyzerSessionManager
     mgr = ImageAnalyzerSessionManager(hf_token="test_token", hf_repo_id="EvilEvan/teacherboy-images")
     with patch("huggingface_hub.HfApi"), patch("huggingface_hub.CommitScheduler"):

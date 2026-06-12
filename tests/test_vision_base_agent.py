@@ -1,11 +1,7 @@
-import asyncio
-import base64
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from linebot.v3.messaging import Configuration, MessagingApiBlob
+from linebot.v3.messaging import MessagingApiBlob
 from linebot.v3.webhooks import MessageEvent, Source
 
 from src.agents.vision_base_agent import VisionBaseAgent
@@ -26,7 +22,7 @@ class TestVisionBaseAgent:
         return VisionBaseAgent(
             name="VisionBaseAgent",
             description="Base agent for vision-related functionalities",
-            messaging_api_blob=mock_messaging_api_blob
+            messaging_api_blob=mock_messaging_api_blob,
         )
 
     @pytest.fixture
@@ -37,6 +33,16 @@ class TestVisionBaseAgent:
         event.source.group_id = None
         event.source.room_id = None
         return event
+
+    @pytest.fixture
+    def mock_github_service(self):
+        with patch("src.services.github_models_service.github_models_service") as mock:
+            yield mock
+
+    @pytest.fixture
+    def mock_openrouter_service(self):
+        with patch("src.services.openrouter_service.openrouter_service") as mock:
+            yield mock
 
     def test_get_chat_id_user(self, vision_base_agent, mock_event):
         chat_id = vision_base_agent._get_chat_id(mock_event)
@@ -98,26 +104,24 @@ class TestVisionBaseAgent:
 
         assert "Stay extremely literal and calm" in messages[0]["content"]
 
-    @patch("src.services.github_models_service.github_models_service")
-    @patch("src.services.openrouter_service.openrouter_service")
-    def test_get_vision_error_detail(self, mock_openrouter, mock_github, vision_base_agent):
-        mock_github.get_last_error.return_value = (400, "Bad Request", "github_model")
-        mock_openrouter.get_last_error.return_value = None
+    def test_get_vision_error_detail(self, vision_base_agent, mock_github_service, mock_openrouter_service):
+        mock_github_service.get_last_error.return_value = (400, "Bad Request", "github_model")
+        mock_openrouter_service.get_last_error.return_value = None
 
         status, detail, model = vision_base_agent._get_vision_error_detail()
         assert status == 400
         assert detail == "Bad Request"
         assert model == "github_model"
 
-        mock_github.get_last_error.return_value = None
-        mock_openrouter.get_last_error.return_value = (401, "Unauthorized", "openrouter_model")
+        mock_github_service.get_last_error.return_value = None
+        mock_openrouter_service.get_last_error.return_value = (401, "Unauthorized", "openrouter_model")
         status, detail, model = vision_base_agent._get_vision_error_detail()
         assert status == 401
         assert detail == "Unauthorized"
         assert model == "openrouter_model"
 
-        mock_github.get_last_error.return_value = None
-        mock_openrouter.get_last_error.return_value = None
+        mock_github_service.get_last_error.return_value = None
+        mock_openrouter_service.get_last_error.return_value = None
         status, detail, model = vision_base_agent._get_vision_error_detail()
         assert status is None
         assert detail is None

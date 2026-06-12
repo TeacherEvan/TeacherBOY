@@ -112,4 +112,41 @@ export default defineSchema({
   })
     .index("by_date_chat", ["date", "chatId"])
     .index("by_teacher", ["teacher"]),
+
+  // Moderator Mode state per group
+  modModeState: defineTable({
+    groupId: v.string(),
+    mode: v.union(v.literal("all"), v.literal("special")),
+    activatedBy: v.string(),
+    specialUserId: v.optional(v.string()),
+    isActive: v.boolean(),
+    ...timestampFields,
+  })
+    .index("by_group", ["groupId"])
+    .index("by_admin", ["activatedBy"]),
+
+  // Ban list per group
+  banList: defineTable({
+    groupId: v.string(),
+    userId: v.string(),
+    bannedBy: v.string(),
+    reason: v.optional(v.string()),
+    bannedAt: v.number(),
+  })
+    .index("by_group_user", ["groupId", "userId"])
+    .index("by_group", ["groupId"]),
+
+  // User warnings per group (3-strike system)
+  userWarnings: defineTable({
+    groupId: v.string(),
+    userId: v.string(),
+    count: v.number(),
+    lastWarningAt: v.number(),
+    lastWarningBy: v.string(),
+    lastWarningReason: v.optional(v.string()),
+    readByUser: v.boolean(),
+    readAt: v.optional(v.number()),
+  })
+    .index("by_group_user", ["groupId", "userId"])
+    .index("by_group", ["groupId"]),
 });

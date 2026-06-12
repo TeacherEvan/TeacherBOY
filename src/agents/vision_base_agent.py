@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -6,18 +5,25 @@ from zoneinfo import ZoneInfo
 from linebot.v3.messaging import MessagingApiBlob
 from linebot.v3.webhooks import MessageEvent
 
-from src.services.github_models_service import github_models_service
-from src.services.openrouter_service import openrouter_service
+from src.agents.base_agent import BaseAgent
 from src.utils.tracing import get_tracer
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
 
 
-class VisionBaseAgent:
+class VisionBaseAgent(BaseAgent):
     def __init__(self, name: str, description: str, messaging_api_blob: MessagingApiBlob | None = None):
-        super().__init__(name, description)  # type: ignore[call-arg]
+        super().__init__(name, description)
         self.blob_api = messaging_api_blob
+
+    async def should_handle(self, event: MessageEvent, text: str) -> bool:
+        """Not implemented — VisionBaseAgent is a utility base class, not a handler."""
+        return False
+
+    async def handle(self, event: MessageEvent, text: str, line_bot_api) -> bool:
+        """Not implemented — VisionBaseAgent is a utility base class, not a handler."""
+        return False
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         """Extract chat ID from event."""
@@ -41,7 +47,7 @@ class VisionBaseAgent:
                 logger.error("MessagingApiBlob client not initialized for image download.")
                 return None
 
-            response = await asyncio.to_thread(self.blob_api.get_message_content, message_id)
+            response = await self.blob_api.get_message_content(message_id)
 
             if response is None:
                 logger.warning("❌ Response is None from LINE API")
@@ -150,6 +156,9 @@ class VisionBaseAgent:
 
     def _get_vision_error_detail(self) -> tuple[int | None, str | None, str | None]:
         """Collect the most recent vision API error detail."""
+        from src.services.github_models_service import github_models_service
+        from src.services.openrouter_service import openrouter_service
+
         for svc in (github_models_service, openrouter_service):
             try:
                 detail = svc.get_last_error()
