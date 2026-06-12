@@ -251,3 +251,31 @@ def test_help_document_memory_topic_alias():
     assert agent._resolve_help_topic("doc", categories) == "Document Memory"
     assert agent._resolve_help_topic("docs", categories) == "Document Memory"
     assert agent._resolve_help_topic("document", categories) == "Document Memory"
+
+
+def test_help_includes_search_category():
+    agent = HelpAgent()
+    with patch("src.agents.help_agent.settings") as mock_settings:
+        mock_settings.is_brave_search_configured.return_value = True
+        mock_settings.is_calendar_configured.return_value = True
+        mock_settings.is_profiler_configured.return_value = True
+        mock_settings.is_github_models_configured.return_value = True
+        mock_settings.document_memory_enabled = True
+        
+        categories = agent._get_command_categories(
+            is_admin=False,
+            chat_type="private chat",
+            zeus_available=False,  # Search should work even when zeus is not available
+            search_available=False,
+        )
+        
+    # Should have Search as separate category when Brave is configured
+    assert "Search" in categories
+    search_commands = categories["Search"]
+    assert any("search" in cmd["command"].lower() for cmd in search_commands)
+
+
+def test_help_search_topic_alias():
+    agent = HelpAgent()
+    categories = {"Search": [{"command": "Ms. Green search <query>", "examples": ["Ms. Green search test"], "available": True}]}
+    assert agent._resolve_help_topic("search", categories) == "Search"

@@ -137,11 +137,13 @@ class HelpAgent(BaseAgent):
                     "examples": [f"{display_name} what is the weather?", f"{display_name} tell me a joke"],
                     "available": zeus_available,
                 },
+            ],
+            "Search": [
                 {
                     "command": f"{display_name} search <query>",
                     "description": "Search the web for information",
                     "examples": [f"{display_name} search Python tutorials"],
-                    "available": search_available,
+                    "available": settings.is_brave_search_configured(),
                 },
             ],
             "News & Information": [
@@ -345,6 +347,7 @@ class HelpAgent(BaseAgent):
             "doc": "Document Memory",
             "docs": "Document Memory",
             "document": "Document Memory",
+            "search": "Search",
             "admin": "Admin Commands",
             display_name: "Core Commands",
         }
