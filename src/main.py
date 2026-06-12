@@ -75,6 +75,11 @@ from src.services.image_analyzer_session_manager import image_analyzer_session_m
 from src.services.logging_service import logging_service
 from src.services.message_buffer_service import message_buffer_service
 from src.services.metrics_service import metrics_service
+from src.services.memory_monitor_service import (
+    get_memory_monitor,
+    init_memory_monitor,
+    check_and_auto_flush,
+)
 from src.services.mod_audit_log import init_mod_audit_log, mod_audit_log
 from src.services.mod_mode_service import init_mod_mode_service, mod_mode_service
 from src.services.news_session_manager import news_session_manager
@@ -148,6 +153,22 @@ def create_optimized_http_client() -> httpx.AsyncClient:
         http2=client_config["http2"],
         follow_redirects=True,
     )
+
+
+async def _memory_monitor_check_loop() -> None:
+    """Background task to periodically check memory pressure and trigger auto-flush."""
+    monitor = get_memory_monitor()
+    if not monitor:
+        return
+
+    while True:
+        try:
+            await asyncio.sleep(monitor.check_interval_seconds)
+            await check_and_auto_flush()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"❌ Memory monitor check failed: {e}", exc_info=True)
 
 
 @asynccontextmanager
@@ -589,6 +610,19 @@ async def lifespan(app: FastAPI):
     calendar_session_manager.start_cleanup()
     message_buffer_service.start_cleanup_task()
     rate_limiter.start_cleanup()
+
+    # Initialize memory monitor (HF Spaces)
+    if settings.memory_monitor_enabled:
+        init_memory_monitor(
+            check_interval_seconds=settings.memory_monitor_check_interval_seconds,
+            auto_flush_threshold=settings.memory_monitor_auto_flush_threshold,
+            auto_flush_mode=settings.memory_monitor_auto_flush_mode,
+            auto_flush_days=settings.memory_monitor_auto_flush_days,
+        )
+        # Start periodic memory check task
+        asyncio.create_task(_memory_monitor_check_loop())
+        logger.info("📊 Memory monitor started (HF Spaces auto-scaling enabled)")
+
     logger.info("✅ All cleanup tasks started")
 
     logger.info("=" * 80)

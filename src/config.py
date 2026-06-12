@@ -413,6 +413,69 @@ class Settings(BaseSettings):
     )
 
     # ============================================================================
+    # Memory Monitor Configuration (HF Spaces Auto-Scaling)
+    # ============================================================================
+    memory_monitor_enabled: bool = Field(
+        default=True,
+        description="Enable container memory pressure monitoring and auto-flush.",
+    )
+    memory_monitor_check_interval_seconds: int = Field(
+        default=60,
+        ge=10,
+        description="Memory check interval in seconds (10-3600).",
+    )
+    memory_monitor_auto_flush_threshold: str = Field(
+        default="CRITICAL",
+        description="Memory pressure threshold for auto-flush (LOW, MEDIUM, HIGH, CRITICAL).",
+    )
+    memory_monitor_auto_flush_mode: str = Field(
+        default="time_based",
+        description="Flush mode for auto-flush (time_based, size_based, manual, full).",
+    )
+    memory_monitor_auto_flush_days: int = Field(
+        default=7,
+        ge=1,
+        le=365,
+        description="Days for auto time-based flush (1-365).",
+    )
+
+    # ============================================================================
+    # Memory Flush Configuration
+    # ============================================================================
+    memory_flush_enabled: bool = Field(
+        default=True,
+        description="Enable admin memory flush commands.",
+    )
+    memory_flush_max_days: int = Field(
+        default=365,
+        ge=1,
+        le=365,
+        description="Max days for time-based flush (1-365).",
+    )
+    memory_flush_dry_run_default: bool = Field(
+        default=True,
+        description="Default to dry-run for safety.",
+    )
+
+    # ============================================================================
+    # Log Viewer Configuration
+    # ============================================================================
+    log_viewer_enabled: bool = Field(
+        default=True,
+        description="Enable interactive log viewer.",
+    )
+    log_viewer_max_results_per_page: int = Field(
+        default=20,
+        ge=5,
+        le=50,
+        description="Max log entries per page.",
+    )
+    log_viewer_default_preset: str = Field(
+        default="last_7_days",
+        description="Default date preset for log viewer.",
+    )
+
+    # ============================================================================
     # GitHub Models Configuration (Alternative to OpenRouter)
     # ============================================================================
     github_models_pat: str | None = Field(
@@ -952,12 +1015,20 @@ class Settings(BaseSettings):
         return True
 
     def is_conversation_memory_configured(self) -> bool:
-        """Check if conversation memory is configured and ready for use."""
+        """Check if conversation memory feature is enabled (regardless of HF persistence)."""
         return bool(self.conversation_memory_enabled)
 
+    def is_conversation_memory_hf_configured(self) -> bool:
+        """Check if HF Hub persistence for conversation memory is configured."""
+        return bool(self.conversation_memory_enabled and self.hf_memory_token and self.hf_memory_repo_id)
+
     def is_document_memory_configured(self) -> bool:
-        """Check if document memory is configured and ready for use."""
+        """Check if document memory feature is enabled (regardless of HF persistence)."""
         return bool(self.document_memory_enabled)
+
+    def is_document_memory_hf_configured(self) -> bool:
+        """Check if HF Hub persistence for document memory is configured."""
+        return bool(self.document_memory_enabled and self.hf_memory_token and self.document_hf_repo_id)
 
     def is_history_log_configured(self) -> bool:
         """Check if history logging is configured and enabled."""
