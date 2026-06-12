@@ -14,12 +14,12 @@ Security features:
 - Automatic cleanup of old conversations
 """
 
-import asyncio
 import hashlib
 import json
 import logging
 from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +34,60 @@ MAX_CONTEXT_TOKENS = 4000  # Approximate token limit for context window
 SESSION_TTL_HOURS = 24  # Session expiration time
 CLEANUP_INTERVAL_MINUTES = 30  # How often to run cleanup
 HF_SYNC_INTERVAL_MINUTES = 5  # How often to sync to HF Hub
+
+
+class FlushMode(StrEnum):
+    """Memory flush modes."""
+
+    TIME_BASED = "time_based"           # Delete older than N days
+    SIZE_BASED = "size_based"           # Cap total messages / per-chat
+    MANUAL_SELECTION = "manual"         # Admin picks specific chats
+    FULL_PURGE = "full"                 # Everything (with confirmation)
+
+
+class FlushParams:
+    """Parameters for memory flush operations."""
+
+    def __init__(
+        self,
+        older_than_days: int | None = None,
+        max_total_messages: int | None = None,
+        max_messages_per_chat: int | None = None,
+        chat_ids: list[str] | None = None,
+        dry_run: bool = False,
+        include_documents: bool = False,
+        include_images: bool = False,
+    ):
+        self.older_than_days = older_than_days
+        self.max_total_messages = max_total_messages
+        self.max_messages_per_chat = max_messages_per_chat
+        self.chat_ids = chat_ids
+        self.dry_run = dry_run
+        self.include_documents = include_documents
+        self.include_images = include_images
+
+
+class FlushResult:
+    """Result of a memory flush operation."""
+
+    def __init__(
+        self,
+        deleted_chats: int = 0,
+        deleted_messages: int = 0,
+        freed_bytes_mb: float = 0.0,
+        dry_run: bool = False,
+        mode: FlushMode | None = None,
+    ):
+        self.deleted_chats = deleted_chats
+        self.deleted_messages = deleted_messages
+        self.freed_bytes_mb = freed_bytes_mb
+        self.dry_run = dry_run
+        self.mode = mode
+
+    def __repr__(self) -> str:
+        action = "Dry run" if self.dry_run else "Executed"
+        return (f"FlushResult({action}: deleted_chats={self.deleted_chats}, "
+                f"deleted_messages={self.deleted_messages}, freed_mb={self.freed_bytes_mb:.2f})")
 
 
 class ConversationMemoryService:
@@ -139,9 +193,6 @@ class ConversationMemoryService:
                 private=True,
                 squash_history=True,  # Keep repo size small
             )
-
-            # Load existing conversations from HF Hub
-            asyncio.create_task(self._load_from_hub())
 
             logger.info("💭 Conversation memory initialized with HF Hub persistence")
 
@@ -547,6 +598,150 @@ class ConversationMemoryService:
             "max_messages_per_session": self.max_messages,
             "session_ttl_hours": self.session_ttl.total_seconds() / 3600,
         }
+
+    async def flush_memory(
+        self,
+        mode: FlushMode,
+        params: FlushParams,
+    ) -> FlushResult:
+        """
+        Flush conversation memory based on mode and parameters.
+
+        Args:
+            mode: Flush mode (TIME_BASED, SIZE_BASED, MANUAL_SELECTION, FULL_PURGE)
+            params: Flush parameters
+
+        Returns:
+            FlushResult with deletion statistics
+        """
+        result = FlushResult(mode=mode, dry_run=params.dry_run)
+
+        if mode == FlushMode.TIME_BASED:
+            return await self._flush_time_based(params, result)
+        elif mode == FlushMode.SIZE_BASED:
+            return await self._flush_size_based(params, result)
+        elif mode == FlushMode.MANUAL_SELECTION:
+            return await self._flush_manual_selection(params, result)
+        elif mode == FlushMode.FULL_PURGE:
+            return await self._flush_full_purge(params, result)
+        else:
+            raise ValueError(f"Unknown flush mode: {mode}")
+
+    async def _flush_time_based(self, params: FlushParams, result: FlushResult) -> FlushResult:
+        """Flush conversations older than specified days."""
+        if params.older_than_days is None:
+            params.older_than_days = 30
+
+        cutoff = datetime.now(UTC) - timedelta(days=params.older_than_days)
+        to_delete = []
+
+        for hashed_id, conv in self._conversations.items():
+            last_activity = conv.get("last_activity")
+            if isinstance(last_activity, datetime):
+                if last_activity.tzinfo is None:
+                    last_activity = last_activity.replace(tzinfo=UTC)
+                if last_activity < cutoff:
+                    to_delete.append(hashed_id)
+
+        result.deleted_chats = len(to_delete)
+        for hashed_id in to_delete:
+            conv = self._conversations[hashed_id]
+            result.deleted_messages += len(conv.get("messages", []))
+
+        if not params.dry_run:
+            for hashed_id in to_delete:
+                del self._conversations[hashed_id]
+                # Also delete from local storage if HF enabled
+                if self._hf_enabled and self._local_storage_path:
+                    file_path = self._local_storage_path / f"{hashed_id}.json"
+                    if file_path.exists():
+                        file_path.unlink()
+
+        return result
+
+    async def _flush_size_based(self, params: FlushParams, result: FlushResult) -> FlushResult:
+        """Flush to cap total messages or per-chat messages."""
+        total_messages = sum(len(conv.get("messages", [])) for conv in self._conversations.values())
+
+        # If per-chat limit specified, trim each chat
+        if params.max_messages_per_chat:
+            for hashed_id, conv in self._conversations.items():
+                messages = conv.get("messages", [])
+                if len(messages) > params.max_messages_per_chat:
+                    removed = len(messages) - params.max_messages_per_chat
+                    result.deleted_messages += removed
+                    if not params.dry_run:
+                        conv["messages"] = messages[-params.max_messages_per_chat:]
+                        # Update local storage
+                        if self._hf_enabled:
+                            await self._save_to_local_storage(hashed_id, conv)
+
+        # If total limit specified, remove oldest chats first
+        if params.max_total_messages and total_messages > params.max_total_messages:
+            # Sort by last_activity (oldest first)
+            sorted_chats = sorted(
+                self._conversations.items(),
+                key=lambda x: x[1].get("last_activity", datetime.min.replace(tzinfo=UTC))
+            )
+            excess = total_messages - params.max_total_messages
+            for hashed_id, conv in sorted_chats:
+                if excess <= 0:
+                    break
+                messages = conv.get("messages", [])
+                if not messages:
+                    continue
+                to_remove = min(excess, len(messages))
+                result.deleted_messages += to_remove
+                excess -= to_remove
+                if not params.dry_run:
+                    if to_remove >= len(messages):
+                        del self._conversations[hashed_id]
+                        result.deleted_chats += 1
+                        if self._hf_enabled and self._local_storage_path:
+                            file_path = self._local_storage_path / f"{hashed_id}.json"
+                            if file_path.exists():
+                                file_path.unlink()
+                    else:
+                        conv["messages"] = messages[-len(messages) + to_remove:]
+                        if self._hf_enabled:
+                            await self._save_to_local_storage(hashed_id, conv)
+
+        return result
+
+    async def _flush_manual_selection(self, params: FlushParams, result: FlushResult) -> FlushResult:
+        """Flush specific chat IDs provided by admin."""
+        if not params.chat_ids:
+            return result
+
+        for chat_id in params.chat_ids:
+            hashed_id = self._hash_chat_id(chat_id)
+            if hashed_id in self._conversations:
+                conv = self._conversations[hashed_id]
+                result.deleted_chats += 1
+                result.deleted_messages += len(conv.get("messages", []))
+                if not params.dry_run:
+                    del self._conversations[hashed_id]
+                    if self._hf_enabled and self._local_storage_path:
+                        file_path = self._local_storage_path / f"{hashed_id}.json"
+                        if file_path.exists():
+                            file_path.unlink()
+
+        return result
+
+    async def _flush_full_purge(self, params: FlushParams, result: FlushResult) -> FlushResult:
+        """Flush all conversations."""
+        result.deleted_chats = len(self._conversations)
+        for conv in self._conversations.values():
+            result.deleted_messages += len(conv.get("messages", []))
+
+        if not params.dry_run:
+            self._conversations.clear()
+            # Clear all local storage files
+            if self._hf_enabled and self._local_storage_path:
+                for file_path in self._local_storage_path.glob("*.json"):
+                    file_path.unlink()
+
+        return result
 
 
 # Singleton instance (configured during app startup)
