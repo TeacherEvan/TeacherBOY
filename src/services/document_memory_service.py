@@ -13,7 +13,8 @@ import logging
 import os
 import re
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,58 @@ SUPPORTED_EXTENSIONS = {
     ".pdf": "application/pdf",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
+
+
+class FlushMode(StrEnum):
+    """Memory flush modes for documents."""
+
+    TIME_BASED = "time_based"           # Delete older than N days
+    SIZE_BASED = "size_based"           # Cap total documents / per-chat
+    MANUAL_SELECTION = "manual"         # Admin picks specific chats
+    FULL_PURGE = "full"                 # Everything (with confirmation)
+
+
+class FlushParams:
+    """Parameters for document flush operations."""
+
+    def __init__(
+        self,
+        older_than_days: int | None = None,
+        max_total_documents: int | None = None,
+        max_documents_per_chat: int | None = None,
+        chat_ids: list[str] | None = None,
+        dry_run: bool = False,
+        include_images: bool = False,
+    ):
+        self.older_than_days = older_than_days
+        self.max_total_documents = max_total_documents
+        self.max_documents_per_chat = max_documents_per_chat
+        self.chat_ids = chat_ids
+        self.dry_run = dry_run
+        self.include_images = include_images
+
+
+class FlushResult:
+    """Result of a document flush operation."""
+
+    def __init__(
+        self,
+        deleted_chats: int = 0,
+        deleted_documents: int = 0,
+        freed_bytes_mb: float = 0.0,
+        dry_run: bool = False,
+        mode: FlushMode | None = None,
+    ):
+        self.deleted_chats = deleted_chats
+        self.deleted_documents = deleted_documents
+        self.freed_bytes_mb = freed_bytes_mb
+        self.dry_run = dry_run
+        self.mode = mode
+
+    def __repr__(self) -> str:
+        action = "Dry run" if self.dry_run else "Executed"
+        return (f"FlushResult({action}: deleted_chats={self.deleted_chats}, "
+                f"deleted_documents={self.deleted_documents}, freed_mb={self.freed_bytes_mb:.2f})")
 
 
 class DocumentMemoryService:
@@ -395,6 +448,168 @@ class DocumentMemoryService:
             logger.info("📄 huggingface_hub not installed; skipping HF Hub document preload")
         except Exception as e:
             logger.error(f"❌ Failed to load documents from HF Hub: {e}")
+
+    async def purge_documents(
+        self,
+        mode: FlushMode,
+        params: FlushParams,
+    ) -> FlushResult:
+        """
+        Purge documents based on mode and parameters.
+
+        Args:
+            mode: Flush mode (TIME_BASED, SIZE_BASED, MANUAL_SELECTION, FULL_PURGE)
+            params: Flush parameters
+
+        Returns:
+            FlushResult with deletion statistics
+        """
+        result = FlushResult(mode=mode, dry_run=params.dry_run)
+
+        if mode == FlushMode.TIME_BASED:
+            return await self._purge_time_based(params, result)
+        elif mode == FlushMode.SIZE_BASED:
+            return await self._purge_size_based(params, result)
+        elif mode == FlushMode.MANUAL_SELECTION:
+            return await self._purge_manual_selection(params, result)
+        elif mode == FlushMode.FULL_PURGE:
+            return await self._purge_full_purge(params, result)
+        else:
+            raise ValueError(f"Unknown flush mode: {mode}")
+
+    async def _purge_time_based(self, params: FlushParams, result: FlushResult) -> FlushResult:
+        """Purge documents older than specified days."""
+        if params.older_than_days is None:
+            params.older_than_days = 30
+
+        cutoff = datetime.now(UTC) - timedelta(days=params.older_than_days)
+        to_delete = []
+
+        for chat_id, docs in self._documents.items():
+            chat_deleted = False
+            for doc_id, doc in list(docs.items()):
+                created_at = doc.get("created_at")
+                if isinstance(created_at, str):
+                    try:
+                        created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                        if created_dt.tzinfo is None:
+                            created_dt = created_dt.replace(tzinfo=UTC)
+                        if created_dt < cutoff:
+                            to_delete.append((chat_id, doc_id))
+                            chat_deleted = True
+                    except Exception:
+                        continue
+
+            if chat_deleted and not params.dry_run:
+                result.deleted_chats += 1
+
+        result.deleted_documents = len(to_delete)
+        for chat_id, doc_id in to_delete:
+            if not params.dry_run:
+                del self._documents[chat_id][doc_id]
+                # Delete local file
+                doc_path = self.storage_path / chat_id / doc_id
+                if doc_path.exists():
+                    try:
+                        size = doc_path.stat().st_size / (1024 * 1024)
+                        result.freed_bytes_mb += size
+                    except Exception:
+                        pass
+                    doc_path.unlink(missing_ok=True)
+                # Delete index file
+                index_path = self.storage_path / chat_id / f"{doc_id}.json"
+                if index_path.exists():
+                    index_path.unlink(missing_ok=True)
+
+            if not params.dry_run and not self._documents.get(chat_id):
+                self._documents.pop(chat_id, None)
+
+        return result
+
+    async def _purge_size_based(self, params: FlushParams, result: FlushResult) -> FlushResult:
+        """Purge to cap total documents or per-chat documents."""
+        # If per-chat limit specified, trim each chat
+        if params.max_documents_per_chat:
+            for chat_id, docs in self._documents.items():
+                doc_items = list(docs.items())
+                if len(doc_items) > params.max_documents_per_chat:
+                    # Sort by created_at (oldest first)
+                    doc_items.sort(key=lambda x: x[1].get("created_at", ""))
+                    to_remove = doc_items[:-params.max_documents_per_chat]
+                    result.deleted_documents += len(to_remove)
+                    if not params.dry_run:
+                        for doc_id, _ in to_remove:
+                            del self._documents[chat_id][doc_id]
+                            doc_path = self.storage_path / chat_id / doc_id
+                            if doc_path.exists():
+                                doc_path.unlink(missing_ok=True)
+                            index_path = self.storage_path / chat_id / f"{doc_id}.json"
+                            if index_path.exists():
+                                index_path.unlink(missing_ok=True)
+
+        # If total limit specified (across all chats)
+        if params.max_total_documents:
+            all_docs = []
+            for chat_id, docs in self._documents.items():
+                for doc_id, doc in docs.items():
+                    all_docs.append((chat_id, doc_id, doc))
+
+            total_docs = len(all_docs)
+            if total_docs > params.max_total_documents:
+                # Sort by created_at (oldest first)
+                all_docs.sort(key=lambda x: x[2].get("created_at", ""))
+                excess = total_docs - params.max_total_documents
+                for chat_id, doc_id, doc in all_docs[:excess]:
+                    result.deleted_documents += 1
+                    if not params.dry_run:
+                        if chat_id in self._documents:
+                            self._documents[chat_id].pop(doc_id, None)
+                            doc_path = self.storage_path / chat_id / doc_id
+                            if doc_path.exists():
+                                doc_path.unlink(missing_ok=True)
+                            index_path = self.storage_path / chat_id / f"{doc_id}.json"
+                            if index_path.exists():
+                                index_path.unlink(missing_ok=True)
+
+        return result
+
+    async def _purge_manual_selection(self, params: FlushParams, result: FlushResult) -> FlushResult:
+        """Purge specific chat IDs provided by admin."""
+        if not params.chat_ids:
+            return result
+
+        for chat_id in params.chat_ids:
+            if chat_id in self._documents:
+                docs = self._documents[chat_id]
+                result.deleted_chats += 1
+                result.deleted_documents += len(docs)
+                if not params.dry_run:
+                    for doc_id in docs:
+                        doc_path = self.storage_path / chat_id / doc_id
+                        if doc_path.exists():
+                            doc_path.unlink(missing_ok=True)
+                        index_path = self.storage_path / chat_id / f"{doc_id}.json"
+                        if index_path.exists():
+                            index_path.unlink(missing_ok=True)
+                    self._documents.pop(chat_id, None)
+
+        return result
+
+    async def _purge_full_purge(self, params: FlushParams, result: FlushResult) -> FlushResult:
+        """Purge all documents."""
+        result.deleted_chats = len(self._documents)
+        for docs in self._documents.values():
+            result.deleted_documents += len(docs)
+
+        if not params.dry_run:
+            self._documents.clear()
+            # Clear all local storage files
+            import shutil
+            if self.storage_path.exists():
+                shutil.rmtree(self.storage_path)
+                self.storage_path.mkdir(parents=True, exist_ok=True)
+
+        return result
 
     def stop(self) -> None:
         if self._commit_scheduler:
