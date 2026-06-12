@@ -39,12 +39,12 @@ USER_BOSS=U1234567890abcdef
 2. **HelpAgent** (Priority 5) - Comprehensive help system (`help`, `Dear Ms. Green help`, etc.)
 3. **AdminAgent** (Priority 5) - `/admin` commands
 4. **CalendarAgent** (Priority 6) - `Ms. Green calendar`, `Ms. Green add`, `Ms. Green events`
-5. **HannibalProfileAgent** (Priority 6) - Message-history profiling
+5. **HannibalProfileAgent** (Priority 6) - `hannibal profile`, `analyze messages` - Message-history profiling
 6. **ProfilerAgent** (Priority 7) - Image-based psychological profiling
-7. **ImageAnalyzerAgent** (Priority 7) - General image Q&A
-8. **DocumentMemoryAgent** (Priority 8) - PDF/DOCX storage and retrieval
-9. **SearchAgent** (Priority 8) - `Ms. Green search ...`
-10. **LLMAgent** (Priority 9) - `Ms. Green ...`
+7. **ImageAnalyzerAgent** (Priority 7) - `Ms. Green analyze`, general image Q&A and date extraction
+8. **DocumentMemoryAgent** (Priority 8) - `Ms. Green doc`, `Ms. Green docs` - PDF/DOCX storage and retrieval
+9. **SearchAgent** (Priority 8) - `Ms. Green search <query>` - Web search via Brave Search API
+10. **LLMAgent** (Priority 9) - `Ms. Green <prompt>` - General LLM conversation
 11. **TranslationAgent** (Priority 10) - Thai ↔ English translation
 12. **SpecialNewsAgent** (Priority 12) - `/special news` command
 13. **NewsAgent** (Priority 15) - `news` or `ข่าว` trigger
@@ -248,3 +248,12 @@ tests/
 - **[docs/ADMIN_COMMANDS.md](../ADMIN_COMMANDS.md)** - Admin reference
 - **[docs/TRACING.md](../TRACING.md)** - OpenTelemetry tracing
 - **[docs/architecture/agents.md](../architecture/agents.md)** - Agent system
+- **[docs/CALENDAR_REMINDERS.md](../CALENDAR_REMINDERS.md)** - Calendar & reminders
+- **[docs/IMAGE_ANALYZER.md](../IMAGE_ANALYZER.md)** - Image analyzer (general Q&A)
+- **[docs/SEARCH_AGENT.md](../SEARCH_AGENT.md)** - Web search agent
+- **[docs/HANNIBAL_PROFILE.md](../HANNIBAL_PROFILE.md)** - Message-history profiling
+- **[docs/PROFILER_USAGE.md](../PROFILER_USAGE.md)** - Psychological profiler (image-based)
+- **[docs/DOCUMENT_MEMORY.md](../DOCUMENT_MEMORY.md)** - Document memory
+- **[docs/NEWS_AGENT.md](../NEWS_AGENT.md)** - News agent
+- **[docs/MODERATOR_MODE.md](../MODERATOR_MODE.md)** - Moderator mode
+- **[docs/CONVERSATION_MEMORY.md](../CONVERSATION_MEMORY.md)** - Conversation memory
