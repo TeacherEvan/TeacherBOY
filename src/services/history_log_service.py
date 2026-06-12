@@ -232,6 +232,16 @@ class AccessLevel(StrEnum):
     SYSTEM = "system"  # System-only, highest security
 
 
+class DatePreset(StrEnum):
+    """Date presets for log viewer queries."""
+
+    TODAY = "today"
+    YESTERDAY = "yesterday"
+    LAST_7_DAYS = "last_7_days"
+    LAST_30_DAYS = "last_30_days"
+    CUSTOM = "custom"
+
+
 # ============================================================================
 # Log Entry Model
 # ============================================================================
@@ -849,6 +859,65 @@ class HistoryLogService:
 
         return results
 
+    async def query_logs_preset(
+        self,
+        preset: DatePreset,
+        event_types: list[EventType] | None = None,
+        levels: list[LogLevel] | None = None,
+        access_level: AccessLevel = AccessLevel.ADMIN,
+        chat_id: str | None = None,
+        user_id: str | None = None,
+        agent_name: str | None = None,
+        limit: int = 100,
+        include_sensitive: bool = False,
+    ) -> list[dict[str, Any]]:
+        """
+        Query logs using a date preset.
+
+        Args:
+            preset: Date preset (TODAY, YESTERDAY, LAST_7_DAYS, LAST_30_DAYS)
+            event_types: Filter by event types
+            levels: Filter by log levels
+            access_level: Minimum access level required
+            chat_id: Filter by chat ID
+            user_id: Filter by user ID
+            agent_name: Filter by agent name
+            limit: Maximum results
+            include_sensitive: Include sensitive data
+
+        Returns:
+            List of matching log entries
+        """
+        now = datetime.now(UTC)
+
+        if preset == DatePreset.TODAY:
+            start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = start_time + timedelta(days=1)
+        elif preset == DatePreset.YESTERDAY:
+            end_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            start_time = end_time - timedelta(days=1)
+        elif preset == DatePreset.LAST_7_DAYS:
+            start_time = now - timedelta(days=7)
+            end_time = now
+        elif preset == DatePreset.LAST_30_DAYS:
+            start_time = now - timedelta(days=30)
+            end_time = now
+        else:
+            raise ValueError(f"Unknown preset: {preset}. Use CUSTOM with start_time/end_time for custom ranges.")
+
+        return await self.query_logs(
+            event_types=event_types,
+            levels=levels,
+            access_level=access_level,
+            chat_id=chat_id,
+            user_id=user_id,
+            agent_name=agent_name,
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit,
+            include_sensitive=include_sensitive,
+        )
+
     def _check_access(self, entry_level: AccessLevel, required_level: AccessLevel) -> bool:
         """Check if access level is sufficient."""
         levels = [AccessLevel.PUBLIC, AccessLevel.INTERNAL, AccessLevel.ADMIN, AccessLevel.SYSTEM]
@@ -884,6 +953,180 @@ class HistoryLogService:
             limit=limit,
             include_sensitive=False,
         )
+
+    def build_log_flex_bubble(
+        self,
+        logs: list[dict[str, Any]],
+        preset: DatePreset,
+        filters: dict[str, Any],
+        page: int,
+        total_pages: int,
+    ) -> dict[str, Any]:
+        """
+        Build a Flex bubble for the log viewer.
+
+        Args:
+            logs: List of log entries to display
+            preset: Current date preset
+            filters: Current filter state
+            page: Current page number (1-indexed)
+            total_pages: Total number of pages
+
+        Returns:
+            Flex bubble dictionary
+        """
+        # Build header
+        header = {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {"type": "text", "text": "📜 Admin Logs", "weight": "bold", "size": "xl", "color": "#FFFFFF"},
+                {
+                    "type": "text",
+                    "text": f"Preset: {preset.value.replace('_', ' ').title()} | Page {page}/{total_pages}",
+                    "size": "sm",
+                    "color": "#CCCCCC",
+                },
+            ],
+            "backgroundColor": "#0D8186",
+            "paddingAll": "md",
+        }
+
+        # Build body with logs
+        body_contents = []
+
+        # Filter row
+        body_contents.append({
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+                {
+                    "type": "button",
+                    "action": {"type": "postback", "label": "Errors", "data": "logs_filter=level=ERROR"},
+                    "style": "primary",
+                    "flex": 1,
+                },
+                {
+                    "type": "button",
+                    "action": {"type": "postback", "label": "Warnings", "data": "logs_filter=level=WARNING"},
+                    "style": "secondary",
+                    "flex": 1,
+                },
+                {
+                    "type": "button",
+                    "action": {"type": "postback", "label": "All", "data": "logs_filter=level=ALL"},
+                    "style": "secondary",
+                    "flex": 1,
+                },
+            ],
+        })
+        body_contents.append({"type": "separator"})
+
+        # Log entries (max 15 per page for Flex size limits)
+        for log in logs[:15]:
+            color = "#FF6B6B" if log["level"] == "error" else ("#FFD93D" if log["level"] == "warning" else "#FFFFFF")
+            agent_name = log.get("agent_name", "-") or "-"
+            chat_id = log.get("chat_id", "-") or "-"
+            body_contents.append({
+                "type": "text",
+                "text": f"{log['timestamp'][:19]} | {log['level'].upper():5} | {agent_name:12} | {chat_id[:8]} | {log['message'][:80]}",
+                "size": "xs",
+                "wrap": True,
+                "color": color,
+            })
+
+        body = {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_contents}
+
+        # Footer pagination
+        footer = {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+                {
+                    "type": "button",
+                    "action": {"type": "postback", "label": "← Prev", "data": f"logs_page={page - 1}"},
+                    "style": "secondary",
+                    "flex": 1,
+                },
+                {"type": "text", "text": f"Page {page}/{total_pages}", "size": "sm", "align": "center", "flex": 1},
+                {
+                    "type": "button",
+                    "action": {"type": "postback", "label": "Next →", "data": f"logs_page={page + 1}"},
+                    "style": "primary",
+                    "flex": 1,
+                },
+            ],
+        }
+
+        return {"type": "bubble", "size": "giga", "header": header, "body": body, "footer": footer}
+
+    def build_date_picker_bubble(self, preset: DatePreset) -> dict[str, Any]:
+        """
+        Build a Flex bubble for custom date range selection.
+
+        Args:
+            preset: Current preset (should be CUSTOM)
+
+        Returns:
+            Flex bubble dictionary with datetimepicker actions
+        """
+        return {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "md",
+                "contents": [
+                    {"type": "text", "text": "📅 Custom Date Range", "weight": "bold", "size": "lg"},
+                    {"type": "text", "text": "Select start and end dates:", "size": "sm", "color": "#888888"},
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "button",
+                                "action": {"type": "datetimepicker", "label": "Start Date", "data": "logs_custom_start", "mode": "date"},
+                                "style": "primary",
+                                "flex": 1,
+                            },
+                            {
+                                "type": "button",
+                                "action": {"type": "datetimepicker", "label": "End Date", "data": "logs_custom_end", "mode": "date"},
+                                "style": "primary",
+                                "flex": 1,
+                            },
+                        ],
+                    },
+                    {
+                        "type": "button",
+                        "action": {"type": "postback", "label": "Apply", "data": "logs_custom_apply"},
+                        "style": "primary",
+                        "color": "#0D8186",
+                    },
+                    {"type": "button", "action": {"type": "postback", "label": "Cancel", "data": "logs_cancel"}, "style": "secondary"},
+                ],
+            },
+        }
+
+    def get_log_quick_reply_items(self) -> list[Any]:
+        """
+        Get quick-reply items for the log viewer.
+
+        Returns:
+            List of QuickReplyItem objects for date presets
+        """
+        try:
+            from linebot.v3.messaging import QuickReplyItem, PostbackAction
+        except ImportError:
+            return []
+
+        return [
+            QuickReplyItem(action=PostbackAction(label="Today", data="logs_preset=today")),
+            QuickReplyItem(action=PostbackAction(label="Yesterday", data="logs_preset=yesterday")),
+            QuickReplyItem(action=PostbackAction(label="Last 7 days", data="logs_preset=last_7_days")),
+            QuickReplyItem(action=PostbackAction(label="Last 30 days", data="logs_preset=last_30_days")),
+            QuickReplyItem(action=PostbackAction(label="Custom range...", data="logs_custom_range")),
+        ]
 
     def stop(self) -> None:
         """Stop the service and flush pending writes."""
