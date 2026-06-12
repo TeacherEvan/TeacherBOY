@@ -149,6 +149,7 @@ def build_admin_dashboard(
                 ),
                 _button_row(
                     _message_button("View groups", "/admin groups"),
+                    _message_button("📜 View Logs", "/admin logs"),
                 ),
                 {
                     "type": "separator",

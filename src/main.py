@@ -790,8 +790,11 @@ async def handle_postback_event(event: PostbackEvent, line_bot_api: MessagingApi
             return
 
         # Handle different postback types
+        preset = DatePreset.LAST_7_DAYS
+        page = 1
+        level_filter = None
+        
         if data == "logs_cancel":
-            # Return to default view
             preset = DatePreset.LAST_7_DAYS
         elif data.startswith("logs_preset="):
             preset_str = data.split("=", 1)[1]
@@ -802,25 +805,50 @@ async def handle_postback_event(event: PostbackEvent, line_bot_api: MessagingApi
                 "last_30_days": DatePreset.LAST_30_DAYS,
             }
             preset = preset_map.get(preset_str, DatePreset.LAST_7_DAYS)
+        elif data.startswith("logs_filter="):
+            # Format: logs_filter=level=ERROR
+            filter_part = data.split("=", 1)[1]  # level=ERROR
+            if "=" in filter_part:
+                filter_key, filter_value = filter_part.split("=", 1)
+                if filter_key == "level" and filter_value != "ALL":
+                    level_filter = filter_value
+        elif data.startswith("logs_page="):
+            page_str = data.split("=", 1)[1]
+            try:
+                page = int(page_str)
+            except ValueError:
+                page = 1
         elif data == "logs_custom_apply":
-            # Custom range - would need stored start/end dates
-            # For now, return to default
-            preset = DatePreset.LAST_7_DAYS
-        else:
-            # Filter or page change - use default preset
             preset = DatePreset.LAST_7_DAYS
 
-        # Query logs
-        logs = await history_log.query_logs_preset(preset, limit=20)
-        total_count = len(await history_log.query_logs_preset(preset, limit=1000))
+        from src.services.history_log_service import LogLevel
+        
+        # Query logs with filter and pagination
+        # Query logs with filter and pagination
+        levels = [LogLevel(level_filter)] if level_filter else None
+        logs = await history_log.query_logs_preset(preset, levels=levels, limit=20, include_sensitive=False)
+        
+        # For total count, get all without limit
+        all_logs = await history_log.query_logs_preset(preset, levels=levels, limit=1000)
+        total_count = len(all_logs)
+        
+        # Calculate total pages
+        total_pages = max(1, (total_count + 19) // 20)
+        
+        # Adjust page
+        page = max(1, min(page, total_pages))
+        
+        # Get the specific page of logs
+        start_idx = (page - 1) * 20
+        end_idx = start_idx + 20
+        page_logs = all_logs[start_idx:end_idx]
 
-        # Build Flex bubble
         bubble = history_log.build_log_flex_bubble(
-            logs=logs,
+            logs=page_logs,
             preset=preset,
-            filters={},
-            page=1,
-            total_pages=max(1, (total_count + 19) // 20),
+            filters={"level": level_filter} if level_filter else {},
+            page=page,
+            total_pages=total_pages,
         )
 
         # Get quick-reply items
@@ -844,12 +872,8 @@ async def handle_postback_event(event: PostbackEvent, line_bot_api: MessagingApi
             )
         return
 
-    # Mod mode postbacks (delegate to mod mode agent if available)
-    if data.startswith("action=mod_") or data.startswith("action=modmode_"):
-        # Try to find and delegate to ModModeAgent
-        from src.agents.agent_router import AgentRouter
-        # The agent router will handle this in its route_message if we add support
-        pass
+    # Add "View Logs" button to admin dashboard
+    # This will be added in the dashboard builder
 
 
 # ============================================================================
