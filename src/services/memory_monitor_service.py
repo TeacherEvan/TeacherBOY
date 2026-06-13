@@ -23,6 +23,14 @@ class MemoryPressure(StrEnum):
 class MemoryMonitorService:
     """Monitors container memory and provides pressure level."""
 
+    # Order for comparison: LOW < MEDIUM < HIGH < CRITICAL
+    _PRESSURE_ORDER = {
+        MemoryPressure.LOW: 0,
+        MemoryPressure.MEDIUM: 1,
+        MemoryPressure.HIGH: 2,
+        MemoryPressure.CRITICAL: 3,
+    }
+
     def __init__(
         self,
         check_interval_seconds: int = 60,
@@ -134,7 +142,8 @@ class MemoryMonitorService:
 
     def should_auto_flush(self) -> bool:
         """Check if auto-flush should be triggered."""
-        return self.get_memory_pressure() >= self.auto_flush_threshold
+        current = self.get_memory_pressure()
+        return self._PRESSURE_ORDER[current] >= self._PRESSURE_ORDER[self.auto_flush_threshold]
 
 
 # Global instance
@@ -193,14 +202,14 @@ async def check_and_auto_flush() -> bool:
 
         if conv_memory:
             params = FlushParams(older_than_days=monitor.auto_flush_days, dry_run=False)
-            result = await conv_memory.flush_memory(FlushMode(monitor.auto_flush_mode), params)
-            logger.info(f"🧹 Auto-flush conversations: {result}")
+            conv_result = await conv_memory.flush_memory(FlushMode(monitor.auto_flush_mode), params)
+            logger.info(f"🧹 Auto-flush conversations: {conv_result}")
             flush_triggered = True
 
         if doc_memory:
             doc_params = DocFlushParams(older_than_days=monitor.auto_flush_days, dry_run=False)
-            result = await doc_memory.purge_documents(DocFlushMode(monitor.auto_flush_mode), doc_params)
-            logger.info(f"🧹 Auto-flush documents: {result}")
+            doc_result = await doc_memory.purge_documents(DocFlushMode(monitor.auto_flush_mode), doc_params)
+            logger.info(f"🧹 Auto-flush documents: {doc_result}")
             flush_triggered = True
 
         return flush_triggered

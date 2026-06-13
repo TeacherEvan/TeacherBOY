@@ -39,10 +39,10 @@ SUPPORTED_EXTENSIONS = {
 class FlushMode(StrEnum):
     """Memory flush modes for documents."""
 
-    TIME_BASED = "time_based"           # Delete older than N days
-    SIZE_BASED = "size_based"           # Cap total documents / per-chat
-    MANUAL_SELECTION = "manual"         # Admin picks specific chats
-    FULL_PURGE = "full"                 # Everything (with confirmation)
+    TIME_BASED = "time_based"  # Delete older than N days
+    SIZE_BASED = "size_based"  # Cap total documents / per-chat
+    MANUAL_SELECTION = "manual"  # Admin picks specific chats
+    FULL_PURGE = "full"  # Everything (with confirmation)
 
 
 class FlushParams:
@@ -84,8 +84,10 @@ class FlushResult:
 
     def __repr__(self) -> str:
         action = "Dry run" if self.dry_run else "Executed"
-        return (f"FlushResult({action}: deleted_chats={self.deleted_chats}, "
-                f"deleted_documents={self.deleted_documents}, freed_mb={self.freed_bytes_mb:.2f})")
+        return (
+            f"FlushResult({action}: deleted_chats={self.deleted_chats}, "
+            f"deleted_documents={self.deleted_documents}, freed_mb={self.freed_bytes_mb:.2f})"
+        )
 
 
 class DocumentMemoryService(HFStorageMixin):
@@ -309,6 +311,96 @@ class DocumentMemoryService(HFStorageMixin):
             self._documents.pop(hashed_id, None)
 
         return True
+
+    def search_documents(self, chat_id: str, query: str) -> list[dict[str, Any]]:
+        """Search document text content by query string.
+
+        Args:
+            chat_id: Chat identifier
+            query: Search query (case-insensitive substring match)
+
+        Returns:
+            List of matching documents with file_name, id, and snippet
+        """
+        hashed_id = self._hash_chat_id(chat_id)
+        docs = self._documents.get(hashed_id, {})
+        if not docs:
+            return []
+
+        query_lower = query.lower()
+        results = []
+
+        for doc_id, doc in docs.items():
+            text = self.get_document_text(chat_id, doc_id)
+            if not text:
+                continue
+
+            # Find matching lines for snippet
+            lines = text.split("\n")
+            matching_lines = [line for line in lines if query_lower in line.lower()]
+
+            if not matching_lines:
+                continue
+
+            # Create snippet from first few matching lines
+            snippet = "\n".join(matching_lines[:3])
+            if len(snippet) > 300:
+                snippet = snippet[:300] + "..."
+
+            results.append({
+                "file_name": doc.get("file_name", "unknown"),
+                "id": doc_id,
+                "snippet": snippet,
+            })
+
+        return results
+
+    def clear_documents(self, chat_id: str) -> bool:
+        """Delete all documents for a chat.
+
+        Args:
+            chat_id: Chat identifier
+
+        Returns:
+            True if any documents were deleted, False if none existed
+        """
+        hashed_id = self._hash_chat_id(chat_id)
+        if hashed_id not in self._documents or not self._documents[hashed_id]:
+            return False
+
+        docs = list(self._documents[hashed_id].keys())
+        for doc_id in docs:
+            self.delete_document(chat_id, doc_id)
+
+        return True
+
+    def find_by_name(self, chat_id: str, name_query: str) -> list[dict[str, Any]]:
+        """Find documents by fuzzy matching on file_name.
+
+        Args:
+            chat_id: Chat identifier
+            name_query: Partial name to match (case-insensitive)
+
+        Returns:
+            List of matching documents with id and file_name
+        """
+        hashed_id = self._hash_chat_id(chat_id)
+        docs = self._documents.get(hashed_id, {})
+        if not docs:
+            return []
+
+        query_lower = name_query.lower()
+        results = []
+
+        for doc_id, doc in docs.items():
+            file_name = doc.get("file_name", "").lower()
+            if query_lower in file_name:
+                results.append({
+                    "id": doc_id,
+                    "file_name": doc.get("file_name", "unknown"),
+                })
+
+        return results
 
     async def load_documents_from_hub(self) -> int:
         """
