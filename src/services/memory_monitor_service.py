@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 class MemoryPressure(StrEnum):
     """Memory pressure levels."""
 
-    LOW = "low"           # < 50% used
-    MEDIUM = "medium"     # 50-75% used
-    HIGH = "high"         # 75-90% used
-    CRITICAL = "critical" # > 90% used
+    LOW = "low"  # < 50% used
+    MEDIUM = "medium"  # 50-75% used
+    HIGH = "high"  # 75-90% used
+    CRITICAL = "critical"  # > 90% used
 
 
 class MemoryMonitorService:
@@ -31,7 +31,7 @@ class MemoryMonitorService:
         auto_flush_days: int = 7,
     ):
         self.check_interval_seconds = check_interval_seconds
-        self.auto_flush_threshold = MemoryPressure(auto_flush_threshold.upper())
+        self.auto_flush_threshold = MemoryPressure(auto_flush_threshold.lower())
         self.auto_flush_mode = auto_flush_mode
         self.auto_flush_days = auto_flush_days
         self._memory_limit_bytes: int | None = None
