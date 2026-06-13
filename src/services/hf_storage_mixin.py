@@ -221,9 +221,7 @@ class HFStorageMixin:
             logger.error(f"Failed to load data from HF Hub: {e}")
             return 0
 
-    def save_to_local(
-        self, hashed_id: str, data: dict[str, Any], file_extension: str = ".json"
-    ) -> bool:
+    def save_to_local(self, hashed_id: str, data: dict[str, Any], file_extension: str = ".json") -> bool:
         """
         Save data to local storage for HF Hub sync.
 

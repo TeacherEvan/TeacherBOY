@@ -1,15 +1,14 @@
 """Tests for HistoryLogService log viewer features."""
 
-import pytest
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock
+
+import pytest
 
 from src.services.history_log_service import (
-    HistoryLogService,
-    EventType,
-    LogLevel,
     DatePreset,
-    AccessLevel,
+    EventType,
+    HistoryLogService,
+    LogLevel,
 )
 
 
@@ -197,7 +196,7 @@ class TestHistoryLogServiceQuickReplies:
         """Test quick-reply items for log viewer."""
         items = log_service.get_log_quick_reply_items()
 
-        from linebot.v3.messaging import QuickReplyItem, PostbackAction
+        from linebot.v3.messaging import PostbackAction, QuickReplyItem
 
         assert len(items) == 5
         for item in items:

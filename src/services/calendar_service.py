@@ -18,7 +18,6 @@ import json
 import logging
 import uuid
 from collections import OrderedDict
-from collections.abc import Awaitable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional

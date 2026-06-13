@@ -1920,7 +1920,9 @@ class AdminAgent(BaseAgent):
                     line_bot_api.reply_message,
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
-                        messages=[TextMessage(text="❌ History log service is not enabled.", quickReply=None, quoteToken=None)],
+                        messages=[
+                            TextMessage(text="❌ History log service is not enabled.", quickReply=None, quoteToken=None)
+                        ],
                         notificationDisabled=False,
                     ),
                 )
@@ -2000,7 +2002,11 @@ class AdminAgent(BaseAgent):
                     line_bot_api.reply_message,
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
-                        messages=[TextMessage(text="❌ Unknown memory subcommand. Use: stats, flush", quickReply=None, quoteToken=None)],
+                        messages=[
+                            TextMessage(
+                                text="❌ Unknown memory subcommand. Use: stats, flush", quickReply=None, quoteToken=None
+                            )
+                        ],
                         notificationDisabled=False,
                     ),
                 )
@@ -2014,30 +2020,34 @@ class AdminAgent(BaseAgent):
 
         if conv_memory:
             conv_stats = conv_memory.get_stats()
-            lines.extend([
-                "💬 Conversation Memory:",
-                f"  Active chats: {conv_stats['active_conversations']}",
-                f"  Total messages: {conv_stats['total_messages']}",
-                f"  Max per session: {conv_stats['max_messages_per_session']}",
-                f"  Session TTL: {conv_stats['session_ttl_hours']:.1f}h",
-                f"  HF sync: {'Enabled' if conv_stats['hf_enabled'] else 'Disabled'}",
-                "",
-            ])
+            lines.extend(
+                [
+                    "💬 Conversation Memory:",
+                    f"  Active chats: {conv_stats['active_conversations']}",
+                    f"  Total messages: {conv_stats['total_messages']}",
+                    f"  Max per session: {conv_stats['max_messages_per_session']}",
+                    f"  Session TTL: {conv_stats['session_ttl_hours']:.1f}h",
+                    f"  HF sync: {'Enabled' if conv_stats['hf_enabled'] else 'Disabled'}",
+                    "",
+                ]
+            )
 
         if doc_memory:
             # Get document stats
             total_docs = sum(len(docs) for docs in doc_memory._documents.values())
             total_chats = len(doc_memory._documents)
-            lines.extend([
-                "📄 Document Memory:",
-                f"  Active chats: {total_chats}",
-                f"  Total documents: {total_docs}",
-                f"  Storage path: {doc_memory.storage_path}",
-                f"  HF sync: {'Enabled' if doc_memory._hf_enabled else 'Disabled'}",
-                f"  Max file size: {doc_memory.max_file_size_bytes / (1024*1024):.1f} MB",
-                f"  Max text chars: {doc_memory.max_text_chars:,}",
-                "",
-            ])
+            lines.extend(
+                [
+                    "📄 Document Memory:",
+                    f"  Active chats: {total_chats}",
+                    f"  Total documents: {total_docs}",
+                    f"  Storage path: {doc_memory.storage_path}",
+                    f"  HF sync: {'Enabled' if doc_memory._hf_enabled else 'Disabled'}",
+                    f"  Max file size: {doc_memory.max_file_size_bytes / (1024 * 1024):.1f} MB",
+                    f"  Max text chars: {doc_memory.max_text_chars:,}",
+                    "",
+                ]
+            )
 
         if not conv_memory and not doc_memory:
             lines.append("⚠️ No memory services enabled.")
@@ -2089,7 +2099,13 @@ class AdminAgent(BaseAgent):
                     line_bot_api.reply_message,
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
-                        messages=[TextMessage(text=f"❌ Unknown mode: {mode_str}. Use: time_based, size_based, manual, full", quickReply=None, quoteToken=None)],
+                        messages=[
+                            TextMessage(
+                                text=f"❌ Unknown mode: {mode_str}. Use: time_based, size_based, manual, full",
+                                quickReply=None,
+                                quoteToken=None,
+                            )
+                        ],
                         notificationDisabled=False,
                     ),
                 )
@@ -2137,9 +2153,7 @@ class AdminAgent(BaseAgent):
             "header": {
                 "type": "box",
                 "layout": "vertical",
-                "contents": [
-                    {"type": "text", "text": "🧹 Memory Flush", "weight": "bold", "size": "xl", "color": "#FFFFFF"}
-                ],
+                "contents": [{"type": "text", "text": "🧹 Memory Flush", "weight": "bold", "size": "xl", "color": "#FFFFFF"}],
                 "backgroundColor": "#E74C3C",
                 "paddingAll": "md",
             },
@@ -2149,12 +2163,36 @@ class AdminAgent(BaseAgent):
                 "spacing": "md",
                 "contents": [
                     {"type": "text", "text": "Choose cleanup mode:", "size": "md"},
-                    {"type": "button", "action": {"type": "postback", "label": "🕐 Time-based", "data": "flush_mode=time_based"}, "style": "primary", "color": "#3498DB"},
-                    {"type": "button", "action": {"type": "postback", "label": "📏 Size-based", "data": "flush_mode=size_based"}, "style": "primary", "color": "#2ECC71"},
-                    {"type": "button", "action": {"type": "postback", "label": "☑️ Manual Selection", "data": "flush_mode=manual"}, "style": "primary", "color": "#F39C12"},
-                    {"type": "button", "action": {"type": "postback", "label": "💀 Full Purge", "data": "flush_mode=full"}, "style": "primary", "color": "#E74C3C"},
+                    {
+                        "type": "button",
+                        "action": {"type": "postback", "label": "🕐 Time-based", "data": "flush_mode=time_based"},
+                        "style": "primary",
+                        "color": "#3498DB",
+                    },
+                    {
+                        "type": "button",
+                        "action": {"type": "postback", "label": "📏 Size-based", "data": "flush_mode=size_based"},
+                        "style": "primary",
+                        "color": "#2ECC71",
+                    },
+                    {
+                        "type": "button",
+                        "action": {"type": "postback", "label": "☑️ Manual Selection", "data": "flush_mode=manual"},
+                        "style": "primary",
+                        "color": "#F39C12",
+                    },
+                    {
+                        "type": "button",
+                        "action": {"type": "postback", "label": "💀 Full Purge", "data": "flush_mode=full"},
+                        "style": "primary",
+                        "color": "#E74C3C",
+                    },
                     {"type": "separator"},
-                    {"type": "button", "action": {"type": "postback", "label": "❌ Cancel", "data": "flush_cancel"}, "style": "secondary"},
+                    {
+                        "type": "button",
+                        "action": {"type": "postback", "label": "❌ Cancel", "data": "flush_cancel"},
+                        "style": "secondary",
+                    },
                 ],
             },
         }

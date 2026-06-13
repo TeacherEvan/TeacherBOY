@@ -278,6 +278,7 @@ class DestructiveActionFlow:
             )
 
         explicit_target = (arg or "").strip()
+        target_chat_id: str | None = None
         if explicit_target:
             target_chat_id = self._normalize_explicit_target(explicit_target)
             if not target_chat_id:

@@ -40,10 +40,10 @@ HF_SYNC_INTERVAL_MINUTES = 5  # How often to sync to HF Hub
 class FlushMode(StrEnum):
     """Memory flush modes."""
 
-    TIME_BASED = "time_based"           # Delete older than N days
-    SIZE_BASED = "size_based"           # Cap total messages / per-chat
-    MANUAL_SELECTION = "manual"         # Admin picks specific chats
-    FULL_PURGE = "full"                 # Everything (with confirmation)
+    TIME_BASED = "time_based"  # Delete older than N days
+    SIZE_BASED = "size_based"  # Cap total messages / per-chat
+    MANUAL_SELECTION = "manual"  # Admin picks specific chats
+    FULL_PURGE = "full"  # Everything (with confirmation)
 
 
 class FlushParams:
@@ -87,8 +87,10 @@ class FlushResult:
 
     def __repr__(self) -> str:
         action = "Dry run" if self.dry_run else "Executed"
-        return (f"FlushResult({action}: deleted_chats={self.deleted_chats}, "
-                f"deleted_messages={self.deleted_messages}, freed_mb={self.freed_bytes_mb:.2f})")
+        return (
+            f"FlushResult({action}: deleted_chats={self.deleted_chats}, "
+            f"deleted_messages={self.deleted_messages}, freed_mb={self.freed_bytes_mb:.2f})"
+        )
 
 
 class ConversationMemoryService(HFStorageMixin):
@@ -288,7 +290,7 @@ class ConversationMemoryService(HFStorageMixin):
 
         # Trim if exceeding max messages
         if len(conv["messages"]) > self.max_messages:
-            conv["messages"] = conv["messages"][-self.max_messages:]
+            conv["messages"] = conv["messages"][-self.max_messages :]
 
         # Handle summarization
         if self._summarizer and len(conv["messages"]) >= self._summarizer.threshold // 200:
@@ -344,6 +346,7 @@ class ConversationMemoryService(HFStorageMixin):
         Returns:
             Number of conversations loaded
         """
+
         def post_process(hashed_id: str, data: dict[str, Any]) -> dict[str, Any]:
             # Restore datetime objects
             last_activity = data.get("last_activity")
@@ -462,7 +465,7 @@ class ConversationMemoryService(HFStorageMixin):
                     removed = len(messages) - params.max_messages_per_chat
                     result.deleted_messages += removed
                     if not params.dry_run:
-                        conv["messages"] = messages[-params.max_messages_per_chat:]
+                        conv["messages"] = messages[-params.max_messages_per_chat :]
                         # Update local storage
                         if self._hf_enabled:
                             await self._save_to_local_storage(hashed_id, conv)
@@ -471,8 +474,7 @@ class ConversationMemoryService(HFStorageMixin):
         if params.max_total_messages and total_messages > params.max_total_messages:
             # Sort by last_activity (oldest first)
             sorted_chats = sorted(
-                self._conversations.items(),
-                key=lambda x: x[1].get("last_activity", datetime.min.replace(tzinfo=UTC))
+                self._conversations.items(), key=lambda x: x[1].get("last_activity", datetime.min.replace(tzinfo=UTC))
             )
             excess = total_messages - params.max_total_messages
             for hashed_id, conv in sorted_chats:
@@ -493,7 +495,7 @@ class ConversationMemoryService(HFStorageMixin):
                             if file_path.exists():
                                 file_path.unlink()
                     else:
-                        conv["messages"] = messages[-len(messages) + to_remove:]
+                        conv["messages"] = messages[-len(messages) + to_remove :]
                         if self._hf_enabled:
                             await self._save_to_local_storage(hashed_id, conv)
 

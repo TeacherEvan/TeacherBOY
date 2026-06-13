@@ -996,30 +996,32 @@ class HistoryLogService:
         body_contents: list[dict[str, Any]] = []
 
         # Filter row
-        body_contents.append({
-            "type": "box",
-            "layout": "horizontal",
-            "contents": [
-                {
-                    "type": "button",
-                    "action": {"type": "postback", "label": "Errors", "data": "logs_filter=level=ERROR"},
-                    "style": "primary",
-                    "flex": 1,
-                },
-                {
-                    "type": "button",
-                    "action": {"type": "postback", "label": "Warnings", "data": "logs_filter=level=WARNING"},
-                    "style": "secondary",
-                    "flex": 1,
-                },
-                {
-                    "type": "button",
-                    "action": {"type": "postback", "label": "All", "data": "logs_filter=level=ALL"},
-                    "style": "secondary",
-                    "flex": 1,
-                },
-            ],
-        })
+        body_contents.append(
+            {
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
+                    {
+                        "type": "button",
+                        "action": {"type": "postback", "label": "Errors", "data": "logs_filter=level=ERROR"},
+                        "style": "primary",
+                        "flex": 1,
+                    },
+                    {
+                        "type": "button",
+                        "action": {"type": "postback", "label": "Warnings", "data": "logs_filter=level=WARNING"},
+                        "style": "secondary",
+                        "flex": 1,
+                    },
+                    {
+                        "type": "button",
+                        "action": {"type": "postback", "label": "All", "data": "logs_filter=level=ALL"},
+                        "style": "secondary",
+                        "flex": 1,
+                    },
+                ],
+            }
+        )
         body_contents.append({"type": "separator"})
 
         # Log entries (max 15 per page for Flex size limits)
@@ -1027,13 +1029,15 @@ class HistoryLogService:
             color = "#FF6B6B" if log["level"] == "error" else ("#FFD93D" if log["level"] == "warning" else "#FFFFFF")
             agent_name = log.get("agent_name", "-") or "-"
             chat_id = log.get("chat_id", "-") or "-"
-            body_contents.append({
-                "type": "text",
-                "text": f"{log['timestamp'][:19]} | {log['level'].upper():5} | {agent_name:12} | {chat_id[:8]} | {log['message'][:80]}",
-                "size": "xs",
-                "wrap": True,
-                "color": color,
-            })
+            body_contents.append(
+                {
+                    "type": "text",
+                    "text": f"{log['timestamp'][:19]} | {log['level'].upper():5} | {agent_name:12} | {chat_id[:8]} | {log['message'][:80]}",
+                    "size": "xs",
+                    "wrap": True,
+                    "color": color,
+                }
+            )
 
         body = {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body_contents}
 
@@ -1085,13 +1089,23 @@ class HistoryLogService:
                         "contents": [
                             {
                                 "type": "button",
-                                "action": {"type": "datetimepicker", "label": "Start Date", "data": "logs_custom_start", "mode": "date"},
+                                "action": {
+                                    "type": "datetimepicker",
+                                    "label": "Start Date",
+                                    "data": "logs_custom_start",
+                                    "mode": "date",
+                                },
                                 "style": "primary",
                                 "flex": 1,
                             },
                             {
                                 "type": "button",
-                                "action": {"type": "datetimepicker", "label": "End Date", "data": "logs_custom_end", "mode": "date"},
+                                "action": {
+                                    "type": "datetimepicker",
+                                    "label": "End Date",
+                                    "data": "logs_custom_end",
+                                    "mode": "date",
+                                },
                                 "style": "primary",
                                 "flex": 1,
                             },
@@ -1103,7 +1117,11 @@ class HistoryLogService:
                         "style": "primary",
                         "color": "#0D8186",
                     },
-                    {"type": "button", "action": {"type": "postback", "label": "Cancel", "data": "logs_cancel"}, "style": "secondary"},
+                    {
+                        "type": "button",
+                        "action": {"type": "postback", "label": "Cancel", "data": "logs_cancel"},
+                        "style": "secondary",
+                    },
                 ],
             },
         }
