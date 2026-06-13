@@ -314,10 +314,7 @@ class TranslationAgent(BaseAgent):
         target_lang = "en" if source_lang == "th" else "th"
         normalized = text.strip()
 
-        # Skip short English passthroughs; always translate Thai
-        if source_lang == "en" and len(normalized) < 30:
-            return text
-
+        # Always translate - remove passthrough for short English
         result = await self.ai_translation_service.translate(
             normalized,
             source_lang=source_lang,

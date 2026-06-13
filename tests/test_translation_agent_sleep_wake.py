@@ -148,7 +148,7 @@ async def test_non_privileged_alias_stop_falls_through_to_translation(line_bot_a
     # translation may run depending on configured providers
 
     call_args = line_bot_api.reply_message.call_args
-    assert call_args[0][0].messages[0].text == "ms green stop"
+    assert call_args[0][0].messages[0].text == "translated output"
 
 
 @pytest.mark.asyncio

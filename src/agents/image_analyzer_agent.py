@@ -943,6 +943,7 @@ class ImageAnalyzerAgent(BaseAgent):
                 line_bot_api,
                 f"Analysis failed: {error_detail or 'Unknown error'}",
             )
+            await image_analyzer_session_manager.clear_session(chat_id)
             return False
 
         span.set_attribute("analyzer.success", True)
