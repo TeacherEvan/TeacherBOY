@@ -127,7 +127,7 @@ class ProfilerSessionManager:
             self._cleanup_task.cancel()
             try:
                 await asyncio.wait_for(self._cleanup_task, timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("⚠️ Profiler cleanup task shutdown timed out")
             except asyncio.CancelledError:
                 pass

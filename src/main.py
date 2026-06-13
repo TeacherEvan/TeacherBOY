@@ -68,9 +68,9 @@ from src.services.document_memory_service import (
 )
 from src.services.gemini_service import gemini_service
 from src.services.github_models_service import github_models_service
+from src.services.harmful_content_detector import harmful_content_detector
 from src.services.hermes_service import hermes_service
 from src.services.hf_inference_service import hf_inference_service
-from src.services.harmful_content_detector import harmful_content_detector
 from src.services.history_log_service import (
     EventType,
     LogLevel,
@@ -653,7 +653,7 @@ async def lifespan(app: FastAPI):
         _memory_monitor_task.cancel()
         try:
             await asyncio.wait_for(_memory_monitor_task, timeout=5.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("⚠️ Memory monitor task shutdown timed out")
         except asyncio.CancelledError:
             pass

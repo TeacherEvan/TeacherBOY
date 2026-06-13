@@ -2,9 +2,9 @@
 
 import logging
 from typing import Any
-from pydantic import BaseModel
 
 import httpx
+from pydantic import BaseModel
 
 from src.config import settings
 

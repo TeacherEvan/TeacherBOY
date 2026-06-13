@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from threading import Lock
 
 logger = logging.getLogger(__name__)
@@ -334,7 +334,7 @@ class RateLimiter:
             self._cleanup_task.cancel()
             try:
                 await asyncio.wait_for(self._cleanup_task, timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("⚠️ Rate limiter cleanup task shutdown timed out")
             except asyncio.CancelledError:
                 pass
@@ -410,9 +410,9 @@ class RateLimiter:
             if isinstance(expires_at, datetime):
                 # Ensure both datetimes are timezone-aware for comparison
                 if expires_at.tzinfo is None:
-                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    expires_at = expires_at.replace(tzinfo=UTC)
                 # Compare using UTC for consistency with tests
-                current_utc = datetime.utcnow().replace(tzinfo=timezone.utc)  # noqa: DTZ003
+                current_utc = datetime.utcnow().replace(tzinfo=UTC)  # noqa: DTZ003
                 if expires_at <= current_utc:
                     targets_to_remove.append(target_chat_id)
 
