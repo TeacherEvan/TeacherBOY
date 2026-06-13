@@ -161,17 +161,30 @@ def main() -> None:
         default=None,
         help="HF dataset repo id for documents (e.g. 'username/zeus-documents'). Defaults to DOCUMENT_HF_REPO_ID env var.",
     )
+    parser.add_argument(
+        "--images",
+        action="store_true",
+        help="Sync image analysis folder (data/images).",
+    )
+    parser.add_argument(
+        "--images-repo",
+        type=str,
+        default=None,
+        help="HF dataset repo id for images (e.g. 'username/teacherboy-images'). Defaults to IMAGES_HF_REPO_ID env var.",
+    )
     args = parser.parse_args()
 
     do_memory = args.memory
     do_logs = args.logs
     do_calendar = args.calendar
     do_documents = args.documents
-    if not do_memory and not do_logs and not do_calendar and not do_documents:
+    do_images = args.images
+    if not do_memory and not do_logs and not do_calendar and not do_documents and not do_images:
         do_memory = True
         do_logs = True
         do_calendar = True  # Include calendar in default sync
         do_documents = True  # Include documents in default sync
+        do_images = True  # Include images in default sync
 
     token = _get_hf_token(args.token)
 
@@ -247,6 +260,22 @@ def main() -> None:
                 commit_message=f"Sync documents ({datetime.now(UTC).date().isoformat()})",
             )
             print(f"✅ Synced documents to hf://datasets/{repo_id}")
+
+    if do_images:
+        repo_id = (args.images_repo or os.getenv("IMAGES_HF_REPO_ID") or "").strip()
+        if not repo_id:
+            print("⚠️  Skipping images sync: No IMAGES_HF_REPO_ID provided")
+        else:
+            folder = root / "data" / "images"
+            _ensure_folder(folder)
+            _ensure_nonempty(folder, marker_name=".hf_sync_marker.txt")
+            _sync_folder(
+                token=token,
+                repo_id=repo_id,
+                local_folder=folder,
+                commit_message=f"Sync images ({datetime.now(UTC).date().isoformat()})",
+            )
+            print(f"✅ Synced images to hf://datasets/{repo_id}")
 
 
 if __name__ == "__main__":

@@ -232,6 +232,74 @@ class HelpAgent(BaseAgent):
                     "available": settings.document_memory_enabled,
                 },
             ],
+            "Moderator Mode": [
+                {
+                    "command": "/modmode",
+                    "description": "Open moderator dashboard",
+                    "examples": ["/modmode"],
+                    "available": is_admin and chat_type in ["group chat", "room chat"],
+                },
+                {
+                    "command": "/modmode all",
+                    "description": "Activate mod mode: monitor all users for harmful content",
+                    "examples": ["/modmode all"],
+                    "available": is_admin and chat_type in ["group chat", "room chat"],
+                },
+                {
+                    "command": "/modmode special @user",
+                    "description": "Activate special mode: only admin + mentioned user can speak",
+                    "examples": ["/modmode special @user"],
+                    "available": is_admin and chat_type in ["group chat", "room chat"],
+                },
+                {
+                    "command": "/modmode off",
+                    "description": "Deactivate moderator mode",
+                    "examples": ["/modmode off"],
+                    "available": is_admin and chat_type in ["group chat", "room chat"],
+                },
+                {
+                    "command": "/modmode dashboard",
+                    "description": "Show moderator dashboard (Flex UI)",
+                    "examples": ["/modmode dashboard"],
+                    "available": is_admin and chat_type in ["group chat", "room chat"],
+                },
+                {
+                    "command": "/modmode kick",
+                    "description": "Kick user from group",
+                    "examples": ["/modmode kick @user"],
+                    "available": is_admin and chat_type in ["group chat", "room chat"],
+                },
+                {
+                    "command": "/modmode warn",
+                    "description": "Warn user (3 strikes = auto-ban)",
+                    "examples": ["/modmode warn @user reason"],
+                    "available": is_admin and chat_type in ["group chat", "room chat"],
+                },
+                {
+                    "command": "/modmode ban",
+                    "description": "Ban user from group",
+                    "examples": ["/modmode ban @user reason"],
+                    "available": is_admin and chat_type in ["group chat", "room chat"],
+                },
+                {
+                    "command": "/modmode unban",
+                    "description": "Remove user from ban list",
+                    "examples": ["/modmode unban @user"],
+                    "available": is_admin and chat_type in ["group chat", "room chat"],
+                },
+                {
+                    "command": "/modmode banlist",
+                    "description": "Show ban list",
+                    "examples": ["/modmode banlist"],
+                    "available": is_admin and chat_type in ["group chat", "room chat"],
+                },
+                {
+                    "command": "/modmode warnlist",
+                    "description": "Show warning list",
+                    "examples": ["/modmode warnlist"],
+                    "available": is_admin and chat_type in ["group chat", "room chat"],
+                },
+            ],
         }
 
         # Admin-only commands
@@ -327,6 +395,7 @@ class HelpAgent(BaseAgent):
                 ),
                 QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="News help", text="help news")),
                 QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Image help", text="help image")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="ModMode help", text="help modmode")),
                 QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Admin help", text="/admin help")),
                 QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="Wake bot", text=display_name)),
             ]
@@ -396,6 +465,7 @@ class HelpAgent(BaseAgent):
             "News & Information",
             "Calendar & Reminders",
             "Image Analysis",
+            "Moderator Mode",
             "Admin Commands",
         ]
         return [

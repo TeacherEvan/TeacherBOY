@@ -42,7 +42,7 @@ class HFStorageMixin:
     hf_repo_id: str | None = None
     storage_path: Path | None = None
     hf_sync_interval: int = 5  # minutes
-    hf_squash_history: bool = True
+    hf_squash_history: bool = False
     hf_path_in_repo: str | None = None  # e.g., "logs", "conversations", "documents"
     hf_repo_type: str = "dataset"
     hf_private: bool = True

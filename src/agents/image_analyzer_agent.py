@@ -48,8 +48,10 @@ from src.config import settings
 from src.services.bot_identity_service import get_bot_identity_service
 from src.services.debrief_extraction_service import DebriefExtractionService
 from src.services.debrief_formatter import DebriefFormatter
+from src.services.gemini_service import gemini_service
 from src.services.github_models_service import github_models_service
 from src.services.hermes_service import hermes_service
+from src.services.hf_inference_service import hf_inference_service
 from src.services.image_analyzer_session_manager import (
     image_analyzer_session_manager,
 )
@@ -322,7 +324,13 @@ class ImageAnalyzerAgent(BaseAgent):
         5. Calendar confirmation response (yes/no add to calendar)
         """
         # Check if any vision-capable provider is available
-        if not (hermes_service.is_configured() or openrouter_service.is_configured() or github_models_service.is_configured()):
+        if not (
+            hermes_service.is_configured()
+            or openrouter_service.is_configured()
+            or github_models_service.is_configured()
+            or gemini_service.is_configured()
+            or hf_inference_service.is_configured()
+        ):
             return False
 
         message = getattr(event, "message", None)

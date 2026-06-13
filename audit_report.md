@@ -1,177 +1,194 @@
-# Code Audit Report - TeacherBOY (Ms. Green)
+# Audit Report - TeacherBOY (Ms. Green) Bot
 
-**Date:** 2025-06-13
-**Project:** Multi-agent LINE/Translation Bot
-**Language:** Python 3.11+, TypeScript (Convex backend)
+**Date:** 2026-06-13
+**Scope:** Full codebase audit focusing on reported issues:
+1. Image analysis not working
+2. Images not being stored
+3. Chats not being stored
+4. ModMode not present on help feature
+5. HuggingFace not synced
 
 ---
 
 ## 1. File Inventory
 
 ### Python Files (src/)
-- **Agents**: 17 files (`src/agents/`)
-  - Base: `base_agent.py`, `agent_factory.py`, `agent_router.py`
-  - Core: `translation_agent.py`, `llm_agent.py`, `admin_agent.py`, `help_agent.py`
-  - Calendar: 12 files in `src/agents/calendar/`
-  - ModMode: 3 files in `src/agents/mod_mode/`
-  - Specialty: `calendar_agent.py`, `document_memory_agent.py`, `hannibal_agent.py`, `image_analyzer_agent.py`, `news_agent.py`, `profiler_agent.py`, `review_agent.py`, `search_agent.py`, `special_news_agent.py`, `vision_base_agent.py`
-  
-- **Config**: `config.py` (Pydantic Settings, 1104 lines)
-- **Handlers**: 2 files (`src/handlers/`)
-- **Main**: `main.py` (FastAPI app, lifespan, webhook - 1297 lines)
-- **Prompts**: 12 files in `src/prompts/`
-- **Services**: 47 files (`src/services/`)
-  - Core: `translation_service.py`, `conversation_memory_service.py`, `calendar_service.py`, `metrics_service.py`, `llm_fallback.py`
-  - Convex: `mod_mode_service.py`, `ban_list_service.py`, `warning_service.py`, `convex_client.py`, `convex_mod_repository.py`
-  - LLM: `openrouter_service.py`, `gemini_service.py`, `github_models_service.py`, `hf_inference_service.py`, `hermes_service.py`, `ollama_service.py`, `nous_service.py`
-  - Utilities: `cache_service.py`, `rate_limiter.py`, `ai_translation_service.py`, `brave_search_service.py`
-  
-- **Utils**: 5 files (`src/utils/`)
+| File | Lines | Purpose |
+|------|-------|---------|
+| src/agents/image_analyzer_agent.py | 1,589 | General image Q&A agent |
+| src/agents/help_agent.py | 771 | Help system with Flex UI |
+| src/agents/mod_mode_agent.py | 303 | Moderator mode agent (priority 4) |
+| src/services/image_analyzer_session_manager.py | 547 | Session management for image analysis |
+| src/services/conversation_memory_service.py | 657 | Chat history with HF persistence |
+| src/services/document_memory_service.py | 631 | PDF/DOCX storage with HF persistence |
+| src/services/hf_storage_mixin.py | 254 | Shared HF Hub persistence logic |
+| src/config.py | 1,104 | Pydantic Settings configuration |
+| src/main.py | 1,297 | FastAPI app + lifespan initialization |
 
 ### TypeScript Files (convex/)
-- 14 files including mutations/queries for: `modModeState`, `banList`, `userWarnings`, `calendar`, `users`, `debriefSessions`, `records`, `settings`, `schema`
+| File | Lines | Purpose |
+|------|-------|---------|
+| convex/modModeState.ts | ~100 | Mod mode state per group |
+| convex/banList.ts | ~100 | Ban list per group |
+| convex/userWarnings.ts | ~100 | 3-strike warnings per group |
 
-### Test Files
-- 80+ test files in `tests/` (433 collected, 837 passed, 1 skipped)
+### Test Summary
+- **Total tests:** 838 (837 passed, 1 skipped)
+- **Lint:** ruff check passed (0 errors)
 
 ---
 
-## 2. Dependency Graph
+## 2. Dependency Graph (Key Services)
 
 ```
-main.py (FastAPI entrypoint)
-├── config.py (Settings - Pydantic)
-├── handlers/message_handler.py
-├── agents/
-│   ├── agent_router.py → BaseAgent subclasses
-│   ├── agent_factory.py (lazy loading)
-│   └── specific agents (17)
-├── services/
-│   ├── LLM providers (8 services)
-│   ├── Translation pipeline
-│   ├── Memory/Calendar/ModMode (Convex + HF Hub)
-│   ├── Metrics, Rate limiting, Logging
-│   └── Utilities (cache, prompts, search)
-├── utils/
-│   ├── tracing.py (OpenTelemetry)
-│   ├── llm_fallback.py (provider chain)
-│   └── text_preprocessing.py
-└── convex/ (TypeScript backend)
-    ├── modModeState.ts
-    ├── banList.ts
-    ├── userWarnings.ts
-    ├── schema.ts
-    └── http.ts (Convex HTTP client)
+main.py (lifespan)
+├── conversation_memory_service (HFStorageMixin + CommitScheduler)
+├── document_memory_service (HFStorageMixin + CommitScheduler)
+├── history_log_service (HFStorageMixin + CommitScheduler)
+├── image_analyzer_session_manager (Custom HF persistence)
+├── mod_mode_service (Convex)
+├── ban_list_service (Convex)
+├── warning_service (Convex)
+├── calendar_service (HF sync)
+└── AgentRouter
+    ├── HelpAgent (priority 5)
+    ├── AdminAgent (priority 5)
+    ├── ModModeAgent (priority 4)
+    ├── ImageAnalyzerAgent (priority 7)
+    └── ... other agents
 ```
 
-### External Dependencies
-- **LINE Bot SDK v3** - Webhook handling
-- **FastAPI** - Web framework
-- **httpx** - Async HTTP client (with HTTP/2)
-- **Convex** - Real-time backend (mod mode, bans, warnings)
-- **HuggingFace Hub** - Persistent storage (conversations, calendar, documents, logs)
-- **OpenTelemetry** - Tracing
-- **LLM Providers**: Gemini, OpenRouter, GitHub Models, HF Inference, Hermes, Ollama
-- **Google Translate / LibreTranslate** - Translation
-- **Brave Search** - Web search
-- **dateparser / python-dateutil** - Date parsing
+---
+
+## 3. Issues Found (Phase 1 Audit)
+
+### Issue 1: ModMode Missing from Help System ⚠️ **HIGH**
+**Location:** `src/agents/help_agent.py` (lines 89-278, 392-400)
+
+**Finding:**
+- `_topic_aliases()` maps `"modmode"`, `"mod mode"`, `"moderator"` → `"Moderator Mode"` (lines 364-366)
+- `_get_command_categories()` does NOT define a `"Moderator Mode"` category
+- `section_order` (line 392-400) does NOT include `"Moderator Mode"`
+- Result: Help topic resolves to "Moderator Mode" but no commands are displayed
+
+**Root Cause:** Feature added to topic aliases but category implementation missing.
 
 ---
 
-## 3. Test Baseline
+### Issue 2: Image Analysis HF Persistence Disabled by Default ⚠️ **HIGH**
+**Location:** `src/config.py` (line 646), `src/main.py` (lines 274-279)
 
+**Finding:**
+- `images_hf_enabled: bool = Field(default=False, ...)` (config.py:646)
+- `main.py` only initializes image HF storage if `settings.images_hf_enabled AND settings.images_hf_repo_id`
+- Default `False` means images NEVER sync to HF Hub unless explicitly enabled
+
+**Related:** `ImageAnalyzerSessionManager` has custom HF persistence (not using `HFStorageMixin`):
+- `_setup_images_hf_storage()` creates CommitScheduler for `./data/images`
+- `save_image_metadata()` writes JSON files to local path
+- But CommitScheduler only starts if HF token/repo_id are set at init OR `main.py` sets them later
+
+**Root Cause:** Configuration default is `False`; separate persistence implementation not integrated with main HF storage pattern.
+
+---
+
+### Issue 3: Conversation Memory HF Sync May Not Commit ⚠️ **MEDIUM**
+**Location:** `src/services/conversation_memory_service.py`, `src/services/hf_storage_mixin.py`
+
+**Finding:**
+- `ConversationMemoryService` extends `HFStorageMixin`
+- `_save_to_local_storage()` writes to local folder for CommitScheduler
+- `CommitScheduler` commits every 5 minutes (`hf_sync_interval`)
+- **Potential Issue:** `squash_history=True` (line 127) + `path_in_repo="conversations"` may cause conflicts
+- No verification that CommitScheduler is actually running/committing in tests
+
+**Evidence:** Tests mock external APIs; no integration test verifies HF commits.
+
+---
+
+### Issue 4: Image Analysis Session Manager - Image Storage ⚠️ **MEDIUM**
+**Location:** `src/services/image_analyzer_session_manager.py`
+
+**Finding:**
+- `store_image()` saves to in-memory `_last_images` dict only (TTL: 1 hour)
+- `save_image_metadata()` saves full analysis to `./data/images/` for HF sync
+- **But:** `_last_images` (recent images for "Last" option) NOT persisted to HF
+- If bot restarts, "Last analyzed image" feature loses data
+- `_last_images` only in memory, no local/HF persistence
+
+---
+
+### Issue 5: HuggingFace Sync Script Missing Image Folder ⚠️ **LOW**
+**Location:** `scripts/hf_sync.py`
+
+**Finding:**
+- Script syncs: conversations, logs, calendar, documents
+- **Missing:** `--images` flag for `data/images` folder
+- Users cannot force-sync image analysis history manually
+
+---
+
+### Issue 6: Image Analyzer Agent - Vision Provider Check ⚠️ **LOW**
+**Location:** `src/agents/image_analyzer_agent.py` (line 325)
+
+**Finding:**
+```python
+if not (hermes_service.is_configured() or openrouter_service.is_configured() or github_models_service.is_configured()):
+    return False
 ```
-pytest tests/ -v --tb=short
-========================= 837 passed, 1 skipped, 284 warnings in 32.36s =================
+- Does NOT check `gemini_service.is_configured()` or `hf_inference_service.is_configured()`
+- If only Gemini/HF Inference configured, image analysis won't trigger
+- Other agents use `settings.get_fallback_llm_providers()` which includes all providers
+
+---
+
+## 4. Test Coverage Gaps
+
+| Area | Tests | Missing |
+|------|-------|---------|
+| Image Analyzer HF persistence | 0 | No test for `save_image_metadata` + HF sync |
+| Conversation Memory HF commit | 0 | No integration test for CommitScheduler |
+| Help Agent ModMode category | 0 | No test for "help modmode" |
+| ModModeAgent dashboard | Partial | Dashboard builder tested, but not full flow |
+| Image "Last" option persistence | 0 | In-memory only, no restart test |
+
+---
+
+## 5. TODOs/FIXMEs Found
+
+```bash
+# From codebase search:
+src/config.py:96  # TODO: translation_cache_ttl_seconds
+src/config.py:138 # DEPRECATED: NewsAPI.org key
 ```
 
-**Test Coverage Areas:**
-- Agent routing & behavior (mod_mode, admin, calendar, translation, LLM, profiler)
-- Service layer (ban_list, warning, conversation_memory, harmful_content_detector)
-- Config validation
-- Convex client & repository
-- Debrief extraction & formatting
-- Image analyzer persistence & routing
-- News agents & format optimization
-- Translation provider chain
-- Session management
+---
+
+## 6. Gate Decision
+
+**DO NOT PROCEED to Phase 2 until user confirms scope.**
+
+**Critical Issues to Fix (Priority Order):**
+1. **ModMode Help Category** - Add "Moderator Mode" category to HelpAgent
+2. **Image HF Persistence** - Enable by default or fix configuration; unify with HFStorageMixin
+3. **Conversation Memory HF Verification** - Add integration test or verify CommitScheduler works
+4. **Image "Last" Option Persistence** - Persist `_last_images` to local/HF
+5. **HF Sync Script** - Add `--images` flag
+6. **Vision Provider Check** - Include all vision-capable providers
 
 ---
 
-## 4. Lint Baseline
+## 7. Recommended Fixes Summary
 
-```
-ruff check . --output-format=concise
-✅ All checks passed!
-```
-
-**Cyclomatic Complexity (C901): 53 functions exceed threshold of 10**
-- Highest: `admin_agent.py:handle` (30), `llm_agent.py:handle` (38), `main.py:webhook` (24), `main.py:lifespan` (44)
-- Calendar handlers: 9 functions >10
-- Agent `handle` methods: 15+ functions >10
-
----
-
-## 5. Type Checking (mypy)
-
-**Errors Found: 15+**
-1. **Missing stubs**: `pytz`, `cachetools`, `dateparser` (install `types-*` packages)
-2. **Missing return type annotations**: `get_tracer()`, `create_span()`, agent_factory functions
-3. **Type mismatches**:
-   - `document_memory_agent.py`: Calls `search_documents()`, `clear_documents()`, `find_by_name()` on `DocumentMemoryService` - **these methods don't exist**
-   - `gemini_service.py`: Dict type mismatch in payload building
-   - `mod_mode_agent.py`: Union type issues with `user_id` (Any | None vs str)
-   - `memory_monitor_service.py`: FlushResult type confusion (conversation vs document)
-   - `message_handler.py`: Optional BanListService access
+| Issue | Fix Approach |
+|-------|--------------|
+| ModMode Help | Add category in `_get_command_categories()` with `/modmode` commands; add to `section_order` |
+| Image HF Enable | Change `images_hf_enabled` default to `True` if repo_id set; or unify with HFStorageMixin |
+| Image Last Persist | Save `_last_images` to local JSON; load on startup; include in HF sync |
+| Conversation HF | Verify CommitScheduler commits; add health check endpoint |
+| HF Sync Script | Add `--images` argument and logic |
+| Vision Providers | Use `settings.get_fallback_llm_providers()` or check all vision providers |
 
 ---
 
-## 6. TODOs/FIXMEs
-
-| File | Line | Comment |
-|------|------|---------|
-| `src/config.py` | 95 | `"TTL for translation cache in seconds (0 to disable) - TODO"` |
-
----
-
-## 7. Key Architectural Observations
-
-### ✅ Strengths
-1. **Singleton Services** - All services are module-level singletons (not per-request)
-2. **Async Throughout** - All I/O uses async/await (httpx, LINE SDK, Convex)
-3. **Priority-based Routing** - AgentRouter uses O(p) priority map optimization
-4. **Lazy Agent Loading** - AgentFactory defers instantiation
-5. **Provider Fallback Chain** - Configurable LLM provider priority with graceful degradation
-6. **Proper Error Handling** - Specific exceptions caught, structured logging (loguru)
-7. **Config via Pydantic Settings** - All env vars validated at startup
-8. **Startup Data Loading** - Synchronous HF Hub data load before serving
-9. **Graceful Shutdown** - All background tasks properly stopped
-10. **No Hardcoded Secrets** - All via settings/env
-
-### ⚠️ Issues to Investigate
-1. **DocumentMemoryService Missing Methods** - Agent calls non-existent methods
-2. **High Cyclomatic Complexity** - 53 functions >10, many agent `handle` methods
-3. **Type Annotation Gaps** - Several functions missing return types
-4. **Union Type Issues** - `user_id` handling in mod_mode_agent
-5. **FlusResult Type Confusion** - Two different FlushResult classes
-6. **Missing Type Stubs** - For pytz, cachetools, dateparser
-
----
-
-## 8. Security Check
-
-- ✅ Input validation on webhook (LINE signature verification)
-- ✅ No SQL injection (using Convex/ORM)
-- ✅ No command injection
-- ✅ Rate limiting on admin operations
-- ✅ AuthZ checks on privileged operations (admin/moderator)
-- ✅ No secrets in code (all via env/config)
-- ✅ TLS via httpx HTTP/2
-
----
-
-## 9. Gates
-
-**Phase 1 Audit Complete** ✅
-
-**Ready for Phase 2: Review** - Awaiting user confirmation to proceed with structural/semantic analysis.
+*End of Audit Report*

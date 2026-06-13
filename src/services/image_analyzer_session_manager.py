@@ -110,8 +110,48 @@ class ImageAnalyzerSessionManager:
         self._images_hf_api: Any | None = None
         self._images_commit_scheduler: Any | None = None
         self._images_local_path = Path("./data/images")
+        # Last images persistence
+        self._last_images_path = self._images_local_path / "_last_images_index.json"
+        self._load_last_images()
         if self._images_hf_enabled:
             self._setup_images_hf_storage()
+
+    def configure_hf_storage(self, token: str, repo_id: str) -> None:
+        """Configure HF storage after initialization."""
+        self._images_hf_token = token
+        self._images_hf_repo_id = repo_id
+        if not self._images_hf_enabled:
+            self._setup_images_hf_storage()
+
+    def _load_last_images(self) -> None:
+        """Load last images index from local storage."""
+        if not self._last_images_path.exists():
+            return
+        try:
+            data = json.loads(self._last_images_path.read_text(encoding="utf-8"))
+            for chat_id, entry in data.items():
+                self._last_images[chat_id] = entry["image_data"]
+                self._last_images_timestamps[chat_id] = datetime.fromisoformat(entry["timestamp"])
+            logger.info(f"🖼️ Loaded {len(self._last_images)} last images from local storage")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to load last images index: {e}")
+
+    async def _save_last_images_index(self) -> None:
+        """Save last images index to local storage for HF sync."""
+        try:
+            async with self._last_images_lock:
+                data = {
+                    chat_id: {
+                        "image_data": img_data,
+                        "timestamp": self._last_images_timestamps[chat_id].isoformat(),
+                    }
+                    for chat_id, img_data in self._last_images.items()
+                }
+            temp_path = self._last_images_path.with_suffix(".tmp")
+            temp_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            temp_path.rename(self._last_images_path)
+        except Exception as e:
+            logger.error(f"❌ Failed to save last images index: {e}")
 
     async def start_session(
         self,
@@ -269,6 +309,8 @@ class ImageAnalyzerSessionManager:
             if len(self._last_images) > self._max_last_images:
                 await self._purge_oldest_last_images()
 
+        await self._save_last_images_index()
+
         logger.info(f"🖼️ Image stored for chat {chat_id}, waiting for question")
         return True
 
@@ -306,11 +348,8 @@ class ImageAnalyzerSessionManager:
 
     async def get_last_image(self, chat_id: str) -> str | None:
         """Get the most recently analyzed image for this chat, if available."""
-        async with self._sessions_lock:
-            session = self._sessions.get(chat_id)
-            if not session:
-                return None
-            return session.last_image_data
+        async with self._last_images_lock:
+            return self._last_images.get(chat_id)
 
     async def clear_session(self, chat_id: str) -> None:
         """
@@ -438,6 +477,8 @@ class ImageAnalyzerSessionManager:
 
             if to_remove > 0:
                 logger.info(f"🖼️ Purged {to_remove} oldest last images due to size limit")
+
+        await self._save_last_images_index()
 
     async def _cleanup_loop(self) -> None:
         """Background task to periodically clean up expired sessions."""

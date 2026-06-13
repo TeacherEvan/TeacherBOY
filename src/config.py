@@ -643,7 +643,7 @@ class Settings(BaseSettings):
         ),
     )
     images_hf_enabled: bool = Field(
-        default=False,
+        default=True,
         description="Enable image analysis persistence to HF Hub.",
     )
     calendar_sync_interval_seconds: int = Field(

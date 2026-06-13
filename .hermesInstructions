@@ -1,0 +1,271 @@
+# TeacherBOY / Ms. Green - Agent Instructions
+
+## Project Overview
+**TeacherBOY** (branded as **Ms. Green**) is a **multi-agent LINE/Telegram translation bot** deployed on **HuggingFace Spaces** via Docker. Built with **Python 3.11**, **FastAPI**, **LINE Bot SDK v3**, and **async/await** throughout.
+
+**Key constraint:** NEVER use the Maton AI API key in this project (Hermes agent uses it separately).
+
+---
+
+## Architecture
+
+### Core Components
+| Layer | Responsibility |
+|-------|----------------|
+| **FastAPI App** (`src/main.py`) | HTTP server, LINE webhook handler, lifespan management |
+| **Agent Router** (`src/agents/agent_router.py`) | Priority-based dispatch to registered agents |
+| **Agents** (`src/agents/`) | Self-contained handlers for specific domains |
+| **Services** (`src/services/`) | Singletons for business logic (LLM, translation, calendar, memory, etc.) |
+| **Config** (`src/config.py`) | Pydantic Settings - ALL env vars validated at startup |
+| **Prompts** (`src/prompts/`) | System prompts & psychological frameworks (FBI BAU, Ekman FACS, Navarro) |
+
+---
+
+## Agent Priority Order (Lower = Higher Priority)
+
+| Priority | Agent | Purpose |
+|----------|-------|---------|
+| 4 | **ModModeAgent** | Group moderation: `/modmode`, activate mod mode, intercepts first in mod-enabled groups |
+| 5 | **HelpAgent** | `/help` commands |
+| 5 | **AdminAgent** | Admin commands, requires `ADMIN_USER_IDS` |
+| 6 | **CalendarAgent** | Calendar/reminder CRUD |
+| 6 | **HannibalProfileAgent** | Psychological profiling from message history |
+| 7 | **ProfilerAgent** | Image-based psychological profiling |
+| 7 | **ImageAnalyzerAgent** | General image Q&A |
+| 8 | **DocumentMemoryAgent** | PDF/DOCX storage & retrieval |
+| 8 | **SearchAgent** | Brave web search |
+| 9 | **LLMAgent** | General chat via OpenRouter/GitHub Models/Hermes fallback |
+| 10 | **TranslationAgent** | English↔Thai translation |
+| 12 | **SpecialNewsAgent** | Thailand-specific news |
+| 15 | **NewsAgent** | General news + weather |
+
+---
+
+## Development Rules
+
+### Code Style
+- **Ruff** for linting/formatting (replaces Black + flake8) - see `pyproject.toml`
+- **Type hints** throughout (no `Any` unless necessary)
+- **Async/await** for ALL I/O (no sync HTTP, no blocking calls)
+- **Pydantic models** for data validation
+- **Services are singletons** - module-level instances (e.g., `translation_service`, `openrouter_service`)
+
+### Adding a New Agent
+1. Create `src/agents/your_agent.py` extending `BaseAgent`
+2. Implement `should_handle()` (fast check), `handle()` (actual logic)
+3. Set appropriate `get_priority()` - lower = runs first
+4. Register in `src/main.py` lifespan `PHASE 3: Agent Registration`
+5. Add tests in `tests/`
+
+### Adding a New Service
+1. Create `src/services/your_service.py` as a singleton class
+2. Export module-level instance: `your_service = YourService()`
+3. Initialize in `main.py` lifespan if needed
+4. Inject via import (not DI) - services import each other directly
+
+### Configuration
+- **ALL** settings in `src/config.py` via `Settings` (Pydantic BaseSettings)
+- Environment variables loaded from `.env` (not committed)
+- Validation via Pydantic field validators (`field_validator`)
+- Access via `from src.config import settings`
+
+---
+
+## LLM Provider Fallback Chain
+**Priority order (configurable via `LLM_FALLBACK_PROVIDER_PRIORITY`):**
+```
+gemini → hermes → openrouter → hf_inference → github → ollama
+```
+All providers use **OpenAI-compatible API format**. See `src/utils/llm_fallback.py` and individual services (`gemini_service.py`, `openrouter_service.py`, `hermes_service.py`, `nous_service.py`, `github_models_service.py`).
+
+---
+
+## Persistent Storage (HuggingFace Hub)
+| Feature | Local Path | HF Repo Setting |
+|---------|------------|-----------------|
+| Conversation Memory | `./data/conversations` | `HF_MEMORY_REPO_ID` |
+| Calendar Events | `./data/calendar` | `CALENDAR_HF_REPO_ID` |
+| Documents (PDF/DOCX) | `./data/documents` | `DOCUMENT_HF_REPO_ID` |
+| History Logs | `./data/logs` | `HISTORY_LOG_HF_REPO_ID` |
+| Mod Audit Logs | `./data/mod_audit` | Same as history logs |
+| Bot Identity | `./data/bot_identity` | N/A (local only) |
+
+**Startup:** `StartupLoader.ensure_data_loaded()` blocks until all HF data is synced locally (prevents "empty state" on cold start).
+
+---
+
+## Key Services Reference
+
+| Service | Purpose | Key Methods |
+|---------|---------|-------------|
+| `translation_service` | LINE translation pipeline (Google → LibreTranslate → AI fallback) | `translate()` |
+| `openrouter_service` | LLM via OpenRouter (free models) | `chat_completion()` |
+| `conversation_memory_service` | Chat context persistence (HF + local) | `get_memory()`, `add_message()` |
+| `calendar_service` | Event management + HF sync | `add_event()`, `get_events()` |
+| `debrief_extraction_service` | Structured lesson debriefs | `extract_debrief()` |
+| `mod_mode_service` | Moderator mode state (Convex backend) | `activate()`, `deactivate()` |
+| `ban_list_service` | Ban list + auto-kick (Convex) | `add()`, `check_and_kick()` |
+| `warning_service` | 3-strike warnings + `reset_warnings` (Convex) | `warn()`, `reset_warnings()` |
+| `harmful_content_detector` | Configurable keyword + LLM detection | `detect()` |
+| `mod_audit_log` | HF Hub append-only audit trail | `log()` |
+| `metrics_service` | In-memory metrics + provider latency | `record_latency()`, `get_stats()` |
+| `ai_translation_service` | Shared AI translation + latency metrics | `translate_with_metrics()` |
+
+---
+
+## Testing
+```bash
+# Run all tests
+pytest tests/ -v --tb=short
+
+# Tests mock external APIs - no real keys needed
+# Required env vars for tests (any string works):
+# LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN
+```
+
+---
+
+## Deployment
+```bash
+# Local dev
+docker-compose up
+
+# Deploy to HF Spaces (auto on push to main via GitHub Actions)
+# Manual: git push hf HEAD:main
+```
+
+---
+
+## Convex Backend (Moderation)
+TypeScript functions in `convex/`:
+- `modModeState.ts` - Moderator mode state per group
+- `banList.ts` - Ban list per group
+- `userWarnings.ts` - 3-strike warnings per group (`resetWarnings` mutation)
+
+---
+
+## Critical Patterns
+
+### Agent Routing Flow
+```
+MessageEvent → AgentRouter.route_message()
+  → sorted by priority (lowest first)
+  → agent.should_handle(event, text) [fast boolean check]
+  → agent.handle(event, text, line_bot_api) [actual processing]
+  → returns True if handled, else continues to next agent
+```
+
+### LLM Call Pattern (with fallback)
+```python
+from src.services.openrouter_service import openrouter_service
+from src.services.gemini_service import gemini_service
+from src.utils.llm_fallback import hermes_service
+
+# Try primary, then fallback chain automatically handled by each service
+response = await openrouter_service.chat_completion(messages, model="...")
+# or
+response = await gemini_service.chat_completion(messages)
+```
+
+### Configuration Access
+```python
+from src.config import settings
+
+# Simple values
+settings.line_channel_access_token
+settings.openrouter_default_model
+
+# Parsed lists
+settings.get_admin_user_ids()  # → list[str]
+settings.is_conversation_memory_hf_configured()  # → bool
+```
+
+### Logging
+```python
+import logging
+logger = logging.getLogger(__name__)
+
+logger.info(f"✅ {message}")      # Success
+logger.warning(f"⚠️  {message}")  # Non-fatal issue
+logger.error(f"❌ {message}", exc_info=True)  # Error with traceback
+```
+
+---
+
+## File Structure Quick Reference
+```
+src/
+├── agents/                    # Agent implementations
+│   ├── base_agent.py          # Abstract base class
+│   ├── agent_router.py        # Priority-based routing
+│   ├── agent_factory.py       # Lazy agent loading
+│   ├── mod_mode/              # ModModeAgent + Flex dashboard
+│   └── [12 agent files]
+├── config.py                  # ALL settings (Pydantic)
+├── handlers/                  # LINE event handlers
+├── main.py                    # FastAPI app + lifespan
+├── prompts/                   # System prompts & frameworks
+│   ├── builders/              # Debrief, text, vision builders
+│   └── frameworks/            # FBI BAU, Ekman FACS, Navarro
+├── services/                  # Business logic (singletons)
+│   ├── mod_mode_service.py    # Convex ModModeState CRUD
+│   ├── ban_list_service.py    # Convex BanList + auto-kick
+│   ├── warning_service.py     # 3-strike warnings + reset_warnings
+│   ├── harmful_content_detector.py  # Keyword + LLM detection
+│   ├── mod_audit_log.py       # HF Hub audit trail
+│   ├── metrics_service.py     # In-memory metrics
+│   ├── ai_translation_service.py    # Shared AI translation
+│   ├── news/                  # News data services
+│   └── profiler/              # Profiler framework loader
+└── utils/                     # Utilities
+    ├── tracing.py             # OpenTelemetry
+    ├── text_preprocessing.py  # Text cleanup
+    └── llm_fallback.py        # Multi-provider fallback
+```
+
+---
+
+## Do's and Don'ts
+
+### ✅ DO
+- Use `async/await` for all I/O
+- Add type hints to all functions
+- Register agents in `main.py` lifespan with correct priority
+- Use existing singleton services via import
+- Write tests for new agents/services
+- Follow Ruff formatting (line-length 127, double quotes)
+
+### ❌ DON'T
+- Use Maton AI API key anywhere in this project
+- Make synchronous HTTP calls (use `httpx.AsyncClient` from `main.py` pool)
+- Create new service instances - use module-level singletons
+- Hardcode configuration - add to `config.py` Settings
+- Block the event loop (no `time.sleep()`, `requests.get()`, etc.)
+- Commit `.env` or secrets
+
+---
+
+## Quick Commands
+```bash
+# Lint & format
+ruff check src/ tests/
+ruff format src/ tests/
+
+# Type check
+mypy src/
+
+# Run tests
+pytest tests/ -v --tb=short
+
+# Local dev server
+uvicorn src.main:app --reload --host 0.0.0.0 --port 7860
+```
+
+---
+
+## Context for Cross-Channel Continuity
+- **User**: Evan (Ewaldt) - Bangkok timezone
+- **Business name**: "Evan Botha" or "Teacher Evan" for Thai business context; "Ewaldt Botha" for legal/job applications
+- **Bot identity**: Ms. Green (configurable via `/admin name`)
+- **Voice preference**: ElevenLabs for longer responses
+- **Communication**: Brief, direct, action-first

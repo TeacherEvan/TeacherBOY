@@ -271,11 +271,11 @@ async def lifespan(app: FastAPI):
     # ========================================================================
     # PHASE 2a5: Image Analysis HF Persistence Initialization
     # ========================================================================
-    if settings.images_hf_enabled and settings.images_hf_repo_id:
-        if not image_analyzer_session_manager._images_hf_enabled:
-            image_analyzer_session_manager._images_hf_token = settings.hf_memory_token
-            image_analyzer_session_manager._images_hf_repo_id = settings.images_hf_repo_id
-            image_analyzer_session_manager._setup_images_hf_storage()
+    if settings.images_hf_repo_id and settings.hf_memory_token:
+        image_analyzer_session_manager.configure_hf_storage(
+            settings.hf_memory_token,
+            settings.images_hf_repo_id
+        )
         logger.info(f"🖼️ Image analysis HF persistence enabled: {settings.images_hf_repo_id}")
     else:
         logger.info("🖼️ Image analysis HF persistence disabled")
