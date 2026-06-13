@@ -46,7 +46,11 @@ class MemoryMonitorService:
         self._last_check: float = 0
 
     def get_memory_limit_bytes(self) -> int | None:
-        """Get memory limit from cgroup (HF Spaces/Docker)."""
+        """Get memory limit from cgroup (HF Spaces/Docker).
+
+        Note: Does NOT fall back to psutil.virtual_memory() because that returns
+        host system memory, not the container's cgroup limit.
+        """
         if self._memory_limit_bytes is not None:
             return self._memory_limit_bytes
 
@@ -64,23 +68,12 @@ class MemoryMonitorService:
                         limit = int(content)
                         if limit > 0:
                             self._memory_limit_bytes = limit
-                            logger.info(f"📊 Memory limit detected: {limit / (1024**3):.2f} GB")
+                            logger.debug(f"📊 Memory limit detected: {limit / (1024**3):.2f} GB")
                             return self._memory_limit_bytes
             except (OSError, ValueError):
                 continue
 
-        # Fallback: try to get from psutil
-        try:
-            import psutil
-
-            mem = psutil.virtual_memory()
-            self._memory_limit_bytes = mem.total
-            logger.info(f"📊 Memory limit (psutil): {mem.total / (1024**3):.2f} GB")
-            return self._memory_limit_bytes
-        except ImportError:
-            pass
-
-        logger.warning("⚠️ Could not detect memory limit")
+        logger.warning("⚠️ Could not detect container memory limit from cgroup")
         return None
 
     def get_memory_usage_bytes(self) -> int:
