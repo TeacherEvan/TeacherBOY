@@ -18,16 +18,16 @@ class FakeMemoryService:
         self._hf_enabled = hf_enabled
         self._conversations = {}
 
-    async def _load_from_hub(self):
-        return None
+    def load_conversations_from_hub(self):
+        return 0
 
 
 class FakeDocumentService:
     def __init__(self, hf_enabled: bool = True):
         self._hf_enabled = hf_enabled
 
-    async def _load_from_hub(self):
-        return None
+    def load_documents_from_hub(self):
+        return 0
 
 
 class FakeHistoryLog:

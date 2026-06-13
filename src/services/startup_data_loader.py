@@ -162,9 +162,15 @@ class StartupDataLoader:
             try:
                 logger.info(f"📄 Downloading documents (attempt {attempt}/{max_retries})...")
 
-                if hasattr(document_service, "_load_from_hub"):
-                    await document_service._load_from_hub()
-                    logger.info("✅ Documents loaded")
+                if hasattr(document_service, "load_documents_from_hub"):
+                    count = document_service.load_documents_from_hub()
+                    logger.info(f"✅ Documents loaded: {count} files from hub")
+                    return True
+
+                # Fallback: mixin's load_from_hub
+                if hasattr(document_service, "load_from_hub"):
+                    count = document_service.load_from_hub()
+                    logger.info(f"✅ Documents loaded: {count} files from hub")
                     return True
 
                 logger.warning("⚠️ Document service missing load method")
@@ -191,11 +197,18 @@ class StartupDataLoader:
             try:
                 logger.info(f"💭 Downloading conversation memory (attempt {attempt}/{max_retries})...")
 
-                # Memory service uses async load method
-                if hasattr(memory_service, "_load_from_hub"):
-                    await memory_service._load_from_hub()
+                # Memory service uses load_conversations_from_hub (calls mixin's load_from_hub)
+                if hasattr(memory_service, "load_conversations_from_hub"):
+                    count = memory_service.load_conversations_from_hub()
                     conv_count = len(memory_service._conversations)
-                    logger.info(f"✅ Memory loaded: {conv_count} conversations")
+                    logger.info(f"✅ Memory loaded: {conv_count} conversations ({count} from hub)")
+                    return True
+
+                # Fallback: some services may use load_from_hub directly from mixin
+                if hasattr(memory_service, "load_from_hub"):
+                    count = memory_service.load_from_hub()
+                    conv_count = len(memory_service._conversations)
+                    logger.info(f"✅ Memory loaded: {conv_count} conversations ({count} from hub)")
                     return True
 
                 logger.warning("⚠️ Memory service missing load method")
@@ -217,20 +230,28 @@ class StartupDataLoader:
         return False
 
     async def _load_logs_with_retry(self, history_log: Any, max_retries: int, retry_delay: int) -> bool:
-        """Load history logs from HF Hub with retry logic."""
+        """Load history logs from HF Hub with retry logic.
+
+        HistoryLogService uses CommitScheduler for automatic HF Hub sync.
+        No explicit load method needed - data syncs on scheduler initialization.
+        """
         for attempt in range(1, max_retries + 1):
             try:
-                logger.info(f"📜 Downloading history logs (attempt {attempt}/{max_retries})...")
+                logger.info(f"📜 Verifying history logs service (attempt {attempt}/{max_retries})...")
 
-                # History log might not have an explicit load method (uses CommitScheduler)
-                # Just verify the service is configured
-                logger.info("✅ History log service ready")
+                # HistoryLogService uses CommitScheduler for auto-sync on startup.
+                # Just verify the service is configured and ready.
+                if hasattr(history_log, "_hf_enabled") and history_log._hf_enabled:
+                    logger.info("✅ History log service ready with HF Hub sync")
+                else:
+                    logger.info("✅ History log service ready (local-only)")
                 return True
 
             except Exception as e:
                 logger.warning(f"⚠️ Logs load attempt {attempt} failed: {e}")
                 if attempt < max_retries:
                     delay = retry_delay * (2 ** (attempt - 1))
+                    logger.info(f"⏳ Retrying in {delay}s...")
                     await asyncio.sleep(delay)
                 else:
                     logger.error(f"❌ Logs load failed after {max_retries} attempts")
