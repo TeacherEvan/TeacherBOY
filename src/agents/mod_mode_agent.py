@@ -61,11 +61,15 @@ class ModModeAgent(BaseAgent):
         if self._is_activation_command(text):
             return await self._is_admin(user_id)
 
+        # Check mod commands that can activate mod mode (allow even if mod mode not active)
+        if self._is_activation_mod_command(text):
+            return await self._is_admin(user_id)
+
         # Check if mod mode is active in this group
         if not await self._mod_mode.is_mod_mode_active(group_id):
             return False
 
-        # Check mod commands
+        # Check other mod commands (require admin)
         if self._is_mod_command(text):
             return await self._is_admin(user_id)
 
@@ -111,6 +115,17 @@ class ModModeAgent(BaseAgent):
 
     def _is_activation_command(self, text: str) -> bool:
         return re.search(r"activate\s+mod\s+mode", text, re.IGNORECASE) is not None
+
+    def _is_activation_mod_command(self, text: str) -> bool:
+        """Check if text is a /modmode command that activates mod mode (all/special)."""
+        text_lower = text.strip().lower()
+        if not text_lower.startswith("/modmode"):
+            return False
+        parts = text_lower.split()
+        if len(parts) < 2:
+            return False
+        # These subcommands activate mod mode
+        return parts[1] in ("all", "special")
 
     async def _handle_activation(self, event: MessageEvent, line_bot_api: MessagingApi) -> bool:
         source = event.source

@@ -17,7 +17,6 @@ Security features:
 import hashlib
 import json
 import logging
-from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
@@ -134,7 +133,7 @@ class ConversationMemoryService(HFStorageMixin):
 
         # In-memory conversation store
         # Format: {hashed_chat_id: {"messages": [...], "summary": str, "last_activity": datetime, "metadata": {...}}}
-        self._conversations: OrderedDict[str, dict[str, Any]] = OrderedDict()
+        self._conversations: dict[str, dict[str, Any]] = {}
 
         # Initialize conversation summarizer (if enabled)
         self._summarizer: ConversationSummarizer | None = None
@@ -305,8 +304,9 @@ class ConversationMemoryService(HFStorageMixin):
         if self._hf_enabled:
             await self._save_to_local_storage(hashed_id, conv)
 
-        # Move to end (most recent)
-        self._conversations.move_to_end(hashed_id)
+        # Move to end (most recent) - for dict, delete and re-add
+        conv = self._conversations.pop(hashed_id)
+        self._conversations[hashed_id] = conv
 
     async def _save_to_local_storage(self, hashed_id: str, conv: dict[str, Any]) -> None:
         """Save conversation to local storage for HF Hub sync."""

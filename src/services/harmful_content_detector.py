@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from pathlib import Path
 
 from src.config import settings
@@ -53,6 +54,9 @@ class HarmfulContentDetector:
         self.keywords = keywords or config_keywords or self.DEFAULT_KEYWORDS.copy()
         self._llm_client = llm_client  # Optional: for LLM-based detection
         self._llm_enabled = llm_client is not None
+        # Pre-compile case-insensitive regex pattern for O(m) matching
+        self._compiled_pattern: re.Pattern | None = None
+        self._rebuild_pattern()
 
     def _load_keywords_from_config(self) -> list[str] | None:
         """Load keywords from config file or environment variable."""
@@ -80,6 +84,17 @@ class HarmfulContentDetector:
 
         return keywords if keywords else None
 
+    def _rebuild_pattern(self) -> None:
+        """Rebuild the compiled regex pattern from current keywords."""
+        if not self.keywords:
+            self._compiled_pattern = None
+            return
+        # Escape each keyword and join with | for alternation
+        # Sort by length descending to match longer keywords first
+        escaped = [re.escape(kw) for kw in sorted(self.keywords, key=len, reverse=True)]
+        pattern = "|".join(escaped)
+        self._compiled_pattern = re.compile(pattern, re.IGNORECASE)
+
     async def detect(self, text: str) -> dict:
         """Detect harmful content in text.
 
@@ -87,14 +102,18 @@ class HarmfulContentDetector:
             dict with: is_harmful (bool), matched_keywords (list), method (str), llm_result (optional)
         """
         text_lower = text.lower()
-        matched = [kw for kw in self.keywords if kw.lower() in text_lower]
 
-        if matched:
-            return {
-                "is_harmful": True,
-                "matched_keywords": matched,
-                "method": "keyword",
-            }
+        # Fast path: use compiled regex for keyword matching
+        if self._compiled_pattern:
+            matches = self._compiled_pattern.findall(text_lower)
+            if matches:
+                # Deduplicate matches (regex findall may return duplicates for overlapping)
+                matched = list(dict.fromkeys(matches))
+                return {
+                    "is_harmful": True,
+                    "matched_keywords": matched,
+                    "method": "keyword",
+                }
 
         # Optional LLM detection (if configured)
         if self._llm_enabled:
@@ -121,11 +140,13 @@ class HarmfulContentDetector:
     def add_keywords(self, keywords: list[str]):
         """Add custom keywords to detection list."""
         self.keywords.extend(keywords)
+        self._rebuild_pattern()
 
     def remove_keyword(self, keyword: str):
         """Remove a keyword from detection list."""
         if keyword in self.keywords:
             self.keywords.remove(keyword)
+            self._rebuild_pattern()
 
     def get_keywords(self) -> list[str]:
         """Get current keyword list."""

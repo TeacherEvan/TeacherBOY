@@ -30,8 +30,9 @@ class _LazyGoogleTranslationProvider:
 
     _service_name = "google_cloud_translation"
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, http_client: httpx.AsyncClient | None = None) -> None:
         self._api_key = api_key
+        self._client = http_client
         self.last_status_code: int | None = None
         self.last_error: str | None = None
 
@@ -40,6 +41,10 @@ class _LazyGoogleTranslationProvider:
 
     def get_last_error(self) -> tuple[int | None, str | None, str | None]:
         return self.last_status_code, self.last_error, self._service_name
+
+    def set_client(self, client: httpx.AsyncClient) -> None:
+        """Set the shared HTTP client for connection pooling."""
+        self._client = client
 
     async def chat_completion(self, messages, temperature=0.2, max_tokens=None, **_kwargs):
         if not self.is_configured():
@@ -81,8 +86,12 @@ class _LazyGoogleTranslationProvider:
         self.last_error = None
         self.last_status_code = None
         try:
-            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-                response = await client.post(url, data=params)
+            # Reuse shared client if available, otherwise create temporary one
+            if self._client:
+                response = await self._client.post(url, data=params)
+            else:
+                async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                    response = await client.post(url, data=params)
         except Exception as exc:
             self.last_error = str(exc)
             logger.error("Google translate request failed: %s", exc)
@@ -180,10 +189,15 @@ class _LazyGoogleTranslateProviderV2:
 class LibreTranslateProvider:
     """Thin wrapper so LibreTranslate can participate in the provider chain."""
 
-    def __init__(self) -> None:
+    def __init__(self, http_client: httpx.AsyncClient | None = None) -> None:
+        self._client = http_client
         self._last_status_code: int | None = None
         self._last_error: str | None = None
         self._last_model: str | None = None
+
+    def set_client(self, client: httpx.AsyncClient) -> None:
+        """Set the shared HTTP client for connection pooling."""
+        self._client = client
 
     def _base_url(self) -> str:
         url = getattr(settings, "libretranslate_api_url", None)
@@ -248,15 +262,19 @@ class LibreTranslateProvider:
         self._last_model = "libretranslate"
 
         try:
-            async with httpx.AsyncClient(
-                timeout=30.0,
-                follow_redirects=True,
-            ) as client:
-                response = await client.post(
-                    url,
-                    headers=self._headers(),
-                    json=payload,
-                )
+            # Reuse shared client if available, otherwise create temporary one
+            if self._client:
+                response = await self._client.post(url, headers=self._headers(), json=payload)
+            else:
+                async with httpx.AsyncClient(
+                    timeout=30.0,
+                    follow_redirects=True,
+                ) as client:
+                    response = await client.post(
+                        url,
+                        headers=self._headers(),
+                        json=payload,
+                    )
         except Exception as exc:
             self._last_error = str(exc)
             logger.error("LibreTranslate request failed: %s", exc)
@@ -306,18 +324,28 @@ class AITranslationService:
         self.nous = nous
         self._cached_provider_tuples: list[tuple] | None = None
         self._provider_cache_version = 0
+        self._shared_client: httpx.AsyncClient | None = None
 
-    def _github_providers(self):
-        if not self.github_models.is_configured():
-            return []
-        return [("github_models", self.github_models, self.github_models.chat_completion, {"temperature": 0.2})]
+    def set_client(self, client: httpx.AsyncClient) -> None:
+        """Set the shared HTTP client for connection pooling across all providers."""
+        self._shared_client = client
+        # Pass to providers that support it
+        if hasattr(self.libre_translate, "set_client"):
+            self.libre_translate.set_client(client)
+        # Google provider will be updated when cache is invalidated
+        self.invalidate_provider_cache()
 
     def _google_providers(self):
         providers = []
         google_key = getattr(settings, "google_translate_api_key", None)
         if google_key:
-            providers.append(_LazyGoogleTranslationProvider(api_key=google_key))
+            providers.append(_LazyGoogleTranslationProvider(api_key=google_key, http_client=self._shared_client))
         return providers
+
+    def _github_providers(self):
+        if not self.github_models.is_configured():
+            return []
+        return [("github_models", self.github_models, self.github_models.chat_completion, {"temperature": 0.2})]
 
     def _openrouter_providers(self):
         providers = []

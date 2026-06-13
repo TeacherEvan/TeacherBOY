@@ -6,7 +6,7 @@ recent timestamps useful for operational visibility.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -37,6 +37,30 @@ class MetricsSnapshot:
     provider_latency_ms_count: dict[str, int] = field(default_factory=dict)
 
 
+class _BoundedSet:
+    """Set with maximum size using FIFO eviction."""
+
+    def __init__(self, max_size: int = 10000):
+        self._max_size = max_size
+        self._set: set[str] = set()
+        self._queue: deque[str] = deque()
+
+    def add(self, item: str) -> None:
+        if item in self._set:
+            return
+        if len(self._set) >= self._max_size:
+            oldest = self._queue.popleft()
+            self._set.discard(oldest)
+        self._set.add(item)
+        self._queue.append(item)
+
+    def __len__(self) -> int:
+        return len(self._set)
+
+    def __contains__(self, item: str) -> bool:
+        return item in self._set
+
+
 @dataclass
 class MetricsService:
     _started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -57,8 +81,10 @@ class MetricsService:
     _rate_limited_requests: int = 0
     _failed_translations: int = 0
     _admin_commands_total: int = 0
-    _unique_users: set[str] = field(default_factory=set)
-    _unique_groups: set[str] = field(default_factory=set)
+
+    # Bounded sets to prevent unbounded memory growth
+    _unique_users: _BoundedSet = field(default_factory=lambda: _BoundedSet(10000))
+    _unique_groups: _BoundedSet = field(default_factory=lambda: _BoundedSet(10000))
     _hourly_requests: dict[int, int] = field(default_factory=lambda: defaultdict(int))
     _cache_hits_total: int = 0
     _cache_misses_total: int = 0
@@ -79,7 +105,7 @@ class MetricsService:
         current_hour = datetime.now(UTC).hour
         self._hourly_requests[current_hour] += 1
 
-        # Track unique users/groups
+        # Track unique users/groups with bounded storage
         if chat_id:
             if chat_id.startswith("user_"):
                 self._unique_users.add(chat_id)
@@ -93,7 +119,7 @@ class MetricsService:
         current_hour = datetime.now(UTC).hour
         self._hourly_requests[current_hour] += 1
 
-        # Track unique users/groups
+        # Track unique users/groups with bounded storage
         if chat_id:
             if chat_id.startswith("user_"):
                 self._unique_users.add(chat_id)

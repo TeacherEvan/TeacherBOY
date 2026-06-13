@@ -86,27 +86,44 @@ class StartupDataLoader:
             "backup_created": False,
         }
 
-        # Load calendar data
+        # Load all services concurrently (they are independent)
+        tasks = []
         if self._calendar_required:
-            results["calendar"] = await self._load_calendar_with_retry(calendar_service, max_retries, retry_delay_seconds)
-            self._calendar_loaded = results["calendar"]
-
-        # Load conversation memory
+            tasks.append(self._load_calendar_with_retry(calendar_service, max_retries, retry_delay_seconds))
         if self._memory_required:
-            results["memory"] = await self._load_memory_with_retry(memory_service, max_retries, retry_delay_seconds)
-            self._memory_loaded = results["memory"]
-
-        # Load document memory
+            tasks.append(self._load_memory_with_retry(memory_service, max_retries, retry_delay_seconds))
         if self._documents_required:
-            results["documents"] = await self._load_documents_with_retry(document_service, max_retries, retry_delay_seconds)
-            self._documents_loaded = results["documents"]
-
-        # Load history logs
+            tasks.append(self._load_documents_with_retry(document_service, max_retries, retry_delay_seconds))
         if self._logs_required:
-            results["logs"] = await self._load_logs_with_retry(history_log, max_retries, retry_delay_seconds)
-            self._logs_loaded = results["logs"]
+            tasks.append(self._load_logs_with_retry(history_log, max_retries, retry_delay_seconds))
 
-        # Create LLM-readable backup for disaster recovery
+        # Execute all loads in parallel
+        if tasks:
+            load_results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Map results back to their respective services
+            idx = 0
+            if self._calendar_required:
+                result = load_results[idx]
+                results["calendar"] = result if isinstance(result, bool) else False
+                self._calendar_loaded = results["calendar"]
+                idx += 1
+            if self._memory_required:
+                result = load_results[idx]
+                results["memory"] = result if isinstance(result, bool) else False
+                self._memory_loaded = results["memory"]
+                idx += 1
+            if self._documents_required:
+                result = load_results[idx]
+                results["documents"] = result if isinstance(result, bool) else False
+                self._documents_loaded = results["documents"]
+                idx += 1
+            if self._logs_required:
+                result = load_results[idx]
+                results["logs"] = result if isinstance(result, bool) else False
+                self._logs_loaded = results["logs"]
+                idx += 1
+
+        # Create LLM-readable backup for disaster recovery (after all loads)
         if calendar_service:
             results["backup_created"] = await self._create_llm_backup(calendar_service)
             self._backup_created = results["backup_created"]

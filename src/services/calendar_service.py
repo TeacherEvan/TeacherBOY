@@ -17,7 +17,6 @@ import asyncio
 import json
 import logging
 import uuid
-from collections import OrderedDict
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
@@ -206,7 +205,7 @@ class CalendarService:
         self._repository = repository
 
         # In-memory event store: {event_id: CalendarEvent}
-        self._events: OrderedDict[str, CalendarEvent] = OrderedDict()
+        self._events: dict[str, CalendarEvent] = {}
 
         # Track HF Hub configuration
         self._hf_enabled = bool(hf_token and hf_repo_id)
@@ -1250,7 +1249,7 @@ class CalendarService:
         chat_id: str | None = None,
         events: list[CalendarEvent],
     ) -> None:
-        retained: OrderedDict[str, CalendarEvent] = OrderedDict()
+        retained: dict[str, CalendarEvent] = {}
         for existing_event_id, existing_event in self._events.items():
             if user_id is not None and existing_event.user_id == user_id:
                 continue
