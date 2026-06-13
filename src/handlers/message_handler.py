@@ -17,17 +17,20 @@ from src.services.session_manager import session_manager
 
 logger = logging.getLogger(__name__)
 
+# Pre-compiled regex patterns for performance
+_THAI_CHAR_PATTERN = re.compile(r"[\u0E00-\u0E7F]")
+_SLEEP_PATTERN = re.compile(r"^thanks ms green[\s.!]*$")
+
 
 def contains_thai(text: str) -> bool:
     """Check if text contains Thai characters."""
-    return bool(re.search(r"[\u0E00-\u0E7F]", text))
+    return bool(_THAI_CHAR_PATTERN.search(text))
 
 
 def is_sleep_command(text: str) -> bool:
     """Check if text is a sleep command (Thanks Ms Green!)."""
     text_lower = text.lower().strip()
-    sleep_pattern = r"^thanks ms green[\s.!]*$"
-    return bool(re.search(sleep_pattern, text_lower))
+    return bool(_SLEEP_PATTERN.search(text_lower))
 
 
 def is_wake_command(text: str) -> bool:

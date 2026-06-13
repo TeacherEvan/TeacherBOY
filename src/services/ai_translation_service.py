@@ -304,6 +304,8 @@ class AITranslationService:
         self.hermes = hermes
         self.gemini = gemini
         self.nous = nous
+        self._cached_provider_tuples: list[tuple] | None = None
+        self._provider_cache_version = 0
 
     def _github_providers(self):
         if not self.github_models.is_configured():
@@ -371,7 +373,15 @@ class AITranslationService:
             return []
         return [("gemini", self.gemini, self.gemini.chat_completion, {"temperature": 0.2})]
 
+    def invalidate_provider_cache(self):
+        """Invalidate the provider tuple cache (call if provider configuration changes)."""
+        self._cached_provider_tuples = None
+        self._provider_cache_version += 1
+
     def _build_provider_tuples(self):
+        if self._cached_provider_tuples is not None:
+            return self._cached_provider_tuples
+
         providers = []
         providers.extend(self._gemini_providers())
         providers.extend([(p._service_name, p, p.chat_completion, {"temperature": 0.2}) for p in self._google_providers()])
@@ -380,6 +390,7 @@ class AITranslationService:
         providers.extend(self._openrouter_providers())
         providers.extend(self._hermes_providers())
         providers.extend(self._libre_providers())
+        self._cached_provider_tuples = providers
         return providers
 
     async def translate(

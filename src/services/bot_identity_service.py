@@ -33,6 +33,8 @@ class BotIdentityService:
         self._default_aliases = self._normalize(default_aliases + [default_name])
         self._profile = self._load()
         self._cached_recognition_aliases: list[str] | None = None
+        self._cached_sorted_aliases: list[str] | None = None
+        self._whitespace_pattern = re.compile(r"\s+")
 
     def _normalize(self, aliases: list[str]) -> list[str]:
         seen: set[str] = set()
@@ -49,6 +51,17 @@ class BotIdentityService:
         if self._cached_recognition_aliases is None:
             self._cached_recognition_aliases = self._normalize([self._profile.display_name, *self._profile.aliases])
         return self._cached_recognition_aliases
+
+    def _sorted_recognition_aliases(self) -> list[str]:
+        """Aliases sorted by length descending for prefix matching."""
+        if self._cached_sorted_aliases is None:
+            self._cached_sorted_aliases = sorted(self._recognition_aliases(), key=len, reverse=True)
+        return self._cached_sorted_aliases
+
+    def _invalidate_alias_caches(self) -> None:
+        """Invalidate alias-related caches."""
+        self._cached_recognition_aliases = None
+        self._cached_sorted_aliases = None
 
     def _load(self) -> BotIdentityProfile:
         if not self._storage_path.exists():
@@ -77,7 +90,7 @@ class BotIdentityService:
         previous_name = self._profile.display_name
         merged_aliases = self._normalize(aliases + [display_name, previous_name] + self._profile.aliases)
         self._profile = BotIdentityProfile(display_name=display_name.strip(), aliases=merged_aliases)
-        self._cached_recognition_aliases = None  # Invalidate cache on profile change
+        self._invalidate_alias_caches()
         self._save()
         return self._profile
 
@@ -85,14 +98,14 @@ class BotIdentityService:
         return (token or "").strip().lower() in self._recognition_aliases()
 
     def split_command_prefix(self, text: str) -> tuple[str | None, str]:
-        cleaned = re.sub(r"\s+", " ", (text or "").strip())
+        cleaned = self._whitespace_pattern.sub(" ", (text or "").strip())
         if cleaned.startswith("/"):
             cleaned = cleaned[1:].lstrip()
         if not cleaned:
             return None, ""
 
         lowered = cleaned.lower()
-        for alias in sorted(self._recognition_aliases(), key=len, reverse=True):
+        for alias in self._sorted_recognition_aliases():
             if lowered == alias:
                 return alias, ""
             if lowered.startswith(f"{alias} "):
@@ -100,8 +113,8 @@ class BotIdentityService:
         return None, cleaned
 
     def expand_prefixed_trigger(self, trigger: str) -> list[str]:
-        normalized = re.sub(r"\s+", " ", (trigger or "").strip().lower())
-        expansion_aliases = sorted(set(self._recognition_aliases()), key=len, reverse=True)
+        normalized = self._whitespace_pattern.sub(" ", (trigger or "").strip().lower())
+        expansion_aliases = self._sorted_recognition_aliases()
 
         for alias in expansion_aliases:
             if normalized == alias:

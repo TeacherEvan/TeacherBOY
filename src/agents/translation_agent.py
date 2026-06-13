@@ -28,6 +28,10 @@ from .base_agent import BaseAgent
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
 
+# Pre-compiled regex patterns for performance
+_THAI_CHAR_PATTERN = re.compile(r"[\u0E00-\u0E7F]")
+_NEWS_TRIGGER_CLEANUP_PATTERN = re.compile(r"[\s.!?]+$")
+
 
 class TranslationAgent(BaseAgent):
     """Agent for handling Thai/English translation with smart session management."""
@@ -47,7 +51,7 @@ class TranslationAgent(BaseAgent):
 
     def contains_thai(self, text: str) -> bool:
         """Check if text contains Thai characters."""
-        return bool(re.search(r"[\u0E00-\u0E7F]", text))
+        return bool(_THAI_CHAR_PATTERN.search(text))
 
     def is_sleep_command(self, text: str) -> bool:
         """
@@ -94,7 +98,7 @@ class TranslationAgent(BaseAgent):
 
     def is_news_trigger(self, text: str) -> bool:
         """Check if text is a news trigger word (should be handled by NewsAgent)."""
-        text_clean = re.sub(r"[\s.!?]+$", "", text.lower().strip())
+        text_clean = _NEWS_TRIGGER_CLEANUP_PATTERN.sub("", text.lower().strip())
         return text_clean in self._NEWS_TRIGGERS
 
     def is_special_news_command(self, text: str) -> bool:
