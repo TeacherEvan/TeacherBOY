@@ -244,20 +244,126 @@ class ModModeAgent(BaseAgent):
         return True
 
     async def _handle_kick_command(self, event, line_bot_api, parts):
-        # Simplified - would use Flex dashboard postbacks in practice
-        await self._reply("Use dashboard to kick users", line_bot_api)
+        """Handle /modmode kick @user_id command."""
+        source = event.source
+        group_id = source.group_id if source.type == "group" else source.room_id
+        admin_id = source.user_id
+
+        if len(parts) < 3:
+            await self._reply("Usage: /modmode kick @user_id", line_bot_api)
+            return True
+
+        target_user_id = parts[2].lstrip("@")
+        if not target_user_id:
+            await self._reply("❌ Invalid user ID", line_bot_api)
+            return True
+
+        if not await self._is_admin(admin_id):
+            await self._reply("❌ Admin only", line_bot_api)
+            return True
+
+        # Kick the user
+        success = await self._kick_user(group_id, target_user_id, line_bot_api, "Kicked via /modmode kick")
+        await self._audit.log_kick(group_id, target_user_id, admin_id, "Kicked via /modmode kick")
+        if success:
+            await self._reply(f"👢 Kicked @{target_user_id}", line_bot_api)
+        else:
+            await self._reply(f"❌ Failed to kick @{target_user_id}", line_bot_api)
         return True
 
     async def _handle_warn_command(self, event, line_bot_api, parts):
-        await self._reply("Use dashboard to warn users", line_bot_api)
+        """Handle /modmode warn @user_id [reason] command."""
+        source = event.source
+        group_id = source.group_id if source.type == "group" else source.room_id
+        admin_id = source.user_id
+
+        if len(parts) < 3:
+            await self._reply("Usage: /modmode warn @user_id [reason]", line_bot_api)
+            return True
+
+        target_user_id = parts[2].lstrip("@")
+        if not target_user_id:
+            await self._reply("❌ Invalid user ID", line_bot_api)
+            return True
+
+        reason = " ".join(parts[3:]) if len(parts) > 3 else "No reason provided"
+
+        if not await self._is_admin(admin_id):
+            await self._reply("❌ Admin only", line_bot_api)
+            return True
+
+        # Use existing _warn_user which handles 3-strike auto-ban
+        # Pass admin_id as warned_by for audit trail
+        result = await self._warnings.warn_user(group_id, target_user_id, admin_id, reason)
+        count = result["count"]
+        await self._audit.log_warn(group_id, target_user_id, admin_id, reason, count)
+
+        if result["should_ban"]:
+            await self._audit.log_ban(group_id, target_user_id, admin_id, f"Auto-ban after {count} warnings")
+            await self._kick_user(group_id, target_user_id, line_bot_api, f"Auto-ban ({count} warnings)")
+            await self._reply(f"🔨 @{target_user_id} BANNED after {count} warnings", line_bot_api)
+        else:
+            await self._reply(f"⚠️ @{target_user_id} Warning {count}/3: {reason}", line_bot_api)
+
         return True
 
     async def _handle_ban_command(self, event, line_bot_api, parts):
-        await self._reply("Use dashboard to ban users", line_bot_api)
+        """Handle /modmode ban @user_id [reason] command - ban + immediate kick."""
+        source = event.source
+        group_id = source.group_id if source.type == "group" else source.room_id
+        admin_id = source.user_id
+
+        if len(parts) < 3:
+            await self._reply("Usage: /modmode ban @user_id [reason]", line_bot_api)
+            return True
+
+        target_user_id = parts[2].lstrip("@")
+        if not target_user_id:
+            await self._reply("❌ Invalid user ID", line_bot_api)
+            return True
+
+        reason = " ".join(parts[3:]) if len(parts) > 3 else "Banned by admin"
+
+        if not await self._is_admin(admin_id):
+            await self._reply("❌ Admin only", line_bot_api)
+            return True
+
+        # Add to ban list
+        await self._ban_list.ban_user(group_id, target_user_id, admin_id, reason)
+        await self._audit.log_ban(group_id, target_user_id, admin_id, reason)
+
+        # Kick immediately
+        await self._kick_user(group_id, target_user_id, line_bot_api, reason)
+        await self._audit.log_kick(group_id, target_user_id, admin_id, reason)
+
+        await self._reply(f"🔨 Banned and kicked @{target_user_id}: {reason}", line_bot_api)
         return True
 
     async def _handle_unban_command(self, event, line_bot_api, parts):
-        await self._reply("Use dashboard to unban users", line_bot_api)
+        """Handle /modmode unban @user_id command - remove from ban list."""
+        source = event.source
+        group_id = source.group_id if source.type == "group" else source.room_id
+        admin_id = source.user_id
+
+        if len(parts) < 3:
+            await self._reply("Usage: /modmode unban @user_id", line_bot_api)
+            return True
+
+        target_user_id = parts[2].lstrip("@")
+        if not target_user_id:
+            await self._reply("❌ Invalid user ID", line_bot_api)
+            return True
+
+        if not await self._is_admin(admin_id):
+            await self._reply("❌ Admin only", line_bot_api)
+            return True
+
+        success = await self._ban_list.unban_user(group_id, target_user_id)
+        if success:
+            await self._audit.log_mode_change(group_id, admin_id, "unban", True, target_user_id)
+            await self._reply(f"✅ Unbanned @{target_user_id}", line_bot_api)
+        else:
+            await self._reply(f"❌ Failed to unban @{target_user_id} (not found?)", line_bot_api)
         return True
 
     # ===== Dashboard =====

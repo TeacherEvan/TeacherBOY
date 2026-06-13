@@ -174,3 +174,72 @@ async def test_handle_modmode_off_command(agent, mock_services, event_factory):
             result = await agent.handle(event, "/modmode off", MagicMock())
             assert result is True
             mock_services["mod_mode"].deactivate_mod_mode.assert_called_with("C123")
+
+
+@pytest.mark.asyncio
+async def test_handle_kick_command(agent, mock_services, event_factory):
+    mock_services["mod_mode"].is_mod_mode_active = _make_async_mock(True)
+    mock_services["audit"].log_kick = _make_async_mock(None)
+    event = event_factory("/modmode kick @U123", user_id="U456", group_id="C123")
+    with patch("src.services.privilege_service.privilege_service.is_admin", return_value=True):
+        with patch.object(agent, "_kick_user", new_callable=AsyncMock) as mock_kick:
+            mock_kick.return_value = True
+            result = await agent.handle(event, "/modmode kick @U123", MagicMock())
+    
+    assert result is True
+    mock_kick.assert_called_once()
+    args, kwargs = mock_kick.call_args
+    assert args[0] == "C123"
+    assert args[1] == "U123"
+    assert args[3] == "Kicked via /modmode kick"
+    mock_services["audit"].log_kick.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_warn_command(agent, mock_services, event_factory):
+    mock_services["mod_mode"].is_mod_mode_active = _make_async_mock(True)
+    mock_services["warning"].warn_user = _make_async_mock({"count": 1, "should_ban": False, "reason": "Test reason"})
+    mock_services["audit"].log_warn = _make_async_mock(None)
+    event = event_factory("/modmode warn @U123 spam", user_id="U456", group_id="C123")
+    
+    with patch("src.services.privilege_service.privilege_service.is_admin", return_value=True):
+        result = await agent.handle(event, "/modmode warn @U123 spam", MagicMock())
+    
+    assert result is True
+    mock_services["warning"].warn_user.assert_called_once_with("C123", "U123", "U456", "spam")
+    mock_services["audit"].log_warn.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_ban_command(agent, mock_services, event_factory):
+    mock_services["mod_mode"].is_mod_mode_active = _make_async_mock(True)
+    mock_services["ban_list"].ban_user = _make_async_mock({"groupId": "C123", "userId": "U123"})
+    mock_services["audit"].log_ban = _make_async_mock(None)
+    mock_services["audit"].log_kick = _make_async_mock(None)
+    event = event_factory("/modmode ban @U123 repeated spam", user_id="U456", group_id="C123")
+    
+    with patch("src.services.privilege_service.privilege_service.is_admin", return_value=True):
+        with patch.object(agent, "_kick_user", new_callable=AsyncMock) as mock_kick:
+            mock_kick.return_value = True
+            result = await agent.handle(event, "/modmode ban @U123 repeated spam", MagicMock())
+    
+    assert result is True
+    mock_services["ban_list"].ban_user.assert_called_once_with("C123", "U123", "U456", "repeated spam")
+    mock_kick.assert_called_once()
+    mock_services["audit"].log_ban.assert_called_once()
+    mock_services["audit"].log_kick.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_unban_command(agent, mock_services, event_factory):
+    mock_services["mod_mode"].is_mod_mode_active = _make_async_mock(True)
+    mock_services["ban_list"].unban_user = _make_async_mock(True)
+    mock_services["audit"].log_mode_change = _make_async_mock(None)
+    event = event_factory("/modmode unban @U123", user_id="U456", group_id="C123")
+    
+    with patch("src.services.privilege_service.privilege_service.is_admin", return_value=True):
+        result = await agent.handle(event, "/modmode unban @U123", MagicMock())
+    
+    assert result is True
+    mock_services["ban_list"].unban_user.assert_called_once_with("C123", "U123")
+    mock_services["audit"].log_mode_change.assert_called_once()
