@@ -118,14 +118,13 @@ class ModModeAgent(BaseAgent):
 
     def _is_activation_mod_command(self, text: str) -> bool:
         """Check if text is a /modmode command that activates mod mode (all/special)."""
+        import re
         text_lower = text.strip().lower()
         if not text_lower.startswith("/modmode"):
             return False
-        parts = text_lower.split()
-        if len(parts) < 2:
-            return False
-        # These subcommands activate mod mode
-        return parts[1] in ("all", "special")
+        # Use regex with word boundary to match subcommand, allowing trailing punctuation
+        match = re.search(r"/modmode\s+(all|special)\b", text_lower)
+        return match is not None
 
     async def _handle_activation(self, event: MessageEvent, line_bot_api: MessagingApi) -> bool:
         source = event.source
@@ -172,16 +171,29 @@ class ModModeAgent(BaseAgent):
     def _is_mod_command(self, text: str) -> bool:
         return text.strip().lower().startswith("/modmode")
 
+    def _parse_modmode_subcommand(self, text: str) -> str | None:
+        """Extract subcommand from /modmode command, ignoring trailing punctuation."""
+        import re
+        text_lower = text.strip().lower()
+        match = re.search(r"/modmode\s+(\w+)", text_lower)
+        return match.group(1) if match else None
+
+    def _parse_modmode_args(self, text: str) -> list[str]:
+        """Parse full arguments for /modmode command, preserving @mentions."""
+        # Split but preserve @mentions
+        parts = text.strip().split()
+        return parts[2:] if len(parts) >= 3 else []
+
     async def _handle_mod_command(self, event: MessageEvent, line_bot_api: MessagingApi, text: str) -> bool:
         source = event.source
         group_id = source.group_id if source.type == "group" else source.room_id
         user_id = source.user_id
 
-        parts = text.strip().split()
-        if len(parts) == 1:
+        subcmd = self._parse_modmode_subcommand(text)
+        if not subcmd:
             return await self._show_dashboard(event, line_bot_api)
 
-        subcmd = parts[1].lower()
+        args = self._parse_modmode_args(text)
 
         if subcmd == "all":
             await self._mod_mode.activate_mod_mode(group_id, user_id, "all")
@@ -190,10 +202,10 @@ class ModModeAgent(BaseAgent):
             return True
 
         if subcmd == "special":
-            if len(parts) < 3:
+            if not args:
                 await self._reply("Usage: /modmode special @user", line_bot_api)
                 return True
-            special_id = parts[2].lstrip("@")
+            special_id = args[0].lstrip("@")
             await self._mod_mode.set_special_user(group_id, special_id)
             await self._audit.log_mode_change(group_id, user_id, "special", True, special_id)
             await self._reply(f"✅ Mod mode: SPECIAL (only admin + @{special_id})", line_bot_api)
@@ -209,13 +221,13 @@ class ModModeAgent(BaseAgent):
             return await self._show_dashboard(event, line_bot_api)
 
         if subcmd == "kick":
-            return await self._handle_kick_command(event, line_bot_api, parts)
+            return await self._handle_kick_command(event, line_bot_api, ["/modmode", "kick"] + args)
 
         if subcmd == "warn":
-            return await self._handle_warn_command(event, line_bot_api, parts)
+            return await self._handle_warn_command(event, line_bot_api, ["/modmode", "warn"] + args)
 
         if subcmd == "ban":
-            return await self._handle_ban_command(event, line_bot_api, parts)
+            return await self._handle_ban_command(event, line_bot_api, ["/modmode", "ban"] + args)
 
         if subcmd == "banlist":
             return await self._show_ban_list(event, line_bot_api)
@@ -224,7 +236,7 @@ class ModModeAgent(BaseAgent):
             return await self._show_warn_list(event, line_bot_api)
 
         if subcmd == "unban":
-            return await self._handle_unban_command(event, line_bot_api, parts)
+            return await self._handle_unban_command(event, line_bot_api, ["/modmode", "unban"] + args)
 
         await self._reply("❌ Unknown /modmode command. Use /modmode dashboard", line_bot_api)
         return True

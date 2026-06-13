@@ -285,3 +285,25 @@ async def test_should_handle_modmode_off_requires_active_mod_mode(agent, mock_se
     with patch("src.services.privilege_service.privilege_service.is_admin", return_value=True):
         result = await agent.should_handle(event, "/modmode off")
         assert result is False
+
+
+@ pytest.mark.asyncio
+async def test_should_handle_modmode_all_with_trailing_punctuation(agent, mock_services, event_factory):
+    """Test that /modmode all... (with trailing punctuation) is handled."""
+    mock_services["mod_mode"].is_mod_mode_active = _make_async_mock(False)
+    mock_services["mod_mode"].is_user_allowed = _make_async_mock(True)
+    event = event_factory("/modmode all...", user_id="U456", group_id="C123")
+    with patch("src.services.privilege_service.privilege_service.is_admin", return_value=True):
+        result = await agent.should_handle(event, "/modmode all...")
+        assert result is True
+
+
+@ pytest.mark.asyncio
+async def test_should_handle_modmode_special_with_trailing_punctuation(agent, mock_services, event_factory):
+    """Test that /modmode special... (with trailing punctuation) is handled."""
+    mock_services["mod_mode"].is_mod_mode_active = _make_async_mock(False)
+    mock_services["mod_mode"].is_user_allowed = _make_async_mock(True)
+    event = event_factory("/modmode special @U123...", user_id="U456", group_id="C123")
+    with patch("src.services.privilege_service.privilege_service.is_admin", return_value=True):
+        result = await agent.should_handle(event, "/modmode special @U123...")
+        assert result is True
