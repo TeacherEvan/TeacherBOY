@@ -150,6 +150,22 @@ This returns the bot to the existing local/HF-backed path without deleting local
 - `CONVERSATION_SUMMARY_INTERVAL`
 - `CONVERSATION_MESSAGES_TO_KEEP_FULL`
 
+## Harmful Content Detection (Moderator Mode)
+
+### `HARMFUL_CONTENT_KEYWORDS`
+
+- **Type:** String (comma-separated)
+- **Default:** `None`
+- **Description:** Comma-separated list of custom harmful keywords. Overrides/adds to built-in English/Thai keyword lists.
+- **Example:** `HARMFUL_CONTENT_KEYWORDS=spam,scam,phishing,customterm`
+
+### `HARMFUL_CONTENT_KEYWORDS_FILE`
+
+- **Type:** String (path)
+- **Default:** `None`
+- **Description:** Path to JSON file containing custom harmful keywords. Supports array format `["keyword1", "keyword2"]` or object format `{"keywords": ["keyword1", "keyword2"]}`.
+- **Example:** `HARMFUL_CONTENT_KEYWORDS_FILE=./config/harmful_keywords.json`
+
 ## HTTP Client
 
 - `HTTP_CLIENT_TIMEOUT_SECONDS`

@@ -255,10 +255,10 @@ Ms. Green: ✅ Cleared 5 documents from this chat.
 
 ## Related Documentation
 
-- [Quick Reference](../reference/quick-reference.md) - Command summary
-- [Environment Variables](../reference/environment.md) - Configuration details
+- [Quick Reference](reference/quick-reference.md) - Command summary
+- [Environment Variables](reference/environment.md) - Configuration details
 - [Conversation Memory](CONVERSATION_MEMORY.md) - Chat memory system
-- [Deployment Guide](../guides/deployment.md) - Mounted volume setup
+- [Deployment Guide](guides/deployment.md) - Mounted volume setup
 
 ---
 

@@ -8,6 +8,7 @@ Supports local storage and optional Hugging Face Hub persistence.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import logging
 import os
@@ -19,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from src.config import settings
+from src.services.hf_storage_mixin import HFStorageMixin
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +88,7 @@ class FlushResult:
                 f"deleted_documents={self.deleted_documents}, freed_mb={self.freed_bytes_mb:.2f})")
 
 
-class DocumentMemoryService:
+class DocumentMemoryService(HFStorageMixin):
     """Service for persisting documents and extracted text per chat."""
 
     def __init__(
@@ -97,19 +99,22 @@ class DocumentMemoryService:
         max_file_size_mb: float = DEFAULT_MAX_FILE_SIZE_MB,
         max_text_chars: int = DEFAULT_MAX_TEXT_CHARS,
     ):
+        # Set up HF storage mixin attributes
         self.hf_token = hf_token
         self.hf_repo_id = hf_repo_id
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
+        self.hf_sync_interval = HF_SYNC_INTERVAL_MINUTES
+        self.hf_squash_history = True
+        self.hf_path_in_repo = "documents"
+        self._hf_enabled = bool(hf_token and hf_repo_id)
 
         self.max_file_size_bytes = int(max_file_size_mb * 1024 * 1024)
         self.max_text_chars = max_text_chars
 
         self._documents: dict[str, dict[str, dict[str, Any]]] = {}
 
-        self._hf_enabled = bool(hf_token and hf_repo_id)
-        self._hf_api: Any | None = None
-        self._commit_scheduler: Any | None = None
+        super().__init__()  # Initialize mixin
 
         if self._hf_enabled:
             self._setup_hf_storage()
@@ -117,54 +122,6 @@ class DocumentMemoryService:
             logger.info("📄 Document memory initialized (local-only)")
 
         self._load_local_index()
-
-    def _setup_hf_storage(self) -> None:
-        """Initialize HF Hub persistence using CommitScheduler."""
-        if not self.hf_token or not self.hf_repo_id:
-            self._hf_enabled = False
-            return
-
-        try:
-            import importlib
-
-            hf = importlib.import_module("huggingface_hub")
-            HfApi = hf.HfApi
-            CommitScheduler = hf.CommitScheduler
-
-            hf_api = HfApi(token=self.hf_token)
-            self._hf_api = hf_api
-
-            try:
-                hf_api.create_repo(
-                    repo_id=self.hf_repo_id,
-                    repo_type="dataset",
-                    private=True,
-                    exist_ok=True,
-                )
-                logger.info(f"📄 HF Hub dataset ready: {self.hf_repo_id}")
-            except Exception as e:
-                logger.warning(f"⚠️ Could not create/verify HF repo: {e}")
-                self._hf_enabled = False
-                return
-
-            self._commit_scheduler = CommitScheduler(
-                repo_id=self.hf_repo_id,
-                repo_type="dataset",
-                folder_path=str(self.storage_path),
-                every=HF_SYNC_INTERVAL_MINUTES,
-                token=self.hf_token,
-                private=True,
-                squash_history=True,
-            )
-
-            logger.info("📄 Document memory initialized with HF Hub persistence")
-
-        except ModuleNotFoundError:
-            logger.warning("⚠️ huggingface_hub not installed, using local-only storage")
-            self._hf_enabled = False
-        except Exception as e:
-            logger.error(f"❌ Failed to initialize document HF storage: {e}")
-            self._hf_enabled = False
 
     def _hash_chat_id(self, chat_id: str) -> str:
         return hashlib.sha256(chat_id.encode("utf-8")).hexdigest()[:16]
@@ -183,10 +140,12 @@ class DocumentMemoryService:
     def _get_doc_dir(self, hashed_id: str, doc_id: str) -> Path:
         if not self._is_valid_doc_id(doc_id):
             raise ValueError("invalid_document_id")
+        assert self.storage_path is not None
         return self.storage_path / hashed_id / doc_id
 
     def _load_local_index(self) -> None:
         """Load metadata from local storage into memory."""
+        assert self.storage_path is not None
         if not self.storage_path.exists():
             return
 
@@ -297,9 +256,7 @@ class DocumentMemoryService:
             "uploaded_at": uploaded_at,
             "user_id": user_id,
             "text_chars": len(trimmed_text),
-            "text_excerpt": trimmed_text[:DEFAULT_EXCERPT_CHARS],
-            "sha256": checksum,
-            "path": str(content_path),
+            "checksum": checksum,
         }
 
         self._write_metadata(doc_dir, metadata)
@@ -307,122 +264,77 @@ class DocumentMemoryService:
 
         return metadata
 
-    def list_documents(self, chat_id: str) -> list[dict[str, Any]]:
+    async def get_document(self, chat_id: str, doc_id: str) -> dict[str, Any] | None:
+        """Retrieve document metadata by ID."""
         hashed_id = self._hash_chat_id(chat_id)
-        docs = list(self._documents.get(hashed_id, {}).values())
-        return sorted(docs, key=lambda d: d.get("uploaded_at", ""), reverse=True)
+        return self._documents.get(hashed_id, {}).get(doc_id)
+
+    def list_documents(self, chat_id: str) -> list[dict[str, Any]]:
+        """List all documents for a chat."""
+        hashed_id = self._hash_chat_id(chat_id)
+        docs = self._documents.get(hashed_id, {})
+        return list(docs.values())
 
     def get_document_text(self, chat_id: str, doc_id: str) -> str | None:
-        if not self._is_valid_doc_id(doc_id):
-            return None
+        """Retrieve extracted text content."""
         hashed_id = self._hash_chat_id(chat_id)
-        metadata = self._documents.get(hashed_id, {}).get(doc_id)
-        if not metadata:
+        doc = self._documents.get(hashed_id, {}).get(doc_id)
+        if not doc:
             return None
-        doc_dir = self._get_doc_dir(hashed_id, doc_id)
-        text_path = doc_dir / "text.txt"
-        if not text_path.exists():
+        try:
+            text_path = self._get_doc_dir(hashed_id, doc_id) / "text.txt"
+        except ValueError:
             return None
-        return text_path.read_text(encoding="utf-8")
-
-    def find_by_name(self, chat_id: str, name: str) -> list[dict[str, Any]]:
-        hashed_id = self._hash_chat_id(chat_id)
-        name_lower = name.lower().strip()
-        results = []
-        for metadata in self._documents.get(hashed_id, {}).values():
-            if name_lower in metadata.get("file_name", "").lower():
-                results.append(metadata)
-        return results
-
-    def search_documents(self, chat_id: str, query: str, limit: int = 5) -> list[dict[str, Any]]:
-        hashed_id = self._hash_chat_id(chat_id)
-        query_lower = query.lower().strip()
-        results: list[dict[str, Any]] = []
-
-        for doc_id, metadata in self._documents.get(hashed_id, {}).items():
-            text = self.get_document_text(chat_id, doc_id) or ""
-            if query_lower in text.lower():
-                idx = text.lower().find(query_lower)
-                start = max(idx - 80, 0)
-                end = min(idx + 220, len(text))
-                snippet = text[start:end]
-                results.append(
-                    {
-                        "id": doc_id,
-                        "file_name": metadata.get("file_name"),
-                        "snippet": snippet,
-                    }
-                )
-            if len(results) >= limit:
-                break
-
-        return results
+        if text_path.exists():
+            return text_path.read_text(encoding="utf-8")
+        return None
 
     def delete_document(self, chat_id: str, doc_id: str) -> bool:
-        if not self._is_valid_doc_id(doc_id):
-            return False
+        """Delete a document and its associated files."""
         hashed_id = self._hash_chat_id(chat_id)
-        metadata = self._documents.get(hashed_id, {}).pop(doc_id, None)
-        if not metadata:
+        if hashed_id not in self._documents or doc_id not in self._documents[hashed_id]:
             return False
-
-        doc_dir = self._get_doc_dir(hashed_id, doc_id)
-        if doc_dir.exists():
-            for item in doc_dir.glob("*"):
-                try:
-                    item.unlink()
-                except Exception:
-                    pass
-            try:
-                doc_dir.rmdir()
-            except Exception:
-                pass
-
-        return True
-
-    def clear_documents(self, chat_id: str) -> bool:
-        hashed_id = self._hash_chat_id(chat_id)
-        if hashed_id not in self._documents:
-            return False
-
-        chat_dir = self.storage_path / hashed_id
-        if chat_dir.exists():
-            for doc_dir in chat_dir.glob("*"):
-                if not doc_dir.is_dir():
-                    continue
-                for item in doc_dir.glob("*"):
-                    try:
-                        item.unlink()
-                    except Exception:
-                        pass
-                try:
-                    doc_dir.rmdir()
-                except Exception:
-                    pass
-
-        self._documents.pop(hashed_id, None)
-        return True
-
-    async def _load_from_hub(self) -> None:
-        if not self._hf_enabled or not self._hf_api:
-            return
 
         try:
-            import importlib
+            doc_dir = self._get_doc_dir(hashed_id, doc_id)
+        except ValueError:
+            return False
+        if doc_dir.exists():
+            import shutil
 
+            shutil.rmtree(doc_dir)
+
+        self._documents[hashed_id].pop(doc_id, None)
+        if not self._documents[hashed_id]:
+            self._documents.pop(hashed_id, None)
+
+        return True
+
+    async def load_documents_from_hub(self) -> int:
+        """
+        Load existing documents from HF Hub on startup.
+
+        Returns:
+            Number of document files downloaded
+        """
+        if not self._hf_enabled or not self._hf_api or not self.hf_repo_id or not self.hf_token:
+            logger.info("HF Hub not configured; skipping document preload")
+            return 0
+
+        try:
             hf = importlib.import_module("huggingface_hub")
             list_repo_files = hf.list_repo_files
             hf_hub_download = hf.hf_hub_download
 
-            files = list_repo_files(
-                repo_id=self.hf_repo_id,
-                repo_type="dataset",
-                token=self.hf_token,
-            )
-
-            if not files:
+            try:
+                files = list_repo_files(
+                    repo_id=self.hf_repo_id,
+                    repo_type="dataset",
+                    token=self.hf_token,
+                )
+            except Exception:
                 logger.info("📄 No existing documents found in HF Hub")
-                return
+                return 0
 
             downloaded = 0
             for file_path in files:
@@ -444,10 +356,37 @@ class DocumentMemoryService:
                 self._load_local_index()
                 logger.info(f"📄 Loaded {downloaded} document file(s) from HF Hub")
 
+            return downloaded
+
         except ModuleNotFoundError:
             logger.info("📄 huggingface_hub not installed; skipping HF Hub document preload")
+            return 0
         except Exception as e:
             logger.error(f"❌ Failed to load documents from HF Hub: {e}")
+            return 0
+
+    def stop(self) -> None:
+        """Stop the commit scheduler (call during shutdown)."""
+        self.stop_hf_storage()
+
+    def get_stats(self) -> dict[str, Any]:
+        """Get service statistics."""
+        total_docs = sum(len(docs) for docs in self._documents.values())
+        total_size = 0
+        for docs in self._documents.values():
+            for doc in docs.values():
+                total_size += doc.get("size_bytes", 0)
+
+        hf_stats = self.get_hf_stats()
+
+        return {
+            "active_chats": len(self._documents),
+            "total_documents": total_docs,
+            "total_size_mb": round(total_size / (1024 * 1024), 2),
+            "max_file_size_mb": self.max_file_size_bytes / (1024 * 1024),
+            "max_text_chars": self.max_text_chars,
+            **hf_stats,
+        }
 
     async def purge_documents(
         self,
@@ -486,7 +425,6 @@ class DocumentMemoryService:
         to_delete = []
 
         for chat_id, docs in self._documents.items():
-            chat_deleted = False
             for doc_id, doc in list(docs.items()):
                 created_at = doc.get("created_at")
                 if isinstance(created_at, str):
@@ -496,80 +434,49 @@ class DocumentMemoryService:
                             created_dt = created_dt.replace(tzinfo=UTC)
                         if created_dt < cutoff:
                             to_delete.append((chat_id, doc_id))
-                            chat_deleted = True
+                            # chat_deleted = True
                     except Exception:
                         continue
 
-            if chat_deleted and not params.dry_run:
-                result.deleted_chats += 1
-
+        result.deleted_chats = len(set(chat_id for chat_id, _ in to_delete))
         result.deleted_documents = len(to_delete)
-        for chat_id, doc_id in to_delete:
-            if not params.dry_run:
-                del self._documents[chat_id][doc_id]
-                # Delete local file
-                doc_path = self.storage_path / chat_id / doc_id
-                if doc_path.exists():
-                    try:
-                        size = doc_path.stat().st_size / (1024 * 1024)
-                        result.freed_bytes_mb += size
-                    except Exception:
-                        pass
-                    doc_path.unlink(missing_ok=True)
-                # Delete index file
-                index_path = self.storage_path / chat_id / f"{doc_id}.json"
-                if index_path.exists():
-                    index_path.unlink(missing_ok=True)
 
-            if not params.dry_run and not self._documents.get(chat_id):
-                self._documents.pop(chat_id, None)
+        if not params.dry_run:
+            for chat_id, doc_id in to_delete:
+                self.delete_document(chat_id, doc_id)
 
         return result
 
     async def _purge_size_based(self, params: FlushParams, result: FlushResult) -> FlushResult:
         """Purge to cap total documents or per-chat documents."""
-        # If per-chat limit specified, trim each chat
+        total_docs = sum(len(docs) for docs in self._documents.values())
+
         if params.max_documents_per_chat:
             for chat_id, docs in self._documents.items():
-                doc_items = list(docs.items())
-                if len(doc_items) > params.max_documents_per_chat:
-                    # Sort by created_at (oldest first)
-                    doc_items.sort(key=lambda x: x[1].get("created_at", ""))
-                    to_remove = doc_items[:-params.max_documents_per_chat]
-                    result.deleted_documents += len(to_remove)
-                    if not params.dry_run:
-                        for doc_id, _ in to_remove:
-                            del self._documents[chat_id][doc_id]
-                            doc_path = self.storage_path / chat_id / doc_id
-                            if doc_path.exists():
-                                doc_path.unlink(missing_ok=True)
-                            index_path = self.storage_path / chat_id / f"{doc_id}.json"
-                            if index_path.exists():
-                                index_path.unlink(missing_ok=True)
+                if len(docs) > params.max_documents_per_chat:
+                    sorted_docs = sorted(
+                        docs.items(),
+                        key=lambda x: x[1].get("uploaded_at", ""),
+                    )
+                    excess = len(docs) - params.max_documents_per_chat
+                    for doc_id, _ in sorted_docs[:excess]:
+                        result.deleted_documents += 1
+                        if not params.dry_run:
+                            self.delete_document(chat_id, doc_id)
 
-        # If total limit specified (across all chats)
-        if params.max_total_documents:
-            all_docs = []
-            for chat_id, docs in self._documents.items():
-                for doc_id, doc in docs.items():
-                    all_docs.append((chat_id, doc_id, doc))
-
-            total_docs = len(all_docs)
-            if total_docs > params.max_total_documents:
-                # Sort by created_at (oldest first)
-                all_docs.sort(key=lambda x: x[2].get("created_at", ""))
-                excess = total_docs - params.max_total_documents
-                for chat_id, doc_id, doc in all_docs[:excess]:
-                    result.deleted_documents += 1
-                    if not params.dry_run:
-                        if chat_id in self._documents:
-                            self._documents[chat_id].pop(doc_id, None)
-                            doc_path = self.storage_path / chat_id / doc_id
-                            if doc_path.exists():
-                                doc_path.unlink(missing_ok=True)
-                            index_path = self.storage_path / chat_id / f"{doc_id}.json"
-                            if index_path.exists():
-                                index_path.unlink(missing_ok=True)
+        if params.max_total_documents and total_docs > params.max_total_documents:
+            all_docs = [
+                (chat_id, doc_id, doc.get("uploaded_at", ""))
+                for chat_id, docs in self._documents.items()
+                for doc_id, doc in docs.items()
+            ]
+            all_docs.sort(key=lambda x: x[2])
+            excess = total_docs - params.max_total_documents
+            for chat_id, doc_id, _ in all_docs[:excess]:
+                result.deleted_documents += 1
+                if not params.dry_run:
+                    self.delete_document(chat_id, doc_id)
+                    result.deleted_chats = len(set(c for c, _, _ in all_docs[:excess]))
 
         return result
 
@@ -579,45 +486,29 @@ class DocumentMemoryService:
             return result
 
         for chat_id in params.chat_ids:
-            if chat_id in self._documents:
-                docs = self._documents[chat_id]
+            hashed_id = self._hash_chat_id(chat_id)
+            if hashed_id in self._documents:
+                docs = self._documents[hashed_id]
                 result.deleted_chats += 1
                 result.deleted_documents += len(docs)
                 if not params.dry_run:
-                    for doc_id in docs:
-                        doc_path = self.storage_path / chat_id / doc_id
-                        if doc_path.exists():
-                            doc_path.unlink(missing_ok=True)
-                        index_path = self.storage_path / chat_id / f"{doc_id}.json"
-                        if index_path.exists():
-                            index_path.unlink(missing_ok=True)
-                    self._documents.pop(chat_id, None)
+                    for doc_id in list(docs.keys()):
+                        self.delete_document(chat_id, doc_id)
 
         return result
 
     async def _purge_full_purge(self, params: FlushParams, result: FlushResult) -> FlushResult:
-        """Purge all documents."""
-        result.deleted_chats = len(self._documents)
-        for docs in self._documents.values():
+        """Purge all documents (requires confirmation via params.dry_run=False)."""
+        for _chat_id, docs in self._documents.items():
+            result.deleted_chats += 1
             result.deleted_documents += len(docs)
 
         if not params.dry_run:
-            self._documents.clear()
-            # Clear all local storage files
-            import shutil
-            if self.storage_path.exists():
-                shutil.rmtree(self.storage_path)
-                self.storage_path.mkdir(parents=True, exist_ok=True)
+            for chat_id in list(self._documents.keys()):
+                for doc_id in list(self._documents[chat_id].keys()):
+                    self.delete_document(chat_id, doc_id)
 
         return result
-
-    def stop(self) -> None:
-        if self._commit_scheduler:
-            try:
-                self._commit_scheduler.stop()
-                logger.info("📄 Document memory scheduler stopped")
-            except Exception as e:
-                logger.warning(f"⚠️ Error stopping document scheduler: {e}")
 
 
 # Singleton instance (configured during app startup)

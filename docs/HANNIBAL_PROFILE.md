@@ -221,7 +221,7 @@ Ms. Green: [Shows how user interacts, collaboration style]
 ## Related Documentation
 
 - [Psychological Profiler](PROFILER_USAGE.md) - Image-based profiling
-- [Quick Reference](../reference/quick-reference.md) - Command summary
+- [Quick Reference](reference/quick-reference.md) - Command summary
 - [GitHub Models Setup](GITHUB_MODELS.md) - Configuration guide
 
 ---

@@ -125,3 +125,8 @@ class ConvexModRepository:
         """Get all warnings in a group."""
         response = await self._client.get("/userWarnings/getByGroup", {"groupId": group_id})
         return response.get("data", [])
+
+    async def reset_warnings(self, group_id: str, user_id: str) -> bool:
+        """Reset warning count for user (admin unban path)."""
+        response = await self._client.post("/userWarnings/resetWarnings", {"groupId": group_id, "userId": user_id})
+        return response.get("success", False)

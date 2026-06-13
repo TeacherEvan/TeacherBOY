@@ -132,13 +132,7 @@ class TestHistoryLogServiceFlexBuilders:
         await log_service.log(EventType.ERROR, "error msg", LogLevel.ERROR, chat_id="chat1")
 
         logs = await log_service.query_logs(limit=10)
-        bubble = log_service.build_log_flex_bubble(
-            logs=logs,
-            preset=DatePreset.LAST_7_DAYS,
-            filters={},
-            page=1,
-            total_pages=1
-        )
+        bubble = log_service.build_log_flex_bubble(logs=logs, preset=DatePreset.LAST_7_DAYS, filters={}, page=1, total_pages=1)
 
         assert bubble["type"] == "bubble"
         assert bubble["size"] == "giga"
@@ -217,4 +211,3 @@ class TestHistoryLogServiceQuickReplies:
         assert "Last 7 days" in labels
         assert "Last 30 days" in labels
         assert "Custom range..." in labels
-

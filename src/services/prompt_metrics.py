@@ -15,6 +15,7 @@ import threading
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ class PromptMetricsCollector:
             Dictionary with aggregated metrics
         """
         with self._lock:
-            summary = {
+            summary: dict[str, Any] = {
                 "total_executions": len(self._records),
                 "by_type": {},
             }
@@ -109,7 +110,7 @@ class PromptMetricsCollector:
 
                 response_times = self._response_times_by_type[prompt_type]
 
-                summary["by_type"][prompt_type] = {
+                summary["by_type"][prompt_type] = {  # type: ignore[index]
                     "count": len(token_counts),
                     "avg_tokens": sum(token_counts) / len(token_counts),
                     "min_tokens": min(token_counts),
@@ -118,9 +119,9 @@ class PromptMetricsCollector:
                 }
 
             # Calculate token savings if we have both optimized and legacy
-            if "standard" in summary["by_type"] and "legacy" in summary["by_type"]:
-                optimized_avg = summary["by_type"]["standard"]["avg_tokens"]
-                legacy_avg = summary["by_type"]["legacy"]["avg_tokens"]
+            if "standard" in summary["by_type"] and "legacy" in summary["by_type"]:  # type: ignore[operator]
+                optimized_avg = summary["by_type"]["standard"]["avg_tokens"]  # type: ignore[index]
+                legacy_avg = summary["by_type"]["legacy"]["avg_tokens"]  # type: ignore[index]
                 savings_pct = ((legacy_avg - optimized_avg) / legacy_avg) * 100
 
                 summary["token_savings_percent"] = round(savings_pct, 1)

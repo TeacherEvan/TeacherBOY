@@ -151,7 +151,7 @@ class AdminConfirmationService:
             return {self._snapshot_value(item) for item in value}
         return self._snapshot_custom_object(value)
 
-    def _snapshot_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _snapshot_payload(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         return {key: self._snapshot_value(value) for key, value in payload.items()}
 
     def _copy_pending_action(self, pending: PendingAdminAction) -> PendingAdminAction:

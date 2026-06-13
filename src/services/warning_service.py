@@ -41,9 +41,7 @@ class WarningService:
 
     async def reset_warnings(self, group_id: str, user_id: str) -> bool:
         """Admin manually reset warnings (unban path)."""
-        # Convex upsert with count=0
-        await self._repo.add_warning(group_id, user_id, "system", "reset")
-        return True
+        return await self._repo.reset_warnings(group_id, user_id)
 
 
 # Singleton instance - used by main.py and other modules

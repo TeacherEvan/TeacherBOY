@@ -261,14 +261,14 @@ def test_help_includes_search_category():
         mock_settings.is_profiler_configured.return_value = True
         mock_settings.is_github_models_configured.return_value = True
         mock_settings.document_memory_enabled = True
-        
+
         categories = agent._get_command_categories(
             is_admin=False,
             chat_type="private chat",
             zeus_available=False,  # Search should work even when zeus is not available
             search_available=False,
         )
-        
+
     # Should have Search as separate category when Brave is configured
     assert "Search" in categories
     search_commands = categories["Search"]
@@ -277,7 +277,9 @@ def test_help_includes_search_category():
 
 def test_help_search_topic_alias():
     agent = HelpAgent()
-    categories = {"Search": [{"command": "Ms. Green search <query>", "examples": ["Ms. Green search test"], "available": True}]}
+    categories = {
+        "Search": [{"command": "Ms. Green search <query>", "examples": ["Ms. Green search test"], "available": True}]
+    }
     assert agent._resolve_help_topic("search", categories) == "Search"
 
 
@@ -289,14 +291,14 @@ def test_help_includes_special_news_category():
         mock_settings.is_github_models_configured.return_value = True
         mock_settings.is_brave_search_configured.return_value = True
         mock_settings.document_memory_enabled = True
-        
+
         categories = agent._get_command_categories(
             is_admin=False,
             chat_type="private chat",
             zeus_available=True,
             search_available=True,
         )
-        
+
     # Special News should appear in DM context
     assert "Special News" in categories
     special_news_commands = categories["Special News"]
@@ -318,14 +320,14 @@ def test_help_includes_hannibal_category():
         mock_settings.is_profiler_configured.return_value = True
         mock_settings.is_brave_search_configured.return_value = True
         mock_settings.document_memory_enabled = True
-        
+
         categories = agent._get_command_categories(
             is_admin=False,
             chat_type="private chat",
             zeus_available=True,
             search_available=True,
         )
-        
+
     # Hannibal should appear when GitHub Models configured
     assert "Hannibal Profile" in categories
     hannibal_commands = categories["Hannibal Profile"]

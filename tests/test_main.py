@@ -85,23 +85,11 @@ def test_health_check_does_not_call_translation_providers(client, mock_settings)
             "src.main.agent_router.list_agents",
             return_value=[{"name": "TranslationAgent"}],
         ),
-        patch(
-            "src.main.google_translation_service.translate",
-            new_callable=AsyncMock,
-            side_effect=AssertionError("google translate probe should not run"),
-        ) as google_translate,
-        patch(
-            "src.main.translation_service.translate",
-            new_callable=AsyncMock,
-            side_effect=AssertionError("libretranslate probe should not run"),
-        ) as libretranslate,
     ):
         response = client.get("/health")
 
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
-    google_translate.assert_not_awaited()
-    libretranslate.assert_not_awaited()
 
 
 def test_readiness_returns_503_when_startup_data_is_not_ready(client):

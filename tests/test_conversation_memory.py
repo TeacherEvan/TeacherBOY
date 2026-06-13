@@ -188,20 +188,10 @@ class TestConversationMemorySingleton:
         fake_module.CommitScheduler = FakeCommitScheduler
 
         storage_path = tmp_path / "hf-conversations"
-        created_tasks = []
-
-        def fake_create_task(coro):
-            created_tasks.append(coro)
-            coro.close()
-            return MagicMock()
 
         monkeypatch.setattr(
             "src.services.conversation_memory_service.settings.conversation_storage_path",
             str(storage_path),
-        )
-        monkeypatch.setattr(
-            "src.services.conversation_memory_service.asyncio.create_task",
-            fake_create_task,
         )
         monkeypatch.setitem(sys.modules, "huggingface_hub", fake_module)
 
@@ -213,7 +203,7 @@ class TestConversationMemorySingleton:
         assert service._hf_enabled is True
         assert service._local_storage_path == storage_path
         assert service._commit_scheduler.kwargs["folder_path"] == str(storage_path)
-        assert created_tasks
+        # Note: _load_from_hub is now called by startup_loader, not during init
 
     def test_init_without_hf_creates_inmemory(self):
         """Test initialization without HF credentials uses in-memory storage."""

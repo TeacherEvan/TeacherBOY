@@ -256,7 +256,7 @@ Keep the summary concise but complete. Focus on information that would be valuab
         self,
         summary: ConversationSummary,
         recent_messages: list[dict[str, str]],
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, Any]]:
         """
         Create a compressed conversation history combining summary and recent messages.
 

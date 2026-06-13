@@ -1,6 +1,10 @@
 """Keyword + optional LLM harmful content detection."""
 
+import json
 import logging
+from pathlib import Path
+
+from src.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +48,37 @@ class HarmfulContentDetector:
     ]
 
     def __init__(self, keywords: list[str] | None = None, llm_client=None):
-        self.keywords = keywords or self.DEFAULT_KEYWORDS.copy()
+        # Load keywords from config if available
+        config_keywords = self._load_keywords_from_config()
+        self.keywords = keywords or config_keywords or self.DEFAULT_KEYWORDS.copy()
         self._llm_client = llm_client  # Optional: for LLM-based detection
         self._llm_enabled = llm_client is not None
+
+    def _load_keywords_from_config(self) -> list[str] | None:
+        """Load keywords from config file or environment variable."""
+        keywords = []
+
+        # Try loading from file
+        if settings.harmful_content_keywords_file:
+            try:
+                file_path = Path(settings.harmful_content_keywords_file)
+                if file_path.exists():
+                    data = json.loads(file_path.read_text(encoding="utf-8"))
+                    if isinstance(data, list):
+                        keywords.extend(data)
+                    elif isinstance(data, dict) and "keywords" in data:
+                        keywords.extend(data["keywords"])
+                    logger.info(f"Loaded {len(keywords)} harmful keywords from {file_path}")
+            except Exception as e:
+                logger.warning(f"Failed to load harmful keywords from file: {e}")
+
+        # Try loading from environment variable
+        if settings.harmful_content_keywords_env:
+            env_keywords = [k.strip() for k in settings.harmful_content_keywords_env.split(",") if k.strip()]
+            keywords.extend(env_keywords)
+            logger.info(f"Loaded {len(env_keywords)} harmful keywords from env var")
+
+        return keywords if keywords else None
 
     async def detect(self, text: str) -> dict:
         """Detect harmful content in text.

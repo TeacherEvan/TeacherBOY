@@ -8,7 +8,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -48,6 +48,9 @@ from src.handlers.message_handler import (
     handle_member_left_event,
 )
 from src.services.ban_list_service import ban_list_service, init_ban_list_service
+
+if TYPE_CHECKING:
+    from src.agents.mod_mode_agent import ModModeAgent
 from src.services.bot_identity_service import get_bot_identity_service
 from src.services.brave_search_service import brave_search_service
 from src.services.calendar_service import calendar_service
@@ -63,7 +66,6 @@ from src.services.document_memory_service import (
 )
 from src.services.gemini_service import gemini_service
 from src.services.github_models_service import github_models_service
-from src.services.google_translation import google_translation_service
 from src.services.harmful_content_detector import harmful_content_detector
 from src.services.history_log_service import (
     EventType,
@@ -73,13 +75,13 @@ from src.services.history_log_service import (
 )
 from src.services.image_analyzer_session_manager import image_analyzer_session_manager
 from src.services.logging_service import logging_service
-from src.services.message_buffer_service import message_buffer_service
-from src.services.metrics_service import metrics_service
 from src.services.memory_monitor_service import (
+    check_and_auto_flush,
     get_memory_monitor,
     init_memory_monitor,
-    check_and_auto_flush,
 )
+from src.services.message_buffer_service import message_buffer_service
+from src.services.metrics_service import metrics_service
 from src.services.mod_audit_log import init_mod_audit_log, mod_audit_log
 from src.services.mod_mode_service import init_mod_mode_service, mod_mode_service
 from src.services.news_session_manager import news_session_manager
@@ -124,8 +126,8 @@ agent_router = AgentRouter()
 # Bot's own user ID for self-message detection (prevents infinite loops)
 bot_user_id: str | None = None
 
-# Convex HTTP client for Mod Mode (separate from main pool)
-convex_http_client: httpx.AsyncClient | None = None
+# ModModeAgent reference for postback handlers
+mod_mode_agent: "ModModeAgent | None" = None
 
 
 def create_optimized_http_client() -> httpx.AsyncClient:
@@ -336,12 +338,11 @@ async def lifespan(app: FastAPI):
         from src.services.convex_client import ConvexClient
         from src.services.convex_mod_repository import ConvexModRepository
 
-        # Initialize Convex client
-        convex_http_client = create_optimized_http_client()
+        # Reuse main HTTP client pool for Convex (shared connection pool)
         convex_client = ConvexClient(
             base_url=str(settings.convex_deployment_url),
             sync_token=settings.convex_sync_token or "",
-            http_client=convex_http_client,
+            http_client=http_client_pool,  # Reuse main pool
             timeout_seconds=settings.convex_request_timeout_seconds,
         )
 
@@ -392,8 +393,6 @@ async def lifespan(app: FastAPI):
     # PHASE 2b: Translation Services Configuration
     # ========================================================================
     if settings.is_google_translate_configured():
-        google_translation_service.api_key = settings.google_translate_api_key
-        google_translation_service.set_client(http_client_pool)
         logger.info("✅ Google Cloud Translation API configured (PRIMARY)")
     else:
         logger.warning("⚠️  Google Translate API not configured - using fallback providers")
@@ -485,11 +484,12 @@ async def lifespan(app: FastAPI):
 
     # Register ModModeAgent (Priority: 4 - Intercepts messages in mod-enabled groups)
     # Must be registered before AdminAgent to intercept mod commands first
+    global mod_mode_agent
     if mod_mode_service and ban_list_service and warning_service:
         from src.agents.mod_mode_agent import ModModeAgent
 
         mod_dashboard = ModDashboardBuilder()
-        mod_agent = ModModeAgent(
+        mod_mode_agent = ModModeAgent(
             mod_mode_service=mod_mode_service,
             ban_list_service=ban_list_service,
             warning_service=warning_service,
@@ -497,7 +497,7 @@ async def lifespan(app: FastAPI):
             audit_log=mod_audit_log,
             dashboard_builder=mod_dashboard,
         )
-        agent_router.register_agent(mod_agent)
+        agent_router.register_agent(mod_mode_agent)
         logger.info("🛡️ ModModeAgent registered (Priority 4 - group moderation)")
     else:
         logger.info("🛡️ ModModeAgent not registered (Convex not configured)")
@@ -685,10 +685,6 @@ async def lifespan(app: FastAPI):
     await http_client_pool.aclose()
     logger.info("✅ HTTP client pool closed")
 
-    if convex_http_client:
-        await convex_http_client.aclose()
-        logger.info("✅ Convex HTTP client pool closed")
-
     logger.info(f"👋 {_service_display_name()} shutdown complete. Goodbye!")
     logger.info("=" * 80)
 
@@ -796,9 +792,10 @@ async def handle_postback_event(event: PostbackEvent, line_bot_api: MessagingApi
 
     # Admin log viewer postbacks
     if data.startswith("logs_"):
-        from src.services.history_log_service import get_history_log, DatePreset
-        from linebot.v3.messaging import QuickReply, QuickReplyItem, FlexMessage, FlexContainer, ReplyMessageRequest
+        from linebot.v3.messaging import FlexContainer, FlexMessage, QuickReply, ReplyMessageRequest
+
         from src.config import settings
+        from src.services.history_log_service import DatePreset, get_history_log
 
         history_log = get_history_log()
         if not history_log:
@@ -827,7 +824,7 @@ async def handle_postback_event(event: PostbackEvent, line_bot_api: MessagingApi
         preset = DatePreset.LAST_7_DAYS
         page = 1
         level_filter = None
-        
+
         if data == "logs_cancel":
             preset = DatePreset.LAST_7_DAYS
         elif data.startswith("logs_preset="):
@@ -856,22 +853,20 @@ async def handle_postback_event(event: PostbackEvent, line_bot_api: MessagingApi
             preset = DatePreset.LAST_7_DAYS
 
         from src.services.history_log_service import LogLevel
-        
-        # Query logs with filter and pagination
+
         # Query logs with filter and pagination
         levels = [LogLevel(level_filter)] if level_filter else None
-        logs = await history_log.query_logs_preset(preset, levels=levels, limit=20, include_sensitive=False)
-        
+
         # For total count, get all without limit
         all_logs = await history_log.query_logs_preset(preset, levels=levels, limit=1000)
         total_count = len(all_logs)
-        
+
         # Calculate total pages
         total_pages = max(1, (total_count + 19) // 20)
-        
+
         # Adjust page
         page = max(1, min(page, total_pages))
-        
+
         # Get the specific page of logs
         start_idx = (page - 1) * 20
         end_idx = start_idx + 20
@@ -906,13 +901,232 @@ async def handle_postback_event(event: PostbackEvent, line_bot_api: MessagingApi
             )
         return
 
+    # ModMode dashboard postbacks (action=mod_*)
+    if data.startswith("action=mod_"):
+        await handle_modmode_postback(event, line_bot_api, data)
+        return
+
     # Add "View Logs" button to admin dashboard
     # This will be added in the dashboard builder
 
 
 # ============================================================================
-# LINE Webhook Endpoint
+# ModMode Postback Handlers
 # ============================================================================
+
+
+async def handle_modmode_postback(event: PostbackEvent, line_bot_api: MessagingApi, data: str) -> None:
+    """Handle ModMode dashboard postback actions."""
+
+    from src.agents.mod_mode.dashboard import ModDashboardBuilder
+
+    if not (mod_mode_service and ban_list_service and warning_service):
+        return
+
+    user_id = getattr(event.source, "user_id", None) if event.source else None
+    if not user_id:
+        return
+
+    # Check if user is admin
+    from src.services.privilege_service import privilege_service
+
+    if not privilege_service.is_admin(user_id):
+        logger.warning(f"⚠️ Non-admin {user_id} attempted ModMode action: {data}")
+        return
+
+    source = event.source
+    if not source or source.type not in ("group", "room"):
+        return
+
+    group_id = source.group_id if source.type == "group" else source.room_id
+    if not group_id:
+        return
+
+    dashboard = ModDashboardBuilder()
+
+    # Parse action and parameters
+    # data format: "action=mod_kick&user=U123" or "action=mod_dashboard"
+    action_parts = data.split("&")
+    action = action_parts[0].replace("action=", "")
+
+    # Extract user parameter if present
+    target_user_id = None
+    for part in action_parts[1:]:
+        if part.startswith("user="):
+            target_user_id = part.split("=", 1)[1]
+            break
+
+    try:
+        if action == "mod_dashboard":
+            info = await mod_mode_service.get_mod_mode_info(group_id)
+            flex_dict = dashboard.build_main_dashboard("Group", group_id, info or {})
+            await _send_flex_reply(event, line_bot_api, flex_dict, "Moderator Mode Dashboard")
+
+        elif action == "mod_banlist":
+            bans = await ban_list_service.get_ban_list(group_id)
+            flex_dict = dashboard.build_ban_list_dashboard(group_id, bans)
+            await _send_flex_reply(event, line_bot_api, flex_dict, "Ban List")
+
+        elif action == "mod_warnlist":
+            warnings = await warning_service.get_warnings(group_id)
+            flex_dict = dashboard.build_warn_list_dashboard(group_id, warnings)
+            await _send_flex_reply(event, line_bot_api, flex_dict, "Warning List")
+
+        elif action == "mod_settings":
+            info = await mod_mode_service.get_mod_mode_info(group_id)
+            flex_dict = dashboard.build_settings_dashboard(group_id, info or {})
+            await _send_flex_reply(event, line_bot_api, flex_dict, "Mod Mode Settings")
+
+        elif action == "mod_deactivate":
+            await mod_mode_service.deactivate_mod_mode(group_id)
+            from src.services.mod_audit_log import mod_audit_log
+
+            if mod_audit_log:
+                await mod_audit_log.log_mode_change(group_id, user_id, "all", False)
+            flex_dict = dashboard.build_main_dashboard("Group", group_id, {})
+            await _send_flex_reply(event, line_bot_api, flex_dict, "Moderator Mode Deactivated")
+
+        elif action == "mod_set_all":
+            await mod_mode_service.activate_mod_mode(group_id, user_id, "all")
+            from src.services.mod_audit_log import mod_audit_log
+
+            if mod_audit_log:
+                await mod_audit_log.log_mode_change(group_id, user_id, "all", True)
+            info = await mod_mode_service.get_mod_mode_info(group_id)
+            flex_dict = dashboard.build_main_dashboard("Group", group_id, info or {})
+            await _send_flex_reply(event, line_bot_api, flex_dict, "Mod Mode: ALL USERS")
+
+        elif action == "mod_set_special":
+            if not target_user_id:
+                # Show confirmation to select user
+                await _send_text_reply(
+                    event,
+                    line_bot_api,
+                    "Usage: Select a user first, then use /modmode special @user",
+                )
+                return
+            await mod_mode_service.set_special_user(group_id, target_user_id)
+            from src.services.mod_audit_log import mod_audit_log
+
+            if mod_audit_log:
+                await mod_audit_log.log_mode_change(group_id, user_id, "special", True, target_user_id)
+            info = await mod_mode_service.get_mod_mode_info(group_id)
+            flex_dict = dashboard.build_main_dashboard("Group", group_id, info or {})
+            await _send_flex_reply(event, line_bot_api, flex_dict, f"Mod Mode: SPECIAL (admin + @{target_user_id})")
+
+        elif action == "mod_kick":
+            if target_user_id:
+                # Show confirm dialog
+                flex_dict = dashboard.build_kick_confirm(group_id, target_user_id, target_user_id)
+                await _send_flex_reply(event, line_bot_api, flex_dict, f"Confirm Kick: {target_user_id}")
+            else:
+                await _send_text_reply(event, line_bot_api, "Select a user to kick")
+
+        elif action == "mod_kick_confirm":
+            if target_user_id and mod_mode_agent:
+                await mod_mode_agent._kick_user(group_id, target_user_id, line_bot_api, "Kicked by moderator")
+                await _send_text_reply(event, line_bot_api, f"✅ Kicked {target_user_id}")
+            else:
+                await _send_text_reply(event, line_bot_api, "User ID required")
+
+        elif action == "mod_warn":
+            if target_user_id:
+                flex_dict = dashboard.build_warn_confirm(group_id, target_user_id, target_user_id)
+                await _send_flex_reply(event, line_bot_api, flex_dict, f"Confirm Warn: {target_user_id}")
+            else:
+                await _send_text_reply(event, line_bot_api, "Select a user to warn")
+
+        elif action == "mod_warn_confirm":
+            if target_user_id:
+                from src.services.warning_service import warning_service as ws
+
+                result = await ws.warn_user(group_id, target_user_id, user_id, "Warned by moderator")
+                count = result["count"]
+                if result["should_ban"]:
+                    from src.services.mod_audit_log import mod_audit_log
+
+                    if mod_audit_log:
+                        await mod_audit_log.log_ban(group_id, target_user_id, user_id, f"Auto-ban after {count} warnings")
+                    if mod_mode_agent:
+                        await mod_mode_agent._kick_user(group_id, target_user_id, line_bot_api, f"Auto-ban ({count} warnings)")
+                    await _send_text_reply(event, line_bot_api, f"🔨 @{target_user_id} BANNED after {count} warnings")
+                else:
+                    from src.services.mod_audit_log import mod_audit_log
+
+                    if mod_audit_log:
+                        await mod_audit_log.log_warn(group_id, target_user_id, user_id, "Warned by moderator", count)
+                    await _send_text_reply(event, line_bot_api, f"⚠️ @{target_user_id} Warning {count}/3")
+            else:
+                await _send_text_reply(event, line_bot_api, "User ID required")
+
+        elif action == "mod_ban":
+            if target_user_id:
+                await ban_list_service.ban_user(group_id, target_user_id, user_id, "Banned by moderator")
+                from src.services.mod_audit_log import mod_audit_log
+
+                if mod_audit_log:
+                    await mod_audit_log.log_ban(group_id, target_user_id, user_id, "Banned by moderator")
+                if mod_mode_agent:
+                    await mod_mode_agent._kick_user(group_id, target_user_id, line_bot_api, "Banned by moderator")
+                await _send_text_reply(event, line_bot_api, f"🔨 Banned {target_user_id}")
+            else:
+                await _send_text_reply(event, line_bot_api, "Select a user to ban")
+
+        elif action == "mod_unban":
+            if target_user_id:
+                await ban_list_service.unban_user(group_id, target_user_id)
+                from src.services.mod_audit_log import mod_audit_log
+
+                if mod_audit_log:
+                    await mod_audit_log.log_unban(group_id, target_user_id, user_id)
+                await _send_text_reply(event, line_bot_api, f"✅ Unbanned {target_user_id}")
+            else:
+                await _send_text_reply(event, line_bot_api, "User ID required")
+
+        elif action == "mod_cancel":
+            info = await mod_mode_service.get_mod_mode_info(group_id)
+            flex_dict = dashboard.build_main_dashboard("Group", group_id, info or {})
+            await _send_flex_reply(event, line_bot_api, flex_dict, "Action Cancelled")
+
+    except Exception as e:
+        logger.error(f"❌ ModMode postback error: {e}", exc_info=True)
+
+
+async def _send_flex_reply(
+    event: PostbackEvent,
+    line_bot_api: MessagingApi,
+    flex_dict: dict,
+    alt_text: str,
+) -> None:
+    """Send a Flex message reply."""
+    from linebot.v3.messaging import FlexContainer, FlexMessage, ReplyMessageRequest
+
+    if not event.reply_token:
+        return
+    flex_message = FlexMessage(  # type: ignore[call-arg]
+        alt_text=alt_text,
+        contents=FlexContainer.from_dict(flex_dict),
+    )
+    await asyncio.to_thread(
+        line_bot_api.reply_message,
+        ReplyMessageRequest(replyToken=event.reply_token, messages=[flex_message], notificationDisabled=False),
+    )
+
+
+async def _send_text_reply(event: PostbackEvent, line_bot_api: MessagingApi, text: str) -> None:
+    """Send a simple text reply."""
+    from linebot.v3.messaging import ReplyMessageRequest, TextMessage
+
+    if not event.reply_token:
+        return
+    await asyncio.to_thread(
+        line_bot_api.reply_message,
+        ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[TextMessage(text=text, quick_reply=None, quote_token=None)],  # type: ignore[call-arg]
+            notificationDisabled=False,
+        ),
+    )
 
 
 @app.post("/webhook", tags=["LINE Bot"])

@@ -32,6 +32,9 @@ class MetricsSnapshot:
     peak_hour_requests: int
     cache_hits_total: int
     cache_misses_total: int
+    # Provider latency metrics
+    provider_latency_ms_total: dict[str, float] = field(default_factory=dict)
+    provider_latency_ms_count: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -56,9 +59,13 @@ class MetricsService:
     _admin_commands_total: int = 0
     _unique_users: set[str] = field(default_factory=set)
     _unique_groups: set[str] = field(default_factory=set)
-    _hourly_requests: dict = field(default_factory=lambda: defaultdict(int))
+    _hourly_requests: dict[int, int] = field(default_factory=lambda: defaultdict(int))
     _cache_hits_total: int = 0
     _cache_misses_total: int = 0
+
+    # Provider latency tracking
+    _provider_latency_ms_total: dict[str, float] = field(default_factory=lambda: defaultdict(float))
+    _provider_latency_ms_count: dict[str, int] = field(default_factory=lambda: defaultdict(int))
 
     def record_translation(self, provider: str, chat_id: str | None = None) -> None:
         self._translation_requests_total += 1
@@ -123,6 +130,18 @@ class MetricsService:
         """Record a cache miss."""
         self._cache_misses_total += 1
 
+    def record_provider_latency(self, provider: str, latency_ms: float) -> None:
+        """Record latency for a provider in milliseconds."""
+        self._provider_latency_ms_total[provider] += latency_ms
+        self._provider_latency_ms_count[provider] += 1
+
+    def get_provider_latency_avg(self, provider: str) -> float:
+        """Get average latency for a provider in milliseconds."""
+        count = self._provider_latency_ms_count.get(provider, 0)
+        if count == 0:
+            return 0.0
+        return self._provider_latency_ms_total[provider] / count
+
     def get_started_at(self) -> datetime:
         return self._started_at
 
@@ -134,7 +153,7 @@ class MetricsService:
         peak_hour = None
         peak_hour_requests = 0
         if self._hourly_requests:
-            peak_hour = max(self._hourly_requests, key=self._hourly_requests.get)
+            peak_hour = max(self._hourly_requests, key=lambda k: self._hourly_requests[k])
             peak_hour_requests = self._hourly_requests[peak_hour]
 
         return MetricsSnapshot(
@@ -156,6 +175,8 @@ class MetricsService:
             peak_hour_requests=peak_hour_requests,
             cache_hits_total=self._cache_hits_total,
             cache_misses_total=self._cache_misses_total,
+            provider_latency_ms_total=dict(self._provider_latency_ms_total),
+            provider_latency_ms_count=dict(self._provider_latency_ms_count),
         )
 
 

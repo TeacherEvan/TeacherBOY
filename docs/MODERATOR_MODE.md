@@ -1,9 +1,9 @@
 # Moderator Mode – Feature Documentation
 
 > **Status:** ✅ Implemented & Deployed  
-> **Version:** 1.0  
+> **Version:** 1.1  
 > **Priority:** 4 (intercepts before all other agents)  
-> **Last Updated:** 2026-06-12
+> **Last Updated:** 2026-06-13
 
 ---
 
@@ -102,6 +102,46 @@ Each button → quick-reply action or sub-menu. No typing required.
 
 ---
 
+## Postback Handlers (Dashboard Actions)
+
+The dashboard uses LINE **postback events** for button interactions. Each button sends an `action` parameter that is handled by `src/main.py`:
+
+| Action | Description | Sub-flow |
+|--------|-------------|----------|
+| `mod_dashboard` | Show main dashboard | — |
+| `mod_banlist` | Show banned users list | Paginated (10 per page) |
+| `mod_warnlist` | Show warned users + strike count | — |
+| `mod_settings` | Show mode settings | `all` / `special @user` |
+| `mod_deactivate` | Deactivate mod mode | Confirmation required |
+| `mod_set_all` | Switch to ALL mode | — |
+| `mod_set_special` | Switch to SPECIAL mode | Prompts for `@user` mention |
+| `mod_kick` | Show user list to kick | → `mod_kick_confirm` |
+| `mod_kick_confirm` | Execute kick | Removes from group |
+| `mod_warn` | Show user list to warn | → `mod_warn_confirm` |
+| `mod_warn_confirm` | Execute warning | 3-strike logic applies |
+| `mod_ban` | Show user list to ban | → ban + auto-kick |
+| `mod_unban` | Show user list to unban | Removes from ban list |
+| `mod_cancel` | Cancel pending destructive action | — |
+
+**Postback data format:**
+```
+action=<action>&group_id=<groupId>&target_user_id=<userId>&page=<pageNum>
+```
+
+> **Note:** All postback handlers are admin-only. Non-admin interactions are silently ignored.
+
+---
+
+## LINE Mention Parsing (Special Mode)
+
+When activating `/modmode special @user`, the bot extracts the target user's LINE ID from the **message mention entity** (not from text regex):
+
+- Uses `event.message.mention.mentionees[0].user_id` — accurate even if display name changes
+- **Fallback:** If mention entity unavailable, falls back to `@(\w+)` regex on text
+- This ensures `@user` mentions work reliably with LINE's native mention UX
+
+---
+
 ## Warning System (3-Strike)
 
 ### Automatic Warnings
@@ -110,6 +150,11 @@ Each button → quick-reply action or sub-menu. No typing required.
 
 ### Manual Warnings
 - `/modmode warn @user [reason]`
+
+### Admin Warning Reset
+- **Convex mutation:** `resetWarnings(groupId, userId)` — resets count to 0, clears read status, adds audit entry
+- Called via admin dashboard or internal unban flow
+- Does **not** remove ban list entry (use `/modmode unban` separately)
 
 ### Strike Progression
 | Strike | Action |
@@ -297,6 +342,9 @@ userWarnings: defineTable({
 })
   .index("by_group_user", ["groupId", "userId"])
   .index("by_group", ["groupId"])
+
+// Mutation: resetWarnings(groupId, userId) — admin unban path
+// Resets count to 0, clears read status, adds audit entry
 ```
 
 ---

@@ -146,7 +146,7 @@ class DebriefExtractionService:
 
         vision_model = model or self.default_vision_model
 
-        messages = [
+        messages: list[dict[str, Any]] = [
             {"role": "system", "content": DEBRIEF_EXTRACTION_PROMPT},
             {"role": "user", "content": [{"type": "image_url", "image_url": {"url": image_url_or_base64}}]},
         ]

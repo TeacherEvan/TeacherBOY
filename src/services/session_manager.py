@@ -90,7 +90,7 @@ class SessionManager:
             return 0
         return int(remaining.total_seconds() / 3600) + 1  # Round up
 
-    def sleep_chat(self, chat_id: str, hours: int = None):
+    def sleep_chat(self, chat_id: str, hours: int | None = None):
         """
         Put a chat to sleep for specified hours.
 

@@ -124,11 +124,19 @@ class ModModeAgent(BaseAgent):
 
         if "special" in text_lower:
             mode = "special"
-            # Extract @mention
-            mention_match = re.search(r"@(\w+)", event.message.text)
-            if mention_match:
-                special_user_id = mention_match.group(1)  # Simplified - would need LINE mention parsing
-            else:
+            # Extract @mention from LINE message mention entity
+            special_user_id = None
+            if hasattr(event.message, "mention") and event.message.mention:
+                mentionees = getattr(event.message.mention, "mentionees", [])
+                if mentionees:
+                    # Use the first mentioned user
+                    special_user_id = mentionees[0].user_id
+            if not special_user_id:
+                # Fallback: try regex from text (for backwards compatibility)
+                mention_match = re.search(r"@(\w+)", event.message.text)
+                if mention_match:
+                    special_user_id = mention_match.group(1)
+            if not special_user_id:
                 await self._reply(event, "❌ Usage: 'activate mod mode special @user'", line_bot_api)
                 return True
 

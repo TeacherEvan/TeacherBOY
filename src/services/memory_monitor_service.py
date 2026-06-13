@@ -50,7 +50,7 @@ class MemoryMonitorService:
 
         for path in cgroup_paths:
             try:
-                with open(path, "r") as f:
+                with open(path) as f:
                     content = f.read().strip()
                     if content and content != "max":
                         limit = int(content)
@@ -85,7 +85,7 @@ class MemoryMonitorService:
         except ImportError:
             # Fallback: read from /proc/self/status
             try:
-                with open("/proc/self/status", "r") as f:
+                with open("/proc/self/status") as f:
                     for line in f:
                         if line.startswith("VmRSS:"):
                             # VmRSS is in kB
@@ -181,8 +181,10 @@ async def check_and_auto_flush() -> bool:
         logger.warning(f"🚨 Memory pressure {monitor.get_memory_pressure().value} - triggering auto-flush")
 
         # Import here to avoid circular dependency
-        from src.services.conversation_memory_service import get_conversation_memory, FlushMode, FlushParams
-        from src.services.document_memory_service import get_document_memory, FlushMode as DocFlushMode, FlushParams as DocFlushParams
+        from src.services.conversation_memory_service import FlushMode, FlushParams, get_conversation_memory
+        from src.services.document_memory_service import FlushMode as DocFlushMode
+        from src.services.document_memory_service import FlushParams as DocFlushParams
+        from src.services.document_memory_service import get_document_memory
 
         conv_memory = get_conversation_memory()
         doc_memory = get_document_memory()

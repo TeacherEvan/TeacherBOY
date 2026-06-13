@@ -29,8 +29,12 @@ OPENROUTER_API_KEY=your_openrouter_api_key  # Optional fallback
 ADMIN_USER_IDS=U1234567890,U0987654321  # Comma-separated LINE user IDs
 MODERATOR_USER_IDS=U1234567890  # Optional: Moderators get direct news access
 
-# Optional: named outbound recipients (admin push)
+# Named outbound recipients (admin push)
 USER_BOSS=U1234567890abcdef
+
+# Harmful content detection (Moderator Mode)
+HARMFUL_CONTENT_KEYWORDS=spam,scam,phishing  # Comma-separated custom keywords
+HARMFUL_CONTENT_KEYWORDS_FILE=./config/harmful_keywords.json  # Optional JSON file
 ```
 
 ## 🤖 Agent Priority Order
@@ -208,7 +212,8 @@ src/
 ├── services/
 │   ├── openrouter_service.py       # OpenRouter client
 │   ├── brave_search_service.py     # Brave Search client
-│   ├── ai_translation_service.py   # Shared AI translation orchestration
+│   ├── ai_translation_service.py   # Shared AI translation orchestration (+ latency metrics)
+│   ├── metrics_service.py          # In-memory metrics + provider latency tracking
 │   ├── news_data_service.py        # News/weather data
 │   ├── special_news_service.py     # Special news RSS
 │   ├── calendar_service.py         # Calendar storage

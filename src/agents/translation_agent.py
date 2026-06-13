@@ -314,40 +314,18 @@ class TranslationAgent(BaseAgent):
         target_lang = "en" if source_lang == "th" else "th"
         normalized = text.strip()
 
-        # Always translate Thai, even short messages
-        if source_lang == "th":
-            result = await self.ai_translation_service.translate(
-                normalized,
-                source_lang=source_lang,
-                target_lang=target_lang,
-            )
-            if result:
-                metrics_service.record_translation(result.provider, chat_id)
-                return result.text
-            metrics_service.record_failed_translation()
-            provider = self.ai_translation_service.nous if self.ai_translation_service.nous.is_configured() else None
-            if provider:
-                status, err, model = provider.get_last_error()
-                last = f"(nous: status={status}, model={model or '?'}, error={err or 'empty'})"
-            else:
-                last = "no configured provider"
-            logger.error("Translation failed: %s", last)
-            return f"[Translation failed] {text}"
-
-        """Translate using the shared AI translation service."""
-        source_lang = "th" if self.contains_thai(text) else "en"
-        target_lang = "en" if source_lang == "th" else "th"
-        # Only skip short English passthroughs; always translate Thai
-        if source_lang == "en" and len(text.strip()) < 30:
+        # Skip short English passthroughs; always translate Thai
+        if source_lang == "en" and len(normalized) < 30:
             return text
 
         result = await self.ai_translation_service.translate(
-            text,
+            normalized,
             source_lang=source_lang,
             target_lang=target_lang,
         )
 
         if result:
+            metrics_service.record_translation(result.provider, chat_id)
             return result.text
 
         metrics_service.record_failed_translation()
@@ -373,7 +351,7 @@ class TranslationAgent(BaseAgent):
 
         last = "; ".join(provider_errors) if provider_errors else "no response/not used"
         logger.error("Translation failed: %s", last)
-        return "Translation failed"
+        return f"[Translation failed] {text}"
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         """Extract chat ID from event."""

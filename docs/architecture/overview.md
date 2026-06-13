@@ -30,14 +30,14 @@ TeacherBOY is a FastAPI webhook app for LINE.
 
 - **ModModeService** (`src/services/mod_mode_service.py`): Convex CRUD for modModeState; activation/deactivation; mode queries
 - **BanListService** (`src/services/ban_list_service.py`): Convex CRUD for banList; auto-kick on join; unban
-- **WarningService** (`src/services/warning_service.py`): Convex CRUD for userWarnings; 3-strike logic; read tracking
-- **HarmfulContentDetector** (`src/services/harmful_content_detector.py`): Keyword + optional LLM detection for harmful content
+- **WarningService** (`src/services/warning_service.py`): Convex CRUD for userWarnings; 3-strike logic; read tracking; **`reset_warnings`** for admin unban
+- **HarmfulContentDetector** (`src/services/harmful_content_detector.py`): Configurable keyword + optional LLM detection; supports JSON file and env var
 - **ModAuditLog** (`src/services/mod_audit_log.py`): Append-only JSONL audit trail to Hugging Face Hub
-- Shared `httpx.AsyncClient` is created once and injected into translation services.
+- **MetricsService** (`src/services/metrics_service.py`): In-memory counters + **provider latency tracking** (avg ms per provider)
+- Shared `httpx.AsyncClient` pool created once in lifespan and injected into all services (translation, Convex, etc.)
 - Translation providers:
-  - Shared AI translation service
-  - GitHub Models (primary when configured)
-  - OpenRouter (fallback)
+  - Shared AI translation service (GitHub Models primary, OpenRouter fallback)
+  - **Latency metrics recorded per provider** via `metrics_service.record_provider_latency()`
 
 - Session/rate-limit state:
   - `src/services/session_manager.py`

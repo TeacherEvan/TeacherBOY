@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 
 import httpx
@@ -10,13 +11,9 @@ from src.config import settings
 from src.services.gemini_service import gemini_service
 from src.services.github_models_service import github_models_service
 from src.services.hermes_service import hermes_service
+from src.services.metrics_service import metrics_service
 from src.services.nous_service import nous_inference_service
 from src.services.openrouter_service import openrouter_service
-
-try:
-    from src.services.google_translation import google_translation_service
-except Exception:  # pragma: no cover
-    google_translation_service = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -318,8 +315,6 @@ class AITranslationService:
         google_key = getattr(settings, "google_translate_api_key", None)
         if google_key:
             providers.append(_LazyGoogleTranslationProvider(api_key=google_key))
-        if google_translation_service is not None:
-            providers.append(_LazyGoogleTranslateProviderV2(service=google_translation_service))
         return providers
 
     def _openrouter_providers(self):
@@ -420,6 +415,7 @@ class AITranslationService:
             )
 
             for provider_name, provider_obj, fn, kwargs in providers:
+                start_time = time.perf_counter()
                 try:
                     if asyncio.iscoroutinefunction(fn):
                         result = await fn(messages, **kwargs)
@@ -429,6 +425,9 @@ class AITranslationService:
                             result = await result
                 except TypeError:
                     result = await fn(messages, **kwargs)
+                finally:
+                    elapsed_ms = (time.perf_counter() - start_time) * 1000
+                    metrics_service.record_provider_latency(provider_name, elapsed_ms)
 
                 if result:
                     result_text = result.strip()

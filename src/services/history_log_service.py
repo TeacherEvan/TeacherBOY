@@ -452,7 +452,7 @@ class HistoryLogService:
         self._commit_scheduler: Any | None = None
 
         # Statistics
-        self._stats = {
+        self._stats: dict[str, object] = {
             "total_logged": 0,
             "errors_logged": 0,
             "warnings_logged": 0,
@@ -586,11 +586,11 @@ class HistoryLogService:
             self._logs.popitem(last=False)
 
         # Update stats
-        self._stats["total_logged"] += 1
+        self._stats["total_logged"] += 1  # type: ignore[operator]
         if level == LogLevel.ERROR:
-            self._stats["errors_logged"] += 1
+            self._stats["errors_logged"] += 1  # type: ignore[operator]
         elif level == LogLevel.WARNING:
-            self._stats["warnings_logged"] += 1
+            self._stats["warnings_logged"] += 1  # type: ignore[operator]
 
         # Persist to file
         if self.enable_file_storage:
@@ -993,7 +993,7 @@ class HistoryLogService:
         }
 
         # Build body with logs
-        body_contents = []
+        body_contents: list[dict[str, Any]] = []
 
         # Filter row
         body_contents.append({
@@ -1116,7 +1116,7 @@ class HistoryLogService:
             List of QuickReplyItem objects for date presets
         """
         try:
-            from linebot.v3.messaging import QuickReplyItem, PostbackAction
+            from linebot.v3.messaging import PostbackAction, QuickReplyItem
         except ImportError:
             return []
 

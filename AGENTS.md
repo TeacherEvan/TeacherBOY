@@ -46,17 +46,19 @@ src/
 ├── services/        # Business logic services
 │   ├── mod_mode_service.py       # ModModeState CRUD (Convex)
 │   ├── ban_list_service.py       # BanList CRUD + auto-kick (Convex)
-│   ├── warning_service.py        # 3-strike warnings + read tracking (Convex)
-│   ├── harmful_content_detector.py # Keyword + LLM harmful detection
+│   ├── warning_service.py        # 3-strike warnings + read tracking + reset_warnings (Convex)
+│   ├── harmful_content_detector.py # Configurable keyword + LLM detection (JSON/env)
 │   ├── mod_audit_log.py          # HF Hub append-only audit logs
+│   ├── metrics_service.py        # In-memory metrics + provider latency
+│   ├── ai_translation_service.py # Shared AI translation + latency metrics
 │   ├── news/        # News data service
 │   └── profiler/    # Profiler framework loader
 └── utils/           # Utilities (tracing, text preprocessing, LLM fallback)
 tests/               # pytest test suite (70+ test files)
-convex/              # Convex backend (TypeScript) for debrief sessions
+convex/              # Convex backend (TypeScript) for mod mode
     ├── modModeState.ts    # Moderator mode state per group
     ├── banList.ts         # Ban list per group
-    └── userWarnings.ts    # 3-strike warnings per group
+    └── userWarnings.ts    # 3-strike warnings per group (resetWarnings mutation)
 ```
 
 ## Testing
@@ -90,6 +92,8 @@ docker-compose up
 - `debrief_extraction_service` - structured lesson debriefs
 - `mod_mode_service` - Moderator mode state (Convex)
 - `ban_list_service` - Ban list + auto-kick (Convex)
-- `warning_service` - 3-strike warnings (Convex)
-- `harmful_content_detector` - Keyword + LLM detection
+- `warning_service` - 3-strike warnings + reset_warnings (Convex)
+- `harmful_content_detector` - Configurable keyword + LLM detection
 - `mod_audit_log` - HF Hub audit trail
+- `metrics_service` - In-memory metrics + provider latency tracking
+- `ai_translation_service` - Shared AI translation with latency metrics

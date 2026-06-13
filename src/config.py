@@ -117,6 +117,19 @@ class Settings(BaseSettings):
     )
 
     # ============================================================================
+    # Harmful Content Detector Configuration
+    # ============================================================================
+    harmful_content_keywords_file: str | None = Field(
+        default=None,
+        description="Path to JSON file containing custom harmful content keywords (optional)",
+    )
+    harmful_content_keywords_env: str | None = Field(
+        default=None,
+        description="Comma-separated list of harmful keywords via env var (HARMFUL_CONTENT_KEYWORDS)",
+        validation_alias=AliasChoices("HARMFUL_CONTENT_KEYWORDS"),
+    )
+
+    # ============================================================================
     # News Agent Configuration
     # ============================================================================
     news_api_key: str | None = Field(

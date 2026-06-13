@@ -18,6 +18,7 @@ import json
 import logging
 import uuid
 from collections import OrderedDict
+from collections.abc import Awaitable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
@@ -36,7 +37,7 @@ SYNC_INTERVAL_MINUTES = 5  # How often to sync to HF Hub
 CALENDAR_FILENAME = "calendar_events.json"
 
 
-def _schedule_audit_log(coro: "asyncio.Future[Any] | asyncio.coroutines.CoroWrapper | Any") -> None:
+def _schedule_audit_log(coro: Any) -> None:
     """Best-effort scheduling of audit logging without breaking sync call sites."""
     try:
         loop = asyncio.get_running_loop()

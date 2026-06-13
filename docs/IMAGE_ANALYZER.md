@@ -205,7 +205,7 @@ Would you like me to translate any specific dish descriptions?
 
 - [Psychological Profiler](PROFILER_USAGE.md) - For behavioral analysis of photos
 - [Calendar & Reminders](CALENDAR_REMINDERS.md) - For adding detected dates to calendar
-- [Quick Reference](../reference/quick-reference.md) - Command summary
+- [Quick Reference](reference/quick-reference.md) - Command summary
 
 ---
 

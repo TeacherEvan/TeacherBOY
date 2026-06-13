@@ -128,7 +128,7 @@ class ModDashboardBuilder:
                     {
                         "type": "box",
                         "layout": "horizontal",
-                        "contents": [
+                        "contents": [  # type: ignore[dict-item]
                             {"type": "text", "text": ban.get("userId", "?"), "size": "sm", "flex": 2},
                             {
                                 "type": "text",
@@ -265,3 +265,39 @@ class ModDashboardBuilder:
                 ],
             },
         }
+
+    def build_warn_list_dashboard(self, group_id: str, warnings: list[dict]) -> dict[str, Any]:
+        """Build warning list view."""
+        contents = [
+            {
+                "type": "text",
+                "text": "⚠️ WARNING LIST",
+                "weight": "bold",
+                "size": "lg",
+                "color": self.PRIMARY_COLOR,
+            },
+            {"type": "separator", "margin": "md"},
+        ]
+        if not warnings:
+            contents.append({"type": "text", "text": "No warnings.", "color": self.SECONDARY_COLOR})
+        else:
+            for warn in warnings[:20]:  # Limit for Flex size
+                contents.append(
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [  # type: ignore[dict-item]
+                            {"type": "text", "text": warn.get("userId", "?"), "size": "sm", "flex": 2},
+                            {
+                                "type": "text",
+                                "text": f"Count: {warn.get('count', 0)}/3 | {warn.get('lastWarningReason', 'No reason')}",
+                                "size": "sm",
+                                "color": self.SECONDARY_COLOR,
+                                "flex": 3,
+                                "wrap": True,
+                            },
+                        ],
+                        "margin": "sm",
+                    }
+                )
+        return {"type": "bubble", "size": "giga", "body": {"type": "box", "layout": "vertical", "contents": contents}}

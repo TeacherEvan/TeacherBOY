@@ -158,7 +158,7 @@ SearchAgent.handle()
 
 ## Related Documentation
 
-- [Quick Reference](../reference/quick-reference.md) - Command summary
+- [Quick Reference](reference/quick-reference.md) - Command summary
 - [Brave Search API](https://brave.com/search/api/) - API documentation
 - [Admin Commands](ADMIN_COMMANDS.md) - Admin search access
 
