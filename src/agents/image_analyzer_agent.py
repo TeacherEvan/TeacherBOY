@@ -137,7 +137,6 @@ class ImageAnalyzerAgent(BaseAgent):
         "look at this",
         "debrief",
         "debrief this",
-        "m",
     ]
 
     def __init__(self, http_client=None):
@@ -309,6 +308,12 @@ class ImageAnalyzerAgent(BaseAgent):
             return True
 
         command_text = self._strip_identity_prefix(text)
+
+        # "m" is an exact-match shorthand for debrief mode — must NOT use startswith
+        # because that would match ANY text beginning with 'm' (e.g. "Main room...")
+        if command_text == "m" or text_lower.strip() == "m":
+            return True
+
         if command_text != text_lower:
             return any(command_text.startswith(trigger) for trigger in self.PREFIXED_TRIGGERS + self.GENERIC_TRIGGERS)
 

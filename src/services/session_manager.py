@@ -205,9 +205,7 @@ class SessionManager:
                 return
 
         cutoff_time = now - timedelta(seconds=self._dedup_window_seconds)
-        valid_entries = [
-            (hash_val, ts) for hash_val, ts in self._message_history[chat_id] if ts > cutoff_time
-        ]
+        valid_entries = [(hash_val, ts) for hash_val, ts in self._message_history[chat_id] if ts > cutoff_time]
 
         self._message_history[chat_id] = valid_entries
         self._message_hashes[chat_id] = {hash_val for hash_val, _ in valid_entries}
@@ -253,7 +251,7 @@ class SessionManager:
         # Trim history to max size (keep most recent)
         if len(self._message_history[chat_id]) > self._max_history_size:
             # Remove oldest entries and update hash set
-            removed = self._message_history[chat_id][:-self._max_history_size]
+            removed = self._message_history[chat_id][: -self._max_history_size]
             self._message_history[chat_id] = self._message_history[chat_id][-self._max_history_size :]
             for hash_val, _ in removed:
                 self._message_hashes[chat_id].discard(hash_val)

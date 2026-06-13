@@ -280,10 +280,7 @@ async def lifespan(app: FastAPI):
     # PHASE 2a5: Image Analysis HF Persistence Initialization
     # ========================================================================
     if settings.images_hf_repo_id and settings.hf_memory_token:
-        image_analyzer_session_manager.configure_hf_storage(
-            settings.hf_memory_token,
-            settings.images_hf_repo_id
-        )
+        image_analyzer_session_manager.configure_hf_storage(settings.hf_memory_token, settings.images_hf_repo_id)
         logger.info(f"🖼️ Image analysis HF persistence enabled: {settings.images_hf_repo_id}")
     else:
         logger.info("🖼️ Image analysis HF persistence disabled")
@@ -493,14 +490,22 @@ async def lifespan(app: FastAPI):
     # Register ModModeAgent (Priority: 4 - Intercepts messages in mod-enabled groups)
     # Must be registered before AdminAgent to intercept mod commands first
     global mod_mode_agent
-    if mod_mode_service and ban_list_service and warning_service:
+    from src.services.mod_mode_service import get_mod_mode_service
+    from src.services.ban_list_service import get_ban_list_service
+    from src.services.warning_service import get_warning_service
+
+    mod_mode_svc = get_mod_mode_service()
+    ban_list_svc = get_ban_list_service()
+    warning_svc = get_warning_service()
+
+    if mod_mode_svc and ban_list_svc and warning_svc:
         from src.agents.mod_mode_agent import ModModeAgent
 
         mod_dashboard = ModDashboardBuilder()
         mod_mode_agent = ModModeAgent(
-            mod_mode_service=mod_mode_service,
-            ban_list_service=ban_list_service,
-            warning_service=warning_service,
+            mod_mode_service=mod_mode_svc,
+            ban_list_service=ban_list_svc,
+            warning_service=warning_svc,
             harmful_detector=harmful_content_detector,
             audit_log=mod_audit_log,
             dashboard_builder=mod_dashboard,
@@ -531,14 +536,14 @@ async def lifespan(app: FastAPI):
         logger.info("📄 Document Memory Agent not registered (disabled)")
 
     # Register Hannibal Profile Agent (Priority: 6 - Psychological profiling from message history)
-    if settings.is_github_models_configured():
+    if settings.is_any_vision_provider_configured():
         from src.agents.hannibal_agent import HannibalProfileAgent
 
         hannibal_agent = HannibalProfileAgent(http_client=http_client_pool)
         agent_router.register_agent(hannibal_agent)
         logger.info("🎭 Hannibal Profile Agent registered (message history analysis)")
     else:
-        logger.info("🎭 Hannibal Profile Agent not registered (GitHub Models not configured)")
+        logger.info("🎭 Hannibal Profile Agent not registered (no vision provider configured)")
 
     # Register Profiler Agent (Priority: 7 - Handles image messages for psychological profiling)
     if settings.is_profiler_configured():
@@ -546,15 +551,15 @@ async def lifespan(app: FastAPI):
         agent_router.register_agent(profiler_agent)
         logger.info(f"🔬 Profiler Agent registered (Model: {settings.profiler_model})")
     else:
-        logger.info("🔬 Profiler Agent not registered (GitHub Models not configured)")
+        logger.info("🔬 Profiler Agent not registered (profiler disabled)")
 
     # Register Image Analyzer Agent (Priority: 7 - Handles image Q&A)
-    if settings.is_github_models_configured():
+    if settings.is_any_vision_provider_configured():
         image_analyzer_agent = ImageAnalyzerAgent(http_client=http_client_pool)
         agent_router.register_agent(image_analyzer_agent)
         logger.info("🖼️ Image Analyzer Agent registered (general image Q&A)")
     else:
-        logger.info("🖼️ Image Analyzer Agent not registered (GitHub Models not configured)")
+        logger.info("🖼️ Image Analyzer Agent not registered (no vision provider configured)")
 
     # Register Search Agent (Priority: 8)
     search_agent = SearchAgent()
@@ -781,7 +786,9 @@ async def health_check() -> dict[str, Any]:
             "conversation_memory": memory_svc.get_stats() if memory_svc else {"enabled": False},
             "document_memory": document_svc.get_stats() if document_svc else {"enabled": False},
             "history_log": history_svc.get_stats() if history_svc else {"enabled": False},
-            "calendar": calendar_service.get_stats() if hasattr(calendar_service, "get_stats") and settings.is_calendar_configured() else {"enabled": settings.is_calendar_configured()},
+            "calendar": calendar_service.get_stats()
+            if hasattr(calendar_service, "get_stats") and settings.is_calendar_configured()
+            else {"enabled": settings.is_calendar_configured()},
             "llm_providers": {
                 "openrouter": openrouter_service.is_configured(),
                 "github_models": github_models_service.is_configured(),
@@ -956,8 +963,15 @@ async def handle_modmode_postback(event: PostbackEvent, line_bot_api: MessagingA
     """Handle ModMode dashboard postback actions."""
 
     from src.agents.mod_mode.dashboard import ModDashboardBuilder
+    from src.services.mod_mode_service import get_mod_mode_service
+    from src.services.ban_list_service import get_ban_list_service
+    from src.services.warning_service import get_warning_service
 
-    if not (mod_mode_service and ban_list_service and warning_service):
+    mod_mode_svc = get_mod_mode_service()
+    ban_list_svc = get_ban_list_service()
+    warning_svc = get_warning_service()
+
+    if not (mod_mode_svc and ban_list_svc and warning_svc):
         return
 
     user_id = getattr(event.source, "user_id", None) if event.source else None
@@ -995,27 +1009,27 @@ async def handle_modmode_postback(event: PostbackEvent, line_bot_api: MessagingA
 
     try:
         if action == "mod_dashboard":
-            info = await mod_mode_service.get_mod_mode_info(group_id)
+            info = await mod_mode_svc.get_mod_mode_info(group_id)
             flex_dict = dashboard.build_main_dashboard("Group", group_id, info or {})
             await _send_flex_reply(event, line_bot_api, flex_dict, "Moderator Mode Dashboard")
 
         elif action == "mod_banlist":
-            bans = await ban_list_service.get_ban_list(group_id)
+            bans = await ban_list_svc.get_ban_list(group_id)
             flex_dict = dashboard.build_ban_list_dashboard(group_id, bans)
             await _send_flex_reply(event, line_bot_api, flex_dict, "Ban List")
 
         elif action == "mod_warnlist":
-            warnings = await warning_service.get_warnings(group_id)
+            warnings = await warning_svc.get_warnings(group_id)
             flex_dict = dashboard.build_warn_list_dashboard(group_id, warnings)
             await _send_flex_reply(event, line_bot_api, flex_dict, "Warning List")
 
         elif action == "mod_settings":
-            info = await mod_mode_service.get_mod_mode_info(group_id)
+            info = await mod_mode_svc.get_mod_mode_info(group_id)
             flex_dict = dashboard.build_settings_dashboard(group_id, info or {})
             await _send_flex_reply(event, line_bot_api, flex_dict, "Mod Mode Settings")
 
         elif action == "mod_deactivate":
-            await mod_mode_service.deactivate_mod_mode(group_id)
+            await mod_mode_svc.deactivate_mod_mode(group_id)
             from src.services.mod_audit_log import mod_audit_log
 
             if mod_audit_log:
@@ -1024,12 +1038,12 @@ async def handle_modmode_postback(event: PostbackEvent, line_bot_api: MessagingA
             await _send_flex_reply(event, line_bot_api, flex_dict, "Moderator Mode Deactivated")
 
         elif action == "mod_set_all":
-            await mod_mode_service.activate_mod_mode(group_id, user_id, "all")
+            await mod_mode_svc.activate_mod_mode(group_id, user_id, "all")
             from src.services.mod_audit_log import mod_audit_log
 
             if mod_audit_log:
                 await mod_audit_log.log_mode_change(group_id, user_id, "all", True)
-            info = await mod_mode_service.get_mod_mode_info(group_id)
+            info = await mod_mode_svc.get_mod_mode_info(group_id)
             flex_dict = dashboard.build_main_dashboard("Group", group_id, info or {})
             await _send_flex_reply(event, line_bot_api, flex_dict, "Mod Mode: ALL USERS")
 
@@ -1042,12 +1056,12 @@ async def handle_modmode_postback(event: PostbackEvent, line_bot_api: MessagingA
                     "Usage: Select a user first, then use /modmode special @user",
                 )
                 return
-            await mod_mode_service.set_special_user(group_id, target_user_id)
+            await mod_mode_svc.set_special_user(group_id, target_user_id)
             from src.services.mod_audit_log import mod_audit_log
 
             if mod_audit_log:
                 await mod_audit_log.log_mode_change(group_id, user_id, "special", True, target_user_id)
-            info = await mod_mode_service.get_mod_mode_info(group_id)
+            info = await mod_mode_svc.get_mod_mode_info(group_id)
             flex_dict = dashboard.build_main_dashboard("Group", group_id, info or {})
             await _send_flex_reply(event, line_bot_api, flex_dict, f"Mod Mode: SPECIAL (admin + @{target_user_id})")
 
@@ -1075,9 +1089,7 @@ async def handle_modmode_postback(event: PostbackEvent, line_bot_api: MessagingA
 
         elif action == "mod_warn_confirm":
             if target_user_id:
-                from src.services.warning_service import warning_service as ws
-
-                result = await ws.warn_user(group_id, target_user_id, user_id, "Warned by moderator")
+                result = await warning_svc.warn_user(group_id, target_user_id, user_id, "Warned by moderator")
                 count = result["count"]
                 if result["should_ban"]:
                     from src.services.mod_audit_log import mod_audit_log
@@ -1098,7 +1110,7 @@ async def handle_modmode_postback(event: PostbackEvent, line_bot_api: MessagingA
 
         elif action == "mod_ban":
             if target_user_id:
-                await ban_list_service.ban_user(group_id, target_user_id, user_id, "Banned by moderator")
+                await ban_list_svc.ban_user(group_id, target_user_id, user_id, "Banned by moderator")
                 from src.services.mod_audit_log import mod_audit_log
 
                 if mod_audit_log:
@@ -1111,7 +1123,7 @@ async def handle_modmode_postback(event: PostbackEvent, line_bot_api: MessagingA
 
         elif action == "mod_unban":
             if target_user_id:
-                await ban_list_service.unban_user(group_id, target_user_id)
+                await ban_list_svc.unban_user(group_id, target_user_id)
                 from src.services.mod_audit_log import mod_audit_log
 
                 if mod_audit_log:
@@ -1121,7 +1133,7 @@ async def handle_modmode_postback(event: PostbackEvent, line_bot_api: MessagingA
                 await _send_text_reply(event, line_bot_api, "User ID required")
 
         elif action == "mod_cancel":
-            info = await mod_mode_service.get_mod_mode_info(group_id)
+            info = await mod_mode_svc.get_mod_mode_info(group_id)
             flex_dict = dashboard.build_main_dashboard("Group", group_id, info or {})
             await _send_flex_reply(event, line_bot_api, flex_dict, "Action Cancelled")
 
@@ -1255,11 +1267,11 @@ async def webhook(request: Request) -> JSONResponse:
 
                                 if chat_id and user_id:
                                     message_buffer_service.store_message(
-                                    chat_id=chat_id,
-                                    text=event.message.text,
-                                    user_id=user_id,
-                                    message_id=event.message.id if hasattr(event.message, "id") else None,
-                                )
+                                        chat_id=chat_id,
+                                        text=event.message.text,
+                                        user_id=user_id,
+                                        message_id=event.message.id if hasattr(event.message, "id") else None,
+                                    )
 
                             # CRITICAL: Check if message is from bot itself (prevent infinite loop)
                             # Skip agent routing for bot's own messages to prevent responding to itself

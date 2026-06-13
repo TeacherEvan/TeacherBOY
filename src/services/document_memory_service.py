@@ -347,11 +347,13 @@ class DocumentMemoryService(HFStorageMixin):
             if len(snippet) > 300:
                 snippet = snippet[:300] + "..."
 
-            results.append({
-                "file_name": doc.get("file_name", "unknown"),
-                "id": doc_id,
-                "snippet": snippet,
-            })
+            results.append(
+                {
+                    "file_name": doc.get("file_name", "unknown"),
+                    "id": doc_id,
+                    "snippet": snippet,
+                }
+            )
 
         return results
 
@@ -395,10 +397,12 @@ class DocumentMemoryService(HFStorageMixin):
         for doc_id, doc in docs.items():
             file_name = doc.get("file_name", "").lower()
             if query_lower in file_name:
-                results.append({
-                    "id": doc_id,
-                    "file_name": doc.get("file_name", "unknown"),
-                })
+                results.append(
+                    {
+                        "id": doc_id,
+                        "file_name": doc.get("file_name", "unknown"),
+                    }
+                )
 
         return results
 

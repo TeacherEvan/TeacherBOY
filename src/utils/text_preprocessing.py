@@ -23,8 +23,7 @@ _PRONOUN_VERB_INCOMPLETE_PATTERN = re.compile(
     r"(tried|wanted|needed|thought|hoped|planned|attempted|started|decided|forgot|remembered)$"
 )
 _TRANSITIVE_VERB_INCOMPLETE_PATTERN = re.compile(
-    r"\b(tried|wanted|needed|thought|hoped|planned|attempted|forgot|remembered|"
-    r"considered|expected|intended|wished|meant)$"
+    r"\b(tried|wanted|needed|thought|hoped|planned|attempted|forgot|remembered|" r"considered|expected|intended|wished|meant)$"
 )
 
 

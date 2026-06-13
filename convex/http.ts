@@ -287,6 +287,21 @@ const getDueRemindersRef = makeFunctionReference<"query">("calendar:getDueRemind
 const getSettingRef = makeFunctionReference<"query">("settings:getSetting");
 const setSettingRef = makeFunctionReference<"mutation">("settings:setSetting");
 
+// Mod Mode function references
+const modModeUpsertRef = makeFunctionReference<"mutation">("modModeState:upsert");
+const modModeGetByGroupRef = makeFunctionReference<"query">("modModeState:getByGroup");
+const modModeDeactivateRef = makeFunctionReference<"mutation">("modModeState:deactivate");
+
+const banListUpsertRef = makeFunctionReference<"mutation">("banList:upsert");
+const banListGetByGroupUserRef = makeFunctionReference<"query">("banList:getByGroupUser");
+const banListGetByGroupRef = makeFunctionReference<"query">("banList:getByGroup");
+const banListRemoveRef = makeFunctionReference<"mutation">("banList:remove");
+
+const userWarningsUpsertRef = makeFunctionReference<"mutation">("userWarnings:upsert");
+const userWarningsGetByGroupUserRef = makeFunctionReference<"query">("userWarnings:getByGroupUser");
+const userWarningsGetByGroupRef = makeFunctionReference<"query">("userWarnings:getByGroup");
+const userWarningsResetWarningsRef = makeFunctionReference<"mutation">("userWarnings:resetWarnings");
+
 http.route({
   path: "/records/upsertUser",
   method: "POST",
@@ -408,6 +423,87 @@ http.route({
   path: "/settings/set",
   method: "POST",
   handler: buildMutationRoute("/settings/set", setSettingRef),
+});
+
+// Mod Mode routes
+http.route({
+  path: "/modModeState/upsert",
+  method: "POST",
+  handler: buildMutationRoute("/modModeState/upsert", modModeUpsertRef),
+});
+
+http.route({
+  path: "/modModeState/getByGroup",
+  method: "GET",
+  handler: buildQueryRoute("/modModeState/getByGroup", modModeGetByGroupRef, (request: Request) => ({
+    groupId: readRequiredStringSearchParam(new URL(request.url).searchParams, "groupId"),
+  })),
+});
+
+http.route({
+  path: "/modModeState/deactivate",
+  method: "POST",
+  handler: buildMutationRoute("/modModeState/deactivate", modModeDeactivateRef),
+});
+
+// Ban List routes
+http.route({
+  path: "/banList/upsert",
+  method: "POST",
+  handler: buildMutationRoute("/banList/upsert", banListUpsertRef),
+});
+
+http.route({
+  path: "/banList/getByGroupUser",
+  method: "GET",
+  handler: buildQueryRoute("/banList/getByGroupUser", banListGetByGroupUserRef, (request: Request) => ({
+    groupId: readRequiredStringSearchParam(new URL(request.url).searchParams, "groupId"),
+    userId: readRequiredStringSearchParam(new URL(request.url).searchParams, "userId"),
+  })),
+});
+
+http.route({
+  path: "/banList/getByGroup",
+  method: "GET",
+  handler: buildQueryRoute("/banList/getByGroup", banListGetByGroupRef, (request: Request) => ({
+    groupId: readRequiredStringSearchParam(new URL(request.url).searchParams, "groupId"),
+  })),
+});
+
+http.route({
+  path: "/banList/remove",
+  method: "POST",
+  handler: buildMutationRoute("/banList/remove", banListRemoveRef),
+});
+
+// User Warnings routes
+http.route({
+  path: "/userWarnings/upsert",
+  method: "POST",
+  handler: buildMutationRoute("/userWarnings/upsert", userWarningsUpsertRef),
+});
+
+http.route({
+  path: "/userWarnings/getByGroupUser",
+  method: "GET",
+  handler: buildQueryRoute("/userWarnings/getByGroupUser", userWarningsGetByGroupUserRef, (request: Request) => ({
+    groupId: readRequiredStringSearchParam(new URL(request.url).searchParams, "groupId"),
+    userId: readRequiredStringSearchParam(new URL(request.url).searchParams, "userId"),
+  })),
+});
+
+http.route({
+  path: "/userWarnings/getByGroup",
+  method: "GET",
+  handler: buildQueryRoute("/userWarnings/getByGroup", userWarningsGetByGroupRef, (request: Request) => ({
+    groupId: readRequiredStringSearchParam(new URL(request.url).searchParams, "groupId"),
+  })),
+});
+
+http.route({
+  path: "/userWarnings/resetWarnings",
+  method: "POST",
+  handler: buildMutationRoute("/userWarnings/resetWarnings", userWarningsResetWarningsRef),
 });
 
 http.route({

@@ -1,0 +1,5 @@
+{
+  "dev": {
+    "urlEnvVar": "CONVEX_DEPLOYMENT_URL"
+  }
+}

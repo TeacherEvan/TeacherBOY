@@ -216,14 +216,19 @@ async def handle_member_joined_event(event, line_bot_api: MessagingApi):
     """Handle new member joining the group."""
     logger.info(f"Member joined: {event.joined.members}")
 
-    # Auto-kick banned users on rejoin
+    # Auto-kick banned users on rejoin (requires Convex/Mod Mode)
     if event.source.type == "group":
-        group_id = event.source.group_id
-        from src.services.ban_list_service import ban_list_service
+        from src.services.ban_list_service import get_ban_list_service
 
+        ban_service = get_ban_list_service()
+        if ban_service is None:
+            logger.debug("Ban list service not available (Convex not configured) - skipping auto-kick check")
+            return
+
+        group_id = event.source.group_id
         for member in event.joined.members:
             user_id = member.user_id
-            if await ban_list_service.is_banned(group_id, user_id):
+            if await ban_service.is_banned(group_id, user_id):
                 try:
                     await asyncio.to_thread(line_bot_api.kick_users, group_id, [user_id])
                     logger.info(f"👢 Auto-kicked banned user {user_id} on rejoin to {group_id}")

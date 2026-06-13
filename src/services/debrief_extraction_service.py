@@ -120,9 +120,7 @@ class DebriefExtractionService:
             elif isinstance(image_source, str) and image_source.startswith("http"):
                 # Use synchronous httpx for this thread-pooled function
                 with httpx.Client(timeout=30.0) as client:
-                    resp = client.get(
-                        image_source, headers={"User-Agent": "Mozilla/5.0"}
-                    )
+                    resp = client.get(image_source, headers={"User-Agent": "Mozilla/5.0"})
                     resp.raise_for_status()
                     arr = np.asarray(bytearray(resp.content), dtype=np.uint8)
                     img = cv2.imdecode(arr, -1)

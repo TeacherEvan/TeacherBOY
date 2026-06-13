@@ -1055,6 +1055,33 @@ class Settings(BaseSettings):
         """Check if the psychological profiler feature is enabled."""
         return bool(self.profiler_enabled)
 
+    def is_any_vision_provider_configured(self) -> bool:
+        """Check if any vision-capable LLM provider is configured.
+
+        Returns True if at least one of the following is configured:
+        - Hermes (with vision model)
+        - OpenRouter (with vision model)
+        - GitHub Models
+        - Gemini (with vision model)
+        - HuggingFace Inference API (vision model)
+        """
+        # Import here to avoid circular imports
+        from src.services.gemini_service import gemini_service
+        from src.services.github_models_service import github_models_service
+        from src.services.hermes_service import hermes_service
+        from src.services.hf_inference_service import hf_inference_service
+        from src.services.openrouter_service import openrouter_service
+
+        return any(
+            [
+                hermes_service.is_vision_configured(),
+                openrouter_service.is_configured(),
+                github_models_service.is_configured(),
+                gemini_service.is_configured(),
+                hf_inference_service.is_configured(),
+            ]
+        )
+
     def is_calendar_configured(self) -> bool:
         """Check if calendar feature is enabled."""
         return bool(self.calendar_enabled)

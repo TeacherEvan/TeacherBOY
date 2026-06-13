@@ -84,7 +84,6 @@ class TranslationAgent(BaseAgent):
         return prefix is not None
 
     def _is_private_chat(self, event: MessageEvent) -> bool:
-
         if event.source and getattr(event.source, "group_id", None):
             return False
         if event.source and getattr(event.source, "room_id", None):
