@@ -6,8 +6,10 @@ high-performance async I/O, and production-ready error handling.
 
 import asyncio
 import logging
+import time
+from collections import defaultdict
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -66,6 +68,8 @@ from src.services.document_memory_service import (
 )
 from src.services.gemini_service import gemini_service
 from src.services.github_models_service import github_models_service
+from src.services.hermes_service import hermes_service
+from src.services.hf_inference_service import hf_inference_service
 from src.services.harmful_content_detector import harmful_content_detector
 from src.services.history_log_service import (
     EventType,
@@ -171,6 +175,10 @@ async def _memory_monitor_check_loop() -> None:
             break
         except Exception as e:
             logger.error(f"❌ Memory monitor check failed: {e}", exc_info=True)
+
+
+# Global reference to memory monitor task for graceful shutdown
+_memory_monitor_task: asyncio.Task | None = None
 
 
 @asynccontextmanager
@@ -620,7 +628,8 @@ async def lifespan(app: FastAPI):
             auto_flush_days=settings.memory_monitor_auto_flush_days,
         )
         # Start periodic memory check task
-        asyncio.create_task(_memory_monitor_check_loop())
+        global _memory_monitor_task
+        _memory_monitor_task = asyncio.create_task(_memory_monitor_check_loop())
         logger.info("📊 Memory monitor started (HF Spaces auto-scaling enabled)")
 
     logger.info("✅ All cleanup tasks started")
@@ -638,14 +647,26 @@ async def lifespan(app: FastAPI):
     logger.info(f"🛑 {_service_display_name()} - Shutting down gracefully...")
     logger.info("=" * 80)
 
+    # Stop memory monitor task
+    logger.info("🧹 Stopping memory monitor task...")
+    if _memory_monitor_task and not _memory_monitor_task.done():
+        _memory_monitor_task.cancel()
+        try:
+            await asyncio.wait_for(_memory_monitor_task, timeout=5.0)
+        except asyncio.TimeoutError:
+            logger.warning("⚠️ Memory monitor task shutdown timed out")
+        except asyncio.CancelledError:
+            pass
+        logger.info("✅ Memory monitor task stopped")
+
     # Stop background cleanup tasks
     logger.info("🧹 Stopping background cleanup tasks...")
-    profiler_session_manager.stop_cleanup()
-    news_session_manager.stop_cleanup()
-    image_analyzer_session_manager.stop_cleanup()
-    calendar_session_manager.stop_cleanup()
-    message_buffer_service.stop_cleanup_task()
-    rate_limiter.stop_cleanup()
+    await profiler_session_manager.stop_cleanup()
+    await news_session_manager.stop_cleanup()
+    await image_analyzer_session_manager.stop_cleanup()
+    await calendar_session_manager.stop_cleanup()
+    await message_buffer_service.stop_cleanup_task()
+    await rate_limiter.stop_cleanup()
     logger.info("✅ All cleanup tasks stopped")
 
     # Stop reminder service scheduler
@@ -739,19 +760,35 @@ async def root() -> dict[str, Any]:
 @app.get("/health", tags=["Health"])
 async def health_check() -> dict[str, Any]:
     """
-    Liveness-only health check endpoint.
+    Comprehensive health check endpoint with service status.
 
-    Returns a cheap process-level status without probing external services.
+    Returns detailed status of all critical services and dependencies.
     """
     agents_registered = len(agent_router.list_agents())
+    memory_svc = get_conversation_memory()
+    document_svc = get_document_memory()
+    history_svc = get_history_log()
 
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "service": _service_display_name(),
+        "version": "3.0.0",
         "checks": {
             "process": "alive",
             "startup_data": "ready" if startup_loader.is_ready() else "loading",
             "agents_registered": agents_registered,
+            "conversation_memory": memory_svc.get_stats() if memory_svc else {"enabled": False},
+            "document_memory": document_svc.get_stats() if document_svc else {"enabled": False},
+            "history_log": history_svc.get_stats() if history_svc else {"enabled": False},
+            "calendar": calendar_service.get_stats() if hasattr(calendar_service, "get_stats") and settings.is_calendar_configured() else {"enabled": settings.is_calendar_configured()},
+            "llm_providers": {
+                "openrouter": openrouter_service.is_configured(),
+                "github_models": github_models_service.is_configured(),
+                "gemini": gemini_service.is_configured(),
+                "hermes": hermes_service.is_configured(),
+                "hf_inference": hf_inference_service.is_configured(),
+            },
         },
     }
 
@@ -1129,6 +1166,25 @@ async def _send_text_reply(event: PostbackEvent, line_bot_api: MessagingApi, tex
     )
 
 
+# Webhook rate limiter - simple in-memory per-IP limiter
+_webhook_rate_limiter: dict[str, list[float]] = defaultdict(list)
+WEBHOOK_RATE_LIMIT = 100  # requests per minute per IP
+WEBHOOK_RATE_WINDOW = 60  # seconds
+
+
+def _check_webhook_rate_limit(ip: str) -> bool:
+    """Check if IP is within rate limit. Returns True if allowed."""
+    now = time.time()
+    window_start = now - WEBHOOK_RATE_WINDOW
+    # Clean old entries
+    _webhook_rate_limiter[ip] = [ts for ts in _webhook_rate_limiter[ip] if ts > window_start]
+    # Check limit
+    if len(_webhook_rate_limiter[ip]) >= WEBHOOK_RATE_LIMIT:
+        return False
+    _webhook_rate_limiter[ip].append(now)
+    return True
+
+
 @app.post("/webhook", tags=["LINE Bot"])
 async def webhook(request: Request) -> JSONResponse:
     """
@@ -1149,6 +1205,12 @@ async def webhook(request: Request) -> JSONResponse:
     Raises:
         HTTPException: If signature validation fails
     """
+    # Rate limit by client IP
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_webhook_rate_limit(client_ip):
+        logger.warning(f"🚫 Webhook rate limit exceeded for IP: {client_ip}")
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
     # Extract signature up front; raw body decoding stays inside the protected path.
     signature = request.headers.get("X-Line-Signature", "")
 
@@ -1177,19 +1239,22 @@ async def webhook(request: Request) -> JSONResponse:
 
                         if isinstance(event.message, TextMessageContent):
                             # Store message in buffer for "zeus scrape" feature
-                            # NOTE: We now store ALL messages including bot's own messages
-                            # This allows Zeus to scrape dates from his own responses
-                            chat_id = None
-                            if event.source:
-                                if getattr(event.source, "group_id", None):
-                                    chat_id = f"group_{event.source.group_id}"
-                                elif getattr(event.source, "room_id", None):
-                                    chat_id = f"room_{event.source.room_id}"
-                                elif getattr(event.source, "user_id", None):
-                                    chat_id = f"user_{event.source.user_id}"
+                            # Skip bot's own messages to avoid polluting date extraction with bot responses
+                            user_id = getattr(event.source, "user_id", None) if event.source else None
+                            if bot_user_id and user_id == bot_user_id:
+                                logger.debug("🔒 Skipping message buffer storage for bot's own message")
+                            else:
+                                chat_id = None
+                                if event.source:
+                                    if getattr(event.source, "group_id", None):
+                                        chat_id = f"group_{event.source.group_id}"
+                                    elif getattr(event.source, "room_id", None):
+                                        chat_id = f"room_{event.source.room_id}"
+                                    elif getattr(event.source, "user_id", None):
+                                        chat_id = f"user_{event.source.user_id}"
 
-                            if chat_id and user_id:
-                                message_buffer_service.store_message(
+                                if chat_id and user_id:
+                                    message_buffer_service.store_message(
                                     chat_id=chat_id,
                                     text=event.message.text,
                                     user_id=user_id,

@@ -295,17 +295,23 @@ class MessageBufferService:
         """Backward-compatible alias for start_cleanup()."""
         self.start_cleanup()
 
-    def stop_cleanup(self) -> None:
+    async def stop_cleanup(self) -> None:
         """Stop background cleanup task."""
         self._running = False
         if self._cleanup_task:
             self._cleanup_task.cancel()
+            try:
+                await asyncio.wait_for(self._cleanup_task, timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning("⚠️ Message buffer cleanup task shutdown timed out")
+            except asyncio.CancelledError:
+                pass
             self._cleanup_task = None
         logger.info("📝 Message buffer cleanup task stopped")
 
-    def stop_cleanup_task(self) -> None:
+    async def stop_cleanup_task(self) -> None:
         """Backward-compatible alias for stop_cleanup()."""
-        self.stop_cleanup()
+        await self.stop_cleanup()
 
     async def _cleanup_loop(self) -> None:
         """Background task to clean up expired messages."""

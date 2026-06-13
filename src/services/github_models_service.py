@@ -1,5 +1,4 @@
-"""
-GitHub Models Service - Free AI inference via GitHub Models API.
+"""GitHub Models Service - Free AI inference via GitHub Models API.
 
 This service provides access to AI models (GPT-4o, Grok, DeepSeek, etc.)
 using your GitHub Personal Access Token (PAT) with models:read scope.
@@ -18,6 +17,7 @@ Available free-tier models include:
 import asyncio
 import logging
 from typing import Any
+from pydantic import BaseModel
 
 import httpx
 
@@ -30,6 +30,18 @@ logger = logging.getLogger(__name__)
 # High tier models: 10 rpm / 50 rpd
 # Grok-3: 1 rpm / 15 rpd
 RATE_LIMIT_RETRY_DELAYS = [1.0, 2.0, 5.0, 10.0]  # Exponential backoff delays
+
+
+class GitHubModelsChoice(BaseModel):
+    """Single choice from GitHub Models API response."""
+
+    message: dict[str, Any]
+
+
+class GitHubModelsResponse(BaseModel):
+    """GitHub Models API response model."""
+
+    choices: list[GitHubModelsChoice] = []
 
 
 class GitHubModelsService:
@@ -179,8 +191,15 @@ class GitHubModelsService:
 
                 data = response.json()
 
-                if "choices" in data and data["choices"]:
-                    content = data["choices"][0]["message"]["content"]
+                # Parse response with Pydantic for defensive parsing
+                try:
+                    parsed = GitHubModelsResponse.model_validate(data)
+                except Exception as exc:
+                    logger.warning("⚠️ GitHub Models response parsing failed: %s", exc)
+                    return None
+
+                if parsed.choices:
+                    content = parsed.choices[0].message.get("content", "")
                     logger.info(
                         "🤖 GitHub Models response from %s (%s chars)",
                         target_model,
@@ -188,7 +207,7 @@ class GitHubModelsService:
                     )
                     return content
 
-                logger.warning("⚠️ GitHub Models response missing choices: %s", data)
+                logger.warning("⚠️ GitHub Models response missing choices: %s", parsed)
                 return None
 
             except httpx.TimeoutException:
@@ -314,8 +333,15 @@ class GitHubModelsService:
 
                 data = response.json()
 
-                if "choices" in data and data["choices"]:
-                    content = data["choices"][0]["message"]["content"]
+                # Parse response with Pydantic for defensive parsing
+                try:
+                    parsed = GitHubModelsResponse.model_validate(data)
+                except Exception as exc:
+                    logger.warning("⚠️ GitHub Models vision response parsing failed: %s", exc)
+                    return None
+
+                if parsed.choices:
+                    content = parsed.choices[0].message.get("content", "")
                     logger.info(
                         "📸 GitHub Models vision response from %s (%s chars)",
                         target_model,
@@ -323,7 +349,7 @@ class GitHubModelsService:
                     )
                     return content
 
-                logger.warning("⚠️ GitHub Models vision response missing choices: %s", data)
+                logger.warning("⚠️ GitHub Models vision response missing choices: %s", parsed)
                 return None
 
             except httpx.TimeoutException:

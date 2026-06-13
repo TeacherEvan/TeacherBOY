@@ -1,15 +1,26 @@
-"""
-OpenRouter Service - LLM access via OpenRouter API.
-"""
+"""OpenRouter Service - LLM access via OpenRouter API."""
 
 import logging
 from typing import Any
+from pydantic import BaseModel
 
 import httpx
 
 from src.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class OpenRouterChoice(BaseModel):
+    """Single choice from OpenRouter API response."""
+
+    message: dict[str, Any]
+
+
+class OpenRouterResponse(BaseModel):
+    """OpenRouter API response model."""
+
+    choices: list[OpenRouterChoice] = []
 
 
 class OpenRouterService:
@@ -87,14 +98,19 @@ class OpenRouterService:
                 )
                 return None
 
-            data = response.json()
+            # Parse response with Pydantic for defensive parsing
+            try:
+                parsed = OpenRouterResponse.model_validate(response.json())
+            except Exception as exc:
+                logger.warning("⚠️ OpenRouter response parsing failed: %s", exc)
+                return None
 
-            if "choices" in data and data["choices"]:
-                content = data["choices"][0]["message"]["content"]
+            if parsed.choices:
+                content = parsed.choices[0].message.get("content", "")
                 logger.info("🤖 OpenRouter response from %s (%s chars)", target_model, len(content))
                 return content
 
-            logger.warning("⚠️ OpenRouter response missing choices: %s", data)
+            logger.warning("⚠️ OpenRouter response missing choices: %s", parsed)
             return None
 
         except Exception as exc:
@@ -155,14 +171,19 @@ class OpenRouterService:
                 )
                 return None
 
-            data = response.json()
+            # Parse response with Pydantic for defensive parsing
+            try:
+                parsed = OpenRouterResponse.model_validate(response.json())
+            except Exception as exc:
+                logger.warning("⚠️ OpenRouter vision response parsing failed: %s", exc)
+                return None
 
-            if "choices" in data and data["choices"]:
-                content = data["choices"][0]["message"]["content"]
+            if parsed.choices:
+                content = parsed.choices[0].message.get("content", "")
                 logger.info("📸 OpenRouter vision response from %s (%s chars)", target_model, len(content))
                 return content
 
-            logger.warning("⚠️ OpenRouter vision response missing choices: %s", data)
+            logger.warning("⚠️ OpenRouter vision response missing choices: %s", parsed)
             return None
 
         except Exception as exc:

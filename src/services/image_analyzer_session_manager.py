@@ -499,10 +499,16 @@ class ImageAnalyzerSessionManager:
         else:
             logger.warning("⚠️  Image analyzer cleanup task already running")
 
-    def stop_cleanup(self) -> None:
+    async def stop_cleanup(self) -> None:
         """Stop background cleanup task."""
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
+            try:
+                await asyncio.wait_for(self._cleanup_task, timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning("⚠️ Image analyzer cleanup task shutdown timed out")
+            except asyncio.CancelledError:
+                pass
             logger.info("✅ Image analyzer session cleanup task stopped")
 
     def _setup_images_hf_storage(self):

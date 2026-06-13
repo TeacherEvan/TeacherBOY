@@ -43,6 +43,15 @@ def test_health_check(client):
             "src.main.agent_router.list_agents",
             return_value=[{"name": "TranslationAgent"}],
         ),
+        patch("src.main.get_conversation_memory", return_value=None),
+        patch("src.main.get_document_memory", return_value=None),
+        patch("src.main.get_history_log", return_value=None),
+        patch("src.main.settings.is_calendar_configured", return_value=False),
+        patch("src.main.settings.is_openrouter_configured", return_value=False),
+        patch("src.main.settings.is_github_models_configured", return_value=False),
+        patch("src.main.settings.is_gemini_configured", return_value=False),
+        patch("src.main.settings.is_hermes_configured", return_value=False),
+        patch("src.main.settings.is_hf_inference_configured", return_value=False),
     ):
         response = client.get("/health")
 
@@ -50,11 +59,12 @@ def test_health_check(client):
     payload = response.json()
 
     assert payload["status"] == "healthy"
-    assert payload["checks"] == {
-        "process": "alive",
-        "startup_data": "ready",
-        "agents_registered": 1,
-    }
+    assert "service" in payload
+    assert "version" in payload
+    assert "checks" in payload
+    assert payload["checks"]["process"] == "alive"
+    assert payload["checks"]["startup_data"] == "ready"
+    assert payload["checks"]["agents_registered"] == 1
     assert isinstance(payload["timestamp"], str)
     assert datetime.fromisoformat(payload["timestamp"])
 
@@ -64,15 +74,21 @@ def test_health_check_returns_200_while_startup_data_is_loading(client):
     with (
         patch("src.main.startup_loader.is_ready", return_value=False),
         patch("src.main.agent_router.list_agents", return_value=[]),
+        patch("src.main.get_conversation_memory", return_value=None),
+        patch("src.main.get_document_memory", return_value=None),
+        patch("src.main.get_history_log", return_value=None),
+        patch("src.main.settings.is_calendar_configured", return_value=False),
+        patch("src.main.settings.is_openrouter_configured", return_value=False),
+        patch("src.main.settings.is_github_models_configured", return_value=False),
+        patch("src.main.settings.is_gemini_configured", return_value=False),
+        patch("src.main.settings.is_hermes_configured", return_value=False),
+        patch("src.main.settings.is_hf_inference_configured", return_value=False),
     ):
         response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json()["checks"] == {
-        "process": "alive",
-        "startup_data": "loading",
-        "agents_registered": 0,
-    }
+    assert response.json()["checks"].get("startup_data") == "loading"
+    assert response.json()["checks"].get("agents_registered") == 0
 
 
 def test_health_check_does_not_call_translation_providers(client, mock_settings):
@@ -85,6 +101,15 @@ def test_health_check_does_not_call_translation_providers(client, mock_settings)
             "src.main.agent_router.list_agents",
             return_value=[{"name": "TranslationAgent"}],
         ),
+        patch("src.main.get_conversation_memory", return_value=None),
+        patch("src.main.get_document_memory", return_value=None),
+        patch("src.main.get_history_log", return_value=None),
+        patch("src.main.settings.is_calendar_configured", return_value=False),
+        patch("src.main.settings.is_openrouter_configured", return_value=False),
+        patch("src.main.settings.is_github_models_configured", return_value=False),
+        patch("src.main.settings.is_gemini_configured", return_value=False),
+        patch("src.main.settings.is_hermes_configured", return_value=False),
+        patch("src.main.settings.is_hf_inference_configured", return_value=False),
     ):
         response = client.get("/health")
 

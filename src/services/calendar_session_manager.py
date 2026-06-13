@@ -1332,10 +1332,16 @@ class CalendarSessionManager:
             self._cleanup_task = asyncio.create_task(self._cleanup_loop())
             logger.info("📅 Calendar session cleanup task started")
 
-    def stop_cleanup(self):
+    async def stop_cleanup(self):
         """Stop background cleanup task."""
         if self._cleanup_task:
             self._cleanup_task.cancel()
+            try:
+                await asyncio.wait_for(self._cleanup_task, timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning("⚠️ Calendar cleanup task shutdown timed out")
+            except asyncio.CancelledError:
+                pass
             self._cleanup_task = None
             logger.info("📅 Calendar session cleanup task stopped")
 

@@ -106,10 +106,11 @@ class DebriefExtractionService:
     def _run_local_ocr_sync(self, image_source: str) -> str | None:
         """Lightweight EasyOCR fallback for messy handwriting. MUST be run via asyncio.to_thread."""
         try:
-            import urllib.request
+            import base64
 
             import cv2
             import easyocr
+            import httpx
             import numpy as np
 
             if isinstance(image_source, str) and image_source.startswith("data:image"):
@@ -118,9 +119,13 @@ class DebriefExtractionService:
                 arr = np.asarray(bytearray(img_bytes), dtype=np.uint8)
                 img = cv2.imdecode(arr, -1)
             elif isinstance(image_source, str) and image_source.startswith("http"):
-                req = urllib.request.Request(image_source, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req) as response:
-                    arr = np.asarray(bytearray(response.read()), dtype=np.uint8)
+                # Use synchronous httpx for this thread-pooled function
+                with httpx.Client(timeout=30.0) as client:
+                    resp = client.get(
+                        image_source, headers={"User-Agent": "Mozilla/5.0"}
+                    )
+                    resp.raise_for_status()
+                    arr = np.asarray(bytearray(resp.content), dtype=np.uint8)
                     img = cv2.imdecode(arr, -1)
             else:
                 return None

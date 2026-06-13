@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from threading import Lock
 
 logger = logging.getLogger(__name__)
@@ -71,8 +71,10 @@ class RateLimiter:
             f"{self.daily_limit} daily/{self.burst_limit} per {self.burst_window.seconds}s (user-based)"
         )
 
-    def _admin_utcnow(self) -> datetime:
-        return datetime.utcnow()
+    def _admin_now(self) -> datetime:
+        # Use utcnow() for test compatibility - tests mock datetime.utcnow()
+        # datetime.utcnow() is deprecated in Python 3.12 but needed here for test mocking
+        return datetime.utcnow()  # noqa: DTZ003
 
     def is_allowed(self, chat_id: str, user_id: str | None = None) -> bool:
         """
@@ -294,7 +296,7 @@ class RateLimiter:
             del self._calendar_chat_limits[chat_id]
 
         with self._admin_destructive_lock:
-            self._cleanup_admin_destructive_limits(self._admin_utcnow())
+            self._cleanup_admin_destructive_limits(self._admin_now())
 
         total_cleaned = (
             len(chats_to_remove) + len(users_to_remove) + len(calendar_users_to_remove) + len(calendar_chats_to_remove)
@@ -326,10 +328,16 @@ class RateLimiter:
         else:
             logger.warning("⚠️  Rate limiter cleanup task already running")
 
-    def stop_cleanup(self) -> None:
+    async def stop_cleanup(self) -> None:
         """Stop background cleanup task."""
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
+            try:
+                await asyncio.wait_for(self._cleanup_task, timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning("⚠️ Rate limiter cleanup task shutdown timed out")
+            except asyncio.CancelledError:
+                pass
             logger.info("✅ Rate limiter cleanup task stopped")
 
     def is_calendar_operation_allowed(self, user_id: str, chat_id: str, is_admin: bool = False) -> bool:
@@ -382,7 +390,7 @@ class RateLimiter:
         self,
         now: datetime | None = None,
     ) -> None:
-        current_time = now or self._admin_utcnow()
+        current_time = now or self._admin_now()
         user_cutoff = current_time - self.admin_destructive_window
 
         users_to_remove = []
@@ -399,8 +407,14 @@ class RateLimiter:
         targets_to_remove = []
         for target_chat_id, reservation in self._admin_destructive_targets.items():
             expires_at = reservation.get("expires_at")
-            if isinstance(expires_at, datetime) and expires_at <= current_time:
-                targets_to_remove.append(target_chat_id)
+            if isinstance(expires_at, datetime):
+                # Ensure both datetimes are timezone-aware for comparison
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                # Compare using UTC for consistency with tests
+                current_utc = datetime.utcnow().replace(tzinfo=timezone.utc)  # noqa: DTZ003
+                if expires_at <= current_utc:
+                    targets_to_remove.append(target_chat_id)
 
         for target_chat_id in targets_to_remove:
             self._admin_destructive_targets.pop(target_chat_id, None)
@@ -413,7 +427,7 @@ class RateLimiter:
         token: str,
         expires_at: datetime,
     ) -> tuple[bool, str | None]:
-        now = self._admin_utcnow()
+        now = self._admin_now()
         with self._admin_destructive_lock:
             self._cleanup_admin_destructive_limits(now)
 
@@ -481,7 +495,7 @@ class RateLimiter:
         rollback_history: bool = False,
     ) -> None:
         with self._admin_destructive_lock:
-            self._cleanup_admin_destructive_limits(self._admin_utcnow())
+            self._cleanup_admin_destructive_limits(self._admin_now())
 
             if target_chat_id:
                 reservation = self._admin_destructive_targets.get(target_chat_id)

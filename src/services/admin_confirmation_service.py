@@ -9,17 +9,17 @@ import secrets
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 from typing import Any
 
 
 def _default_created_at() -> datetime:
-    return datetime.utcnow()
+    return datetime.now(UTC)
 
 
 def _default_expires_at() -> datetime:
-    return datetime.utcnow() + timedelta(minutes=5)
+    return datetime.now(UTC) + timedelta(minutes=5)
 
 
 def _default_preview_fields() -> Mapping[str, Any]:
@@ -53,7 +53,7 @@ class AdminConfirmationService:
         self._pending: dict[str, PendingAdminAction] = {}
 
     def issue_token(self, ttl_seconds: int | None = None) -> tuple[str, datetime, datetime]:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         ttl = ttl_seconds if ttl_seconds is not None else self._default_ttl_seconds
         return self._generate_token(), now, now + timedelta(seconds=ttl)
 
@@ -252,7 +252,7 @@ class AdminConfirmationService:
                 for duplicate in duplicates:
                     self._pending.pop(duplicate.token, None)
 
-        now = created_at or datetime.utcnow()
+        now = created_at or datetime.now(UTC)
         if expires_at is None:
             ttl = ttl_seconds if ttl_seconds is not None else self._default_ttl_seconds
             expires_at = now + timedelta(seconds=ttl)
@@ -273,7 +273,7 @@ class AdminConfirmationService:
         return self._copy_pending_action(pending)
 
     def _cleanup(self) -> None:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expired = [tok for tok, p in self._pending.items() if p.expires_at <= now]
         for tok in expired:
             self._pending.pop(tok, None)

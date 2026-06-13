@@ -181,10 +181,16 @@ class NewsSessionManager:
         else:
             logger.warning("⚠️  News cleanup task already running")
 
-    def stop_cleanup(self) -> None:
+    async def stop_cleanup(self) -> None:
         """Stop background cleanup task."""
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
+            try:
+                await asyncio.wait_for(self._cleanup_task, timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning("⚠️ News cleanup task shutdown timed out")
+            except asyncio.CancelledError:
+                pass
             logger.info("✅ News session cleanup task stopped")
 
 
