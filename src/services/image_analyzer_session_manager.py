@@ -234,6 +234,7 @@ class ImageAnalyzerSessionManager:
         """
         session = await self.get_session(chat_id)
         if not session:
+            logger.debug(f"🖼️ is_waiting_for_image: no session for chat {chat_id}")
             return False
 
         # Check user match (in groups, ensure same user)
@@ -241,19 +242,24 @@ class ImageAnalyzerSessionManager:
             logger.debug(f"🖼️ User mismatch: session owner {session.user_id}, image from {user_id}")
             return False
 
-        return session.state == AnalyzerState.WAITING_FOR_IMAGE
+        result = session.state == AnalyzerState.WAITING_FOR_IMAGE
+        logger.debug(f"🖼️ is_waiting_for_image: chat={chat_id}, state={session.state.value}, result={result}")
+        return result
 
     async def is_waiting_for_analysis_choice(self, chat_id: str, user_id: str | None = None) -> bool:
         """Check if session is waiting for a New/Last selection."""
         session = await self.get_session(chat_id)
         if not session:
+            logger.debug(f"🖼️ is_waiting_for_analysis_choice: no session for chat {chat_id}")
             return False
 
         if user_id and session.user_id != "unknown" and user_id != session.user_id:
             logger.debug(f"🖼️ User mismatch: session owner {session.user_id}, choice from {user_id}")
             return False
 
-        return session.state == AnalyzerState.WAITING_FOR_ANALYSIS_CHOICE
+        result = session.state == AnalyzerState.WAITING_FOR_ANALYSIS_CHOICE
+        logger.debug(f"🖼️ is_waiting_for_analysis_choice: chat={chat_id}, state={session.state.value}, result={result}")
+        return result
 
     async def is_waiting_for_question(self, chat_id: str, user_id: str | None = None) -> bool:
         """
@@ -268,6 +274,7 @@ class ImageAnalyzerSessionManager:
         """
         session = await self.get_session(chat_id)
         if not session:
+            logger.debug(f"🖼️ is_waiting_for_question: no session for chat {chat_id}")
             return False
 
         # Check user match
@@ -275,7 +282,9 @@ class ImageAnalyzerSessionManager:
             logger.debug(f"🖼️ User mismatch: session owner {session.user_id}, question from {user_id}")
             return False
 
-        return session.state == AnalyzerState.WAITING_FOR_QUESTION
+        result = session.state == AnalyzerState.WAITING_FOR_QUESTION
+        logger.debug(f"🖼️ is_waiting_for_question: chat={chat_id}, state={session.state.value}, result={result}")
+        return result
 
     async def store_image(self, chat_id: str, image_data: str) -> bool:
         """
@@ -423,13 +432,16 @@ class ImageAnalyzerSessionManager:
         """
         session = await self.get_session(chat_id)
         if not session:
+            logger.debug(f"🖼️ is_waiting_for_calendar_confirmation: no session for chat {chat_id}")
             return False
 
         # Check user match
         if user_id and session.user_id != "unknown" and user_id != session.user_id:
             return False
 
-        return session.state == AnalyzerState.WAITING_FOR_CALENDAR_CONFIRMATION
+        result = session.state == AnalyzerState.WAITING_FOR_CALENDAR_CONFIRMATION
+        logger.debug(f"🖼️ is_waiting_for_calendar_confirmation: chat={chat_id}, state={session.state.value}, result={result}")
+        return result
 
     async def cleanup_expired(self) -> None:
         """Remove expired sessions and expired last images."""

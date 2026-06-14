@@ -58,6 +58,9 @@ async def test_analyze_prompt_asks_new_or_last(mock_event, mock_line_bot_api):
         mock_gms.is_configured.return_value = True
         mock_privilege.is_admin.return_value = False
         mock_rl.is_allowed.return_value = True
+        mock_session.is_waiting_for_analysis_choice = AsyncMock(return_value=False)
+        mock_session.is_waiting_for_question = AsyncMock(return_value=False)
+        mock_session.is_waiting_for_calendar_confirmation = AsyncMock(return_value=False)
         mock_session.start_analysis_choice = AsyncMock()
 
         handled = await agent.handle(mock_event, "Ms. Green analyze", mock_line_bot_api)
@@ -92,6 +95,9 @@ async def test_plain_analyze_keeps_new_or_last_prompt(mock_event, mock_line_bot_
         mock_gms.is_configured.return_value = True
         mock_privilege.is_admin.return_value = False
         mock_rl.is_allowed.return_value = True
+        mock_session.is_waiting_for_analysis_choice = AsyncMock(return_value=False)
+        mock_session.is_waiting_for_question = AsyncMock(return_value=False)
+        mock_session.is_waiting_for_calendar_confirmation = AsyncMock(return_value=False)
         mock_session.start_analysis_choice = AsyncMock()
 
         handled = await agent.handle(mock_event, "analyze", mock_line_bot_api)
