@@ -35,6 +35,11 @@ class MetricsSnapshot:
     # Provider latency metrics
     provider_latency_ms_total: dict[str, float] = field(default_factory=dict)
     provider_latency_ms_count: dict[str, int] = field(default_factory=dict)
+    # Agent RED metrics
+    agent_requests_total: dict[str, int] = field(default_factory=dict)
+    agent_errors_total: dict[str, int] = field(default_factory=dict)
+    agent_latency_ms_total: dict[str, float] = field(default_factory=dict)
+    agent_latency_ms_count: dict[str, int] = field(default_factory=dict)
 
 
 class _BoundedSet:
@@ -92,6 +97,12 @@ class MetricsService:
     # Provider latency tracking
     _provider_latency_ms_total: dict[str, float] = field(default_factory=lambda: defaultdict(float))
     _provider_latency_ms_count: dict[str, int] = field(default_factory=lambda: defaultdict(int))
+
+    # Agent RED metrics
+    _agent_requests_total: dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    _agent_errors_total: dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    _agent_latency_ms_total: dict[str, float] = field(default_factory=lambda: defaultdict(float))
+    _agent_latency_ms_count: dict[str, int] = field(default_factory=lambda: defaultdict(int))
 
     def record_translation(self, provider: str, chat_id: str | None = None) -> None:
         self._translation_requests_total += 1
@@ -168,6 +179,44 @@ class MetricsService:
             return 0.0
         return self._provider_latency_ms_total[provider] / count
 
+    def record_agent_request(self, agent_name: str, message_type: str | None = None, duration_ms: float | None = None, success: bool = True) -> None:
+        """Record an agent request for RED metrics.
+
+        Args:
+            agent_name: Name of the agent
+            message_type: Type of message (text, image, file)
+            duration_ms: Latency in milliseconds
+            success: Whether the request succeeded
+        """
+        key = f"{agent_name}:{message_type}" if message_type else agent_name
+        self._agent_requests_total[key] += 1
+        if not success:
+            self._agent_errors_total[key] += 1
+        if duration_ms is not None:
+            self._agent_latency_ms_total[key] += duration_ms
+            self._agent_latency_ms_count[key] += 1
+
+    def get_agent_latency_avg(self, agent_name: str, message_type: str | None = None) -> float:
+        """Get average latency for an agent in milliseconds."""
+        key = f"{agent_name}:{message_type}" if message_type else agent_name
+        count = self._agent_latency_ms_count.get(key, 0)
+        if count == 0:
+            return 0.0
+        return self._agent_latency_ms_total[key] / count
+
+    def get_agent_error_rate(self, agent_name: str, message_type: str | None = None) -> float:
+        """Get error rate for an agent (0.0 to 1.0)."""
+        key = f"{agent_name}:{message_type}" if message_type else agent_name
+        total = self._agent_requests_total.get(key, 0)
+        if total == 0:
+            return 0.0
+        return self._agent_errors_total.get(key, 0) / total
+
+    def get_agent_requests_total(self, agent_name: str, message_type: str | None = None) -> int:
+        """Get total request count for an agent."""
+        key = f"{agent_name}:{message_type}" if message_type else agent_name
+        return self._agent_requests_total.get(key, 0)
+
     def get_started_at(self) -> datetime:
         return self._started_at
 
@@ -203,6 +252,10 @@ class MetricsService:
             cache_misses_total=self._cache_misses_total,
             provider_latency_ms_total=dict(self._provider_latency_ms_total),
             provider_latency_ms_count=dict(self._provider_latency_ms_count),
+            agent_requests_total=dict(self._agent_requests_total),
+            agent_errors_total=dict(self._agent_errors_total),
+            agent_latency_ms_total=dict(self._agent_latency_ms_total),
+            agent_latency_ms_count=dict(self._agent_latency_ms_count),
         )
 
 
