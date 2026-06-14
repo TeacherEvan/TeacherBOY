@@ -746,6 +746,7 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", description="Server bind host address")
     port: int = Field(default=8000, ge=1024, le=65535, description="Server bind port")
     debug: bool = Field(default=False, description="Enable debug mode (DO NOT use in production)")
+    log_level: str = Field(default="INFO", description="Log level (DEBUG, INFO, WARNING, ERROR)")
 
     # Performance and monitoring
     enable_request_logging: bool = Field(default=True, description="Enable detailed request/response logging")

@@ -45,35 +45,62 @@ class ModModeAgent(BaseAgent):
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """Intercept if group has active mod mode or for activation command."""
+        logger.debug(f"🔍 ModModeAgent.should_handle: text='{text[:50]}', source_type={getattr(event.source, 'type', None)}")
         if not isinstance(event.message, TextMessageContent):
+            logger.debug("🔍 ModModeAgent: Not TextMessageContent, returning False")
             return False
 
         source = event.source
         if not source or source.type not in ("group", "room"):
+            logger.debug(f"🔍 ModModeAgent: Not group/room (type={source.type if source else None}), returning False")
             return False  # Mod mode only in groups/rooms
 
         group_id = source.group_id if source.type == "group" else source.room_id
         user_id = getattr(source, "user_id", None)
         if not user_id or not group_id:
+            logger.debug(f"🔍 ModModeAgent: Missing user_id={user_id} or group_id={group_id}, returning False")
             return False
 
         # Check activation command (from admin) - allow even if mod mode not active
         if self._is_activation_command(text):
-            return await self._is_admin(user_id)
+            is_admin = await self._is_admin(user_id)
+            logger.info(f"🔍 ModModeAgent: Activation command detected from user={user_id}, is_admin={is_admin}")
+            return is_admin
 
         # Check mod commands that can activate mod mode (allow even if mod mode not active)
         if self._is_activation_mod_command(text):
-            return await self._is_admin(user_id)
+            is_admin = await self._is_admin(user_id)
+            logger.info(f"🔍 ModModeAgent: /modmode activation command from user={user_id}, is_admin={is_admin}")
+            return is_admin
+
+        # If mod mode service is not available, we cannot check mod mode active or handle non-mod commands
+        if self._mod_mode is None:
+            logger.warning(f"🔍 ModModeAgent: mod_mode service is None, cannot check mod mode, returning False")
+            return False
 
         # Check if mod mode is active in this group
-        if not await self._mod_mode.is_mod_mode_active(group_id):
+        is_active = await self._mod_mode.is_mod_mode_active(group_id)
+        logger.debug(f"🔍 ModModeAgent: group={group_id} mod_mode_active={is_active}")
+        if not is_active:
+            # Check if this is a /modmode command that activates mod mode (all/special)
+            # These should be handled even when mod mode is not active
+            if text.strip().lower().startswith("/modmode"):
+                subcmd = self._parse_modmode_subcommand(text)
+                logger.debug(f"🔍 ModModeAgent: mod mode not active, subcmd={subcmd}")
+                if subcmd in ("all", "special"):
+                    is_admin = await self._is_admin(user_id)
+                    logger.info(f"🔍 ModModeAgent: /modmode {subcmd} (activates mod mode) from user={user_id}, is_admin={is_admin}")
+                    return is_admin
             return False
 
         # Check other mod commands (require admin)
         if self._is_mod_command(text):
-            return await self._is_admin(user_id)
+            is_admin = await self._is_admin(user_id)
+            logger.info(f"🔍 ModModeAgent: Mod command from user={user_id}, is_admin={is_admin}")
+            return is_admin
 
         # Intercept message in mod-enabled group for processing
+        logger.debug(f"🔍 ModModeAgent: Intercepting message in mod-enabled group={group_id}")
         return True
 
     async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
@@ -82,29 +109,38 @@ class ModModeAgent(BaseAgent):
         group_id = source.group_id if source.type == "group" else source.room_id
         user_id = getattr(source, "user_id", None)
 
+        logger.info(f"🔧 ModModeAgent.handle: user={user_id}, group={group_id}, text='{text[:50]}'")
+
         try:
             # 1. Activation command
             if self._is_activation_command(text):
+                logger.info(f"🔧 ModModeAgent: Handling activation command for user={user_id}")
                 return await self._handle_activation(event, line_bot_api)
 
             # 2. Mod commands (/modmode ...)
             if self._is_mod_command(text):
+                logger.info(f"🔧 ModModeAgent: Handling /modmode command for user={user_id}")
                 return await self._handle_mod_command(event, line_bot_api, text)
 
             # 3. Banned user -> kick
-            if await self._ban_list.is_banned(group_id, user_id):
+            if self._ban_list and await self._ban_list.is_banned(group_id, user_id):
+                logger.warning(f"🔧 ModModeAgent: Banned user {user_id} in group {group_id}, kicking")
                 return await self._kick_user(group_id, user_id, line_bot_api, "banned")
 
             # 4. Special mode: block non-allowed users
-            if not await self._mod_mode.is_user_allowed(group_id, user_id):
+            if self._mod_mode and not await self._mod_mode.is_user_allowed(group_id, user_id):
+                logger.warning(f"🔧 ModModeAgent: User {user_id} not allowed in special mode group {group_id}")
                 return await self._warn_user(group_id, user_id, line_bot_api, "Not allowed to speak in special mode")
 
             # 5. Harmful content detection in "all" mode
-            if await self._should_detect_harmful(group_id, text):
+            if self._mod_mode and await self._should_detect_harmful(group_id, text):
+                logger.info(f"🔧 ModModeAgent: Checking harmful content for user={user_id}")
                 detection = await self._detector.detect(text)
                 if detection["is_harmful"]:
+                    logger.warning(f"🔧 ModModeAgent: Harmful content detected for user={user_id}: {detection['matched_keywords']}")
                     return await self._handle_harmful_content(event, line_bot_api, detection)
 
+            logger.debug(f"🔧 ModModeAgent: No action needed, letting other agents handle")
             return False  # Let other agents handle
 
         except Exception as e:

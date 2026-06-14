@@ -104,8 +104,9 @@ from src.utils.tracing import setup_tracing
 # ============================================================================
 # Logging Configuration
 # ============================================================================
+log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
 logging.basicConfig(
-    level=logging.DEBUG if settings.debug else logging.INFO,
+    level=logging.DEBUG if settings.debug else log_level,
     format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
 )
 logger = logging.getLogger(__name__)
