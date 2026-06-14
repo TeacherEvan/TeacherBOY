@@ -146,7 +146,7 @@ class MemoryMonitorService:
                 if usage_gb >= self.auto_flush_threshold_gb:
                     logger.warning(f"🚨 Memory usage {usage_gb:.2f} GB >= threshold {self.auto_flush_threshold_gb:.2f} GB - triggering auto-flush")
                     return True
-        
+
         # Fall back to percentage-based threshold
         current = self.get_memory_pressure()
         return self._PRESSURE_ORDER[current] >= self._PRESSURE_ORDER[self.auto_flush_threshold]

@@ -75,7 +75,7 @@ class ModModeAgent(BaseAgent):
 
         # If mod mode service is not available, we cannot check mod mode active or handle non-mod commands
         if self._mod_mode is None:
-            logger.warning(f"🔍 ModModeAgent: mod_mode service is None, cannot check mod mode, returning False")
+            logger.warning("🔍 ModModeAgent: mod_mode service is None, cannot check mod mode, returning False")
             return False
 
         # Check if mod mode is active in this group
@@ -140,7 +140,7 @@ class ModModeAgent(BaseAgent):
                     logger.warning(f"🔧 ModModeAgent: Harmful content detected for user={user_id}: {detection['matched_keywords']}")
                     return await self._handle_harmful_content(event, line_bot_api, detection)
 
-            logger.debug(f"🔧 ModModeAgent: No action needed, letting other agents handle")
+            logger.debug("🔧 ModModeAgent: No action needed, letting other agents handle")
             return False  # Let other agents handle
 
         except Exception as e:

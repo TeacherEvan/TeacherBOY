@@ -11,8 +11,11 @@ import httpx
 from linebot.v3.messaging import (
     FlexContainer,
     FlexMessage,
+    MessageAction,
     MessagingApi,
     PushMessageRequest,
+    QuickReply,
+    QuickReplyItem,
     ReplyMessageRequest,
     TextMessage,
 )
@@ -282,6 +285,9 @@ class AdminAgent(BaseAgent):
                 elif command == "memory":
                     await self._handle_admin_memory(event, line_bot_api, arg)
                     return True
+                elif command == "model":
+                    await self._handle_admin_model(event, line_bot_api, arg)
+                    return True
                 else:
                     response = (
                         f"❌ Unknown command: {command}\n\n"
@@ -425,17 +431,23 @@ class AdminAgent(BaseAgent):
             "    → Request clearing bot internal history/state for a chat\n"
             "      (private confirmation required; LINE does not support deleting/unsending\n"
             "       chat messages via API)\n\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "✅ Confirmations (private chat only):\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "  /admin confirm <token>\n"
-            "  /admin cancel <token>\n\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "💡 Tips:\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "• [chat_id] is optional - defaults to current chat\n"
-            "• Chat IDs format: user_U123..., group_C123...\n"
-            "• Destructive admin requests are limited to 3 destructive requests per 10 minutes per admin\n"
+            "━━━━━━━━━━━━━━━━\\n"
+            "✅ Confirmations (private chat only):\\n"
+            "━━━━━━━━━━━━━━━━\\n"
+            "  /admin confirm <token>\\n"
+            "  /admin cancel <token>\\n\\n"
+            "━━━━━━━━━━━━━━━━\\n"
+            "🤖 Model Selection:\\n"
+            "━━━━━━━━━━━━━━━━\\n"
+            "  /admin model list      → List all NOUS Portal models\\n\\n"
+            "  /admin model vision    → List vision-capable models only\\n\\n"
+            "  /admin model set <id>  → Set default chat model (in-memory)\\n\\n"
+            "━━━━━━━━━━━━━━━━\\n"
+            "💡 Tips:\\n"
+            "━━━━━━━━━━━━━━━━\\n"
+            "• [chat_id] is optional - defaults to current chat\\n"
+            "• Chat IDs format: user_U123..., group_C123...\\n"
+            "• Destructive admin requests are limited to 3 destructive requests per 10 minutes per admin\\n"
             "• Use 'sessions' to see active chat IDs"
         )
 
@@ -2210,6 +2222,146 @@ class AdminAgent(BaseAgent):
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[flex_message],
+                    notificationDisabled=False,
+                ),
+            )
+
+    async def _handle_admin_model(self, event: MessageEvent, line_bot_api: MessagingApi, arg: str | None) -> None:
+        """
+        Handle /admin model command - show/select NOUS Portal models.
+
+        Args:
+            event: The LINE message event
+            line_bot_api: LINE Bot API client
+            arg: Optional subcommand (list, set <model_id>, vision)
+        """
+        from src.services.nous_service import NOUS_FREE_MODELS, nous_inference_service
+
+        parts = (arg or "").strip().split(None, 1)
+        subcommand = parts[0] if parts else "list"
+        subarg = parts[1] if len(parts) > 1 else None
+
+        if subcommand == "list":
+            await self._send_nous_model_list(event, line_bot_api, vision_only=False)
+        elif subcommand == "vision":
+            await self._send_nous_model_list(event, line_bot_api, vision_only=True)
+        elif subcommand == "set":
+            if not subarg:
+                if event.reply_token:
+                    await asyncio.to_thread(
+                        line_bot_api.reply_message,
+                        ReplyMessageRequest(
+                            replyToken=event.reply_token,
+                            messages=[TextMessage(text="❌ Usage: /admin model set <model_id>", quickReply=None, quoteToken=None)],
+                            notificationDisabled=False,
+                        ),
+                    )
+                return
+
+            # Validate model exists
+            valid_models = [m["id"] for m in NOUS_FREE_MODELS]
+            if subarg not in valid_models:
+                if event.reply_token:
+                    await asyncio.to_thread(
+                        line_bot_api.reply_message,
+                        ReplyMessageRequest(
+                            replyToken=event.reply_token,
+                            messages=[TextMessage(text=f"❌ Unknown model: {subarg}\n\nValid models: {', '.join(valid_models)}", quickReply=None, quoteToken=None)],
+                            notificationDisabled=False,
+                        ),
+                    )
+                return
+
+            # Update config (in-memory, requires restart to persist)
+            import src.config as config_module
+            config_module.settings.nous_model = subarg
+            nous_inference_service.default_model = subarg
+
+            if event.reply_token:
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[TextMessage(text=f"✅ Default NOUS model set to: {subarg}\n\n⚠️ Change is in-memory only. Set NOUS_MODEL={subarg} in environment and restart to persist.", quickReply=None, quoteToken=None)],
+                        notificationDisabled=False,
+                    ),
+                )
+        else:
+            if event.reply_token:
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[TextMessage(text="❌ Unknown model subcommand. Use: list, vision, set <model_id>", quickReply=None, quoteToken=None)],
+                        notificationDisabled=False,
+                    ),
+                )
+
+    async def _send_nous_model_list(self, event: MessageEvent, line_bot_api: MessagingApi, vision_only: bool = False) -> None:
+        """Send Quick Reply dropdown with available NOUS models."""
+        from src.services.nous_service import NOUS_FREE_MODELS, nous_inference_service
+
+        models = [m for m in NOUS_FREE_MODELS if m["vision"] == vision_only] if vision_only else NOUS_FREE_MODELS
+
+        current_model = nous_inference_service.default_model
+        current_vision = nous_inference_service.default_vision_model
+
+        lines = ["🤖 NOUS Portal Models", "━━━━━━━━━━━━━━━━━━━━", ""]
+        if vision_only:
+            lines.append("👁️ Vision Models Only")
+        else:
+            lines.append("💬 Chat Models (add 'vision' filter for vision models)")
+        lines.append("")
+
+        for m in models:
+            marker = ""
+            if m["id"] == current_model:
+                marker = " ✅ (current chat)"
+            elif m["id"] == current_vision:
+                marker = " 👁️ (current vision)"
+            lines.append(f"• {m['name']} ({m['id']}){marker}")
+            lines.append(f"  {m['description']}")
+            if m["vision"]:
+                lines.append("  👁️ Vision capable")
+            lines.append("")
+
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("Commands:")
+        lines.append("  /admin model list      - Show all models")
+        lines.append("  /admin model vision    - Show vision models only")
+        lines.append("  /admin model set <id>  - Set default model")
+
+        # Build Quick Reply buttons for easy selection
+        quick_reply_items = []
+        for m in models[:11]:  # LINE limit: 13 items max
+            label = m["name"]
+            if m["vision"]:
+                label += " 👁️"
+            quick_reply_items.append(
+                QuickReplyItem(
+                    type="action",
+                    imageUrl=None,
+                    action=MessageAction(label=label[:20], text=f"/admin model set {m['id']}"),
+                )
+            )
+
+        # Add back button
+        quick_reply_items.append(
+            QuickReplyItem(
+                type="action",
+                imageUrl=None,
+                action=MessageAction(label="🔙 Back", text="/admin model list"),
+            )
+        )
+
+        quick_reply = QuickReply(items=quick_reply_items) if quick_reply_items else None
+
+        if event.reply_token:
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[TextMessage(text="\n".join(lines), quickReply=quick_reply, quoteToken=None)],
                     notificationDisabled=False,
                 ),
             )

@@ -49,7 +49,7 @@ from src.handlers.message_handler import (
     handle_member_joined_event,
     handle_member_left_event,
 )
-from src.services.ban_list_service import ban_list_service, init_ban_list_service
+from src.services.ban_list_service import init_ban_list_service
 
 if TYPE_CHECKING:
     from src.agents.mod_mode_agent import ModModeAgent
@@ -87,7 +87,7 @@ from src.services.memory_monitor_service import (
 from src.services.message_buffer_service import message_buffer_service
 from src.services.metrics_service import metrics_service
 from src.services.mod_audit_log import init_mod_audit_log, mod_audit_log
-from src.services.mod_mode_service import init_mod_mode_service, mod_mode_service
+from src.services.mod_mode_service import init_mod_mode_service
 from src.services.news_session_manager import news_session_manager
 from src.services.nous_service import nous_inference_service
 from src.services.openrouter_service import openrouter_service
@@ -98,7 +98,7 @@ from src.services.reminder_service import reminder_service
 from src.services.scheduler_service import scheduler_service
 from src.services.startup_data_loader import startup_loader
 from src.services.translation_service import translation_service
-from src.services.warning_service import init_warning_service, warning_service
+from src.services.warning_service import init_warning_service
 from src.utils.tracing import setup_tracing
 
 # ============================================================================
@@ -493,8 +493,8 @@ async def lifespan(app: FastAPI):
     # Register regardless of service availability - agent will handle missing services gracefully
     global mod_mode_agent
     from src.agents.mod_mode_agent import ModModeAgent
-    from src.services.mod_mode_service import get_mod_mode_service
     from src.services.ban_list_service import get_ban_list_service
+    from src.services.mod_mode_service import get_mod_mode_service
     from src.services.warning_service import get_warning_service
 
     mod_mode_svc = get_mod_mode_service()
@@ -511,7 +511,7 @@ async def lifespan(app: FastAPI):
         dashboard_builder=mod_dashboard,
     )
     agent_router.register_agent(mod_mode_agent)
-    
+
     if mod_mode_svc and ban_list_svc and warning_svc:
         logger.info("🛡️ ModModeAgent registered (Priority 4 - group moderation)")
     else:
@@ -971,8 +971,8 @@ async def handle_modmode_postback(event: PostbackEvent, line_bot_api: MessagingA
     """Handle ModMode dashboard postback actions."""
 
     from src.agents.mod_mode.dashboard import ModDashboardBuilder
-    from src.services.mod_mode_service import get_mod_mode_service
     from src.services.ban_list_service import get_ban_list_service
+    from src.services.mod_mode_service import get_mod_mode_service
     from src.services.warning_service import get_warning_service
 
     mod_mode_svc = get_mod_mode_service()
@@ -1151,11 +1151,13 @@ async def handle_modmode_postback(event: PostbackEvent, line_bot_api: MessagingA
 
 async def handle_memory_flush_postback(event: PostbackEvent, line_bot_api: MessagingApi, data: str) -> None:
     """Handle memory flush mode selection postback."""
-    from linebot.v3.messaging import FlexContainer, FlexMessage, ReplyMessageRequest, TextMessage
+    from linebot.v3.messaging import ReplyMessageRequest, TextMessage
 
     from src.config import settings
     from src.services.conversation_memory_service import FlushMode, FlushParams, get_conversation_memory
-    from src.services.document_memory_service import FlushMode as DocFlushMode, FlushParams as DocFlushParams, get_document_memory
+    from src.services.document_memory_service import FlushMode as DocFlushMode
+    from src.services.document_memory_service import FlushParams as DocFlushParams
+    from src.services.document_memory_service import get_document_memory
 
     user_id = getattr(event.source, "user_id", None) if event.source else None
 
