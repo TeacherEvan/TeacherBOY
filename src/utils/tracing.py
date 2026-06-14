@@ -45,11 +45,13 @@ def setup_tracing(app: FastAPI, settings: Settings) -> None:
         fastapi_instrumentation = importlib.import_module("opentelemetry.instrumentation.fastapi")
         httpx_instrumentation = importlib.import_module("opentelemetry.instrumentation.httpx")
         logging_instrumentation = importlib.import_module("opentelemetry.instrumentation.logging")
+        console_exporter = importlib.import_module("opentelemetry.exporter.console")
 
         Resource = sdk_resources.Resource
         TracerProvider = sdk_trace.TracerProvider
         BatchSpanProcessor = sdk_trace_export.BatchSpanProcessor
         OTLPSpanExporter = otlp_exporter.OTLPSpanExporter
+        ConsoleSpanExporter = console_exporter.ConsoleSpanExporter
         FastAPIInstrumentor = fastapi_instrumentation.FastAPIInstrumentor
         HTTPXClientInstrumentor = httpx_instrumentation.HTTPXClientInstrumentor
         LoggingInstrumentor = logging_instrumentation.LoggingInstrumentor
@@ -61,20 +63,33 @@ def setup_tracing(app: FastAPI, settings: Settings) -> None:
         else:
             resource = Resource.create({"service.name": settings.otel_service_name})
             provider = TracerProvider(resource=resource)
-            exporter = OTLPSpanExporter(endpoint=settings.otel_exporter_otlp_endpoint)
-            provider.add_span_processor(BatchSpanProcessor(exporter))
-            trace.set_tracer_provider(provider)
+            
+            # Try OTLP exporter first, fall back to console
+            try:
+                otlp_exporter_instance = OTLPSpanExporter(endpoint=settings.otel_exporter_otlp_endpoint)
+                provider.add_span_processor(BatchSpanProcessor(otlp_exporter_instance))
+                logger.info(
+                    "✅ Tracing enabled with OTLP exporter (service=%s, otlp=%s)",
+                    settings.otel_service_name,
+                    settings.otel_exporter_otlp_endpoint,
+                )
+            except Exception as otlp_error:
+                # Fall back to console exporter
+                console_exporter_instance = ConsoleSpanExporter()
+                provider.add_span_processor(BatchSpanProcessor(console_exporter_instance))
+                logger.warning(
+                    "⚠️  OTLP exporter failed, falling back to console exporter: %s",
+                    otlp_error,
+                )
+
+        trace.set_tracer_provider(provider)
 
         # Auto-instrumentation.
         FastAPIInstrumentor.instrument_app(app)
         HTTPXClientInstrumentor().instrument()
         LoggingInstrumentor().instrument(set_logging_format=True)
 
-        logger.info(
-            "✅ Tracing enabled (service=%s, otlp=%s)",
-            settings.otel_service_name,
-            settings.otel_exporter_otlp_endpoint,
-        )
+        logger.info("✅ Tracing fully initialized")
         _TRACING_INITIALIZED = True
 
     except Exception as e:
