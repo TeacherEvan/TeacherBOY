@@ -110,6 +110,7 @@ class ImageAnalyzerSessionManager:
         self._images_hf_api: Any | None = None
         self._images_commit_scheduler: Any | None = None
         self._images_local_path = Path("./data/images")
+        self._images_local_path.mkdir(parents=True, exist_ok=True)
         # Last images persistence
         self._last_images_path = self._images_local_path / "_last_images_index.json"
         self._load_last_images()
