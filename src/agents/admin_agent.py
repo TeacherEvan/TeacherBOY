@@ -55,6 +55,7 @@ from .admin.dashboard_builder import (
 )
 from .admin.destructive_action_flow import DestructiveActionFlow
 from .admin.admin_model_handler import AdminModelHandler
+from .admin.admin_dashboard_handler import AdminDashboardHandler
 from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
@@ -79,9 +80,18 @@ class AdminAgent(BaseAgent):
         self._admin_setup_key = settings.admin_setup_key.strip() if isinstance(settings.admin_setup_key, str) else None
         self._claimed_admin_user_id: str | None = None
         self._destructive_action_flow: DestructiveActionFlow | None = None
+
+        # Initialize handlers
         self._model_handler = AdminModelHandler(
             http_client=http_client,
             is_admin_check=self._is_admin,
+        )
+        # Use a lambda to defer reading persistence_backend until runtime
+        self._dashboard_handler = AdminDashboardHandler(
+            is_admin_check=self._is_admin,
+            is_private_chat_check=self._is_private_chat,
+            push_flex_to_user=self._push_flex_to_user,
+            persistence_backend=None,  # Will read from settings at runtime
         )
 
         if self._admin_user_ids:
@@ -231,7 +241,7 @@ class AdminAgent(BaseAgent):
                     logger.info(f"🔧 Admin stats executed by {user_id} in chat {chat_id}")
                     return True
                 elif command == "dashboard":
-                    dashboard_handled = await self._handle_dashboard_command(
+                    dashboard_handled = await self._dashboard_handler.handle_dashboard_command(
                         event=event,
                         chat_id=chat_id,
                         user_id=user_id,
