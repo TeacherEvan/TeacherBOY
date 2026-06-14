@@ -2237,6 +2237,20 @@ class AdminAgent(BaseAgent):
         """
         from src.services.nous_service import NOUS_FREE_MODELS, nous_inference_service
 
+        # Authorization check - only admins can change model
+        user_id = getattr(event.source, "user_id", None) if event.source else None
+        if not self._is_admin(user_id):
+            if event.reply_token:
+                await asyncio.to_thread(
+                    line_bot_api.reply_message,
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[TextMessage(text="❌ Admin only command.", quickReply=None, quoteToken=None)],
+                        notificationDisabled=False,
+                    ),
+                )
+            return
+
         parts = (arg or "").strip().split(None, 1)
         subcommand = parts[0] if parts else "list"
         subarg = parts[1] if len(parts) > 1 else None
@@ -2272,9 +2286,10 @@ class AdminAgent(BaseAgent):
                     )
                 return
 
-            # Update config (in-memory, requires restart to persist)
-            import src.config as config_module
-            config_module.settings.nous_model = subarg
+            # Update config (in-memory only - requires env var + restart to persist)
+            # Note: settings.nous_model is a Pydantic field; runtime mutation here is ephemeral.
+            # For persistence, admin must set NOUS_MODEL=<id> in .env and restart the service.
+            settings.nous_model = subarg
             nous_inference_service.default_model = subarg
 
             if event.reply_token:
@@ -2301,10 +2316,30 @@ class AdminAgent(BaseAgent):
         """Send Quick Reply dropdown with available NOUS models."""
         from src.services.nous_service import NOUS_FREE_MODELS, nous_inference_service
 
-        models = [m for m in NOUS_FREE_MODELS if m["vision"] == vision_only] if vision_only else NOUS_FREE_MODELS
+        models = self._filter_nous_models(NOUS_FREE_MODELS, vision_only)
+        message_text = self._build_model_list_text(models, nous_inference_service, vision_only)
+        quick_reply = self._build_model_quick_reply(models)
 
-        current_model = nous_inference_service.default_model
-        current_vision = nous_inference_service.default_vision_model
+        if event.reply_token:
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[TextMessage(text=message_text, quickReply=quick_reply, quoteToken=None)],
+                    notificationDisabled=False,
+                ),
+            )
+
+    def _filter_nous_models(self, models: list[dict], vision_only: bool) -> list[dict]:
+        """Filter NOUS models by vision capability."""
+        if vision_only:
+            return [m for m in models if m["vision"]]
+        return models
+
+    def _build_model_list_text(self, models: list[dict], service: Any, vision_only: bool) -> str:
+        """Build the text message for model list display."""
+        current_model = service.default_model
+        current_vision = service.default_vision_model
 
         lines = ["🤖 NOUS Portal Models", "━━━━━━━━━━━━━━━━━━━━", ""]
         if vision_only:
@@ -2331,7 +2366,12 @@ class AdminAgent(BaseAgent):
         lines.append("  /admin model vision    - Show vision models only")
         lines.append("  /admin model set <id>  - Set default model")
 
-        # Build Quick Reply buttons for easy selection
+        return "\n".join(lines)
+
+    def _build_model_quick_reply(self, models: list[dict]) -> "QuickReply | None":
+        """Build QuickReply buttons for model selection."""
+        from linebot.v3.messaging import MessageAction, QuickReply, QuickReplyItem
+
         quick_reply_items = []
         for m in models[:11]:  # LINE limit: 13 items max
             label = m["name"]
@@ -2354,17 +2394,7 @@ class AdminAgent(BaseAgent):
             )
         )
 
-        quick_reply = QuickReply(items=quick_reply_items) if quick_reply_items else None
-
-        if event.reply_token:
-            await asyncio.to_thread(
-                line_bot_api.reply_message,
-                ReplyMessageRequest(
-                    replyToken=event.reply_token,
-                    messages=[TextMessage(text="\n".join(lines), quickReply=quick_reply, quoteToken=None)],
-                    notificationDisabled=False,
-                ),
-            )
+        return QuickReply(items=quick_reply_items) if quick_reply_items else None
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         """Extract chat ID from event."""
