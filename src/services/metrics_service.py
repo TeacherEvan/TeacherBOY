@@ -35,6 +35,11 @@ class MetricsSnapshot:
     # Provider latency metrics
     provider_latency_ms_total: dict[str, float] = field(default_factory=dict)
     provider_latency_ms_count: dict[str, int] = field(default_factory=dict)
+    # Detailed provider latency (per model, per request type)
+    provider_model_latency_total: dict[str, float] = field(default_factory=dict)
+    provider_model_latency_count: dict[str, int] = field(default_factory=dict)
+    provider_request_type_latency_total: dict[str, float] = field(default_factory=dict)
+    provider_request_type_latency_count: dict[str, int] = field(default_factory=dict)
     # Agent RED metrics
     agent_requests_total: dict[str, int] = field(default_factory=dict)
     agent_errors_total: dict[str, int] = field(default_factory=dict)
@@ -97,6 +102,12 @@ class MetricsService:
     # Provider latency tracking
     _provider_latency_ms_total: dict[str, float] = field(default_factory=lambda: defaultdict(float))
     _provider_latency_ms_count: dict[str, int] = field(default_factory=lambda: defaultdict(int))
+
+    # Detailed provider latency (per model, per request type)
+    _provider_model_latency_total: dict[str, float] = field(default_factory=lambda: defaultdict(float))
+    _provider_model_latency_count: dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    _provider_request_type_latency_total: dict[str, float] = field(default_factory=lambda: defaultdict(float))
+    _provider_request_type_latency_count: dict[str, int] = field(default_factory=lambda: defaultdict(int))
 
     # Agent RED metrics
     _agent_requests_total: dict[str, int] = field(default_factory=lambda: defaultdict(int))
@@ -172,12 +183,40 @@ class MetricsService:
         self._provider_latency_ms_total[provider] += latency_ms
         self._provider_latency_ms_count[provider] += 1
 
+    def record_provider_model_latency(self, provider: str, model: str, latency_ms: float) -> None:
+        """Record latency for a specific provider model."""
+        key = f"{provider}:{model}"
+        self._provider_model_latency_total[key] += latency_ms
+        self._provider_model_latency_count[key] += 1
+
+    def record_provider_request_type_latency(self, provider: str, request_type: str, latency_ms: float) -> None:
+        """Record latency for a specific provider request type."""
+        key = f"{provider}:{request_type}"
+        self._provider_request_type_latency_total[key] += latency_ms
+        self._provider_request_type_latency_count[key] += 1
+
     def get_provider_latency_avg(self, provider: str) -> float:
         """Get average latency for a provider in milliseconds."""
         count = self._provider_latency_ms_count.get(provider, 0)
         if count == 0:
             return 0.0
         return self._provider_latency_ms_total[provider] / count
+
+    def get_provider_model_latency_avg(self, provider: str, model: str) -> float:
+        """Get average latency for a specific provider model."""
+        key = f"{provider}:{model}"
+        count = self._provider_model_latency_count.get(key, 0)
+        if count == 0:
+            return 0.0
+        return self._provider_model_latency_total[key] / count
+
+    def get_provider_request_type_latency_avg(self, provider: str, request_type: str) -> float:
+        """Get average latency for a specific provider request type."""
+        key = f"{provider}:{request_type}"
+        count = self._provider_request_type_latency_count.get(key, 0)
+        if count == 0:
+            return 0.0
+        return self._provider_request_type_latency_total[key] / count
 
     def record_agent_request(self, agent_name: str, message_type: str | None = None, duration_ms: float | None = None, success: bool = True) -> None:
         """Record an agent request for RED metrics.
@@ -252,6 +291,10 @@ class MetricsService:
             cache_misses_total=self._cache_misses_total,
             provider_latency_ms_total=dict(self._provider_latency_ms_total),
             provider_latency_ms_count=dict(self._provider_latency_ms_count),
+            provider_model_latency_total=dict(self._provider_model_latency_total),
+            provider_model_latency_count=dict(self._provider_model_latency_count),
+            provider_request_type_latency_total=dict(self._provider_request_type_latency_total),
+            provider_request_type_latency_count=dict(self._provider_request_type_latency_count),
             agent_requests_total=dict(self._agent_requests_total),
             agent_errors_total=dict(self._agent_errors_total),
             agent_latency_ms_total=dict(self._agent_latency_ms_total),

@@ -1,12 +1,14 @@
 """OpenRouter Service - LLM access via OpenRouter API."""
 
 import logging
+import time
 from typing import Any
 
 import httpx
 from pydantic import BaseModel
 
 from src.config import settings
+from src.services.metrics_service import metrics_service
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +70,7 @@ class OpenRouterService:
         self._last_status_code = None
         self._last_model = target_model
 
+        start_time = time.perf_counter()
         try:
             headers = {
                 "Authorization": f"Bearer {settings.openrouter_api_key}",
@@ -83,6 +86,12 @@ class OpenRouterService:
             }
 
             response = await self.client.post(self.api_url, headers=headers, json=payload, timeout=30.0)
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+
+            # Record detailed latency metrics
+            metrics_service.record_provider_latency("openrouter", elapsed_ms)
+            metrics_service.record_provider_model_latency("openrouter", target_model, elapsed_ms)
+            metrics_service.record_provider_request_type_latency("openrouter", "chat_completion", elapsed_ms)
 
             if response.status_code != 200:
                 err_text = (response.text or "").strip()
@@ -114,6 +123,10 @@ class OpenRouterService:
             return None
 
         except Exception as exc:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            metrics_service.record_provider_latency("openrouter", elapsed_ms)
+            metrics_service.record_provider_model_latency("openrouter", target_model, elapsed_ms)
+            metrics_service.record_provider_request_type_latency("openrouter", "chat_completion", elapsed_ms)
             logger.error("❌ OpenRouter request failed: %s", exc, exc_info=True)
             self._last_error = str(exc)
             return None
@@ -138,6 +151,7 @@ class OpenRouterService:
         self._last_status_code = None
         self._last_model = target_model
 
+        start_time = time.perf_counter()
         try:
             headers = {
                 "Authorization": f"Bearer {settings.openrouter_api_key}",
@@ -156,6 +170,12 @@ class OpenRouterService:
                 payload["max_tokens"] = max_tokens
 
             response = await self.client.post(self.api_url, headers=headers, json=payload, timeout=30.0)
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+
+            # Record detailed latency metrics
+            metrics_service.record_provider_latency("openrouter", elapsed_ms)
+            metrics_service.record_provider_model_latency("openrouter", target_model, elapsed_ms)
+            metrics_service.record_provider_request_type_latency("openrouter", "chat_completion_vision", elapsed_ms)
 
             if response.status_code != 200:
                 err_text = (response.text or "").strip()
@@ -187,6 +207,10 @@ class OpenRouterService:
             return None
 
         except Exception as exc:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            metrics_service.record_provider_latency("openrouter", elapsed_ms)
+            metrics_service.record_provider_model_latency("openrouter", target_model, elapsed_ms)
+            metrics_service.record_provider_request_type_latency("openrouter", "chat_completion_vision", elapsed_ms)
             logger.error("❌ OpenRouter vision request failed: %s", exc, exc_info=True)
             self._last_error = str(exc)
             return None

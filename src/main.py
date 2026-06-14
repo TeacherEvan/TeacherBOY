@@ -87,6 +87,7 @@ from src.services.memory_monitor_service import (
 )
 from src.services.message_buffer_service import message_buffer_service
 from src.services.metrics_service import metrics_service
+from src.services.n1_detector import n1_detector, query_cache
 from src.services.mod_audit_log import init_mod_audit_log, mod_audit_log
 from src.services.mod_mode_service import init_mod_mode_service
 from src.services.news_session_manager import news_session_manager
@@ -807,6 +808,93 @@ async def health_check() -> dict[str, Any]:
                 "hf_inference": hf_inference_service.is_configured(),
             },
         },
+    }
+
+
+@app.get("/metrics", tags=["Observability"])
+async def metrics_dashboard() -> dict[str, Any]:
+    """
+    Detailed metrics dashboard for observability.
+
+    Returns:
+    - Agent RED metrics (Rate, Errors, Duration)
+    - Provider latency breakdowns (per model, per request type)
+    - System metrics
+    """
+    snapshot = metrics_service.snapshot()
+    n1_stats = n1_detector.get_stats()
+    cache_stats = {
+        "size": len(query_cache._cache),
+        "max_size": query_cache.max_size,
+        "ttl_seconds": query_cache.ttl_seconds,
+    }
+
+    # Calculate provider summaries
+    provider_summaries = {}
+    for provider in ["openrouter", "github_models", "gemini", "hermes", "hf_inference"]:
+        total_count = snapshot.provider_latency_ms_count.get(provider, 0)
+        if total_count > 0:
+            provider_summaries[provider] = {
+                "avg_latency_ms": snapshot.provider_latency_ms_total.get(provider, 0) / total_count,
+                "total_requests": total_count,
+                "models": {},
+                "request_types": {},
+            }
+            # Per-model breakdown
+            for key, count in snapshot.provider_model_latency_count.items():
+                if key.startswith(f"{provider}:"):
+                    model = key.split(":", 1)[1]
+                    total = snapshot.provider_model_latency_total.get(key, 0)
+                    provider_summaries[provider]["models"][model] = {
+                        "avg_latency_ms": total / count if count > 0 else 0,
+                        "requests": count,
+                    }
+            # Per-request-type breakdown
+            for key, count in snapshot.provider_request_type_latency_count.items():
+                if key.startswith(f"{provider}:"):
+                    req_type = key.split(":", 1)[1]
+                    total = snapshot.provider_request_type_latency_total.get(key, 0)
+                    provider_summaries[provider]["request_types"][req_type] = {
+                        "avg_latency_ms": total / count if count > 0 else 0,
+                        "requests": count,
+                    }
+
+    # Agent RED summaries
+    agent_summaries = {}
+    for key, count in snapshot.agent_requests_total.items():
+        errors = snapshot.agent_errors_total.get(key, 0)
+        agent_summaries[key] = {
+            "requests": count,
+            "errors": errors,
+            "error_rate": errors / count if count > 0 else 0.0,
+            "avg_latency_ms": snapshot.agent_latency_ms_total.get(key, 0) / snapshot.agent_latency_ms_count.get(key, 1)
+            if snapshot.agent_latency_ms_count.get(key, 0) > 0 else 0.0,
+        }
+
+    return {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "uptime_seconds": metrics_service.get_uptime().total_seconds(),
+        "system": {
+            "translation_requests_total": snapshot.translation_requests_total,
+            "translation_google_total": snapshot.translation_google_total,
+            "translation_libre_total": snapshot.translation_libre_total,
+            "news_requests_total": snapshot.news_requests_total,
+            "rate_limited_requests": snapshot.rate_limited_requests,
+            "failed_translations": snapshot.failed_translations,
+            "admin_commands_total": snapshot.admin_commands_total,
+            "unique_users": snapshot.unique_users_count,
+            "unique_groups": snapshot.unique_groups_count,
+            "cache_hits": snapshot.cache_hits_total,
+            "cache_misses": snapshot.cache_misses_total,
+            "cache_hit_rate": (
+                snapshot.cache_hits_total / (snapshot.cache_hits_total + snapshot.cache_misses_total)
+                if (snapshot.cache_hits_total + snapshot.cache_misses_total) > 0 else 0.0
+            ),
+        },
+        "providers": provider_summaries,
+        "agents": agent_summaries,
+        "n1_queries": n1_stats,
+        "cache": cache_stats,
     }
 
 

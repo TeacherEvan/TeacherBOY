@@ -16,12 +16,14 @@ Available free-tier models include:
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 import httpx
 from pydantic import BaseModel
 
 from src.config import settings
+from src.services.metrics_service import metrics_service
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +119,7 @@ class GitHubModelsService:
         self._last_model = target_model
 
         while attempt < max_attempts:
+            start_time = time.perf_counter()
             try:
                 response = await self.client.post(
                     self.api_url,
@@ -124,6 +127,12 @@ class GitHubModelsService:
                     json=payload,
                     timeout=60.0,
                 )
+                elapsed_ms = (time.perf_counter() - start_time) * 1000
+
+                # Record detailed latency metrics
+                metrics_service.record_provider_latency("github_models", elapsed_ms)
+                metrics_service.record_provider_model_latency("github_models", target_model, elapsed_ms)
+                metrics_service.record_provider_request_type_latency("github_models", "chat_completion", elapsed_ms)
 
                 if response.status_code == 429:
                     self._last_status_code = 429
@@ -211,11 +220,19 @@ class GitHubModelsService:
                 return None
 
             except httpx.TimeoutException:
+                elapsed_ms = (time.perf_counter() - start_time) * 1000
+                metrics_service.record_provider_latency("github_models", elapsed_ms)
+                metrics_service.record_provider_model_latency("github_models", target_model, elapsed_ms)
+                metrics_service.record_provider_request_type_latency("github_models", "chat_completion", elapsed_ms)
                 logger.error("❌ GitHub Models request timed out (model=%s)", target_model)
                 self._last_error = "Request timed out"
                 return None
 
             except Exception as exc:
+                elapsed_ms = (time.perf_counter() - start_time) * 1000
+                metrics_service.record_provider_latency("github_models", elapsed_ms)
+                metrics_service.record_provider_model_latency("github_models", target_model, elapsed_ms)
+                metrics_service.record_provider_request_type_latency("github_models", "chat_completion", elapsed_ms)
                 logger.error("❌ GitHub Models request failed: %s", exc, exc_info=True)
                 self._last_error = str(exc)
                 return None
@@ -254,6 +271,7 @@ class GitHubModelsService:
         max_attempts = len(RATE_LIMIT_RETRY_DELAYS) + 1 if retry_on_rate_limit else 1
 
         while attempt < max_attempts:
+            start_time = time.perf_counter()
             try:
                 logger.info("📸 Sending vision request to %s...", target_model)
 
@@ -263,6 +281,12 @@ class GitHubModelsService:
                     json=payload,
                     timeout=120.0,
                 )
+                elapsed_ms = (time.perf_counter() - start_time) * 1000
+
+                # Record detailed latency metrics
+                metrics_service.record_provider_latency("github_models", elapsed_ms)
+                metrics_service.record_provider_model_latency("github_models", target_model, elapsed_ms)
+                metrics_service.record_provider_request_type_latency("github_models", "chat_completion_vision", elapsed_ms)
 
                 if response.status_code == 429:
                     self._last_status_code = 429
@@ -353,11 +377,19 @@ class GitHubModelsService:
                 return None
 
             except httpx.TimeoutException:
+                elapsed_ms = (time.perf_counter() - start_time) * 1000
+                metrics_service.record_provider_latency("github_models", elapsed_ms)
+                metrics_service.record_provider_model_latency("github_models", target_model, elapsed_ms)
+                metrics_service.record_provider_request_type_latency("github_models", "chat_completion_vision", elapsed_ms)
                 logger.error("❌ GitHub Models vision request timed out (model=%s)", target_model)
                 self._last_error = "Vision request timed out"
                 return None
 
             except Exception as exc:
+                elapsed_ms = (time.perf_counter() - start_time) * 1000
+                metrics_service.record_provider_latency("github_models", elapsed_ms)
+                metrics_service.record_provider_model_latency("github_models", target_model, elapsed_ms)
+                metrics_service.record_provider_request_type_latency("github_models", "chat_completion_vision", elapsed_ms)
                 logger.error("❌ GitHub Models vision request failed: %s", exc, exc_info=True)
                 self._last_error = str(exc)
                 return None
