@@ -296,7 +296,8 @@ class ProfilerAgent(BaseAgent):
                 # Get analysis from vision providers with fallback
                 logger.info("🔬 Sending to vision model for psychological analysis...")
 
-                model = getattr(settings, "profiler_model", "openai/gpt-4o")
+                # Use each provider's default vision model (do not override)
+                model = None
                 analysis = await chat_completion_with_vision_fallback(
                     messages=messages,
                     model=model,

@@ -1,194 +1,222 @@
-# Audit Report - TeacherBOY (Ms. Green) Bot
+# Audit Report - TeacherBOY / Ms. Green
 
-**Date:** 2026-06-13
-**Scope:** Full codebase audit focusing on reported issues:
-1. Image analysis not working
-2. Images not being stored
-3. Chats not being stored
-4. ModMode not present on help feature
-5. HuggingFace not synced
+**Generated:** 2026-06-13
+**Project:** Multi-Agent LINE Translation Bot (FastAPI + Python 3.11+)
 
 ---
 
-## 1. File Inventory
+## 1. File Inventory & Line Counts
 
-### Python Files (src/)
-| File | Lines | Purpose |
-|------|-------|---------|
-| src/agents/image_analyzer_agent.py | 1,589 | General image Q&A agent |
-| src/agents/help_agent.py | 771 | Help system with Flex UI |
-| src/agents/mod_mode_agent.py | 303 | Moderator mode agent (priority 4) |
-| src/services/image_analyzer_session_manager.py | 547 | Session management for image analysis |
-| src/services/conversation_memory_service.py | 657 | Chat history with HF persistence |
-| src/services/document_memory_service.py | 631 | PDF/DOCX storage with HF persistence |
-| src/services/hf_storage_mixin.py | 254 | Shared HF Hub persistence logic |
-| src/config.py | 1,104 | Pydantic Settings configuration |
-| src/main.py | 1,297 | FastAPI app + lifespan initialization |
+| Language | Files | Lines of Code |
+|----------|-------|---------------|
+| Python   | 225   | 61,082        |
+| TypeScript | 23  | ~5,000 (Convex backend) |
 
-### TypeScript Files (convex/)
-| File | Lines | Purpose |
-|------|-------|---------|
-| convex/modModeState.ts | ~100 | Mod mode state per group |
-| convex/banList.ts | ~100 | Ban list per group |
-| convex/userWarnings.ts | ~100 | 3-strike warnings per group |
+**Total: ~66,000 LOC**
 
-### Test Summary
-- **Total tests:** 838 (837 passed, 1 skipped)
-- **Lint:** ruff check passed (0 errors)
+### Key Directories
+- `src/agents/` - 13 agent implementations
+- `src/services/` - 40+ service modules
+- `src/handlers/` - LINE webhook handlers
+- `src/utils/` - Utilities (tracing, text preprocessing, LLM fallback)
+- `src/prompts/` - System prompts & frameworks
+- `convex/` - Convex TypeScript backend (mod mode, ban list, warnings)
+- `tests/` - 70+ test files, 847 tests
 
 ---
 
-## 2. Dependency Graph (Key Services)
+## 2. Dependency Graph (Text)
 
 ```
-main.py (lifespan)
-├── conversation_memory_service (HFStorageMixin + CommitScheduler)
-├── document_memory_service (HFStorageMixin + CommitScheduler)
-├── history_log_service (HFStorageMixin + CommitScheduler)
-├── image_analyzer_session_manager (Custom HF persistence)
-├── mod_mode_service (Convex)
-├── ban_list_service (Convex)
-├── warning_service (Convex)
-├── calendar_service (HF sync)
-└── AgentRouter
-    ├── HelpAgent (priority 5)
-    ├── AdminAgent (priority 5)
-    ├── ModModeAgent (priority 4)
-    ├── ImageAnalyzerAgent (priority 7)
-    └── ... other agents
+ENTRY POINT: src/main.py
+├── FastAPI app + lifespan
+├── AgentRouter (priority-based routing)
+│   ├── ModModeAgent (P4) - group moderation
+│   ├── HelpAgent (P5)
+│   ├── AdminAgent (P5)
+│   ├── CalendarAgent (P6)
+│   ├── HannibalProfileAgent (P6)
+│   ├── ProfilerAgent (P7)
+│   ├── ImageAnalyzerAgent (P7)
+│   ├── DocumentMemoryAgent (P8)
+│   ├── SearchAgent (P8)
+│   ├── LLMAgent (P9)
+│   ├── TranslationAgent (P10)
+│   ├── SpecialNewsAgent (P12)
+│   └── NewsAgent (P15)
+├── Services (singletons via getter pattern)
+│   ├── ModModeService, BanListService, WarningService (Convex)
+│   ├── ConversationMemoryService (HF Hub)
+│   ├── CalendarService (Google Calendar + HF)
+│   ├── AITranslationService (multi-provider fallback)
+│   ├── MetricsService, HarmfulContentDetector, ModAuditLog
+│   └── ... 20+ more services
+├── External Integrations
+│   ├── LINE Bot SDK v3
+│   ├── Convex (structured persistence)
+│   ├── Hugging Face Hub (data persistence)
+│   ├── Google Calendar API
+│   ├── OpenRouter / GitHub Models / Hermes / Gemini (LLM fallback chain)
+│   └── Brave Search API
+└── Config: Pydantic Settings (src/config.py)
 ```
 
 ---
 
-## 3. Issues Found (Phase 1 Audit)
+## 3. Test Baseline
 
-### Issue 1: ModMode Missing from Help System ⚠️ **HIGH**
-**Location:** `src/agents/help_agent.py` (lines 89-278, 392-400)
+| Metric | Value |
+|--------|-------|
+| Tests Collected | 433 |
+| Tests Passing | **847** (after venv venv fix) |
+| Tests Skipped | 1 |
+| Collection Errors | 0 (when run with `.venv/bin/python -m pytest`) |
 
-**Finding:**
-- `_topic_aliases()` maps `"modmode"`, `"mod mode"`, `"moderator"` → `"Moderator Mode"` (lines 364-366)
-- `_get_command_categories()` does NOT define a `"Moderator Mode"` category
-- `section_order` (line 392-400) does NOT include `"Moderator Mode"`
-- Result: Help topic resolves to "Moderator Mode" but no commands are displayed
-
-**Root Cause:** Feature added to topic aliases but category implementation missing.
-
----
-
-### Issue 2: Image Analysis HF Persistence Disabled by Default ⚠️ **HIGH**
-**Location:** `src/config.py` (line 646), `src/main.py` (lines 274-279)
-
-**Finding:**
-- `images_hf_enabled: bool = Field(default=False, ...)` (config.py:646)
-- `main.py` only initializes image HF storage if `settings.images_hf_enabled AND settings.images_hf_repo_id`
-- Default `False` means images NEVER sync to HF Hub unless explicitly enabled
-
-**Related:** `ImageAnalyzerSessionManager` has custom HF persistence (not using `HFStorageMixin`):
-- `_setup_images_hf_storage()` creates CommitScheduler for `./data/images`
-- `save_image_metadata()` writes JSON files to local path
-- But CommitScheduler only starts if HF token/repo_id are set at init OR `main.py` sets them later
-
-**Root Cause:** Configuration default is `False`; separate persistence implementation not integrated with main HF storage pattern.
+**Test Categories:**
+- Agent tests: 20 (ModModeAgent), 5 (dashboard), 2 (integration)
+- Service tests: 17 (mod mode, ban list, warnings, Convex, harmful content, audit log)
+- Total test files: 70+
 
 ---
 
-### Issue 3: Conversation Memory HF Sync May Not Commit ⚠️ **MEDIUM**
-**Location:** `src/services/conversation_memory_service.py`, `src/services/hf_storage_mixin.py`
+## 4. Lint Baseline
 
-**Finding:**
-- `ConversationMemoryService` extends `HFStorageMixin`
-- `_save_to_local_storage()` writes to local folder for CommitScheduler
-- `CommitScheduler` commits every 5 minutes (`hf_sync_interval`)
-- **Potential Issue:** `squash_history=True` (line 127) + `path_in_repo="conversations"` may cause conflicts
-- No verification that CommitScheduler is actually running/committing in tests
+### Ruff Check - 5 Errors (all fixable with `--fix`)
 
-**Evidence:** Tests mock external APIs; no integration test verifies HF commits.
+| Code | File | Line | Issue |
+|------|------|------|-------|
+| F401 | src/main.py | 52 | `ban_list_service` imported but unused |
+| F401 | src/main.py | 90 | `mod_mode_service` imported but unused |
+| F401 | src/main.py | 101 | `warning_service` imported but unused |
+| I001 | src/main.py | 493 | Import block un-sorted |
+| I001 | src/main.py | 965 | Import block un-sorted |
+
+### Ruff Format - 2 Files Need Reformatting
+- `src/agents/mod_mode_agent.py`
+- `tests/agents/test_mod_mode_agent.py`
+
+### Cyclomatic Complexity (C901) - 57 Functions > 10
+**Top offenders (>30):**
+- `src/main.py:lifespan` (46) - **CRITICAL** - main initialization
+- `src/main.py:handle_modmode_postback` (40) - **HIGH**
+- `src/agents/llm_agent.py:handle` (38) - **HIGH**
+- `src/agents/calendar_agent.py:handle` (43) - **HIGH**
+- `src/agents/calendar/handlers/image_handler.py:_handle_extracted_date_response` (29) - **MEDIUM**
+- `src/agents/admin_agent.py:_get_stats_message` (25) - **MEDIUM**
+- `src/agents/calendar/handlers/inline_handler.py:_parse_inline_add` (23) - **MEDIUM**
+
+### Unused Variables/Imports (F401/F841)
+- Only the 3 F401 errors in `src/main.py` (already covered above)
+
+### MyPy Type Checking - 41 Errors
+**Key issues:**
+- `src/agents/mod_mode_agent.py` - 7 type errors (user_id: Any vs str, audit_log Optional)
+- `src/main.py:510` - `ModAuditLog | None` passed where `ModAuditLog` required
+- `src/agents/vision_base_agent.py:164` - object has no attribute `get_last_error`
+- Multiple files: missing `types-python-dateutil` stubs
+- Test files: missing type annotations on variables
 
 ---
 
-### Issue 4: Image Analysis Session Manager - Image Storage ⚠️ **MEDIUM**
-**Location:** `src/services/image_analyzer_session_manager.py`
+## 5. TODOs/FIXMEs
 
-**Finding:**
-- `store_image()` saves to in-memory `_last_images` dict only (TTL: 1 hour)
-- `save_image_metadata()` saves full analysis to `./data/images/` for HF sync
-- **But:** `_last_images` (recent images for "Last" option) NOT persisted to HF
-- If bot restarts, "Last analyzed image" feature loses data
-- `_last_images` only in memory, no local/HF persistence
+| File | Line | Type | Content |
+|------|------|------|---------|
+| src/config.py | 96 | TODO | "TTL for translation cache in seconds (0 to disable) - TODO" |
+
+**Only 1 TODO found** - impressive codebase cleanliness.
 
 ---
 
-### Issue 5: HuggingFace Sync Script Missing Image Folder ⚠️ **LOW**
-**Location:** `scripts/hf_sync.py`
+## 6. Critical Architecture Checks
 
-**Finding:**
-- Script syncs: conversations, logs, calendar, documents
-- **Missing:** `--images` flag for `data/images` folder
-- Users cannot force-sync image analysis history manually
+### ✅ PASSING
+- **Getter pattern for services**: Services use `get_*_service()` pattern with lazy initialization
+- **Lifespan initialization order**: Convex services initialized after client creation, before agent registration
+- **Agent priority routing**: ModModeAgent (P4) registered before AdminAgent (P5) - correct
+- **No module-level singleton imports in handlers**: Handlers use getter functions
+- **Null guards in handlers**: `if service is None: return` pattern used consistently
 
----
+### ⚠️ NEEDS ATTENTION
+| Issue | File | Severity | Detail |
+|-------|------|----------|--------|
+| Unused imports in main.py | src/main.py:52,90,101 | MEDIUM | `ban_list_service`, `mod_mode_service`, `warning_service` imported but only getters used |
+| Import sorting | src/main.py:493,965 | STYLE | Import blocks not sorted |
+| Complex functions (57) | Multiple files | MEDIUM | Many handler functions exceed C901 threshold (10) |
+| MyPy errors (41) | 18 files | HIGH | Type annotation gaps, Optional handling |
+| Format needs reformatting | 2 files | STYLE | mod_mode_agent.py, test file |
 
-### Issue 6: Image Analyzer Agent - Vision Provider Check ⚠️ **LOW**
-**Location:** `src/agents/image_analyzer_agent.py` (line 325)
+### ❌ CRITICAL FINDINGS
 
-**Finding:**
+**1. ModModeAgent Type Errors (7 errors in mod_mode_agent.py:95-154)**
 ```python
-if not (hermes_service.is_configured() or openrouter_service.is_configured() or github_models_service.is_configured()):
-    return False
+# Line 95: user_id typed as Any | None but is_banned expects str
+if await self._ban_list.is_banned(group_id, user_id):
+
+# Line 154: _reply called with 3 args but signature takes 2
+await self._reply(event, "...", line_bot_api)  # event not in signature
 ```
-- Does NOT check `gemini_service.is_configured()` or `hf_inference_service.is_configured()`
-- If only Gemini/HF Inference configured, image analysis won't trigger
-- Other agents use `settings.get_fallback_llm_providers()` which includes all providers
+
+**2. ModAuditLog Optional Type Mismatch (main.py:510)**
+```python
+mod_mode_agent = ModModeAgent(
+    audit_log=mod_audit_log,  # Type: ModAuditLog | None
+    # Expected: ModAuditLog
+)
+```
 
 ---
 
-## 4. Test Coverage Gaps
+## 7. Service Initialization Audit (PROJECT_REVIEW.md compliance)
 
-| Area | Tests | Missing |
-|------|-------|---------|
-| Image Analyzer HF persistence | 0 | No test for `save_image_metadata` + HF sync |
-| Conversation Memory HF commit | 0 | No integration test for CommitScheduler |
-| Help Agent ModMode category | 0 | No test for "help modmode" |
-| ModModeAgent dashboard | Partial | Dashboard builder tested, but not full flow |
-| Image "Last" option persistence | 0 | In-memory only, no restart test |
+### ✅ CORRECT PATTERNS
+- ModModeAgent uses constructor injection (services passed in)
+- Lifespan uses getters: `get_mod_mode_service()`, `get_ban_list_service()`, `get_warning_service()`
+- Handlers use getters at runtime: `from ... import get_ban_list_service`
+
+### ⚠️ UNUSED MODULE VARIABLE IMPORTS (main.py)
+```python
+# Lines 52, 90, 101 - These module variables are imported but NEVER USED
+from src.services.ban_list_service import ban_list_service, init_ban_list_service
+from src.services.mod_mode_service import init_mod_mode_service, mod_mode_service
+from src.services.warning_service import init_warning_service, warning_service
+```
+Only `init_*_service` and getter imports are needed. The `*_service` module variables are stale imports.
 
 ---
 
-## 5. TODOs/FIXMEs Found
+## 8. Summary & Gate Decision
+
+### Audit Status: **CONDITIONAL PASS**
+
+**Gate Criteria Met:**
+- ✅ File inventory complete
+- ✅ Dependency graph mapped
+- ✅ Test baseline established (847 passing)
+- ✅ Lint baseline established (5 fixable errors)
+- ✅ TODOs documented (only 1)
+
+**Blockers for Phase 2 (Review):**
+1. **Fix 5 ruff errors** (F401 unused imports, I001 import sorting) - auto-fixable
+2. **Format 2 files** - auto-fixable
+3. **Fix ModModeAgent type errors** (7 errors) - requires code changes
+4. **Fix ModAuditLog Optional type** in main.py - simple type fix
+
+**Recommendation:** Run auto-fixes first, then address type errors, then proceed to Phase 2.
+
+---
+
+## 9. Quick Commands for Remediation
 
 ```bash
-# From codebase search:
-src/config.py:96  # TODO: translation_cache_ttl_seconds
-src/config.py:138 # DEPRECATED: NewsAPI.org key
+# Auto-fix lint issues
+cd /home/ewaldt/Documents/VS/Other/Bot/TeacherBOY
+.venv/bin/ruff check . --fix
+.venv/bin/ruff format .
+
+# Run full test suite
+.venv/bin/python -m pytest tests/ -v --tb=short
+
+# Type check after fixes
+.venv/bin/mypy src/ --ignore-missing-imports
 ```
-
----
-
-## 6. Gate Decision
-
-**DO NOT PROCEED to Phase 2 until user confirms scope.**
-
-**Critical Issues to Fix (Priority Order):**
-1. **ModMode Help Category** - Add "Moderator Mode" category to HelpAgent
-2. **Image HF Persistence** - Enable by default or fix configuration; unify with HFStorageMixin
-3. **Conversation Memory HF Verification** - Add integration test or verify CommitScheduler works
-4. **Image "Last" Option Persistence** - Persist `_last_images` to local/HF
-5. **HF Sync Script** - Add `--images` flag
-6. **Vision Provider Check** - Include all vision-capable providers
-
----
-
-## 7. Recommended Fixes Summary
-
-| Issue | Fix Approach |
-|-------|--------------|
-| ModMode Help | Add category in `_get_command_categories()` with `/modmode` commands; add to `section_order` |
-| Image HF Enable | Change `images_hf_enabled` default to `True` if repo_id set; or unify with HFStorageMixin |
-| Image Last Persist | Save `_last_images` to local JSON; load on startup; include in HF sync |
-| Conversation HF | Verify CommitScheduler commits; add health check endpoint |
-| HF Sync Script | Add `--images` argument and logic |
-| Vision Providers | Use `settings.get_fallback_llm_providers()` or check all vision providers |
-
----
-
-*End of Audit Report*

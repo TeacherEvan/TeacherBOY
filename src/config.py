@@ -441,12 +441,17 @@ class Settings(BaseSettings):
         default="CRITICAL",
         description="Memory pressure threshold for auto-flush (LOW, MEDIUM, HIGH, CRITICAL).",
     )
+    memory_monitor_auto_flush_threshold_gb: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Memory usage threshold in GB for auto-flush (0 = disabled). For 16GB container, 2GB = 12.5%.",
+    )
     memory_monitor_auto_flush_mode: str = Field(
         default="time_based",
         description="Flush mode for auto-flush (time_based, size_based, manual, full).",
     )
     memory_monitor_auto_flush_days: int = Field(
-        default=7,
+        default=30,
         ge=1,
         le=365,
         description="Days for auto time-based flush (1-365).",

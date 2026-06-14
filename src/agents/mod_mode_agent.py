@@ -22,11 +22,11 @@ class ModModeAgent(BaseAgent):
 
     def __init__(
         self,
-        mod_mode_service: ModModeService,
-        ban_list_service: BanListService,
-        warning_service: WarningService,
-        harmful_detector: HarmfulContentDetector,
-        audit_log: ModAuditLog,
+        mod_mode_service: ModModeService | None,
+        ban_list_service: BanListService | None,
+        warning_service: WarningService | None,
+        harmful_detector: HarmfulContentDetector | None,
+        audit_log: ModAuditLog | None,
         dashboard_builder: ModDashboardBuilder,
     ):
         super().__init__(
@@ -158,7 +158,7 @@ class ModModeAgent(BaseAgent):
         await self._audit.log_mode_change(group_id, user_id, mode, True, special_user_id)
 
         mode_msg = (
-            "ALL USERS (harmful content monitored)" if mode == "all" else f"SPECIAL MODE (only you + @{special_user_id})"
+            "ALL USERS (normal chat, harmful content monitored)" if mode == "all" else f"SPECIAL MODE (only you + @{special_user_id} can speak)"
         )
         await self._reply(
             f"🛡️ Moderator Mode ACTIVATED\nMode: {mode_msg}\nUse /modmode for dashboard",
@@ -198,7 +198,7 @@ class ModModeAgent(BaseAgent):
         if subcmd == "all":
             await self._mod_mode.activate_mod_mode(group_id, user_id, "all")
             await self._audit.log_mode_change(group_id, user_id, "all", True)
-            await self._reply("✅ Mod mode: ALL USERS (harmful content monitored)", line_bot_api)
+            await self._reply("✅ Mod mode: ALL USERS (normal chat, harmful content monitored)", line_bot_api)
             return True
 
         if subcmd == "special":
@@ -208,7 +208,7 @@ class ModModeAgent(BaseAgent):
             special_id = args[0].lstrip("@")
             await self._mod_mode.set_special_user(group_id, special_id)
             await self._audit.log_mode_change(group_id, user_id, "special", True, special_id)
-            await self._reply(f"✅ Mod mode: SPECIAL (only admin + @{special_id})", line_bot_api)
+            await self._reply(f"✅ Mod mode: SPECIAL (only admin + @{special_id} can speak)", line_bot_api)
             return True
 
         if subcmd == "off":
@@ -245,6 +245,14 @@ class ModModeAgent(BaseAgent):
 
     async def _kick_user(self, group_id: str, user_id: str, line_bot_api: MessagingApi, reason: str) -> bool:
         """Kick user via LINE API."""
+        # Protect special user from being kicked
+        if self._mod_mode:
+            info = await self._mod_mode.get_mod_mode_info(group_id)
+            if info and info.get("mode") == "special":
+                special_user_id = info.get("special_user_id")
+                if special_user_id and user_id == special_user_id:
+                    logger.warning(f"⚠️ Attempted to kick special user {user_id} - blocked")
+                    return False
         try:
             # LINE Bot SDK v3: kick from group
             if hasattr(line_bot_api, "kick_users"):
@@ -288,6 +296,15 @@ class ModModeAgent(BaseAgent):
         if not await self._is_admin(admin_id):
             await self._reply("❌ Admin only", line_bot_api)
             return True
+
+        # Check if target is special user (protected)
+        if self._mod_mode:
+            info = await self._mod_mode.get_mod_mode_info(group_id)
+            if info and info.get("mode") == "special":
+                special_user_id = info.get("special_user_id")
+                if special_user_id and target_user_id == special_user_id:
+                    await self._reply(f"❌ Cannot kick @{target_user_id} - protected as special user in SPECIAL mode", line_bot_api)
+                    return True
 
         # Kick the user
         success = await self._kick_user(group_id, target_user_id, line_bot_api, "Kicked via /modmode kick")

@@ -35,11 +35,13 @@ class MemoryMonitorService:
         self,
         check_interval_seconds: int = 60,
         auto_flush_threshold: str = "CRITICAL",
+        auto_flush_threshold_gb: float = 0.0,
         auto_flush_mode: str = "time_based",
         auto_flush_days: int = 7,
     ):
         self.check_interval_seconds = check_interval_seconds
         self.auto_flush_threshold = MemoryPressure(auto_flush_threshold.lower())
+        self.auto_flush_threshold_gb = auto_flush_threshold_gb
         self.auto_flush_mode = auto_flush_mode
         self.auto_flush_days = auto_flush_days
         self._memory_limit_bytes: int | None = None
@@ -135,6 +137,17 @@ class MemoryMonitorService:
 
     def should_auto_flush(self) -> bool:
         """Check if auto-flush should be triggered."""
+        # Check GB-based threshold first (if configured)
+        if self.auto_flush_threshold_gb > 0:
+            limit = self.get_memory_limit_bytes()
+            usage = self.get_memory_usage_bytes()
+            if limit and usage > 0:
+                usage_gb = usage / (1024**3)
+                if usage_gb >= self.auto_flush_threshold_gb:
+                    logger.warning(f"🚨 Memory usage {usage_gb:.2f} GB >= threshold {self.auto_flush_threshold_gb:.2f} GB - triggering auto-flush")
+                    return True
+        
+        # Fall back to percentage-based threshold
         current = self.get_memory_pressure()
         return self._PRESSURE_ORDER[current] >= self._PRESSURE_ORDER[self.auto_flush_threshold]
 
@@ -151,6 +164,7 @@ def get_memory_monitor() -> MemoryMonitorService | None:
 def init_memory_monitor(
     check_interval_seconds: int = 60,
     auto_flush_threshold: str = "CRITICAL",
+    auto_flush_threshold_gb: float = 0.0,
     auto_flush_mode: str = "time_based",
     auto_flush_days: int = 7,
 ) -> MemoryMonitorService:
@@ -160,11 +174,12 @@ def init_memory_monitor(
     _memory_monitor = MemoryMonitorService(
         check_interval_seconds=check_interval_seconds,
         auto_flush_threshold=auto_flush_threshold,
+        auto_flush_threshold_gb=auto_flush_threshold_gb,
         auto_flush_mode=auto_flush_mode,
         auto_flush_days=auto_flush_days,
     )
 
-    logger.info(f"📊 Memory Monitor initialized (threshold: {auto_flush_threshold}, mode: {auto_flush_mode})")
+    logger.info(f"📊 Memory Monitor initialized (threshold: {auto_flush_threshold}, GB threshold: {auto_flush_threshold_gb}, mode: {auto_flush_mode})")
     return _memory_monitor
 
 

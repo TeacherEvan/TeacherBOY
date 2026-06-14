@@ -489,7 +489,9 @@ async def lifespan(app: FastAPI):
 
     # Register ModModeAgent (Priority: 4 - Intercepts messages in mod-enabled groups)
     # Must be registered before AdminAgent to intercept mod commands first
+    # Register regardless of service availability - agent will handle missing services gracefully
     global mod_mode_agent
+    from src.agents.mod_mode_agent import ModModeAgent
     from src.services.mod_mode_service import get_mod_mode_service
     from src.services.ban_list_service import get_ban_list_service
     from src.services.warning_service import get_warning_service
@@ -498,22 +500,21 @@ async def lifespan(app: FastAPI):
     ban_list_svc = get_ban_list_service()
     warning_svc = get_warning_service()
 
+    mod_dashboard = ModDashboardBuilder()
+    mod_mode_agent = ModModeAgent(
+        mod_mode_service=mod_mode_svc,
+        ban_list_service=ban_list_svc,
+        warning_service=warning_svc,
+        harmful_detector=harmful_content_detector,
+        audit_log=mod_audit_log,
+        dashboard_builder=mod_dashboard,
+    )
+    agent_router.register_agent(mod_mode_agent)
+    
     if mod_mode_svc and ban_list_svc and warning_svc:
-        from src.agents.mod_mode_agent import ModModeAgent
-
-        mod_dashboard = ModDashboardBuilder()
-        mod_mode_agent = ModModeAgent(
-            mod_mode_service=mod_mode_svc,
-            ban_list_service=ban_list_svc,
-            warning_service=warning_svc,
-            harmful_detector=harmful_content_detector,
-            audit_log=mod_audit_log,
-            dashboard_builder=mod_dashboard,
-        )
-        agent_router.register_agent(mod_mode_agent)
         logger.info("🛡️ ModModeAgent registered (Priority 4 - group moderation)")
     else:
-        logger.info("🛡️ ModModeAgent not registered (Convex not configured)")
+        logger.info("🛡️ ModModeAgent registered (Priority 4) but running in degraded mode - some features unavailable")
 
     # Register Calendar Agent (Priority: 6 - Handles calendar/reminder commands)
     if settings.is_calendar_configured():
@@ -629,6 +630,7 @@ async def lifespan(app: FastAPI):
         init_memory_monitor(
             check_interval_seconds=settings.memory_monitor_check_interval_seconds,
             auto_flush_threshold=settings.memory_monitor_auto_flush_threshold,
+            auto_flush_threshold_gb=settings.memory_monitor_auto_flush_threshold_gb,
             auto_flush_mode=settings.memory_monitor_auto_flush_mode,
             auto_flush_days=settings.memory_monitor_auto_flush_days,
         )
@@ -950,6 +952,11 @@ async def handle_postback_event(event: PostbackEvent, line_bot_api: MessagingApi
         await handle_modmode_postback(event, line_bot_api, data)
         return
 
+    # Memory flush postbacks (flush_mode=*)
+    if data.startswith("flush_mode="):
+        await handle_memory_flush_postback(event, line_bot_api, data)
+        return
+
     # Add "View Logs" button to admin dashboard
     # This will be added in the dashboard builder
 
@@ -1139,6 +1146,64 @@ async def handle_modmode_postback(event: PostbackEvent, line_bot_api: MessagingA
 
     except Exception as e:
         logger.error(f"❌ ModMode postback error: {e}", exc_info=True)
+
+
+async def handle_memory_flush_postback(event: PostbackEvent, line_bot_api: MessagingApi, data: str) -> None:
+    """Handle memory flush mode selection postback."""
+    from linebot.v3.messaging import FlexContainer, FlexMessage, ReplyMessageRequest, TextMessage
+
+    from src.config import settings
+    from src.services.conversation_memory_service import FlushMode, FlushParams, get_conversation_memory
+    from src.services.document_memory_service import FlushMode as DocFlushMode, FlushParams as DocFlushParams, get_document_memory
+
+    user_id = getattr(event.source, "user_id", None) if event.source else None
+
+    # Check if user is admin
+    admin_user_ids = settings.get_admin_user_ids()
+    if user_id not in admin_user_ids:
+        return
+
+    # Parse mode: flush_mode=time_based|size_based|manual|full
+    mode_str = data.split("=", 1)[1] if "=" in data else "time_based"
+
+    mode_map = {
+        "time_based": FlushMode.TIME_BASED,
+        "size_based": FlushMode.SIZE_BASED,
+        "manual": FlushMode.MANUAL_SELECTION,
+        "full": FlushMode.FULL_PURGE,
+    }
+
+    mode = mode_map.get(mode_str.lower(), FlushMode.TIME_BASED)
+
+    # Execute flush
+    conv_memory = get_conversation_memory()
+    doc_memory = get_document_memory()
+
+    params = FlushParams(dry_run=False, older_than_days=7)
+    results = []
+
+    if conv_memory:
+        conv_result = await conv_memory.flush_memory(mode, params)
+        results.append(f"💬 Conversations: {conv_result}")
+
+    if doc_memory:
+        doc_params = DocFlushParams(dry_run=False, older_than_days=7)
+        doc_result = await doc_memory.purge_documents(DocFlushMode(mode.value), doc_params)
+        results.append(f"📄 Documents: {doc_result}")
+
+    response_text = "✅ Memory Flush Executed\n━━━━━━━━━━━━━━━━\n\n" + "\n".join(results)
+
+    if event.reply_token:
+        await asyncio.to_thread(
+            line_bot_api.reply_message,
+            ReplyMessageRequest(
+                replyToken=event.reply_token,
+                messages=[TextMessage(text=response_text, quickReply=None, quoteToken=None)],
+                notificationDisabled=False,
+            ),
+        )
+
+    logger.info(f"🧹 Manual memory flush by admin {user_id}: {mode_str}")
 
 
 async def _send_flex_reply(
