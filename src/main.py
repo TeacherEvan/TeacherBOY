@@ -7,6 +7,7 @@ high-performance async I/O, and production-ready error handling.
 import asyncio
 import logging
 import time
+import uuid
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -100,6 +101,12 @@ from src.services.startup_data_loader import startup_loader
 from src.services.translation_service import translation_service
 from src.services.warning_service import init_warning_service
 from src.utils.tracing import setup_tracing
+
+# ============================================================================
+# Correlation ID Context (must be before logging setup)
+# ============================================================================
+from src.utils.correlation import get_correlation_id, set_correlation_id, reset_correlation_id
+
 
 # ============================================================================
 # Logging Configuration
@@ -1285,20 +1292,24 @@ async def webhook(request: Request) -> JSONResponse:
     Raises:
         HTTPException: If signature validation fails
     """
-    # Rate limit by client IP
-    client_ip = request.client.host if request.client else "unknown"
-    if not _check_webhook_rate_limit(client_ip):
-        logger.warning(f"🚫 Webhook rate limit exceeded for IP: {client_ip}")
-        raise HTTPException(status_code=429, detail="Rate limit exceeded")
-
-    # Extract signature up front; raw body decoding stays inside the protected path.
-    signature = request.headers.get("X-Line-Signature", "")
+    # Generate correlation ID for request tracing
+    correlation_id = uuid.uuid4().hex[:16]
+    token = set_correlation_id(correlation_id)
 
     try:
+        # Rate limit by client IP
+        client_ip = request.client.host if request.client else "unknown"
+        if not _check_webhook_rate_limit(client_ip):
+            logger.warning(f"🚫 Webhook rate limit exceeded for IP: {client_ip}", extra={"correlation_id": correlation_id})
+            raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+        # Extract signature up front; raw body decoding stays inside the protected path.
+        signature = request.headers.get("X-Line-Signature", "")
+
         body = await request.body()
         body_text = body.decode("utf-8")
 
-        logger.info(f"📨 Received webhook request ({len(body_text)} bytes)")
+        logger.info(f"📨 Received webhook request ({len(body_text)} bytes)", extra={"correlation_id": correlation_id})
 
         # Parse and validate events using LINE SDK v3
         events = webhook_parser.parse(body_text, signature)  # type: ignore[union-attr]
@@ -1322,7 +1333,7 @@ async def webhook(request: Request) -> JSONResponse:
                             # Skip bot's own messages to avoid polluting date extraction with bot responses
                             user_id = getattr(event.source, "user_id", None) if event.source else None
                             if bot_user_id and user_id == bot_user_id:
-                                logger.debug("🔒 Skipping message buffer storage for bot's own message")
+                                logger.debug("🔒 Skipping message buffer storage for bot's own message", extra={"correlation_id": correlation_id})
                             else:
                                 chat_id = None
                                 if event.source:
@@ -1344,7 +1355,7 @@ async def webhook(request: Request) -> JSONResponse:
                             # CRITICAL: Check if message is from bot itself (prevent infinite loop)
                             # Skip agent routing for bot's own messages to prevent responding to itself
                             if bot_user_id and user_id == bot_user_id:
-                                logger.debug("🔒 Skipping agent routing for bot's own message (stored in buffer only)")
+                                logger.debug("🔒 Skipping agent routing for bot's own message (stored in buffer only)", extra={"correlation_id": correlation_id})
                                 continue
 
                             # Route text message to appropriate agent
@@ -1352,7 +1363,7 @@ async def webhook(request: Request) -> JSONResponse:
 
                         elif isinstance(event.message, ImageMessageContent):
                             # Route image message to ProfilerAgent via agent router
-                            logger.info(f"📷 Received image message from {user_id}")
+                            logger.info(f"📷 Received image message from {user_id}", extra={"correlation_id": correlation_id})
                             await agent_router.route_message(event, line_bot_api)
 
                     elif isinstance(event, JoinEvent):
@@ -1363,7 +1374,7 @@ async def webhook(request: Request) -> JSONResponse:
                         # User added bot as friend
                         user_id = getattr(event.source, "user_id", None) if getattr(event, "source", None) else None
                         metrics_service.record_friend_added(user_id)
-                        logger.info("➕ Follow event received (friend added)")
+                        logger.info("➕ Follow event received (friend added)", extra={"correlation_id": correlation_id})
 
                         # Send welcome message
                         if user_id:
@@ -1385,15 +1396,15 @@ async def webhook(request: Request) -> JSONResponse:
                                         customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
                                     ),
                                 )
-                                logger.info(f"✅ Sent welcome message to new friend {user_id}")
+                                logger.info(f"✅ Sent welcome message to new friend {user_id}", extra={"correlation_id": correlation_id})
                             except Exception as e:
-                                logger.error(f"❌ Failed to send welcome message: {e}")
+                                logger.error(f"❌ Failed to send welcome message: {e}", extra={"correlation_id": correlation_id})
 
                     elif isinstance(event, UnfollowEvent):
                         # User blocked/removed bot
                         user_id = getattr(event.source, "user_id", None) if getattr(event, "source", None) else None
                         metrics_service.record_friend_removed(user_id)
-                        logger.info("➖ Unfollow event received")
+                        logger.info("➖ Unfollow event received", extra={"correlation_id": correlation_id})
 
                     elif isinstance(event, LeaveEvent):
                         # Bot left a group/room
@@ -1412,12 +1423,13 @@ async def webhook(request: Request) -> JSONResponse:
                         await handle_postback_event(event, line_bot_api)
 
                     else:
-                        logger.debug(f"Unhandled event type: {type(event).__name__}")
+                        logger.debug(f"Unhandled event type: {type(event).__name__}", extra={"correlation_id": correlation_id})
 
                 except Exception as event_error:
                     logger.error(
                         f"❌ Error processing event {type(event).__name__}: {event_error}",
                         exc_info=True,
+                        extra={"correlation_id": correlation_id},
                     )
                     # Continue processing other events even if one fails
                     continue
@@ -1425,15 +1437,18 @@ async def webhook(request: Request) -> JSONResponse:
         return JSONResponse(content={"status": "success", "processed": len(events)})
 
     except InvalidSignatureError:
-        logger.error("❌ Invalid LINE signature - possible security threat!")
+        logger.error("❌ Invalid LINE signature - possible security threat!", extra={"correlation_id": correlation_id})
         raise HTTPException(status_code=400, detail="Invalid signature. Request rejected for security.")
 
     except Exception as e:
-        logger.error(f"❌ Webhook processing error: {str(e)}", exc_info=True)
+        logger.error(f"❌ Webhook processing error: {str(e)}", exc_info=True, extra={"correlation_id": correlation_id})
         return JSONResponse(
             content={"status": "error", "detail": "Internal server error"},
             status_code=500,
         )
+
+    finally:
+        reset_correlation_id(token)
 
 
 if __name__ == "__main__":

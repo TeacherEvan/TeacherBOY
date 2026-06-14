@@ -1,8 +1,11 @@
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger as _logger
+
+from src.utils.correlation import get_correlation_id
 
 
 class LoggingService:
@@ -31,7 +34,12 @@ class LoggingService:
 
     @staticmethod
     def _build_payload(level: str, message: str, extra: dict | None = None) -> str:
-        payload: dict[str, object] = {"level": level, "message": message}
+        payload: dict[str, object] = {
+            "level": level,
+            "message": message,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "correlation_id": get_correlation_id(),
+        }
         if extra:
             payload["extra"] = extra
         return json.dumps(payload, ensure_ascii=False)
@@ -45,5 +53,7 @@ class LoggingService:
     def error(self, message: str, extra: dict | None = None) -> None:
         _logger.error(self._build_payload("ERROR", message, extra))
 
+    def debug(self, message: str, extra: dict | None = None) -> None:
+        _logger.debug(self._build_payload("DEBUG", message, extra))
 
 logging_service = LoggingService()
