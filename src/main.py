@@ -157,9 +157,17 @@ def create_optimized_http_client() -> httpx.AsyncClient:
         Configured httpx.AsyncClient instance
     """
     client_config = settings.get_http_client_config()
+    max_connections = client_config["limits"]["max_connections"]
+    max_keepalive = client_config["limits"]["max_keepalive_connections"]
     limits = httpx.Limits(
-        max_connections=client_config["limits"]["max_connections"],
-        max_keepalive_connections=client_config["limits"]["max_keepalive_connections"],
+        max_connections=max_connections,
+        max_keepalive_connections=max_keepalive,
+    )
+
+    # Update connection pool metrics
+    metrics_service.update_connection_pool_stats(
+        max_connections=max_connections,
+        max_keepalive=max_keepalive,
     )
 
     return httpx.AsyncClient(
@@ -893,6 +901,18 @@ async def metrics_dashboard() -> dict[str, Any]:
         },
         "providers": provider_summaries,
         "agents": agent_summaries,
+        "connection_pool": {
+            "max_connections": snapshot.connection_pool_max_connections,
+            "max_keepalive_connections": snapshot.connection_pool_max_keepalive,
+            "active_connections": snapshot.connection_pool_active_connections,
+            "idle_connections": snapshot.connection_pool_idle_connections,
+            "requests_queued": snapshot.connection_pool_requests_queued,
+            "errors": snapshot.connection_pool_errors,
+            "utilization_percent": (
+                (snapshot.connection_pool_active_connections / snapshot.connection_pool_max_connections * 100)
+                if snapshot.connection_pool_max_connections > 0 else 0.0
+            ),
+        },
         "n1_queries": n1_stats,
         "cache": cache_stats,
     }

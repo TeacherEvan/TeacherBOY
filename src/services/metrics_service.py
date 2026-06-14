@@ -45,6 +45,13 @@ class MetricsSnapshot:
     agent_errors_total: dict[str, int] = field(default_factory=dict)
     agent_latency_ms_total: dict[str, float] = field(default_factory=dict)
     agent_latency_ms_count: dict[str, int] = field(default_factory=dict)
+    # Connection pool metrics
+    connection_pool_max_connections: int = 0
+    connection_pool_max_keepalive: int = 0
+    connection_pool_active_connections: int = 0
+    connection_pool_idle_connections: int = 0
+    connection_pool_requests_queued: int = 0
+    connection_pool_errors: int = 0
 
 
 class _BoundedSet:
@@ -114,6 +121,14 @@ class MetricsService:
     _agent_errors_total: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     _agent_latency_ms_total: dict[str, float] = field(default_factory=lambda: defaultdict(float))
     _agent_latency_ms_count: dict[str, int] = field(default_factory=lambda: defaultdict(int))
+
+    # Connection pool metrics
+    _connection_pool_max_connections: int = 0
+    _connection_pool_max_keepalive: int = 0
+    _connection_pool_active_connections: int = 0
+    _connection_pool_idle_connections: int = 0
+    _connection_pool_requests_queued: int = 0
+    _connection_pool_errors: int = 0
 
     def record_translation(self, provider: str, chat_id: str | None = None) -> None:
         self._translation_requests_total += 1
@@ -256,6 +271,27 @@ class MetricsService:
         key = f"{agent_name}:{message_type}" if message_type else agent_name
         return self._agent_requests_total.get(key, 0)
 
+    def update_connection_pool_stats(
+        self,
+        max_connections: int,
+        max_keepalive: int,
+        active: int = 0,
+        idle: int = 0,
+        queued: int = 0,
+        errors: int = 0,
+    ) -> None:
+        """Update connection pool statistics."""
+        self._connection_pool_max_connections = max_connections
+        self._connection_pool_max_keepalive = max_keepalive
+        self._connection_pool_active_connections = active
+        self._connection_pool_idle_connections = idle
+        self._connection_pool_requests_queued = queued
+        self._connection_pool_errors = errors
+
+    def record_connection_pool_error(self) -> None:
+        """Record a connection pool error."""
+        self._connection_pool_errors += 1
+
     def get_started_at(self) -> datetime:
         return self._started_at
 
@@ -299,6 +335,12 @@ class MetricsService:
             agent_errors_total=dict(self._agent_errors_total),
             agent_latency_ms_total=dict(self._agent_latency_ms_total),
             agent_latency_ms_count=dict(self._agent_latency_ms_count),
+            connection_pool_max_connections=self._connection_pool_max_connections,
+            connection_pool_max_keepalive=self._connection_pool_max_keepalive,
+            connection_pool_active_connections=self._connection_pool_active_connections,
+            connection_pool_idle_connections=self._connection_pool_idle_connections,
+            connection_pool_requests_queued=self._connection_pool_requests_queued,
+            connection_pool_errors=self._connection_pool_errors,
         )
 
 
