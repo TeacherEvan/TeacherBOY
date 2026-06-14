@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 from src.services.convex_client import ConvexClient
+from src.services.n1_detector import query_cache
 
 
 class ConvexModRepository:
@@ -11,6 +12,19 @@ class ConvexModRepository:
 
     def __init__(self, convex_client: ConvexClient):
         self._client = convex_client
+
+    def _invalidate_group_cache(self, group_id: str) -> None:
+        """Invalidate all cached queries for a group."""
+        query_cache.invalidate("convex", "/modModeState/getByGroup", group_id)
+        query_cache.invalidate("convex", "/banList/getByGroup", group_id)
+        query_cache.invalidate("convex", "/banList/getByGroupUser", group_id)
+        query_cache.invalidate("convex", "/userWarnings/getByGroup", group_id)
+        query_cache.invalidate("convex", "/userWarnings/getByGroupUser", group_id)
+
+    def _invalidate_user_cache(self, group_id: str, user_id: str) -> None:
+        """Invalidate cached queries for a specific user in a group."""
+        query_cache.invalidate("convex", "/banList/getByGroupUser", group_id, user_id)
+        query_cache.invalidate("convex", "/userWarnings/getByGroupUser", group_id, user_id)
 
     # ===== modModeState =====
 
@@ -36,11 +50,13 @@ class ConvexModRepository:
         if special_user_id:
             payload["specialUserId"] = special_user_id
         response = await self._client.post("/modModeState/upsert", payload)
+        self._invalidate_group_cache(group_id)
         return response.get("data", payload)
 
     async def deactivate_mod_mode(self, group_id: str) -> bool:
         """Deactivate mod mode for a group."""
         response = await self._client.post("/modModeState/deactivate", {"groupId": group_id})
+        self._invalidate_group_cache(group_id)
         return response.get("success", False)
 
     # ===== banList =====
@@ -62,6 +78,7 @@ class ConvexModRepository:
         if reason:
             payload["reason"] = reason
         response = await self._client.post("/banList/upsert", payload)
+        self._invalidate_group_cache(group_id)
         return response.get("data", payload)
 
     async def is_user_banned(self, group_id: str, user_id: str) -> bool:
@@ -72,6 +89,7 @@ class ConvexModRepository:
     async def unban_user(self, group_id: str, user_id: str) -> bool:
         """Remove user from ban list."""
         response = await self._client.post("/banList/remove", {"groupId": group_id, "userId": user_id})
+        self._invalidate_user_cache(group_id, user_id)
         return response.get("success", False)
 
     async def get_ban_list(self, group_id: str) -> list[dict[str, Any]]:
@@ -102,6 +120,7 @@ class ConvexModRepository:
             "readByUser": False,
         }
         response = await self._client.post("/userWarnings/upsert", payload)
+        self._invalidate_user_cache(group_id, user_id)
         return response.get("data", payload)
 
     async def get_warning_count(self, group_id: str, user_id: str) -> int:
@@ -119,6 +138,7 @@ class ConvexModRepository:
             "readAt": int(time.time() * 1000),
         }
         response = await self._client.post("/userWarnings/upsert", payload)
+        self._invalidate_user_cache(group_id, user_id)
         return response.get("data", payload)
 
     async def get_warnings(self, group_id: str) -> list[dict[str, Any]]:
@@ -129,4 +149,5 @@ class ConvexModRepository:
     async def reset_warnings(self, group_id: str, user_id: str) -> bool:
         """Reset warning count for user (admin unban path)."""
         response = await self._client.post("/userWarnings/resetWarnings", {"groupId": group_id, "userId": user_id})
+        self._invalidate_user_cache(group_id, user_id)
         return response.get("success", False)
