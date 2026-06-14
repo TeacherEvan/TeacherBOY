@@ -54,6 +54,7 @@ from .admin.dashboard_builder import (
     build_dashboard_handoff_message,
 )
 from .admin.destructive_action_flow import DestructiveActionFlow
+from .admin.admin_model_handler import AdminModelHandler
 from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,10 @@ class AdminAgent(BaseAgent):
         self._admin_setup_key = settings.admin_setup_key.strip() if isinstance(settings.admin_setup_key, str) else None
         self._claimed_admin_user_id: str | None = None
         self._destructive_action_flow: DestructiveActionFlow | None = None
+        self._model_handler = AdminModelHandler(
+            http_client=http_client,
+            is_admin_check=self._is_admin,
+        )
 
         if self._admin_user_ids:
             logger.info(f"✅ AdminAgent initialized with {len(self._admin_user_ids)} authorized admin(s)")
@@ -286,7 +291,7 @@ class AdminAgent(BaseAgent):
                     await self._handle_admin_memory(event, line_bot_api, arg)
                     return True
                 elif command == "model":
-                    await self._handle_admin_model(event, line_bot_api, arg)
+                    await self._model_handler.handle(event, line_bot_api, arg)
                     return True
                 else:
                     response = (
