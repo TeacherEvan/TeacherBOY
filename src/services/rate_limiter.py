@@ -45,12 +45,17 @@ class RateLimiter:
         self.calendar_chat_limit = 30  # 30 operations per minute per chat
         self.calendar_chat_window = timedelta(minutes=1)
 
-        # Destructive admin request limiting
+        # Destructive admin request limiting - 3 per minute per admin
         self._admin_destructive_history: dict[str, list[datetime]] = defaultdict(list)
         self._admin_destructive_targets: dict[str, dict[str, datetime | str]] = {}
         self._admin_destructive_lock = Lock()
-        self.admin_destructive_limit = 3  # 3 destructive requests per 10 minutes per admin
-        self.admin_destructive_window = timedelta(minutes=10)
+        self.admin_destructive_limit = 3  # 3 destructive requests per minute per admin
+        self.admin_destructive_window = timedelta(minutes=1)
+
+        # General admin rate limiting - 10 requests per minute per admin
+        self._admin_general_history: dict[str, list[datetime]] = defaultdict(list)
+        self.admin_general_limit = 10  # 10 admin requests per minute per admin
+        self.admin_general_window = timedelta(minutes=1)
 
         # User-based rate limiting for authenticated users
         # Dictionary: {user_id: {"daily": [timestamps], "burst": [timestamps]}}
@@ -227,6 +232,91 @@ class RateLimiter:
 
         return 0
 
+    def check_admin_limit(self, user_id: str, destructive: bool = False) -> tuple[bool, int | None]:
+        """Check if an admin request is allowed.
+
+        Args:
+            user_id: Admin user identifier
+            destructive: Whether this is a destructive admin command
+
+        Returns:
+            Tuple of (allowed, retry_after_seconds)
+            - allowed: True if request is allowed, False if rate limited
+            - retry_after_seconds: Seconds until limit resets (None if allowed)
+        """
+        now = self._admin_now()
+
+        if destructive:
+            # Check destructive limit (3 per minute)
+            cutoff = now - self.admin_destructive_window
+            self._admin_destructive_history[user_id] = [
+                ts for ts in self._admin_destructive_history[user_id] if ts > cutoff
+            ]
+            count = len(self._admin_destructive_history[user_id])
+            if count >= self.admin_destructive_limit:
+                oldest = min(self._admin_destructive_history[user_id]) if self._admin_destructive_history[user_id] else now
+                retry_after = int((oldest + self.admin_destructive_window - now).total_seconds())
+                return False, max(1, retry_after)
+
+            # Also check general admin limit (destructive counts towards general too)
+        else:
+            # Check general admin limit (10 per minute for non-destructive)
+            cutoff = now - self.admin_general_window
+            self._admin_general_history[user_id] = [
+                ts for ts in self._admin_general_history[user_id] if ts > cutoff
+            ]
+            count = len(self._admin_general_history[user_id])
+            if count >= self.admin_general_limit:
+                oldest = min(self._admin_general_history[user_id]) if self._admin_general_history[user_id] else now
+                retry_after = int((oldest + self.admin_general_window - now).total_seconds())
+                return False, max(1, retry_after)
+
+        return True, None
+
+    def record_admin_request(self, user_id: str, destructive: bool = False) -> None:
+        """Record an admin request for rate limiting.
+
+        Args:
+            user_id: Admin user identifier
+            destructive: Whether this is a destructive admin command
+        """
+        now = self._admin_now()
+        if destructive:
+            self._admin_destructive_history[user_id].append(now)
+        self._admin_general_history[user_id].append(now)
+
+    def get_admin_reset_time(self, user_id: str, destructive: bool = False) -> int:
+        """Get seconds until admin rate limit resets.
+
+        Args:
+            user_id: Admin user identifier
+            destructive: Whether checking destructive limit
+
+        Returns:
+            Seconds until limit resets (0 if not rate limited)
+        """
+        now = self._admin_now()
+        if destructive:
+            history = self._admin_destructive_history[user_id]
+            window = self.admin_destructive_window
+        else:
+            history = self._admin_general_history[user_id]
+            window = self.admin_general_window
+
+        if not history:
+            return 0
+
+        cutoff = now - window
+        valid = [ts for ts in history if ts > cutoff]
+        if not valid:
+            return 0
+
+        oldest = min(valid)
+        reset_time = oldest + window
+        if reset_time > now:
+            return int((reset_time - now).total_seconds())
+        return 0
+
     def reset_chat(self, chat_id: str):
         """
         Reset rate limit for a specific chat.
@@ -298,8 +388,35 @@ class RateLimiter:
         with self._admin_destructive_lock:
             self._cleanup_admin_destructive_limits(self._admin_now())
 
+            # Clean up admin rate limit entries
+            admin_general_cutoff = now - self.admin_general_window
+            admin_destructive_cutoff = now - self.admin_destructive_window
+
+            admin_general_users_to_remove = []
+            for user_id, timestamps in self._admin_general_history.items():
+                valid = [ts for ts in timestamps if ts > admin_general_cutoff]
+                if not valid:
+                    admin_general_users_to_remove.append(user_id)
+                else:
+                    self._admin_general_history[user_id] = valid
+
+            for user_id in admin_general_users_to_remove:
+                del self._admin_general_history[user_id]
+
+            admin_destructive_users_to_remove = []
+            for user_id, timestamps in self._admin_destructive_history.items():
+                valid = [ts for ts in timestamps if ts > admin_destructive_cutoff]
+                if not valid:
+                    admin_destructive_users_to_remove.append(user_id)
+                else:
+                    self._admin_destructive_history[user_id] = valid
+
+            for user_id in admin_destructive_users_to_remove:
+                del self._admin_destructive_history[user_id]
+
         total_cleaned = (
             len(chats_to_remove) + len(users_to_remove) + len(calendar_users_to_remove) + len(calendar_chats_to_remove)
+            + len(admin_general_users_to_remove) + len(admin_destructive_users_to_remove)
         )
         if total_cleaned > 0:
             logger.debug(
