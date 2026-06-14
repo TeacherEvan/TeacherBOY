@@ -1,0 +1,31 @@
+# Hermes Instructions - TeacherBOY
+
+## Deployment
+
+**CRITICAL: GitHub Actions is blocked by billing issue on TeacherEvan org/account.**
+
+All deployments to Hugging Face Spaces MUST be done via direct git push:
+
+```bash
+# Add HF remote (one-time setup)
+git remote add hf https://EvilEvan:${HF_TOKEN}@huggingface.co/spaces/EvilEvan/TeacherBOY
+
+# Deploy to HF Space (run after every change to src/, tests/, Dockerfile, requirements.txt)
+git push hf HEAD:main --force
+```
+
+**Do NOT rely on GitHub Actions workflows** (ci.yml, huggingface_sync.yml) - they fail with "account is locked due to a billing issue".
+
+## Testing
+
+```bash
+# Run all tests locally
+pytest tests/ -v --tb=short
+```
+
+## Key Files
+
+- `src/agents/image_analyzer_agent.py` - Image analysis agent (fixed: session priority)
+- `src/services/image_analyzer_session_manager.py` - Session state management
+- `.github/workflows/huggingface_sync.yml` - Broken (billing)
+- `.github/workflows/ci.yml` - Broken (billing)

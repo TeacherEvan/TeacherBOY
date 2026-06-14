@@ -36,28 +36,37 @@ Ms. Green: 📷 Please send the image you'd like me to analyze (60 seconds)
 Within 60 seconds, send the image you want analyzed.
 
 Ms. Green will:
-1. Send "📷 Analyzing image... Please wait." message
-2. Download the image from LINE
-3. Send it to GPT-4o vision API for analysis
-4. Ask: "What would you like to know about this image?"
+1. Download the image from LINE
+2. Store it and ask: "What would you like to do?"
+3. Present **Quick Reply buttons** for common actions
 
-### Step 3: Ask Your Question
+### Step 3: Choose Action (Quick Reply Buttons)
 
-Send your question about the image. Ms. Green will analyze and respond.
+Ms. Green shows three Quick Reply buttons:
 
-**Example:**
+| Button | Action | Description |
+|--------|--------|-------------|
+| 🔍 **Analyze** | `Analyze this` | General image Q&A — ask any question |
+| 📝 **Scrape** | `Scrape this` | Extract text/data from image |
+| 📖 **Generate Debrief** | `M` | Structured daily debrief extraction |
 
-```
-User: Ms. Green analyze
-Ms. Green: 📷 Please send the image you'd like me to analyze (60 seconds)
+**Or** type your own question directly — the bot will treat it as an analysis question.
 
-User: [sends photo of a Thai menu]
-Ms. Green: 📷 Analyzing image... Please wait.
-Ms. Green: What would you like to know about this image?
+### Step 4: Get Your Answer
 
-User: What dishes are vegetarian?
-Ms. Green: Based on the menu image, here are the vegetarian options...
-```
+- If you tapped **🔍 Analyze**: Type your question (e.g., "What dishes are vegetarian?")
+- If you tapped **📝 Scrape**: Bot extracts text/data automatically
+- If you tapped **📖 Generate Debrief**: Bot runs structured debrief extraction
+
+## Alternative: Bare `analyze` Trigger (New/Last Choice)
+
+If you send just `analyze` or `Ms. Green analyze` (without "this"), Ms. Green will ask:
+
+> **New or Last** — with Quick Reply buttons:
+> - **New** — Send a new image
+> - **Last** — Use the most recently analyzed image in this chat
+
+This is useful when you want to ask multiple questions about the same image.
 
 ## Calendar Integration
 
@@ -117,7 +126,7 @@ GITHUB_MODELS_PAT=your_github_pat_here
 ## Example Output
 
 ```
-📷 IMAGE ANALYSIS RESULT
+⚡ MS. GREEN OBSERVES ⚡
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 Based on the image you sent, I can see:
@@ -158,7 +167,7 @@ Would you like me to translate any specific dish descriptions?
 
 ### Agent Priority
 
-- Priority 7 (after Admin/Help, before Search/LLM)
+- **Priority 7** (after Profiler, before Search/LLM)
 - Handles both text triggers and images with active sessions
 
 ### Files
@@ -210,4 +219,4 @@ Would you like me to translate any specific dish descriptions?
 ---
 
 **Last Updated**: June 2026  
-**Version**: 1.0.0
+**Version**: 2.0.0 (Quick Reply flow)

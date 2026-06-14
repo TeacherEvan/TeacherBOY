@@ -2,7 +2,10 @@
 
 **Date:** 2026-06-08  
 **Feature:** `/admin features` — Interactive agent enable/disable panel  
-**Branch:** `feature/ms-green-features`
+**Branch:** `feature/ms-green-features`  
+**Status:** 🔄 **Design Complete — Not Implemented** (as of 2026-06-14)
+
+---
 
 ---
 

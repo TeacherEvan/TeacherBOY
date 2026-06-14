@@ -97,18 +97,18 @@ For the full variable reference and mounted-volume examples, see [Environment va
 - **Trigger:** Type `news` or `ข่าว` to start
 - **📰 Special News:** `/special news` in DM provides interactive carousel with tourism, sports, international headlines
 
-### Ms. Green AI (LLM Agent) **NEW!**
+### 🤖 Ms. Green AI (LLM Agent) **NEW!**
 
 - **🤖 Ask Ms. Green:** `Ms. Green <question>`
 - **🌡️ Warmth (Temperature):** Configure via `LLM_TEMPERATURE` (default: `1.0`)
 - **🧊 Wise Persona (Default):** Controlled by `LLM_SYSTEM_PROMPT` (optional override); calm, gentle, and exceptionally wise, without fairy-tale styling
 - **👥 Group Access Policy:**
   - Admins can use Ms. Green anywhere
-  - Non-admins follow `ZEUS_GROUP_ACCESS_MODE`:
+  - Non-admins follow `MS_GREEN_GROUP_ACCESS_MODE`:
     - `all` (default)
-    - `allowlist` with `ZEUS_ALLOWED_GROUP_IDS`
-    - `denylist` with `ZEUS_DENIED_GROUP_IDS`
-- **🧑‍💼 Boss Easter Egg:** If asked “who is boss”, replies with exactly: `Evan...`
+    - `allowlist` with `GREEN_ALLOWED_GROUP_IDS`
+    - `denylist` with `GREEN_DENIED_GROUP_IDS`
+- **🧑‍💼 Boss Easter Egg:** If asked "who is boss", replies with exactly: `Evan...`
 
 ### Psychological Profiler **NEW!**
 
@@ -208,9 +208,9 @@ ADDITIONAL_AGENTS=
 # Ms. Green AI (optional)
 LLM_TEMPERATURE=1.0
 # Group/room policy for non-admin Ms. Green usage: all|allowlist|denylist
-ZEUS_GROUP_ACCESS_MODE=all
-ZEUS_ALLOWED_GROUP_IDS=
-ZEUS_DENIED_GROUP_IDS=
+MS_GREEN_GROUP_ACCESS_MODE=all
+GREEN_ALLOWED_GROUP_IDS=
+GREEN_DENIED_GROUP_IDS=
 # Optional: override Ms. Green persona
 # LLM_SYSTEM_PROMPT=
 

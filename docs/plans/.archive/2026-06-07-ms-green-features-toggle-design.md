@@ -1,5 +1,10 @@
 # Ms Green Features Toggle System - Design Document
 
+**Date:** 2026-06-07  
+**Status:** 🔄 **Design Complete — Not Implemented** (as of 2026-06-14)
+
+---
+
 ## Overview
 Global feature toggle system for Ms. Green (TeacherBOY) LINE bot. Provides a LINE Rich Menu with 5 toggle buttons (Translate, Calendar/Reminders, News, Search, LLM Chat) that update a JSON config file and instantly reflect visual state (green=on, red=off).
 

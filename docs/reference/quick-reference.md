@@ -15,8 +15,9 @@ docker-compose up --build
 pytest
 pytest --cov=src --cov-report=html
 
-# Deploy to Hugging Face
-git push --force-with-lease hf main:main
+# Deploy to Hugging Face (direct push - GitHub Actions blocked by billing)
+git remote add hf https://EvilEvan:${HF_TOKEN}@huggingface.co/spaces/EvilEvan/TeacherBOY
+git push hf HEAD:main --force
 ```
 
 ## 🔑 Environment Variables (Required)
