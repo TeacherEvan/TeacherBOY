@@ -162,6 +162,26 @@ class Settings(BaseSettings):
     )
 
     # ============================================================================
+    # NOUS Portal Configuration (Free Vision AI)
+    # ============================================================================
+    nous_api_key: str | None = Field(
+        default=None,
+        description="NOUS Portal API key for free vision models",
+    )
+    nous_base_url: str | None = Field(
+        default="https://api.nousresearch.com/v1",
+        description="Base URL for NOUS Portal API",
+    )
+    nous_model: str | None = Field(
+        default=None,
+        description="NOUS Portal model identifier (e.g., Hermes-3-Llama-3.1-70B)",
+    )
+    nous_vision_model: str | None = Field(
+        default=None,
+        description="NOUS Portal vision model identifier",
+    )
+
+    # ============================================================================
     # Hermes / OpenAI-compatible fallback Configuration
     # ============================================================================
     hermes_api_key: str | None = Field(
@@ -201,10 +221,10 @@ class Settings(BaseSettings):
     # Fallback / provider priority Configuration (LLM)
     # ============================================================================
     llm_fallback_provider_priority: str = Field(
-        default="gemini,hermes,openrouter,hf_inference,github,ollama",
+        default="gemini,nous,hermes,openrouter,hf_inference,github,ollama",
         description=(
             "Comma-separated priority list for LLM providers and fallback chain. "
-            "Options: gemini, hermes, openrouter, hf_inference, github, ollama. First configured provider is used; "
+            "Options: gemini, nous, hermes, openrouter, hf_inference, github, ollama. First configured provider is used; "
             "if that fails, the next configured provider is tried."
         ),
     )
@@ -915,10 +935,18 @@ class Settings(BaseSettings):
         """Check if Gemini API is properly configured."""
         return bool(self.gemini_api_key and len(self.gemini_api_key) > 10)
 
+    def is_nous_configured(self) -> bool:
+        """Check if NOUS Portal API is properly configured."""
+        return bool(
+            (self.nous_base_url or "").strip()
+            and (self.nous_api_key or "").strip()
+            and len((self.nous_api_key or "").strip()) > 10
+        )
+
     def get_fallback_llm_providers(self) -> list[str]:
         """
         Return provider order list with one highest-priority configured provider
-        selected from each configured group: github / openrouter / hermes / gemini.
+        selected from each configured group: github / openrouter / hermes / gemini / nous.
         """
         configured: list[str] = []
         if self.is_github_models_configured() and "github" not in configured:
@@ -929,7 +957,9 @@ class Settings(BaseSettings):
             configured.append("hermes")
         if self.is_gemini_configured() and "gemini" not in configured:
             configured.append("gemini")
-        return configured or ["github", "openrouter", "hermes", "gemini"]
+        if self.is_nous_configured() and "nous" not in configured:
+            configured.append("nous")
+        return configured or ["github", "openrouter", "hermes", "gemini", "nous"]
 
     def get_llm_provider_priority(self) -> list[str]:
         """
