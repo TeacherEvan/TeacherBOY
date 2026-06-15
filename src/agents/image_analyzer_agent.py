@@ -322,11 +322,14 @@ class ImageAnalyzerAgent(BaseAgent):
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """
         Handle if:
-        1. Text message with analyze trigger (start session)
-        2. Image message when waiting for image
+        1. Image message when waiting for image
+        2. Text message when waiting for analysis choice (new/last)
         3. Text message when waiting for question
-        4. Text message when waiting for analysis choice
-        5. Calendar confirmation response (yes/no add to calendar)
+        4. Calendar confirmation response (yes/no add to calendar)
+        5. Text message with trigger phrase (start session) - ONLY if no active session
+
+        Session state checks MUST come before trigger checks to avoid re-triggering
+        on Quick Reply button texts like "Analyze this", "Scrape this", "M".
         """
         # Check if any vision-capable provider is available
         if not (
@@ -346,37 +349,34 @@ class ImageAnalyzerAgent(BaseAgent):
         chat_id = self._get_chat_id(event)
         user_id = getattr(event.source, "user_id", None) if event.source else None
 
-        # Case 1: Text message with trigger phrase
-        if message_type == "text" and text and self._is_trigger(text):
-            return True
-
-        # Case 2: Image message when waiting for image
+        # Case 1: Image message when waiting for image (highest priority for images)
         if message_type == "image":
             return await image_analyzer_session_manager.is_waiting_for_image(chat_id, user_id)
 
-        # Case 3: Text message when waiting for analysis choice
-        if (
-            message_type == "text"
-            and text
-            and await image_analyzer_session_manager.is_waiting_for_analysis_choice(chat_id, user_id)
-        ):
-            # Only accept 'new' or 'last' as valid choices
-            choice = text.strip().lower()
-            if choice in ("new", "last"):
+        # Case 2: Text message when waiting for analysis choice (new/last)
+        if message_type == "text" and text:
+            if await image_analyzer_session_manager.is_waiting_for_analysis_choice(chat_id, user_id):
+                # Only accept 'new' or 'last' as valid choices
+                choice = text.strip().lower()
+                if choice in ("new", "last"):
+                    return True
+                # Invalid choice - will re-prompt in handle()
                 return True
-            # Invalid choice - will re-prompt in handle()
-            return True
 
-        # Case 4: Text message when waiting for question
+        # Case 3: Text message when waiting for question
         if message_type == "text" and text:
             if await image_analyzer_session_manager.is_waiting_for_question(chat_id, user_id):
                 return True
 
-            # Case 5: Calendar confirmation response
+            # Case 4: Calendar confirmation response
             text_lower = text.lower().strip()
             if await image_analyzer_session_manager.is_waiting_for_calendar_confirmation(chat_id, user_id):
                 if any(kw in text_lower for kw in ["yes add", "no skip", "yes", "no", "ใช่", "ไม่"]):
                     return True
+
+        # Case 5: Trigger phrase - start session (lowest priority, only if no active session)
+        if message_type == "text" and text and self._is_trigger(text):
+            return True
 
         return False
 
