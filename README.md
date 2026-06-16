@@ -66,7 +66,7 @@ For the full variable reference and mounted-volume examples, see [Environment va
 - **🔥 Smart Auto-Detection:** Automatically starts when Thai text is detected
 - **🔄 Continuous Mode:** Translates EVERY message until you say "Thanks Ms Green!"
 - **😴 Sleep Mode:** Bot sleeps for 24 hours - say "Dear Ms. Green" alone to wake up
-- **🌐 AI Translation:** Shared AI translation service with GitHub Models first and OpenRouter fallback
+- **🌐 AI Translation:** Shared AI translation service with Gemini free tier first and OpenRouter fallback
 - **🛡️ Hallucination Prevention:** Detects incomplete sentences and prevents unwanted context injection
 - **💬 Bi-directional:** Thai 🇹🇭 → English 🇬🇧 and English 🇬🇧 → Thai 🇹🇭
 - **👥 Group Chat Support:** Works in 1-on-1, groups, and multi-person chats
@@ -136,7 +136,7 @@ For the full variable reference and mounted-volume examples, see [Environment va
   - Product identification: "What products are shown here?"
   - Any visual question about the image
 - **⏱️ Rate Limiting:** 5 analyses/hour (admins unlimited)
-- **🧠 Powered by:** GPT-4o vision via GitHub Models
+- **🧠 Powered by:** GPT-4o vision via AI fallback chain (Gemini primary)
 
 ### Multi-Agent Architecture
 
@@ -169,7 +169,7 @@ For the full variable reference and mounted-volume examples, see [Environment va
 
 - **Framework:** Python 3.11+, FastAPI
 - **Platform:** LINE Messaging API v3 (Async)
-- **Translation:** Shared AI translation service backed by GitHub Models and OpenRouter
+- **Translation:** Shared AI translation service backed by Gemini free tier and OpenRouter
 - **Architecture:** Multi-agent system with modular design
 - **Libraries:** `line-bot-sdk`, `httpx`, `pydantic`
 
@@ -186,8 +186,8 @@ See **[LINE Setup Guide](docs/guides/line-setup.md)** for detailed instructions.
 LINE_CHANNEL_SECRET=your_channel_secret
 LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
 
-# AI translation providers
-GITHUB_MODELS_PAT=your_github_models_pat
+# AI translation providers (Gemini free tier primary)
+GEMINI_API_KEY=your_gemini_api_key
 OPENROUTER_API_KEY=your_openrouter_api_key  # Optional fallback
 
 # Structured persistence backend
@@ -388,7 +388,7 @@ pytest --cov=src --cov-report=html
 
 - Smart Thai character detection
 - Continuous translation mode
-- Shared AI translation via GitHub Models with OpenRouter fallback
+- Shared AI translation via Gemini free tier with OpenRouter fallback
 - Session management per chat
 - "Thanks Ms Green!" sleep command (24h)
 - "Dear Ms. Green" wake command

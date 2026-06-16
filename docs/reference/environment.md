@@ -11,7 +11,7 @@ Start from `.env.example`.
 
 ## Recommended
 
-- `GITHUB_MODELS_PAT` (preferred AI provider for translation and vision)
+- `GEMINI_API_KEY` or `GOOGLE_API_KEY` (primary AI provider - free tier)
 - `OPENROUTER_API_KEY` (fallback AI provider)
 
 ## Admin
@@ -76,21 +76,17 @@ This returns the bot to the existing local/HF-backed path without deleting local
 
 - Translation uses the shared AI translation service.
 - Configure at least one provider:
-  - `GITHUB_MODELS_PAT`
-  - `OPENROUTER_API_KEY`
+  - `GEMINI_API_KEY` or `GOOGLE_API_KEY` (primary via fallback chain)
+  - `OPENROUTER_API_KEY` (fallback)
 
-## LLM (OpenRouter)
+## LLM (Provider Fallback Chain)
 
-- `OPENROUTER_API_KEY`
-- `OPENROUTER_DEFAULT_MODEL` (default: `google/gemma-2-9b-it`)
+- `GEMINI_API_KEY` / `GOOGLE_API_KEY` (primary - free tier, recommended)
+- `OPENROUTER_API_KEY` (fallback)
+- `OPENROUTER_DEFAULT_MODEL` (default: `nvidia/nemotron-3-ultra-550b-a55b:free`)
 - `DEFAULT_MODEL` (alias of `OPENROUTER_DEFAULT_MODEL`, useful on Hugging Face Spaces)
+- `LLM_PROVIDER_PRIORITY` (default: `gemini` only; other providers only as fallback)
 - `LLM_SYSTEM_PROMPT` (optional; controls bot personality/tone)
-
-## LLM (GitHub Models)
-
-- `GITHUB_MODELS_PAT`
-- `GITHUB_MODELS_DEFAULT_MODEL`
-- `LLM_PROVIDER_PRIORITY` (`github,openrouter` by default)
 
 ## Web Search (Brave)
 

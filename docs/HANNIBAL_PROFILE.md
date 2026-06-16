@@ -60,7 +60,7 @@ Ms. Green: [Returns detailed psychological profile]
 
 | Context | Access |
 |---------|--------|
-| Private Chat (DM) | ✅ Available when GitHub Models configured |
+| Private Chat (DM) | ✅ Available when AI providers configured |
 | Group/Room | ❌ Not available (privacy) |
 
 **Note**: Only works in private chats for privacy reasons.
@@ -72,16 +72,18 @@ Ms. Green: [Returns detailed psychological profile]
 
 ## Configuration
 
-Requires GitHub Models (for GPT-4o):
+Requires AI provider (Gemini free tier recommended):
 
 ```env
-# Get PAT from: https://github.com/settings/tokens (scope: models:read)
-GITHUB_MODELS_PAT=your_github_pat_here
+# Primary provider - Gemini free tier (recommended)
+# Get key from: https://aistudio.google.com/app/apikey
+GEMINI_API_KEY=your_gemini_api_key_here
 
-# Default model: openai/gpt-4o
-# Alternative: openai/gpt-4o-mini (faster)
-# GITHUB_MODELS_DEFAULT_MODEL=openai/gpt-4o
+# Alternative: OpenRouter (fallback)
+# OPENROUTER_API_KEY=your_openrouter_api_key_here
 ```
+
+**Note**: The agent uses the LLM fallback chain (Gemini first, then OpenRouter as fallback). See [Environment Variables](reference/environment.md) for all options.
 
 ## Example Output
 
@@ -142,18 +144,18 @@ NOT for professional psychological assessment, hiring, legal, or medical use.
 
 - Analysis runs in private chat only
 - Results not stored permanently
-- No profile database created
-- Message content used only for analysis, then discarded
-
 ## Troubleshooting
 
-### "HannibalProfileAgent: GitHub Models not configured"
-→ Set `GITHUB_MODELS_PAT` in `.env` with valid GitHub PAT
+### "HannibalProfileAgent: No LLM provider configured"
+
+→ Set `GEMINI_API_KEY` in `.env` with valid Google AI Studio key
 
 ### "Not responding in group chat"
+
 → This feature is private-chat only for privacy
 
 ### "No conversation history to analyze"
+
 → Need some message history first. Chat more, then try again.
 
 ## Technical Details
@@ -161,17 +163,17 @@ NOT for professional psychological assessment, hiring, legal, or medical use.
 ### Agent Priority
 
 - Priority 6 (same as Calendar, after Admin/Help)
-- Only registered when GitHub Models configured
+- Only registered when AI providers configured
 
 ### Files
 
 - `src/agents/hannibal_agent.py` - Main agent logic
-- `src/services/github_models_service.py` - GitHub Models integration
+- `src/utils/llm_fallback.py` - LLM fallback chain
 - `tests/test_hannibal_agent.py` - Test suite (if exists)
 
 ### Flow
 
-```
+```text
 User: "hannibal profile"
         │
         ▼
@@ -184,7 +186,7 @@ HannibalProfileAgent.handle()
         │
         ├─► Build prompt with FBI/Ekman/Navarro frameworks
         │
-        ├─► Call GitHub Models (GPT-4o)
+        ├─► Call LLM fallback chain (Gemini first)
         │
         └─► Return formatted psychological profile
 ```
@@ -222,7 +224,7 @@ Ms. Green: [Shows how user interacts, collaboration style]
 
 - [Psychological Profiler](PROFILER_USAGE.md) - Image-based profiling
 - [Quick Reference](reference/quick-reference.md) - Command summary
-- [GitHub Models Setup](GITHUB_MODELS.md) - Configuration guide
+- [Environment Variables](reference/environment.md) - Configuration guide
 
 ---
 

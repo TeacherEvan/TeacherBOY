@@ -33,7 +33,6 @@
 - **News Usage Examples:** [NEWS_USAGE_EXAMPLES.md](NEWS_USAGE_EXAMPLES.md) - Detailed LINE chat interaction flows
 - **KPS Assistant:** [KPS_ASSISTANT.md](KPS_ASSISTANT.md) - Staff assistant workflows
 - **Incomplete Sentence Fix:** [INCOMPLETE_SENTENCE_FIX.md](INCOMPLETE_SENTENCE_FIX.md) - Translation hallucination prevention
-- **LLM Provider Setup:** [GITHUB_MODELS.md](GITHUB_MODELS.md) - GitHub Models and provider priority
 - **Productivity Optimizations:** [guides/PRODUCTIVITY_OPTIMIZATIONS.md](guides/PRODUCTIVITY_OPTIMIZATIONS.md) - Token reduction, summarization, cost optimization
 
 ## Reference

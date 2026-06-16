@@ -142,13 +142,13 @@ Gemma 2 9B:   Free (GitHub Models)
 4. Use Gemma 2 9B for free tier
 5. Cache frequently used prompts
 
-## 🚀 Integration Examples
+### Integration Examples
 
-### Example 1: LLM Agent with Optimized Prompts
+#### Example 1: LLM Agent with Optimized Prompts
 
 ```python
 from src.services.prompt_builder_service import prompt_builder_service, ContextBlock
-from src.services.github_models_service import github_models_service
+from src.utils.llm_fallback import chat_completion_with_fallback
 
 async def handle_llm_query(user_message: str, chat_id: str):
     """Handle LLM query with optimized prompt building."""
@@ -196,12 +196,11 @@ async def handle_llm_query(user_message: str, chat_id: str):
     )
 
     # Send to LLM
-    response = await github_models_service.chat_completion(
+    response = await chat_completion_with_fallback(
         messages=[
             {"role": "system", "content": result.final_prompt},
             {"role": "user", "content": user_message},
         ],
-        model="openai/gpt-4o-mini",
         temperature=1.15,
     )
 
@@ -308,10 +307,10 @@ from src.services.prompt_builder_service import prompt_builder_service
 from src.services.conversation_summarization_service import (
     conversation_summarization_service,
 )
-from src.services.github_models_service import github_models_service
+from src.utils.llm_fallback import chat_completion_with_fallback
 
 # Set up summarization service with LLM
-conversation_summarization_service.set_llm_service(github_models_service)
+conversation_summarization_service.set_llm_fn(chat_completion_with_fallback)
 ```
 
 ## 🔧 Troubleshooting
@@ -352,7 +351,7 @@ summary = await conversation_summarization_service.summarize_conversation(
 ## 📚 Additional Resources
 
 - [reference/maintainers.md](../reference/maintainers.md) - Active maintainer guidance
-- [GITHUB_MODELS.md](../GITHUB_MODELS.md) - LLM provider setup
+- [reference/environment.md](../reference/environment.md) - LLM provider setup
 - [CONVERSATION_MEMORY.md](../CONVERSATION_MEMORY.md) - Memory management
 
 ## 🎯 Best Practices
