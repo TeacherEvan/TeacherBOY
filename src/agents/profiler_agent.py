@@ -27,7 +27,6 @@ from linebot.v3.webhooks import MessageEvent
 from src.config import settings
 from src.prompts.builders.vision_builder import VisionPromptBuilder
 from src.services.bot_identity_service import get_bot_identity_service
-from src.services.github_models_service import github_models_service
 from src.services.hermes_service import hermes_service
 from src.services.image_consent_service import image_consent_service
 from src.services.metrics_service import metrics_service
@@ -112,7 +111,6 @@ class ProfilerAgent(BaseAgent):
             [
                 hermes_service.is_vision_configured(),
                 openrouter_service.is_configured(),
-                github_models_service.is_configured(),
             ]
         )
         if not available:

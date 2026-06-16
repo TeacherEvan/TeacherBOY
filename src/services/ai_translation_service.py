@@ -9,7 +9,6 @@ import httpx
 
 from src.config import settings
 from src.services.gemini_service import gemini_service
-from src.services.github_models_service import github_models_service
 from src.services.hermes_service import hermes_service
 from src.services.metrics_service import metrics_service
 from src.services.nous_service import nous_inference_service
@@ -309,14 +308,12 @@ class AITranslationService:
 
     def __init__(
         self,
-        github_models=github_models_service,
         openrouter=openrouter_service,
         libre_translate: LibreTranslateProvider | None = None,
         hermes=hermes_service,
         gemini=gemini_service,
         nous=nous_inference_service,
     ):
-        self.github_models = github_models
         self.openrouter = openrouter
         self.libre_translate = libre_translate or LibreTranslateProvider()
         self.hermes = hermes
@@ -341,11 +338,6 @@ class AITranslationService:
         if google_key:
             providers.append(_LazyGoogleTranslationProvider(api_key=google_key, http_client=self._shared_client))
         return providers
-
-    def _github_providers(self):
-        if not self.github_models.is_configured():
-            return []
-        return [("github_models", self.github_models, self.github_models.chat_completion, {"temperature": 0.2})]
 
     def _openrouter_providers(self):
         providers = []
@@ -413,7 +405,6 @@ class AITranslationService:
         providers = []
         providers.extend(self._gemini_providers())
         providers.extend([(p._service_name, p, p.chat_completion, {"temperature": 0.2}) for p in self._google_providers()])
-        providers.extend(self._github_providers())
         providers.extend(self._nous_providers())
         providers.extend(self._openrouter_providers())
         providers.extend(self._hermes_providers())

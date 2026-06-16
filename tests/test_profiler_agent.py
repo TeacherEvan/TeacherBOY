@@ -72,9 +72,11 @@ class TestProfilerAgentShouldHandle:
         """
         with (
             patch("src.agents.profiler_agent.settings", mock_settings),
-            patch("src.agents.profiler_agent.github_models_service") as mock_gms,
+            patch("src.agents.profiler_agent.hermes_service") as mock_hermes,
+            patch("src.agents.profiler_agent.openrouter_service") as mock_openrouter,
         ):
-            mock_gms.is_configured.return_value = True
+            mock_hermes.is_vision_configured.return_value = True
+            mock_openrouter.is_configured.return_value = True
 
             from src.agents.profiler_agent import ProfilerAgent
 
@@ -108,9 +110,11 @@ class TestProfilerAgentShouldHandle:
         """Test that profiler does NOT handle 'analyze' triggers (those go to ImageAnalyzer)."""
         with (
             patch("src.agents.profiler_agent.settings", mock_settings),
-            patch("src.agents.profiler_agent.github_models_service") as mock_gms,
+            patch("src.agents.profiler_agent.hermes_service") as mock_hermes,
+            patch("src.agents.profiler_agent.openrouter_service") as mock_openrouter,
         ):
-            mock_gms.is_configured.return_value = True
+            mock_hermes.is_vision_configured.return_value = True
+            mock_openrouter.is_configured.return_value = True
 
             from src.agents.profiler_agent import ProfilerAgent
 
@@ -135,9 +139,11 @@ class TestProfilerAgentShouldHandle:
     async def test_should_not_handle_legacy_zeus_profile_trigger(self, mock_text_event, mock_settings):
         with (
             patch("src.agents.profiler_agent.settings", mock_settings),
-            patch("src.agents.profiler_agent.github_models_service") as mock_gms,
+            patch("src.agents.profiler_agent.hermes_service") as mock_hermes,
+            patch("src.agents.profiler_agent.openrouter_service") as mock_openrouter,
         ):
-            mock_gms.is_configured.return_value = True
+            mock_hermes.is_vision_configured.return_value = True
+            mock_openrouter.is_configured.return_value = True
 
             from src.agents.profiler_agent import ProfilerAgent
 
@@ -151,10 +157,12 @@ class TestProfilerAgentShouldHandle:
         """Test that profiler handles image when session is active."""
         with (
             patch("src.agents.profiler_agent.settings", mock_settings),
-            patch("src.agents.profiler_agent.github_models_service") as mock_gms,
+            patch("src.agents.profiler_agent.hermes_service") as mock_hermes,
+            patch("src.agents.profiler_agent.openrouter_service") as mock_openrouter,
             patch("src.agents.profiler_agent.profiler_session_manager") as mock_session,
         ):
-            mock_gms.is_configured.return_value = True
+            mock_hermes.is_vision_configured.return_value = True
+            mock_openrouter.is_configured.return_value = True
             mock_session.is_waiting_for_image.return_value = True  # Active session
 
             from src.agents.profiler_agent import ProfilerAgent
@@ -169,10 +177,12 @@ class TestProfilerAgentShouldHandle:
         """Test that profiler rejects image without active session (no trigger sent)."""
         with (
             patch("src.agents.profiler_agent.settings", mock_settings),
-            patch("src.agents.profiler_agent.github_models_service") as mock_gms,
+            patch("src.agents.profiler_agent.hermes_service") as mock_hermes,
+            patch("src.agents.profiler_agent.openrouter_service") as mock_openrouter,
             patch("src.agents.profiler_agent.profiler_session_manager") as mock_session,
         ):
-            mock_gms.is_configured.return_value = True
+            mock_hermes.is_vision_configured.return_value = True
+            mock_openrouter.is_configured.return_value = True
             mock_session.is_waiting_for_image.return_value = False  # No session
 
             from src.agents.profiler_agent import ProfilerAgent
@@ -187,9 +197,11 @@ class TestProfilerAgentShouldHandle:
         """Test that profiler does NOT handle text messages without triggers."""
         with (
             patch("src.agents.profiler_agent.settings", mock_settings),
-            patch("src.agents.profiler_agent.github_models_service") as mock_gms,
+            patch("src.agents.profiler_agent.hermes_service") as mock_hermes,
+            patch("src.agents.profiler_agent.openrouter_service") as mock_openrouter,
         ):
-            mock_gms.is_configured.return_value = True
+            mock_hermes.is_vision_configured.return_value = True
+            mock_openrouter.is_configured.return_value = True
 
             from src.agents.profiler_agent import ProfilerAgent
 
@@ -215,12 +227,14 @@ class TestProfilerAgentShouldHandle:
 
     @pytest.mark.asyncio
     async def test_should_not_handle_when_github_not_configured(self, mock_event, mock_settings):
-        """Test that profiler doesn't handle when GitHub Models not configured."""
+        """Test that profiler doesn't handle when no vision providers configured."""
         with (
             patch("src.agents.profiler_agent.settings", mock_settings),
-            patch("src.agents.profiler_agent.github_models_service") as mock_gms,
+            patch("src.agents.profiler_agent.hermes_service") as mock_hermes,
+            patch("src.agents.profiler_agent.openrouter_service") as mock_openrouter,
         ):
-            mock_gms.is_configured.return_value = False
+            mock_hermes.is_vision_configured.return_value = False
+            mock_openrouter.is_configured.return_value = False
 
             from src.agents.profiler_agent import ProfilerAgent
 
@@ -239,12 +253,14 @@ class TestProfilerAgentShouldHandle:
 
         with (
             patch("src.agents.profiler_agent.settings", mock_settings),
-            patch("src.agents.profiler_agent.github_models_service") as mock_gms,
+            patch("src.agents.profiler_agent.hermes_service") as mock_hermes,
+            patch("src.agents.profiler_agent.openrouter_service") as mock_openrouter,
             patch("src.agents.profiler_agent.image_consent_service") as mock_consent,
             patch("src.agents.profiler_agent.profiler_session_manager") as mock_session,
             patch("src.agents.profiler_agent.asyncio.to_thread"),
         ):
-            mock_gms.is_configured.return_value = True
+            mock_hermes.is_vision_configured.return_value = True
+            mock_openrouter.is_configured.return_value = True
             mock_consent.should_use_literal_mode.return_value = True
 
             from src.agents.profiler_agent import ProfilerAgent
@@ -296,11 +312,13 @@ class TestProfilerAgentHandle:
 
         with (
             patch("src.agents.profiler_agent.settings", mock_settings),
-            patch("src.agents.profiler_agent.github_models_service") as mock_gms,
+            patch("src.agents.profiler_agent.hermes_service") as mock_hermes,
+            patch("src.agents.profiler_agent.openrouter_service") as mock_openrouter,
             patch("src.agents.profiler_agent.profiler_session_manager") as mock_session,
             patch("src.agents.profiler_agent.asyncio.to_thread") as mock_thread,
         ):
-            mock_gms.is_configured.return_value = True
+            mock_hermes.is_vision_configured.return_value = True
+            mock_openrouter.is_configured.return_value = True
 
             from src.agents.profiler_agent import ProfilerAgent
 
@@ -319,12 +337,14 @@ class TestProfilerAgentHandle:
         """Test rate limiting for non-admin users when analyzing image."""
         with (
             patch("src.agents.profiler_agent.settings", mock_settings),
-            patch("src.agents.profiler_agent.github_models_service") as mock_gms,
+            patch("src.agents.profiler_agent.hermes_service") as mock_hermes,
+            patch("src.agents.profiler_agent.openrouter_service") as mock_openrouter,
             patch("src.agents.profiler_agent.profiler_rate_limiter") as mock_limiter,
             patch("src.agents.profiler_agent.metrics_service"),
             patch("src.agents.profiler_agent.profiler_session_manager") as mock_session,
         ):
-            mock_gms.is_configured.return_value = True
+            mock_hermes.is_vision_configured.return_value = True
+            mock_openrouter.is_configured.return_value = True
             mock_limiter.is_allowed.return_value = False
             mock_limiter.get_reset_time.return_value = 3600
             mock_session.is_waiting_for_image.return_value = True  # Active session
@@ -345,13 +365,15 @@ class TestProfilerAgentHandle:
 
         with (
             patch("src.agents.profiler_agent.settings", mock_settings),
-            patch("src.agents.profiler_agent.github_models_service") as mock_gms,
+            patch("src.agents.profiler_agent.hermes_service") as mock_hermes,
+            patch("src.agents.profiler_agent.openrouter_service") as mock_openrouter,
             patch("src.agents.profiler_agent.profiler_rate_limiter") as mock_limiter,
             patch("src.agents.profiler_agent.profiler_service"),
             patch("src.agents.profiler_agent.privilege_service") as mock_priv,
             patch("src.agents.profiler_agent.profiler_session_manager") as mock_session,
         ):
-            mock_gms.is_configured.return_value = True
+            mock_hermes.is_vision_configured.return_value = True
+            mock_openrouter.is_configured.return_value = True
             mock_priv.is_claimed_admin.return_value = False  # Not runtime admin
             mock_session.is_waiting_for_image.return_value = True  # Active session
 
@@ -508,7 +530,7 @@ class TestProfilerConfig:
         settings = Settings()
 
         # Should return False when GitHub Models not configured
-        assert settings.is_profiler_configured() == settings.is_github_models_configured()
+        assert settings.is_profiler_configured() == True  # profiler_enabled is True
 
 
 class TestAgentRouterImageHandling:

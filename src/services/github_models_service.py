@@ -47,17 +47,15 @@ class GitHubModelsResponse(BaseModel):
 
 
 class GitHubModelsService:
-    """
-    Service for interacting with GitHub Models API.
-
-    Uses GitHub PAT for authentication. Create a token at:
-    https://github.com/settings/tokens with 'models:read' scope.
-    """
+    """Service for interacting with GitHub Models API (OpenAI-compatible)."""
 
     def __init__(self, http_client: httpx.AsyncClient | None = None) -> None:
         self.client = http_client
-        self.api_url = "https://models.github.ai/inference/chat/completions"
+        self.api_url = "https://models.github.ai/chat/completions"
         self.api_version = "2022-11-28"
+
+        self.default_model = settings.github_models_default_model
+        self.vision_model = settings.github_models_vision_model
 
         self._last_error: str | None = None
         self._last_status_code: int | None = None
@@ -255,7 +253,7 @@ class GitHubModelsService:
             logger.warning("⚠️ HTTP client not available for GitHub Models")
             return None
 
-        target_model = model or "openai/gpt-4o"
+        target_model = model or self.vision_model
         self._last_error = None
         self._last_status_code = None
         self._last_model = target_model

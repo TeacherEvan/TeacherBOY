@@ -128,7 +128,6 @@ async def test_debrief_image_uses_debrief_extraction_service(
             image_url_or_base64="data:image/jpeg;base64,abc",
             chat_id="group_123",
             date_str="2026-01-15",
-            model="openai/gpt-4o",
         )
         # Verify DebriefFormatter was called
         mock_formatter.format_daily_debrief.assert_called_once_with(mock_debrief)

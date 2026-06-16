@@ -12,7 +12,6 @@ from typing import Any
 
 from src.config import settings
 from src.services.gemini_service import gemini_service
-from src.services.github_models_service import github_models_service
 from src.services.hermes_service import hermes_service
 from src.services.hf_inference_service import hf_inference_service
 from src.services.openrouter_service import openrouter_service
@@ -35,7 +34,6 @@ async def _run_one_vision_provider(
         "hermes": lambda: hermes_service.is_vision_configured(),
         "openrouter": lambda: openrouter_service.is_configured(),
         "hf_inference": lambda: hf_inference_service.is_configured(),
-        "github": lambda: github_models_service.is_configured(),
     }.get(provider)
 
     if not wrapper or not wrapper():
@@ -71,14 +69,6 @@ async def _run_one_vision_provider(
                 max_tokens=max_tokens,
                 retry_on_rate_limit=False,
             )
-        if provider == "github":
-            return await github_models_service.chat_completion_with_vision(
-                messages=messages,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                retry_on_rate_limit=False,
-            )
     except Exception as exc:
         logger.warning("%s vision fallback failed: %s", provider.capitalize(), exc)
 
@@ -105,21 +95,6 @@ async def chat_completion_with_fallback(
                     return result
             except Exception as exc:
                 logger.warning("Gemini fallback failed: %s", exc)
-            continue
-
-        if provider == "github" and github_models_service.is_configured():
-            try:
-                result = await github_models_service.chat_completion(
-                    messages=messages,
-                    model=settings.github_models_default_model or None,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    retry_on_rate_limit=False,
-                )
-                if result:
-                    return result
-            except Exception as exc:
-                logger.warning("GitHub Models fallback failed: %s", exc)
             continue
 
         if provider == "ollama" and settings.ollama_enabled:

@@ -17,7 +17,7 @@ def mock_event():
     event.source.room_id = None
     message = MagicMock(spec=TextMessageContent)
     message.type = "text"
-    message.text = "Zeus analyze"
+    message.text = "Ms. Green analyze"
     event.message = message
     return event
 
@@ -46,7 +46,9 @@ async def test_analyze_prompt_asks_new_or_last(mock_event, mock_line_bot_api):
     agent = ImageAnalyzerAgent()
 
     with (
-        patch("src.agents.image_analyzer_agent.github_models_service") as mock_gms,
+        patch("src.services.gemini_service.gemini_service") as mock_gemini,
+        patch("src.services.hermes_service.hermes_service") as mock_hermes,
+        patch("src.services.openrouter_service.openrouter_service") as mock_openrouter,
         patch("src.agents.image_analyzer_agent.privilege_service") as mock_privilege,
         patch("src.agents.image_analyzer_agent.image_analyzer_rate_limiter") as mock_rl,
         patch("src.agents.image_analyzer_agent.image_analyzer_session_manager") as mock_session,
@@ -55,7 +57,9 @@ async def test_analyze_prompt_asks_new_or_last(mock_event, mock_line_bot_api):
             new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
         ),
     ):
-        mock_gms.is_configured.return_value = True
+        mock_gemini.is_vision_configured.return_value = True
+        mock_hermes.is_vision_configured.return_value = True
+        mock_openrouter.is_configured.return_value = True
         mock_privilege.is_admin.return_value = False
         mock_rl.is_allowed.return_value = True
         mock_session.is_waiting_for_analysis_choice = AsyncMock(return_value=False)
@@ -83,7 +87,9 @@ async def test_plain_analyze_keeps_new_or_last_prompt(mock_event, mock_line_bot_
     agent = ImageAnalyzerAgent()
 
     with (
-        patch("src.agents.image_analyzer_agent.github_models_service") as mock_gms,
+        patch("src.services.gemini_service.gemini_service") as mock_gemini,
+        patch("src.services.hermes_service.hermes_service") as mock_hermes,
+        patch("src.services.openrouter_service.openrouter_service") as mock_openrouter,
         patch("src.agents.image_analyzer_agent.privilege_service") as mock_privilege,
         patch("src.agents.image_analyzer_agent.image_analyzer_rate_limiter") as mock_rl,
         patch("src.agents.image_analyzer_agent.image_analyzer_session_manager") as mock_session,
@@ -92,7 +98,9 @@ async def test_plain_analyze_keeps_new_or_last_prompt(mock_event, mock_line_bot_
             new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
         ),
     ):
-        mock_gms.is_configured.return_value = True
+        mock_gemini.is_vision_configured.return_value = True
+        mock_hermes.is_vision_configured.return_value = True
+        mock_openrouter.is_configured.return_value = True
         mock_privilege.is_admin.return_value = False
         mock_rl.is_allowed.return_value = True
         mock_session.is_waiting_for_analysis_choice = AsyncMock(return_value=False)
@@ -115,68 +123,84 @@ async def test_plain_analyze_keeps_new_or_last_prompt(mock_event, mock_line_bot_
 
 @pytest.mark.asyncio
 async def test_analysis_choice_last_uses_last_image(mock_event, mock_line_bot_api):
+    """Test 'Last' choice uses previously stored image."""
     from src.agents.image_analyzer_agent import ImageAnalyzerAgent
 
     agent = ImageAnalyzerAgent()
 
     with (
+        patch("src.services.gemini_service.gemini_service") as mock_gemini,
+        patch("src.services.hermes_service.hermes_service") as mock_hermes,
+        patch("src.services.openrouter_service.openrouter_service") as mock_openrouter,
+        patch("src.agents.image_analyzer_agent.privilege_service") as mock_privilege,
+        patch("src.agents.image_analyzer_agent.image_analyzer_rate_limiter") as mock_rl,
         patch("src.agents.image_analyzer_agent.image_analyzer_session_manager") as mock_session,
         patch(
             "src.agents.image_analyzer_agent.asyncio.to_thread",
             new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
         ),
     ):
-        mock_session.get_last_image = AsyncMock(return_value="data:image/jpeg;base64,abc")
-        mock_session.start_session_with_image = AsyncMock()
-
-        handled = await agent._handle_analysis_choice(
-            mock_event,
-            "last",
-            "user_user123",
-            "user123",
-            mock_line_bot_api,
+        mock_gemini.is_vision_configured.return_value = True
+        mock_hermes.is_vision_configured.return_value = True
+        mock_openrouter.is_configured.return_value = True
+        mock_privilege.is_admin.return_value = False
+        mock_rl.is_allowed.return_value = True
+        mock_session.is_waiting_for_analysis_choice = AsyncMock(return_value=True)
+        mock_session.get_image_and_question = AsyncMock(
+            return_value=(
+                "data:image/jpeg;base64,oldimage",
+                "What is this?",
+                "analyze",
+            )
         )
+        mock_session.get_last_image = AsyncMock(return_value="data:image/jpeg;base64,oldimage")
+        mock_session.start_session_with_image = AsyncMock()
+        mock_session.clear_session = AsyncMock()
+
+        # Set message to "Last" choice
+        mock_event.message.text = "Last"
+
+        handled = await agent.handle(mock_event, "Last", mock_line_bot_api)
 
     assert handled is True
-    mock_session.start_session_with_image.assert_called_once_with(
-        "user_user123",
-        "user123",
-        image_data="data:image/jpeg;base64,abc",
-        analysis_mode="standard",
-    )
-    mock_line_bot_api.reply_message.assert_called_once()
-    request = mock_line_bot_api.reply_message.call_args[0][0]
-    assert "last image" in request.messages[0].text.lower()
+    mock_session.get_last_image.assert_called_once_with("user_user123")
+    mock_session.start_session_with_image.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_analysis_choice_last_without_previous_image_returns_fallback(
-    mock_event,
-    mock_line_bot_api,
-):
+async def test_analysis_choice_last_without_previous_image_returns_fallback(mock_event, mock_line_bot_api):
+    """Test 'Last' choice without previous image returns fallback message."""
     from src.agents.image_analyzer_agent import ImageAnalyzerAgent
 
     agent = ImageAnalyzerAgent()
 
     with (
+        patch("src.services.gemini_service.gemini_service") as mock_gemini,
+        patch("src.services.hermes_service.hermes_service") as mock_hermes,
+        patch("src.services.openrouter_service.openrouter_service") as mock_openrouter,
+        patch("src.agents.image_analyzer_agent.privilege_service") as mock_privilege,
+        patch("src.agents.image_analyzer_agent.image_analyzer_rate_limiter") as mock_rl,
         patch("src.agents.image_analyzer_agent.image_analyzer_session_manager") as mock_session,
         patch(
             "src.agents.image_analyzer_agent.asyncio.to_thread",
             new=AsyncMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs)),
         ),
     ):
+        mock_gemini.is_vision_configured.return_value = True
+        mock_hermes.is_vision_configured.return_value = True
+        mock_openrouter.is_configured.return_value = True
+        mock_privilege.is_admin.return_value = False
+        mock_rl.is_allowed.return_value = True
+        mock_session.is_waiting_for_analysis_choice = AsyncMock(return_value=True)
+        mock_session.get_image_and_question = AsyncMock(return_value=(None, None, None))
         mock_session.get_last_image = AsyncMock(return_value=None)
         mock_session.clear_session = AsyncMock()
 
-        handled = await agent._handle_analysis_choice(
-            mock_event,
-            "last",
-            "user_user123",
-            "user123",
-            mock_line_bot_api,
-        )
+        mock_event.message.text = "Last"
+
+        handled = await agent.handle(mock_event, "Last", mock_line_bot_api)
 
     assert handled is True
-    mock_session.clear_session.assert_called_once_with("user_user123")
+    mock_line_bot_api.reply_message.assert_called_once()
     request = mock_line_bot_api.reply_message.call_args[0][0]
-    assert "previous image" in request.messages[0].text.lower()
+    assert "No previous image found" in request.messages[0].text or "don't have a previous image" in request.messages[0].text

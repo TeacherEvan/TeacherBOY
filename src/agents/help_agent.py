@@ -204,10 +204,10 @@ class HelpAgent(BaseAgent):
                 },
                 {
                     "command": f"{display_name} analyze this",
-                    "description": "General image Q&A with GPT-4o vision",
+                    "description": "General image Q&A with AI vision",
                     "examples": [f"{display_name} analyze this", "analyze image", "examine this photo"],
                     "rate_limit": "5 analyses/hour (admins unlimited)" if not is_admin else "Unlimited",
-                    "available": settings.is_github_models_configured(),
+                    "available": settings.is_any_vision_provider_configured(),
                 },
             ],
             "Hannibal Profile": [
@@ -215,7 +215,7 @@ class HelpAgent(BaseAgent):
                     "command": "hannibal profile",
                     "description": "Psychological profile from message history",
                     "examples": ["hannibal profile", "analyze messages"],
-                    "available": settings.is_github_models_configured(),
+                    "available": True,  # Uses LLM fallback chain (Gemini first)
                 },
             ],
             "Document Memory": [

@@ -184,8 +184,9 @@ class TestLLMAgentIntegration:
 
         with (
             patch.object(agent, "_auto_search", new_callable=AsyncMock) as mock_search,
-            patch.object(agent, "github_service") as mock_github,
-            patch.object(agent, "openrouter_service") as mock_openrouter,
+            patch("src.agents.llm_agent.openrouter_service") as mock_openrouter,
+            patch("src.agents.llm_agent.gemini_service") as mock_gemini,
+            patch("src.agents.llm_agent.hermes_service") as mock_hermes,
             patch("src.agents.llm_agent.settings") as mock_settings,
         ):
             # Configure mocks
@@ -193,11 +194,12 @@ class TestLLMAgentIntegration:
             mock_settings.llm_temperature = 0.7
             mock_settings.conversation_memory_enabled = False
             mock_settings.is_zeus_allowed_in_group.return_value = True
-            mock_settings.get_llm_provider_priority.return_value = ["github"]
+            mock_settings.get_llm_provider_priority.return_value = ["gemini"]
 
-            mock_github.is_configured.return_value = True
-            mock_github.chat_completion = AsyncMock(return_value="Here's what I found...")
+            mock_gemini.is_configured.return_value = True
+            mock_gemini.chat_completion = AsyncMock(return_value="Here's what I found...")
             mock_openrouter.is_configured.return_value = False
+            mock_hermes.is_configured.return_value = False
 
             mock_search.return_value = [{"title": "Result", "url": "https://test.com", "description": "Test"}]
 

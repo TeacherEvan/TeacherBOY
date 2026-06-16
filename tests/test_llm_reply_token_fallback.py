@@ -50,20 +50,21 @@ async def test_push_message_success(llm_agent, mock_event, mock_line_api):
 
     mock_line_api.push_message = MagicMock()
 
-    # Mock successful response from GitHub Models
-    with patch.object(llm_agent.github_service, "chat_completion", return_value="The weather is sunny!"):
-        with patch.object(llm_agent.github_service, "is_configured", return_value=True):
-            with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
-                # Mock successful push_message call
-                mock_to_thread.return_value = None
+    # Mock successful response from fallback chain
+    with patch("src.agents.llm_agent.openrouter_service") as mock_openrouter:
+        mock_openrouter.is_configured.return_value = True
+        mock_openrouter.chat_completion = AsyncMock(return_value="The weather is sunny!")
+        with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
+            # Mock successful push_message call
+            mock_to_thread.return_value = None
 
-                result = await llm_agent.handle(mock_event, "Ms. Green what is the weather?", mock_line_api)
+            result = await llm_agent.handle(mock_event, "Ms. Green what is the weather?", mock_line_api)
 
-                # Verify it was handled successfully
-                assert result is True
+            # Verify it was handled successfully
+            assert result is True
 
-                # Verify push_message was called
-                assert mock_to_thread.call_count == 1
+            # Verify push_message was called
+            assert mock_to_thread.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -72,16 +73,17 @@ async def test_push_message_handles_errors(llm_agent, mock_event, mock_line_api)
 
     mock_line_api.push_message = MagicMock()
 
-    # Mock successful GitHub Models response
-    with patch.object(llm_agent.github_service, "chat_completion", return_value="Hello!"):
-        with patch.object(llm_agent.github_service, "is_configured", return_value=True):
-            with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
-                # Mock push_message to raise exception
-                mock_to_thread.side_effect = Exception("Push failed")
+    # Mock successful LLM response
+    with patch("src.agents.llm_agent.openrouter_service") as mock_openrouter:
+        mock_openrouter.is_configured.return_value = True
+        mock_openrouter.chat_completion = AsyncMock(return_value="Hello!")
+        with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
+            # Mock push_message to raise exception
+            mock_to_thread.side_effect = Exception("Push failed")
 
-                # Should handle gracefully (log error but not crash)
-                result = await llm_agent.handle(mock_event, "Ms. Green hello", mock_line_api)
-                assert result is True
+            # Should handle gracefully (log error but not crash)
+            result = await llm_agent.handle(mock_event, "Ms. Green hello", mock_line_api)
+            assert result is True
 
 
 @pytest.mark.asyncio
@@ -90,17 +92,18 @@ async def test_push_message_called_once(llm_agent, mock_event, mock_line_api):
 
     mock_line_api.push_message = MagicMock()
 
-    with patch.object(llm_agent.github_service, "chat_completion", return_value="Response!"):
-        with patch.object(llm_agent.github_service, "is_configured", return_value=True):
-            with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
-                # Mock successful push_message call
-                mock_to_thread.return_value = None
+    with patch("src.agents.llm_agent.openrouter_service") as mock_openrouter:
+        mock_openrouter.is_configured.return_value = True
+        mock_openrouter.chat_completion = AsyncMock(return_value="Response!")
+        with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
+            # Mock successful push_message call
+            mock_to_thread.return_value = None
 
-                result = await llm_agent.handle(mock_event, "Ms. Green test", mock_line_api)
-                assert result is True
+            result = await llm_agent.handle(mock_event, "Ms. Green test", mock_line_api)
+            assert result is True
 
-                # Should only call push_message
-                assert mock_to_thread.call_count == 1
+            # Should only call push_message
+            assert mock_to_thread.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -110,16 +113,17 @@ async def test_error_message_sent_via_push(llm_agent, mock_event, mock_line_api)
     mock_line_api.push_message = MagicMock()
 
     # Mock LLM failure
-    with patch.object(llm_agent.github_service, "chat_completion", return_value=None):
-        with patch.object(llm_agent.github_service, "is_configured", return_value=True):
-            with patch.object(llm_agent.github_service, "get_last_error", return_value=(500, "Server error", "gpt-4o")):
-                with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
-                    # Mock successful push for error message
-                    mock_to_thread.return_value = None
+    with patch("src.agents.llm_agent.openrouter_service") as mock_openrouter:
+        mock_openrouter.is_configured.return_value = True
+        mock_openrouter.chat_completion = AsyncMock(return_value=None)
+        mock_openrouter.get_last_error = MagicMock(return_value=(500, "Server error", "openrouter"))
+        with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
+            # Mock successful push for error message
+            mock_to_thread.return_value = None
 
-                    # Should handle gracefully
-                    result = await llm_agent.handle(mock_event, "Ms. Green test", mock_line_api)
-                    assert result is True
+            # Should handle gracefully
+            result = await llm_agent.handle(mock_event, "Ms. Green test", mock_line_api)
+            assert result is True
 
-                    # Should call push_message for error message
-                    assert mock_to_thread.call_count == 1
+            # Should call push_message for error message
+            assert mock_to_thread.call_count == 1

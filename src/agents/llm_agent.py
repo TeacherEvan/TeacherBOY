@@ -26,10 +26,11 @@ from src.config import settings
 from src.services.bot_identity_service import get_bot_identity_service
 from src.services.brave_search_service import brave_search_service
 from src.services.conversation_memory_service import get_conversation_memory
-from src.services.github_models_service import github_models_service
+from src.services.gemini_service import gemini_service
 from src.services.hermes_service import hermes_service
 from src.services.openrouter_service import openrouter_service
 from src.services.privilege_service import privilege_service
+from src.utils.llm_fallback import chat_completion_with_fallback
 from src.utils.tracing import get_tracer
 
 from .base_agent import BaseAgent
@@ -95,15 +96,14 @@ _LIVE_DATA_REGEX = re.compile("|".join(f"({p})" for p in LIVE_DATA_PATTERNS), re
 
 
 class LLMAgent(BaseAgent):
-    """Agent for handling general questions using GitHub Models or OpenRouter LLMs."""
+    """Agent for handling general questions using LLM fallback chain (Gemini first)."""
 
     def __init__(self):
         super().__init__(
             name="LLMAgent",
-            description="General Q&A using GitHub Models or OpenRouter LLMs",
+            description="General Q&A using LLM fallback chain (Gemini, OpenRouter, Hermes)",
         )
         # Services for LLM providers
-        self.github_service = github_models_service
         self.openrouter_service = openrouter_service
         # Keep legacy reference for admin actions that use llm_service.client
         self.llm_service = openrouter_service
@@ -121,16 +121,14 @@ class LLMAgent(BaseAgent):
         priority = settings.get_llm_provider_priority()
 
         for provider in priority:
-            if provider == "github" and self.github_service.is_configured():
-                return self.github_service, "GitHub Models"
+            if provider == "gemini" and gemini_service.is_configured():
+                return gemini_service, "Gemini"
             elif provider == "openrouter" and self.openrouter_service.is_configured():
                 return self.openrouter_service, "OpenRouter"
             elif provider == "hermes" and hermes_service.is_configured():
                 return hermes_service, "Hermes"
 
         # Fallback: try any configured provider
-        if self.github_service.is_configured():
-            return self.github_service, "GitHub Models"
         if self.openrouter_service.is_configured():
             return self.openrouter_service, "OpenRouter"
         if hermes_service.is_configured():

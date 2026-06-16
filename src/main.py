@@ -68,7 +68,6 @@ from src.services.document_memory_service import (
     init_document_memory,
 )
 from src.services.gemini_service import gemini_service
-from src.services.github_models_service import github_models_service
 from src.services.harmful_content_detector import harmful_content_detector
 from src.services.hermes_service import hermes_service
 from src.services.hf_inference_service import hf_inference_service
@@ -249,7 +248,6 @@ async def lifespan(app: FastAPI):
     translation_service.set_client(http_client_pool)
     openrouter_service.set_client(http_client_pool)
     brave_search_service.set_client(http_client_pool)
-    github_models_service.set_client(http_client_pool)
     nous_inference_service.set_client(http_client_pool)
     gemini_service.set_client(http_client_pool)
     logger.info("✅ HTTP client pool ready with connection pooling enabled")
@@ -810,7 +808,6 @@ async def health_check() -> dict[str, Any]:
             else {"enabled": settings.is_calendar_configured()},
             "llm_providers": {
                 "openrouter": openrouter_service.is_configured(),
-                "github_models": github_models_service.is_configured(),
                 "gemini": gemini_service.is_configured(),
                 "hermes": hermes_service.is_configured(),
                 "hf_inference": hf_inference_service.is_configured(),
@@ -839,7 +836,7 @@ async def metrics_dashboard() -> dict[str, Any]:
 
     # Calculate provider summaries
     provider_summaries = {}
-    for provider in ["openrouter", "github_models", "gemini", "hermes", "hf_inference"]:
+    for provider in ["openrouter", "gemini", "hermes", "hf_inference"]:
         total_count = snapshot.provider_latency_ms_count.get(provider, 0)
         if total_count > 0:
             provider_summaries[provider] = {

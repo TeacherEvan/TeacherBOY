@@ -29,12 +29,12 @@ from linebot.v3.webhooks import MessageEvent
 
 from src.config import settings
 from src.services.bot_identity_service import get_bot_identity_service
-from src.services.github_models_service import github_models_service
 from src.services.message_buffer_service import message_buffer_service
 from src.services.metrics_service import metrics_service
 from src.services.privilege_service import privilege_service
 from src.services.rate_limiter import RateLimiter
 from src.utils.tracing import get_tracer
+from src.utils.llm_fallback import chat_completion_with_fallback
 
 from .base_agent import BaseAgent
 
@@ -117,8 +117,16 @@ class HannibalProfileAgent(BaseAgent):
         if not text:
             return False
 
-        # Check if GitHub Models is configured (required for LLM)
-        if not github_models_service.is_configured():
+        # Check if any LLM provider is configured
+        from src.utils.llm_fallback import chat_completion_with_fallback
+        # Just check if any provider is available - the fallback handles it
+        available = any([
+            settings.is_openrouter_configured(),
+            settings.is_hermes_configured(),
+            settings.is_gemini_configured(),
+            settings.is_nous_configured(),
+        ])
+        if not available:
             return False
 
         text_lower = text.lower().strip()
@@ -204,15 +212,14 @@ class HannibalProfileAgent(BaseAgent):
                 # Build analysis prompt
                 analysis_prompt = self._build_analysis_prompt(messages, target_user_id)
 
-                # Get analysis from GPT-4o
-                logger.info(f"🎭 Sending {len(messages)} messages to GPT-4o for Hannibal analysis...")
+                # Get analysis from LLM fallback chain (Gemini first)
+                logger.info(f"🎭 Sending {len(messages)} messages to LLM for Hannibal analysis...")
 
-                analysis = await github_models_service.chat_completion(
+                analysis = await chat_completion_with_fallback(
                     messages=[
                         {"role": "system", "content": self._get_system_prompt()},
                         {"role": "user", "content": analysis_prompt},
                     ],
-                    model=getattr(settings, "profiler_model", "openai/gpt-4o"),
                     temperature=0.4,  # Balanced for analysis
                     max_tokens=4000,
                 )

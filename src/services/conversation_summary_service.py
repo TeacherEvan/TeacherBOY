@@ -115,15 +115,14 @@ class ConversationSummarizer:
             New summary text or None if failed
         """
         # Import here to avoid circular dependency
-        from src.services.github_models_service import github_models_service
+        from src.utils.llm_fallback import chat_completion_with_fallback
 
         # Build summary prompt
         summary_prompt = self._build_summary_prompt(messages, existing_summary)
 
         try:
-            new_summary = await github_models_service.chat_completion(
+            new_summary = await chat_completion_with_fallback(
                 messages=[{"role": "user", "content": summary_prompt}],
-                model=self.model,
                 temperature=0.3,  # Low temperature for factual summarization
                 max_tokens=self.summary_max_tokens,
             )

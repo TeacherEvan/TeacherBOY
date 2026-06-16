@@ -221,11 +221,12 @@ class Settings(BaseSettings):
     # Fallback / provider priority Configuration (LLM)
     # ============================================================================
     llm_fallback_provider_priority: str = Field(
-        default="gemini,nous,hermes,openrouter,hf_inference,github,ollama",
+        default="gemini",
         description=(
             "Comma-separated priority list for LLM providers and fallback chain. "
             "Options: gemini, nous, hermes, openrouter, hf_inference, github, ollama. First configured provider is used; "
-            "if that fails, the next configured provider is tried."
+            "if that fails, the next configured provider is tried. "
+            "DEFAULT: gemini only (free tier). Other providers only as fallback if Gemini fails."
         ),
     )
 
@@ -513,27 +514,7 @@ class Settings(BaseSettings):
         description="Default date preset for log viewer.",
     )
 
-    # ============================================================================
-    # GitHub Models Configuration (Alternative to OpenRouter)
-    # ============================================================================
-    github_models_pat: str | None = Field(
-        default=None,
-        description=(
-            "GitHub Personal Access Token (PAT) with 'models:read' scope for GitHub Models API. "
-            "Create at https://github.com/settings/tokens"
-        ),
-    )
-    github_models_default_model: str = Field(
-        default="openai/gpt-4o",
-        description=(
-            "Default model for GitHub Models API. Options include: "
-            "openai/gpt-4o, openai/gpt-4o-mini, xai/grok-3, deepseek/deepseek-r1, "
-            "meta/llama-3.3-70b-instruct. See https://github.com/marketplace/models"
-        ),
-    )
 
-    # ============================================================================
-    # Psychological Profiler Configuration (Vision AI)
     # ============================================================================
     profiler_enabled: bool = Field(
         default=True,
@@ -915,10 +896,6 @@ class Settings(BaseSettings):
         """Check if Brave Search API is properly configured."""
         return bool(self.brave_search_api_key and len(self.brave_search_api_key) > 10)
 
-    def is_github_models_configured(self) -> bool:
-        """Check if GitHub Models API is properly configured with a PAT."""
-        return bool(self.github_models_pat and len(self.github_models_pat) > 10)
-
     def is_hermes_configured(self) -> bool:
         """Check if Hermes fallback is configured with base URL and key."""
         return bool(
@@ -946,11 +923,9 @@ class Settings(BaseSettings):
     def get_fallback_llm_providers(self) -> list[str]:
         """
         Return provider order list with one highest-priority configured provider
-        selected from each configured group: github / openrouter / hermes / gemini / nous.
+        selected from each configured group: openrouter / hermes / gemini / nous.
         """
         configured: list[str] = []
-        if self.is_github_models_configured() and "github" not in configured:
-            configured.append("github")
         if self.is_openrouter_configured() and "openrouter" not in configured:
             configured.append("openrouter")
         if self.is_hermes_configured() and "hermes" not in configured:
@@ -959,7 +934,7 @@ class Settings(BaseSettings):
             configured.append("gemini")
         if self.is_nous_configured() and "nous" not in configured:
             configured.append("nous")
-        return configured or ["github", "openrouter", "hermes", "gemini", "nous"]
+        return configured or ["openrouter", "hermes", "gemini", "nous"]
 
     def get_llm_provider_priority(self) -> list[str]:
         """
@@ -1097,13 +1072,11 @@ class Settings(BaseSettings):
         Returns True if at least one of the following is configured:
         - Hermes (with vision model)
         - OpenRouter (with vision model)
-        - GitHub Models
         - Gemini (with vision model)
         - HuggingFace Inference API (vision model)
         """
         # Import here to avoid circular imports
         from src.services.gemini_service import gemini_service
-        from src.services.github_models_service import github_models_service
         from src.services.hermes_service import hermes_service
         from src.services.hf_inference_service import hf_inference_service
         from src.services.openrouter_service import openrouter_service
@@ -1112,7 +1085,6 @@ class Settings(BaseSettings):
             [
                 hermes_service.is_vision_configured(),
                 openrouter_service.is_configured(),
-                github_models_service.is_configured(),
                 gemini_service.is_configured(),
                 hf_inference_service.is_configured(),
             ]

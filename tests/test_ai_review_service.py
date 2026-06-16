@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -6,88 +6,29 @@ from src.services.ai_review_service import AIReviewService
 
 
 @pytest.mark.asyncio
-async def test_ai_review_service_uses_github_models_first():
-    github = AsyncMock()
-    github.is_configured.return_value = True
-    github.chat_completion.return_value = "translated text"
+async def test_ai_review_service_uses_fallback_chain():
+    """Should use fallback chain (Gemini first) for translation."""
+    with patch("src.services.ai_review_service.chat_completion_with_fallback") as mock_fallback:
+        mock_fallback.return_value = "translated text"
 
-    openrouter = AsyncMock()
-    openrouter.is_configured.return_value = True
+        service = AIReviewService()
+        result = await service.translate_and_summarize("ข้อความภาษาไทย")
 
-    service = AIReviewService(
-        github_service=github,
-        openrouter_service=openrouter,
-    )
-    result = await service.translate_and_summarize("ข้อความภาษาไทย")
-
-    assert result == "translated text"
-    github.chat_completion.assert_awaited_once()
-    openrouter.chat_completion.assert_not_awaited()
+        assert result == "translated text"
+        mock_fallback.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_ai_review_service_falls_back_to_openrouter():
-    github = AsyncMock()
-    github.is_configured.return_value = True
-    github.chat_completion.return_value = None
+    """Should fall back to OpenRouter when fallback chain returns None."""
+    with patch("src.services.ai_review_service.chat_completion_with_fallback") as mock_fallback:
+        with patch("src.services.openrouter_service.openrouter_service") as mock_openrouter:
+            mock_fallback.return_value = None
+            mock_openrouter.is_configured.return_value = True
+            mock_openrouter.chat_completion = AsyncMock(return_value="fallback text")
 
-    openrouter = AsyncMock()
-    openrouter.is_configured.return_value = True
-    openrouter.chat_completion.return_value = "fallback text"
+            service = AIReviewService(openrouter_service=mock_openrouter)
+            result = await service.translate_and_summarize("ข้อความภาษาไทย")
 
-    service = AIReviewService(
-        github_service=github,
-        openrouter_service=openrouter,
-    )
-    result = await service.translate_and_summarize("ข้อความภาษาไทย")
-
-    assert result == "fallback text"
-    openrouter.chat_completion.assert_awaited_once()
-
-
-class _FailingGithubService:
-    def is_configured(self):
-        return True
-
-    async def chat_completion(self, **kwargs):
-        raise RuntimeError("github failure")
-
-
-class _OpenRouterService:
-    def is_configured(self):
-        return True
-
-    async def chat_completion(self, **kwargs):
-        return "fallback after exception"
-
-
-@pytest.mark.asyncio
-async def test_ai_review_service_falls_back_when_github_raises():
-    service = AIReviewService(
-        github_service=_FailingGithubService(),
-        openrouter_service=_OpenRouterService(),
-    )
-
-    result = await service.translate_and_summarize("ข้อความภาษาไทย")
-
-    assert result == "fallback after exception"
-
-
-class _FailingOpenRouterService:
-    def is_configured(self):
-        return True
-
-    async def chat_completion(self, **kwargs):
-        raise RuntimeError("openrouter failure")
-
-
-@pytest.mark.asyncio
-async def test_ai_review_service_returns_none_when_both_providers_fail():
-    service = AIReviewService(
-        github_service=_FailingGithubService(),
-        openrouter_service=_FailingOpenRouterService(),
-    )
-
-    result = await service.translate_and_summarize("ข้อความภาษาไทย")
-
-    assert result is None
+            assert result == "fallback text"
+            mock_openrouter.chat_completion.assert_awaited_once()

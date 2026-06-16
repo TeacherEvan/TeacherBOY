@@ -33,6 +33,7 @@ class OpenRouterService:
         self.api_url = "https://openrouter.ai/api/v1/chat/completions"
         self.api_key = settings.openrouter_api_key
         self.default_model = settings.openrouter_default_model
+        self.vision_model = settings.openrouter_vision_model
 
         self._last_error: str | None = None
         self._last_status_code: int | None = None
@@ -146,7 +147,7 @@ class OpenRouterService:
             logger.warning("⚠️ HTTP client not available for OpenRouter")
             return None
 
-        target_model = model or self.default_model
+        target_model = model or self.vision_model
         self._last_error = None
         self._last_status_code = None
         self._last_model = target_model

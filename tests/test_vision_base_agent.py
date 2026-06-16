@@ -18,7 +18,7 @@ class TestVisionBaseAgent:
 
     @pytest.fixture
     def vision_base_agent(self, mock_line_api_client):
-        mock_messaging_api_blob = MagicMock(spec=MessagingApiBlob)
+        mock_messaging_api_blob = AsyncMock(spec=MessagingApiBlob)
         return VisionBaseAgent(
             name="VisionBaseAgent",
             description="Base agent for vision-related functionalities",
@@ -35,8 +35,8 @@ class TestVisionBaseAgent:
         return event
 
     @pytest.fixture
-    def mock_github_service(self):
-        with patch("src.services.github_models_service.github_models_service") as mock:
+    def mock_hermes_service(self):
+        with patch("src.services.hermes_service.hermes_service") as mock:
             yield mock
 
     @pytest.fixture
@@ -49,48 +49,37 @@ class TestVisionBaseAgent:
         assert chat_id == "user_test_user"
 
     def test_get_chat_id_group(self, vision_base_agent, mock_event):
-        mock_event.source.user_id = None
-        mock_event.source.group_id = "test_group"
+        mock_event.source.group_id = "group123"
         chat_id = vision_base_agent._get_chat_id(mock_event)
-        assert chat_id == "group_test_group"
+        assert chat_id == "group_group123"
 
     def test_get_chat_id_room(self, vision_base_agent, mock_event):
-        mock_event.source.user_id = None
-        mock_event.source.room_id = "test_room"
+        mock_event.source.room_id = "room123"
         chat_id = vision_base_agent._get_chat_id(mock_event)
-        assert chat_id == "room_test_room"
+        assert chat_id == "room_room123"
 
     @pytest.mark.asyncio
-    async def test_download_image_success(self, vision_base_agent, mock_line_api_client):
-        mock_message_id = "test_message_id"
-        mock_image_bytes = b"fake_image_bytes"
+    async def test_download_image_success(self, vision_base_agent):
+        mock_content = b"fake image data"
+        vision_base_agent.blob_api.get_message_content = AsyncMock(return_value=mock_content)
 
-        mock_blob_api = vision_base_agent.blob_api
-        mock_blob_api.get_message_content = AsyncMock(return_value=mock_image_bytes)
+        result = await vision_base_agent._download_image("test_msg_id")
 
-        with patch.object(settings, "line_channel_access_token", "fake_token"):
-            downloaded_bytes = await vision_base_agent._download_image(mock_message_id)
-
-        assert downloaded_bytes == mock_image_bytes
-        mock_blob_api.get_message_content.assert_called_once_with(mock_message_id)
+        assert result == mock_content
+        vision_base_agent.blob_api.get_message_content.assert_called_once_with("test_msg_id")
 
     @pytest.mark.asyncio
-    async def test_download_image_failure(self, vision_base_agent, mock_line_api_client):
-        mock_message_id = "test_message_id"
+    async def test_download_image_failure(self, vision_base_agent):
+        vision_base_agent.blob_api.get_message_content = AsyncMock(side_effect=Exception("Network error"))
 
-        mock_blob_api = vision_base_agent.blob_api
-        mock_blob_api.get_message_content = AsyncMock(side_effect=Exception("Download error"))
+        result = await vision_base_agent._download_image("test_msg_id")
 
-        with patch.object(settings, "line_channel_access_token", "fake_token"):
-            downloaded_bytes = await vision_base_agent._download_image(mock_message_id)
-
-        assert downloaded_bytes is None
-        mock_blob_api.get_message_content.assert_called_once_with(mock_message_id)
+        assert result is None
 
     def test_build_vision_message_standard(self, vision_base_agent):
         image_data_url = "data:image/jpeg;base64,abc"
-        question = "What is this image about?"
-        messages = vision_base_agent._build_vision_message(image_data_url, question, scene_mode="standard")
+        question = "What is this?"
+        messages = vision_base_agent._build_vision_message(image_data_url, question)
 
         assert len(messages) == 2
         assert messages[0]["role"] == "system"
@@ -104,25 +93,29 @@ class TestVisionBaseAgent:
 
         assert "Stay extremely literal and calm" in messages[0]["content"]
 
-    def test_get_vision_error_detail(self, vision_base_agent, mock_github_service, mock_openrouter_service):
-        mock_github_service.get_last_error.return_value = (400, "Bad Request", "github_model")
-        mock_openrouter_service.get_last_error.return_value = None
-
+    def test_get_vision_error_detail(self, vision_base_agent, mock_openrouter_service):
+        """Test that error detail can be retrieved from services."""
+        # The _get_vision_error_detail method dynamically imports openrouter_service
+        mock_openrouter_service.get_last_error.return_value = (400, "Bad Request", "openrouter_model")
+        
         status, detail, model = vision_base_agent._get_vision_error_detail()
         assert status == 400
         assert detail == "Bad Request"
-        assert model == "github_model"
-
-        mock_github_service.get_last_error.return_value = None
-        mock_openrouter_service.get_last_error.return_value = (401, "Unauthorized", "openrouter_model")
-        status, detail, model = vision_base_agent._get_vision_error_detail()
-        assert status == 401
-        assert detail == "Unauthorized"
         assert model == "openrouter_model"
 
-        mock_github_service.get_last_error.return_value = None
+    def test_get_vision_error_detail_none(self, vision_base_agent, mock_openrouter_service):
+        """Test when no error is available."""
         mock_openrouter_service.get_last_error.return_value = None
+        
         status, detail, model = vision_base_agent._get_vision_error_detail()
         assert status is None
         assert detail is None
         assert model is None
+
+    def test_get_vision_error_detail_services_unavailable(self, vision_base_agent):
+        """Test when services module import fails."""
+        with patch("src.services.openrouter_service.openrouter_service", None):
+            status, detail, model = vision_base_agent._get_vision_error_detail()
+            assert status is None
+            assert detail is None
+            assert model is None

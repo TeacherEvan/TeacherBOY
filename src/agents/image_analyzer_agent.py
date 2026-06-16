@@ -49,7 +49,6 @@ from src.services.bot_identity_service import get_bot_identity_service
 from src.services.debrief_extraction_service import DebriefExtractionService
 from src.services.debrief_formatter import DebriefFormatter
 from src.services.gemini_service import gemini_service
-from src.services.github_models_service import github_models_service
 from src.services.hermes_service import hermes_service
 from src.services.hf_inference_service import hf_inference_service
 from src.services.image_analyzer_session_manager import (
@@ -126,6 +125,7 @@ class ImageAnalyzerAgent(BaseAgent):
         "examine",
         "look at",
         "debrief",
+        "scrape",
     ]
 
     GENERIC_TRIGGERS = [
@@ -137,6 +137,12 @@ class ImageAnalyzerAgent(BaseAgent):
         "look at this",
         "debrief",
         "debrief this",
+        "scrape",
+        "scrape this",
+        "scrape image",
+        "extract text",
+        "extract text from image",
+        "ocr",
     ]
 
     def __init__(self, http_client=None):
@@ -333,11 +339,10 @@ class ImageAnalyzerAgent(BaseAgent):
         """
         # Check if any vision-capable provider is available
         if not (
-            hermes_service.is_configured()
-            or openrouter_service.is_configured()
-            or github_models_service.is_configured()
-            or gemini_service.is_configured()
-            or hf_inference_service.is_configured()
+            hermes_service.is_vision_configured()
+            or openrouter_service.is_configured()  # OpenRouter uses vision model from settings
+            or gemini_service.is_vision_configured()
+            or hf_inference_service.is_vision_configured()
         ):
             return False
 
@@ -457,12 +462,10 @@ class ImageAnalyzerAgent(BaseAgent):
 
         # Use DebriefExtractionService for structured extraction
         try:
-            vision_model = getattr(settings, "profiler_model", "openai/gpt-4o")
             debrief = await _debrief_extraction_service.extract_from_image(
                 image_url_or_base64=image_data,
                 chat_id=chat_id,
                 date_str=datetime.now().strftime("%Y-%m-%d"),
-                model=vision_model,
             )
         except Exception as e:
             logger.error(f"❌ Debrief extraction failed: {e}")
@@ -526,6 +529,7 @@ class ImageAnalyzerAgent(BaseAgent):
 
         command_text = self._strip_identity_prefix(text)
         is_debrief = "debrief" in command_text or command_text.strip().lower() == "m"
+        is_scrape = "scrape" in command_text or "ocr" in command_text or "extract text" in command_text
 
         # If debrief trigger and we already have an image stored, process immediately
         if is_debrief:
@@ -534,7 +538,7 @@ class ImageAnalyzerAgent(BaseAgent):
                 logger.info(f"📖 Direct debrief trigger detected for chat {chat_id}")
                 return await self._process_direct_debrief(event, chat_id, user_id, line_bot_api, session.image_data)
 
-        bare_analyze = command_text == "analyze"
+        bare_analyze = command_text in ("analyze", "analyze this")
 
         if bare_analyze:
             await image_analyzer_session_manager.start_analysis_choice(chat_id, user_id)
@@ -569,18 +573,20 @@ class ImageAnalyzerAgent(BaseAgent):
             logger.info(f"🖼️ Image analysis choice prompt sent for chat {chat_id}")
             return True
 
-        analysis_mode = "debrief" if is_debrief else "standard"
+        analysis_mode = "debrief" if is_debrief else ("scrape" if is_scrape else "standard")
         await image_analyzer_session_manager.start_session(chat_id, user_id, analysis_mode=analysis_mode)
 
         prompt_text = (
             "🖼️ Please send the image you'd like me to analyze.\n\n"
-            if analysis_mode != "debrief"
-            else "🖼️ Please send the image you'd like me to debrief.\n\n"
+            if analysis_mode != "debrief" and analysis_mode != "scrape"
+            else ("🖼️ Please send the image you'd like me to debrief.\n\n" if analysis_mode == "debrief" else "🖼️ Please send the image you'd like me to extract text from.\n\n")
         )
         prompt_msg = TextMessage(
             text=prompt_text
             + "(You have 60 seconds to send an image)\n\n"
-            + ("ส่งภาพที่ต้องการให้วิเคราะห์ (60 วินาที)" if analysis_mode != "debrief" else "ส่งภาพที่ต้องการให้สรุปเชิงวิเคราะห์ (60 วินาที)"),
+            + ("ส่งภาพที่ต้องการให้วิเคราะห์ (60 วินาที)" if analysis_mode != "debrief" and analysis_mode != "scrape"
+               else "ส่งภาพที่ต้องการให้สรุปเชิงวิเคราะห์ (60 วินาที)" if analysis_mode == "debrief"
+               else "ส่งภาพที่ต้องการให้แยกข้อความ (60 วินาที)"),
             quickReply=None,
             quoteToken=None,
         )
@@ -839,13 +845,11 @@ class ImageAnalyzerAgent(BaseAgent):
         if analysis_mode == "debrief":
             # Use DebriefExtractionService for structured extraction
             try:
-                vision_model = getattr(settings, "profiler_model", "openai/gpt-4o")
                 start_time = datetime.now(UTC)
                 debrief = await _debrief_extraction_service.extract_from_image(
                     image_url_or_base64=image_data,
                     chat_id=chat_id,
                     date_str=datetime.now().strftime("%Y-%m-%d"),
-                    model=vision_model,
                 )
                 duration_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
             except Exception as e:
@@ -874,7 +878,7 @@ class ImageAnalyzerAgent(BaseAgent):
                         analysis_mode=analysis_mode,
                         duration_ms=duration_ms,
                         image_size_bytes=image_size_bytes,
-                        model_used=vision_model,
+                        model_used="auto",
                     )
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to save image metadata: {e}")
@@ -899,17 +903,83 @@ class ImageAnalyzerAgent(BaseAgent):
             logger.info(f"✅ Debrief sent for chat {chat_id}")
             await image_analyzer_session_manager.clear_session(chat_id)
             return True
+        elif analysis_mode == "scrape":
+            # Scrape mode: Extract text/OCR from image
+            scrape_prompt = (
+                "Extract ALL text from this image. Return ONLY the text content found in the image. "
+                "Include any text from signs, documents, screens, menus, labels, handwriting, etc. "
+                "Preserve line breaks and layout as much as possible. "
+                "If multiple languages are present, include all. "
+                "Do not add explanations or analysis - just the extracted text."
+            )
+            scrape_messages = self._build_vision_message(image_data, scrape_prompt, scene_mode="literal")
+
+            start_time = datetime.now(UTC)
+            scraped_text = await chat_completion_with_vision_fallback(
+                messages=scrape_messages,
+                temperature=0.1,
+                max_tokens=2000,
+            )
+            duration_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
+
+            # Save image metadata to HF (if enabled)
+            if hasattr(image_analyzer_session_manager, "save_image_metadata"):
+                try:
+                    image_size_bytes = 0
+                    if image_data and image_data.startswith("data:image"):
+                        base64_part = image_data.split(",", 1)[1] if "," in image_data else ""
+                        image_size_bytes = len(base64_part) * 3 // 4
+
+                    await image_analyzer_session_manager.save_image_metadata(
+                        chat_id=chat_id,
+                        image_base64=image_data,
+                        prompt=scrape_prompt,
+                        response=scraped_text or "No text found",
+                        analysis_mode=analysis_mode,
+                        duration_ms=duration_ms,
+                        image_size_bytes=image_size_bytes,
+                        model_used="auto",
+                    )
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to save image metadata: {e}")
+
+            # Format and send scraped text
+            if not scraped_text:
+                response = "⚡ No text found in the image."
+            else:
+                response = f"⚡ EXTRACTED TEXT ⚡\n━━━━━━━━━━━━━━━━━\n\n{scraped_text}"
+
+            response = self._format_response(response)
+
+            # Send via push (reply token already used for "analyzing" message)
+            group_id = getattr(event.source, "group_id", None) if event.source else None
+            room_id = getattr(event.source, "room_id", None) if event.source else None
+            target = group_id or room_id or user_id
+
+            if target:
+                text_msg = TextMessage(text=response, quickReply=None, quoteToken=None)
+                await asyncio.to_thread(
+                    line_bot_api.push_message,
+                    PushMessageRequest(
+                        to=target,
+                        messages=[text_msg],
+                        notificationDisabled=False,
+                        customAggregationUnits=None,
+                    ),
+                )
+
+            logger.info(f"✅ Text extraction sent for chat {chat_id}")
+            await image_analyzer_session_manager.clear_session(chat_id)
+            return True
         else:
             messages = self._build_vision_message(image_data, question, scene_mode=scene_mode)
 
-        # Call vision via provider-agnostic fallback
+        # Call vision via provider-agnostic fallback (uses priority chain, no hardcoded model)
         logger.info(f"🖼️ Analyzing image with question: {question[:50]}...")
 
         start_time = datetime.now(UTC)
-        model = getattr(settings, "profiler_model", "openai/gpt-4o")
         analysis = await chat_completion_with_vision_fallback(
             messages=messages,
-            model=model,
             temperature=0.15 if low_risk_scene else settings.llm_temperature,
             max_tokens=2000,
         )
@@ -935,7 +1005,6 @@ class ImageAnalyzerAgent(BaseAgent):
                 messages = self._build_vision_message(image_data, question, scene_mode="literal")
                 analysis = await chat_completion_with_vision_fallback(
                     messages=messages,
-                    model=model,
                     temperature=0.1,
                     max_tokens=2000,
                 )
@@ -982,7 +1051,7 @@ class ImageAnalyzerAgent(BaseAgent):
                     analysis_mode=analysis_mode,
                     duration_ms=duration_ms,
                     image_size_bytes=image_size_bytes,
-                    model_used=model,
+                    model_used="auto",
                 )
             except Exception as e:
                 logger.warning(f"⚠️ Failed to save image metadata: {e}")
@@ -1078,7 +1147,7 @@ class ImageAnalyzerAgent(BaseAgent):
 
     def _get_vision_error_detail(self) -> tuple[int | None, str | None, str | None]:
         """Collect the most recent vision API error detail."""
-        for svc in (hermes_service, github_models_service, openrouter_service):
+        for svc in (hermes_service, openrouter_service):
             try:
                 detail = svc.get_last_error()
             except AttributeError:

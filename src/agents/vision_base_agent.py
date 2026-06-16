@@ -156,10 +156,9 @@ class VisionBaseAgent(BaseAgent):
 
     def _get_vision_error_detail(self) -> tuple[int | None, str | None, str | None]:
         """Collect the most recent vision API error detail."""
-        from src.services.github_models_service import github_models_service
         from src.services.openrouter_service import openrouter_service
 
-        for svc in (github_models_service, openrouter_service):
+        for svc in (openrouter_service,):
             try:
                 detail = svc.get_last_error()
             except AttributeError:
