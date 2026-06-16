@@ -22,7 +22,7 @@ class NewsSessionManager:
         self._news_sessions: dict[str, dict] = {}
         self._session_timeout_minutes = session_timeout_minutes
         self._cleanup_task: asyncio.Task | None = None
-        self._cleanup_interval_seconds = 300  # Run cleanup every 5 minutes
+        self._cleanup_interval_seconds = 604800  # Run cleanup every 7 days (weekly)
 
     def is_in_news_flow(self, chat_id: str) -> bool:
         """

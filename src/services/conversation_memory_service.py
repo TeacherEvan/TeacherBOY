@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 MAX_MESSAGES_PER_SESSION = 20  # Maximum messages to keep in context
 MAX_CONTEXT_TOKENS = 4000  # Approximate token limit for context window
 SESSION_TTL_HOURS = 24  # Session expiration time
-CLEANUP_INTERVAL_MINUTES = 30  # How often to run cleanup
+CLEANUP_INTERVAL_MINUTES = 10080  # How often to run cleanup (weekly)
 HF_SYNC_INTERVAL_MINUTES = 5  # How often to sync to HF Hub
 
 

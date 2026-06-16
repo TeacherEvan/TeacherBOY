@@ -16,7 +16,7 @@ class ProfilerSessionManager:
         self._waiting_for_image: dict[str, tuple[str, datetime, str]] = {}
         self._session_ttl_seconds = 60  # Expire after 60 seconds
         self._cleanup_task: asyncio.Task | None = None
-        self._cleanup_interval_seconds = 60  # Run cleanup every 60 seconds
+        self._cleanup_interval_seconds = 604800  # Run cleanup every 7 days (weekly)
 
     def request_profiling(
         self,

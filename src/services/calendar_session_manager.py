@@ -150,7 +150,7 @@ class CalendarSessionManager:
         self._recently_expired_scrape_flows: dict[str, dict[str, datetime]] = {}
         self._session_ttl_seconds = 120  # 2 minutes per step
         self._cleanup_task: asyncio.Task | None = None
-        self._cleanup_interval_seconds = 60
+        self._cleanup_interval_seconds = 604800  # Run cleanup every 7 days (weekly)
         self._remove_flow_nonce_counter = 0
 
     def get_session(self, chat_id: str) -> CalendarSession | None:

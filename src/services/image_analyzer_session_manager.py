@@ -98,7 +98,7 @@ class ImageAnalyzerSessionManager:
         self._last_images_ttl_seconds = 3600  # Last images expire after 1 hour
         self._max_last_images = 100  # Maximum number of last images to store
         self._cleanup_task: asyncio.Task | None = None
-        self._cleanup_interval_seconds = 30  # Cleanup every 30 seconds
+        self._cleanup_interval_seconds = 604800  # Cleanup every 7 days (weekly)
         # Locks for thread-safe access to shared dictionaries
         self._sessions_lock = asyncio.Lock()
         self._last_images_lock = asyncio.Lock()

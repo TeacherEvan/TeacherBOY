@@ -69,7 +69,7 @@ class RateLimiter:
 
         # Cleanup task
         self._cleanup_task: asyncio.Task | None = None
-        self._cleanup_interval_seconds = 300  # Run cleanup every 5 minutes
+        self._cleanup_interval_seconds = 604800  # Run cleanup every 7 days (weekly)
 
         logger.info(
             f"✅ Rate limiter initialized: {max_requests} requests per {time_window_seconds}s (chat-based), "

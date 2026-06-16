@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 # Configuration defaults
 DEFAULT_MAX_MESSAGES = 200  # Max messages per chat (increased for Hannibal Profile feature)
 DEFAULT_TTL_SECONDS = 86400  # 24 hours - messages expire after this (increased from 2h)
-DEFAULT_CLEANUP_INTERVAL = 300  # 5 minutes
+DEFAULT_CLEANUP_INTERVAL = 604800  # 7 days (weekly)
 
 
 @dataclass
