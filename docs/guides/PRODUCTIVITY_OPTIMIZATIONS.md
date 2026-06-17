@@ -131,7 +131,7 @@ estimated_tokens = len(text) // 4
 ```text
 GPT-4o:       $2.50 per 1M input tokens
 GPT-4o-mini:  $0.15 per 1M input tokens
-Gemma 2 9B:   Free (GitHub Models)
+Gemini 2.5 Flash:   Free (Google AI Studio)
 ```
 
 **Cost Reduction Strategies**:
@@ -139,7 +139,7 @@ Gemma 2 9B:   Free (GitHub Models)
 1. Use priority-based context inclusion (drop low-priority context)
 2. Summarize long conversations
 3. Use GPT-4o-mini for simple tasks
-4. Use Gemma 2 9B for free tier
+4. Use Gemini 2.5 Flash for free tier
 5. Cache frequently used prompts
 
 ### Integration Examples

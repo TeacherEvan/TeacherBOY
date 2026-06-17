@@ -144,7 +144,9 @@ class MemoryMonitorService:
             if limit and usage > 0:
                 usage_gb = usage / (1024**3)
                 if usage_gb >= self.auto_flush_threshold_gb:
-                    logger.warning(f"🚨 Memory usage {usage_gb:.2f} GB >= threshold {self.auto_flush_threshold_gb:.2f} GB - triggering auto-flush")
+                    logger.warning(
+                        f"🚨 Memory usage {usage_gb:.2f} GB >= threshold {self.auto_flush_threshold_gb:.2f} GB - triggering auto-flush"
+                    )
                     return True
 
         # Fall back to percentage-based threshold
@@ -179,7 +181,9 @@ def init_memory_monitor(
         auto_flush_days=auto_flush_days,
     )
 
-    logger.info(f"📊 Memory Monitor initialized (threshold: {auto_flush_threshold}, GB threshold: {auto_flush_threshold_gb}, mode: {auto_flush_mode})")
+    logger.info(
+        f"📊 Memory Monitor initialized (threshold: {auto_flush_threshold}, GB threshold: {auto_flush_threshold_gb}, mode: {auto_flush_mode})"
+    )
     return _memory_monitor
 
 

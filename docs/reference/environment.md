@@ -16,7 +16,7 @@ Start from `.env.example`.
 
 ## Admin
 
-- `ADMIN_USER_IDS` (comma-separated)
+- `ADMIN_USER_IDS` (comma-separated bare LINE user IDs, e.g., `U123,U456` — **no quotes, brackets, or spaces**; invalid formats trigger startup warnings)
 - `ADMIN_SETUP_KEY` (temporary bootstrap)
 
 ## Named Users (Outbound Messaging)

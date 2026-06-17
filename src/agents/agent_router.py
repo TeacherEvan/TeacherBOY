@@ -13,7 +13,6 @@ from linebot.v3.webhooks import (
 )
 
 from src.services.metrics_service import metrics_service
-from src.utils.correlation import get_correlation_id
 from src.utils.tracing import get_tracer
 
 from .base_agent import BaseAgent

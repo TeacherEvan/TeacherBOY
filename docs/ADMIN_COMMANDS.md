@@ -30,8 +30,13 @@ ADMIN_USER_IDS=U1234567890abcdef,U9876543210fedcba
 ### Bootstrap claim
 1. Set a temporary `ADMIN_SETUP_KEY`.
 2. In LINE: `/admin claim <ADMIN_SETUP_KEY>`.
-3. Add the returned user ID to `ADMIN_USER_IDS`.
-4. Restart and remove `ADMIN_SETUP_KEY`.
+3. **CRITICAL**: The response will state "THIS WILL BE LOST ON RESTART." You MUST:
+   - Add the returned user ID to `ADMIN_USER_IDS` in your host environment/secrets
+   - Restart the service
+   - Remove `ADMIN_SETUP_KEY` afterwards
+4. On HF Spaces: Set `ADMIN_USER_IDS` in **Space Settings → Secrets BEFORE removing `ADMIN_SETUP_KEY`**, then the Space will auto-restart with permanent admin access.
+
+> ⚠️ **The claim is in-memory only for the current process.** If the container restarts (config change, deploy, HF Spaces secret change), the claim is lost unless `ADMIN_USER_IDS` is set.
 
 ---
 
@@ -487,7 +492,7 @@ Example:
 
 #### `/admin llm_send <alias> <prompt>`
 
-Uses the OpenRouter LLM to draft a short message, then pushes it.
+Uses the LLM fallback chain (Gemini primary, OpenRouter fallback) to draft a short message, then pushes it.
 
 Example:
 
@@ -687,18 +692,30 @@ pytest tests/test_admin_agent.py -v
 
 ### Admin commands not working?
 
-1. **Check ADMIN_USER_IDS is set**:
-
+1. **Check ADMIN_USER_IDS is set and correctly formatted**:
+   
    ```bash
    echo $ADMIN_USER_IDS
    ```
+   
+   **Format**: Comma-separated bare LINE user IDs (no quotes, no brackets, no spaces):
+   ```env
+   ADMIN_USER_IDS=U1234567890abcdef,U9876543210fedcba
+   ```
+   
+   ❌ Common mistakes that now trigger startup warnings:
+   - JSON array: `["U123", "U456"]`
+   - Spaces around commas: `U123, U456`
+   - Quotes: `"U123"` or `'U123'`
 
 2. **Verify your LINE user ID is in the list**:
    - Send a message to the bot
    - Check logs for your user ID
-   - Compare with ADMIN_USER_IDS
+   - Compare with `ADMIN_USER_IDS`
 
 3. **Check bot logs for errors**: `docker compose logs | grep -i admin`
+   - Look for: `✅ AdminAgent initialized with N authorized admin(s) from env`
+   - Or warnings: `⚠️ Admin/moderator user IDs appears to be a JSON array...`
 
 4. **Restart the bot** after changing `.env`: `docker-compose restart`
 
@@ -707,6 +724,13 @@ pytest tests/test_admin_agent.py -v
 - Admin commands from **unauthorized users are silently ignored**
 - This is by design for security (no error messages)
 - Make sure your user ID is in `ADMIN_USER_IDS`
+
+### I claimed admin but lost access after restart?
+
+- `/admin claim` grants **in-memory admin only for the current process**
+- On HF Spaces, any secret change triggers a container restart
+- You MUST set `ADMIN_USER_IDS` in **Space Settings → Secrets** BEFORE removing `ADMIN_SETUP_KEY`
+- After setting `ADMIN_USER_IDS`, the Space will auto-restart with permanent admin access
 
 ### Chat ID format issues?
 
@@ -737,6 +761,6 @@ For issues or questions:
 
 ---
 
-**Version:** 1.0.0  
-**Last Updated:** December 12, 2025  
+**Version:** 1.1.0  
+**Last Updated:** June 17, 2026  
 **License:** MIT

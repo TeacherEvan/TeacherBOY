@@ -45,13 +45,12 @@ def setup_tracing(app: FastAPI, settings: Settings) -> None:
         fastapi_instrumentation = importlib.import_module("opentelemetry.instrumentation.fastapi")
         httpx_instrumentation = importlib.import_module("opentelemetry.instrumentation.httpx")
         logging_instrumentation = importlib.import_module("opentelemetry.instrumentation.logging")
-        console_exporter = importlib.import_module("opentelemetry.exporter.console")
 
         Resource = sdk_resources.Resource
         TracerProvider = sdk_trace.TracerProvider
         BatchSpanProcessor = sdk_trace_export.BatchSpanProcessor
         OTLPSpanExporter = otlp_exporter.OTLPSpanExporter
-        ConsoleSpanExporter = console_exporter.ConsoleSpanExporter
+        ConsoleSpanExporter = sdk_trace_export.ConsoleSpanExporter
         FastAPIInstrumentor = fastapi_instrumentation.FastAPIInstrumentor
         HTTPXClientInstrumentor = httpx_instrumentation.HTTPXClientInstrumentor
         LoggingInstrumentor = logging_instrumentation.LoggingInstrumentor
@@ -63,7 +62,7 @@ def setup_tracing(app: FastAPI, settings: Settings) -> None:
         else:
             resource = Resource.create({"service.name": settings.otel_service_name})
             provider = TracerProvider(resource=resource)
-            
+
             # Try OTLP exporter first, fall back to console
             try:
                 otlp_exporter_instance = OTLPSpanExporter(endpoint=settings.otel_exporter_otlp_endpoint)

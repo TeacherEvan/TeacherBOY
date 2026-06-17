@@ -1,8 +1,8 @@
 """Minimal Convex HTTP client with N+1 detection and caching."""
 
+import time
 from dataclasses import dataclass
 from typing import Any
-import time
 
 import httpx
 

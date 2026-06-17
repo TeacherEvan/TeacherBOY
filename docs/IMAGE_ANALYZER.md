@@ -98,14 +98,15 @@ Ms. Green: [Starts add flow for each date]
 Edit `.env` to customize:
 
 ```env
-# Enable/disable feature (requires GitHub Models)
-# GitHub Models is required for vision AI
-GITHUB_MODELS_PAT=your_github_pat_here
+# Enable/disable feature (uses vision AI via fallback chain)
+# Primary: Gemini free tier (GEMINI_API_KEY or GOOGLE_API_KEY)
+# Fallback: OpenRouter, Hermes, HF Inference, Ollama
+GEMINI_API_KEY=your_gemini_api_key_here
 
-# Vision model (must support images)
-# Default: openai/gpt-4o
-# Alternative: openai/gpt-4o-mini (faster, less detailed)
-# GITHUB_MODELS_DEFAULT_MODEL=openai/gpt-4o
+# Vision model (must support images/vision)
+# Default: gemini-2.5-flash (supports vision)
+# Alternative: gemini-2.0-flash (faster)
+# GEMINI_VISION_MODEL=gemini-2.5-flash
 ```
 
 ## Supported Content Types
@@ -156,14 +157,15 @@ Would you like me to translate any specific dish descriptions?
 
 ### API Requirements
 
-**GitHub Models (Required):**
-- Free tier: [GitHub Models](https://github.com/marketplace/models)
-- Create GitHub PAT with `models:read` scope
-- Set `GITHUB_MODELS_PAT` in `.env`
+**Vision AI (Required):**
+- **Primary:** Google AI Studio free tier — [Gemini](https://aistudio.google.com/)
+- Create API key at Google AI Studio
+- Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` in `.env`
+- **Fallback chain:** OpenRouter (free models), Hermes, HF Inference, Ollama
 
 **Model:**
-- Default: `openai/gpt-4o` (supports vision)
-- Alternative: `openai/gpt-4o-mini` (faster, less detailed)
+- Default: `gemini-2.5-flash` (supports vision)
+- Alternative: `gemini-2.0-flash` (faster)
 
 ### Agent Priority
 
@@ -178,8 +180,8 @@ Would you like me to translate any specific dish descriptions?
 
 ## Troubleshooting
 
-### "Image Analyzer: GitHub Models not configured"
-→ Set `GITHUB_MODELS_PAT` in `.env` with valid GitHub PAT
+### "Vision AI not configured"
+→ Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` in `.env` with valid Google AI Studio API key
 
 ### "Image Analyzer not responding to images"
 → Make sure you sent a trigger phrase first (within last 60 seconds)
@@ -194,7 +196,7 @@ Would you like me to translate any specific dish descriptions?
 
 **Data Handling:**
 - Images are NOT stored locally
-- Images are sent to GitHub Models API for analysis
+- Images are sent to Vision AI API (Gemini primary, fallback chain) for analysis
 - Analysis text is returned but not permanently logged
 - No image database is created
 

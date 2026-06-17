@@ -33,47 +33,30 @@ logger = logging.getLogger(__name__)
 # Bangkok timezone
 BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 
-# Extraction prompt template
-EXTRACTION_PROMPT = """You are an AI assistant that extracts calendar events from chat messages.
+# Extraction prompt template - simplified to reduce AI refusals
+EXTRACTION_PROMPT = """You are a date finder for calendar events.
 
-Analyze the following messages and identify any dates, events, appointments, deadlines, or scheduled activities mentioned.
-
-MESSAGES TO ANALYZE:
+Messages:
 {messages}
 
-TODAY'S DATE: {today}
-CURRENT YEAR: {year}
+Today: {today}
+Current year: {year}
+Next year: {next_year}
 
-INSTRUCTIONS:
-1. Look for explicit dates (e.g., "January 15", "15/01/2025", "next Friday", "meeting on Friday")
-2. Look for relative dates (e.g., "tomorrow", "next week", "in 3 days")
-3. Identify what the event/activity is for each date
-4. Extract a short title and optional description
-5. Only extract dates that are clearly mentioned - don't invent events
-6. Ignore past dates (before today)
-7. Parse Thai dates and Thai language events if present
-8. CRITICAL: Use actual numeric years ONLY. The current year is {year}. Next year is {next_year}.
-9. CRITICAL: Format dates as YYYY-MM-DD with numeric values only (e.g., {year}-01-15, {year}-12-25)
-10. If year is not specified, use {year} for dates that haven't passed yet, or {next_year} if the date in current year is already past
+Find dates and events in the messages. Handle English and Thai dates (relative like "tomorrow"/"พรุ่งนี้", "next week"/"สัปดาห์หน้า", and absolute formats).
 
-OUTPUT FORMAT - VALID JSON ARRAY ONLY:
-[
-  {{
-    "date": "2026-01-15",
-    "title": "Short event title (max 50 chars)",
-    "description": "Optional longer description",
-    "source_text": "Original message text this was extracted from",
-    "confidence": "high"
-  }}
-]
+Rules:
+- Use numeric years only ({year} or {next_year})
+- Date format: YYYY-MM-DD (e.g., {year}-01-15)
+- Skip past dates (before today)
+- If year not specified, use {year} for future dates, {next_year} if already passed this year
+- Return ONLY a JSON array, nothing else
+- Empty array [] if no dates found
 
-IMPORTANT RULES:
-- Return ONLY the JSON array, no other text, no markdown code blocks
-- If no dates/events found, return empty array: []
-- dates must be valid ISO format: YYYY-MM-DD with numeric years
-- confidence must be "high", "medium", or "low"
+JSON format:
+[{{"date":"{year}-01-15","title":"Event title","description":"Optional details","source_text":"Original message","confidence":"high"}}]
 
-RESPOND WITH JSON ONLY:"""
+Confidence: "high", "medium", or "low"."""
 
 
 @dataclass
@@ -125,6 +108,8 @@ class DateExtractionService:
         Returns:
             List of ExtractedEvent objects
         """
+        from src.services.metrics_service import metrics_service
+
         if not messages:
             logger.debug("📅 No messages to extract from")
             return []
@@ -148,7 +133,16 @@ class DateExtractionService:
 
             if not response:
                 logger.warning("📅 No response from AI, using fallback extraction")
-                return self._fallback_extraction(messages, today)
+                events = self._fallback_extraction(messages, today)
+                metrics_service.record_extraction_request(
+                    provider=None, success=False, used_fallback=True
+                )
+                return events
+
+            # Prepend Godmode prefill for Gemini (response may be completion only)
+            prefill = '[{"date":"'
+            if not response.lstrip().startswith("["):
+                response = prefill + response
 
             # Parse JSON response
             events = self._parse_extraction_response(response, today)
@@ -158,12 +152,18 @@ class DateExtractionService:
 
             self._extraction_count += 1
             logger.info(f"📅 Extracted {len(events)} events from {len(messages)} messages")
-
+            metrics_service.record_extraction_request(
+                provider="gemini", success=True, event_count=len(events)
+            )
             return events
 
         except Exception as e:
             logger.error(f"📅 AI extraction failed: {e}", exc_info=True)
-            return self._fallback_extraction(messages, today)
+            events = self._fallback_extraction(messages, today)
+            metrics_service.record_extraction_request(
+                provider="gemini", success=False, used_fallback=True
+            )
+            return events
 
     def _parse_extraction_response(
         self,

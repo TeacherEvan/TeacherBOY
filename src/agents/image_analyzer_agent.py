@@ -408,27 +408,25 @@ class ImageAnalyzerAgent(BaseAgent):
             try:
                 # Step 1: Image received - store and ask for question (highest priority for images)
                 if message_type == "image":
-                    logger.debug(f"🖼️ handle: image received, routing to _handle_image")
+                    logger.debug("🖼️ handle: image received, routing to _handle_image")
                     return await self._handle_image(event, chat_id, user_id, line_bot_api, span)
 
                 # Step 2: Analysis choice received (new/last) - before trigger to avoid re-triggering
                 waiting_for_choice = await image_analyzer_session_manager.is_waiting_for_analysis_choice(chat_id, user_id)
                 if message_type == "text" and waiting_for_choice:
-                    logger.debug(f"🖼️ handle: waiting_for_analysis_choice=True, routing to _handle_analysis_choice")
+                    logger.debug("🖼️ handle: waiting_for_analysis_choice=True, routing to _handle_analysis_choice")
                     return await self._handle_analysis_choice(event, text, chat_id, user_id, line_bot_api)
 
                 # Step 3: Question received - analyze and respond (before trigger to handle "Analyze this" button)
                 waiting_for_question = await image_analyzer_session_manager.is_waiting_for_question(chat_id, user_id)
                 if message_type == "text" and waiting_for_question:
-                    logger.debug(f"🖼️ handle: waiting_for_question=True, routing to _handle_question")
+                    logger.debug("🖼️ handle: waiting_for_question=True, routing to _handle_question")
                     return await self._handle_question(event, text, chat_id, user_id, line_bot_api, span)
 
                 # Step 4: Calendar confirmation response
-                waiting_for_cal = await image_analyzer_session_manager.is_waiting_for_calendar_confirmation(
-                    chat_id, user_id
-                )
+                waiting_for_cal = await image_analyzer_session_manager.is_waiting_for_calendar_confirmation(chat_id, user_id)
                 if message_type == "text" and waiting_for_cal:
-                    logger.debug(f"🖼️ handle: waiting_for_calendar_confirmation=True, routing to _handle_calendar_confirmation")
+                    logger.debug("🖼️ handle: waiting_for_calendar_confirmation=True, routing to _handle_calendar_confirmation")
                     return await self._handle_calendar_confirmation(event, text, chat_id, user_id, line_bot_api)
 
                 # Step 5: Trigger phrase - start analysis choice flow (lowest priority, only if no active session)
@@ -437,7 +435,9 @@ class ImageAnalyzerAgent(BaseAgent):
                     logger.debug(f"🖼️ handle: is_trigger=True, routing to _handle_trigger (text='{text[:50]}')")
                     return await self._handle_trigger(event, text, chat_id, user_id, line_bot_api)
 
-                logger.debug(f"🖼️ handle: no matching condition, message_type={message_type}, text='{text[:50] if text else None}'")
+                logger.debug(
+                    f"🖼️ handle: no matching condition, message_type={message_type}, text='{text[:50] if text else None}'"
+                )
                 return False
 
             except Exception as e:
@@ -579,14 +579,22 @@ class ImageAnalyzerAgent(BaseAgent):
         prompt_text = (
             "🖼️ Please send the image you'd like me to analyze.\n\n"
             if analysis_mode != "debrief" and analysis_mode != "scrape"
-            else ("🖼️ Please send the image you'd like me to debrief.\n\n" if analysis_mode == "debrief" else "🖼️ Please send the image you'd like me to extract text from.\n\n")
+            else (
+                "🖼️ Please send the image you'd like me to debrief.\n\n"
+                if analysis_mode == "debrief"
+                else "🖼️ Please send the image you'd like me to extract text from.\n\n"
+            )
         )
         prompt_msg = TextMessage(
             text=prompt_text
             + "(You have 60 seconds to send an image)\n\n"
-            + ("ส่งภาพที่ต้องการให้วิเคราะห์ (60 วินาที)" if analysis_mode != "debrief" and analysis_mode != "scrape"
-               else "ส่งภาพที่ต้องการให้สรุปเชิงวิเคราะห์ (60 วินาที)" if analysis_mode == "debrief"
-               else "ส่งภาพที่ต้องการให้แยกข้อความ (60 วินาที)"),
+            + (
+                "ส่งภาพที่ต้องการให้วิเคราะห์ (60 วินาที)"
+                if analysis_mode != "debrief" and analysis_mode != "scrape"
+                else "ส่งภาพที่ต้องการให้สรุปเชิงวิเคราะห์ (60 วินาที)"
+                if analysis_mode == "debrief"
+                else "ส่งภาพที่ต้องการให้แยกข้อความ (60 วินาที)"
+            ),
             quickReply=None,
             quoteToken=None,
         )

@@ -10,7 +10,6 @@ This module provides safe URL validation to prevent SSRF attacks by:
 import logging
 import socket
 from ipaddress import IPv4Address, IPv6Address, ip_address
-from typing import Optional
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -29,7 +28,7 @@ DEFAULT_ALLOWED_HOSTS: set[str] = {
 
 def is_private_or_reserved_ip(ip_str: str) -> bool:
     """Check if an IP address is private, reserved, or loopback.
-    
+
     Covers:
     - IPv4 private ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
     - IPv4 loopback (127.0.0.0/8)
@@ -49,14 +48,7 @@ def is_private_or_reserved_ip(ip_str: str) -> bool:
         return True  # Treat invalid IPs as unsafe
 
     if isinstance(ip, IPv4Address):
-        return (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_reserved
-            or ip.is_unspecified
-        )
+        return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified
     elif isinstance(ip, IPv6Address):
         return (
             ip.is_private
@@ -72,7 +64,7 @@ def is_private_or_reserved_ip(ip_str: str) -> bool:
 
 def resolve_all_ips(hostname: str) -> list[str]:
     """Resolve all IP addresses for a hostname (both IPv4 and IPv6).
-    
+
     Uses getaddrinfo to get all addresses, which is what actual HTTP clients use.
     """
     try:
@@ -90,19 +82,19 @@ def resolve_all_ips(hostname: str) -> list[str]:
 
 def assert_safe_url(
     url: str,
-    allowed_hosts: Optional[set[str]] = None,
+    allowed_hosts: set[str] | None = None,
     allow_redirects: bool = False,
 ) -> str:
     """Validate a URL is safe for server-side fetching.
-    
+
     Args:
         url: The URL to validate
         allowed_hosts: Optional set of allowed hostnames. If None, uses DEFAULT_ALLOWED_HOSTS.
         allow_redirects: Whether to allow HTTP redirects (default: False for security)
-    
+
     Returns:
         The validated URL string
-        
+
     Raises:
         ValueError: If the URL fails any safety check
     """
@@ -149,30 +141,25 @@ def assert_safe_url(
     return url
 
 
-async def safe_fetch(
-    client,
-    url: str,
-    allowed_hosts: Optional[set[str]] = None,
-    **kwargs
-):
+async def safe_fetch(client, url: str, allowed_hosts: set[str] | None = None, **kwargs):
     """Safely fetch a URL with SSRF protection.
-    
+
     Args:
         client: httpx.AsyncClient instance
         url: URL to fetch
         allowed_hosts: Optional allowed hosts set
         **kwargs: Additional arguments passed to client.get()
-    
+
     Returns:
         httpx.Response
-        
+
     Raises:
         ValueError: If URL fails safety checks
         httpx.HTTPError: On HTTP errors
     """
     validated_url = assert_safe_url(url, allowed_hosts)
-    
+
     # Ensure redirects are not followed
     kwargs.setdefault("follow_redirects", False)
-    
+
     return await client.get(validated_url, **kwargs)

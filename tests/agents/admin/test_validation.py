@@ -3,18 +3,18 @@
 import pytest
 
 from src.agents.admin.validation import (
+    VALID_NOUS_MODELS,
+    AdminGroupsArgs,
+    AdminLeaveArgs,
+    AdminMemoryArgs,
     AdminModelSetArgs,
     AdminPurgeArgs,
     AdminResetArgs,
-    AdminLeaveArgs,
     AdminSessionsArgs,
-    AdminGroupsArgs,
     AdminStatsArgs,
-    AdminMemoryArgs,
-    validate_nous_model,
     validate_chat_id,
+    validate_nous_model,
     validate_user_id,
-    VALID_NOUS_MODELS,
 )
 
 

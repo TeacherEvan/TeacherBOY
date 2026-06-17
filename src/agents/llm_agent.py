@@ -30,7 +30,6 @@ from src.services.gemini_service import gemini_service
 from src.services.hermes_service import hermes_service
 from src.services.openrouter_service import openrouter_service
 from src.services.privilege_service import privilege_service
-from src.utils.llm_fallback import chat_completion_with_fallback
 from src.utils.tracing import get_tracer
 
 from .base_agent import BaseAgent

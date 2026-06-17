@@ -20,14 +20,14 @@ Python 3.11, FastAPI, LINE Bot SDK v3, async/await throughout.
 7. ImageAnalyzerAgent (7) - general image Q&A
 8. DocumentMemoryAgent (8) - PDF/DOCX storage and retrieval
 9. SearchAgent (8) - Brave web search
-10. LLMAgent (9) - general chat via OpenRouter/GitHub Models/Hermes fallback
+10. LLMAgent (9) - general chat via LLM fallback chain (Gemini first)
 11. TranslationAgent (10) - English↔Thai translation
 12. SpecialNewsAgent (12) - Thailand-specific news
 13. NewsAgent (15) - general news + weather
 
 ## Key Constraints
 - **NEVER use Maton AI API key** in this project (Hermes agent uses it separately)
-- LLM fallback chain: hermes → openrouter → github (configurable)
+- LLM fallback chain: gemini → openrouter → hermes → hf_inference → nous → ollama (configurable)
 - All LLM providers use OpenAI-compatible API format
 - Pydantic Settings for config (env vars)
 - HuggingFace Hub used for persistent storage (conversations, calendar, documents, logs)
@@ -86,7 +86,7 @@ docker-compose up
 
 ## Key Services
 - `translation_service` - LINE translation pipeline
-- `openrouter_service` - LLM via OpenRouter (free models)
+- `openrouter_service` - LLM fallback provider (OpenRouter free models)
 - `conversation_memory_service` - chat context persistence
 - `calendar_service` - event management + HF sync
 - `debrief_extraction_service` - structured lesson debriefs

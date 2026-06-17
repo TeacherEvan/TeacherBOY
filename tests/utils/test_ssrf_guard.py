@@ -1,13 +1,13 @@
 """Tests for SSRF guard utilities."""
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
 
 from src.utils.ssrf_guard import (
+    assert_safe_url,
     is_private_or_reserved_ip,
     resolve_all_ips,
-    assert_safe_url,
-    DEFAULT_ALLOWED_HOSTS,
 )
 
 
@@ -87,6 +87,7 @@ class TestResolveAllIPs:
     def test_dns_failure_returns_empty(self, mock_getaddrinfo):
         """Test DNS failure returns empty list."""
         import socket as socket_module
+
         mock_getaddrinfo.side_effect = socket_module.gaierror("Name does not resolve")
         ips = resolve_all_ips("nonexistent.invalid")
         assert ips == []

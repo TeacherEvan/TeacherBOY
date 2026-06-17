@@ -89,7 +89,9 @@ class ModModeAgent(BaseAgent):
                 logger.debug(f"🔍 ModModeAgent: mod mode not active, subcmd={subcmd}")
                 if subcmd in ("all", "special"):
                     is_admin = await self._is_admin(user_id)
-                    logger.info(f"🔍 ModModeAgent: /modmode {subcmd} (activates mod mode) from user={user_id}, is_admin={is_admin}")
+                    logger.info(
+                        f"🔍 ModModeAgent: /modmode {subcmd} (activates mod mode) from user={user_id}, is_admin={is_admin}"
+                    )
                     return is_admin
             return False
 
@@ -137,7 +139,9 @@ class ModModeAgent(BaseAgent):
                 logger.info(f"🔧 ModModeAgent: Checking harmful content for user={user_id}")
                 detection = await self._detector.detect(text)
                 if detection["is_harmful"]:
-                    logger.warning(f"🔧 ModModeAgent: Harmful content detected for user={user_id}: {detection['matched_keywords']}")
+                    logger.warning(
+                        f"🔧 ModModeAgent: Harmful content detected for user={user_id}: {detection['matched_keywords']}"
+                    )
                     return await self._handle_harmful_content(event, line_bot_api, detection)
 
             logger.debug("🔧 ModModeAgent: No action needed, letting other agents handle")
@@ -155,6 +159,7 @@ class ModModeAgent(BaseAgent):
     def _is_activation_mod_command(self, text: str) -> bool:
         """Check if text is a /modmode command that activates mod mode (all/special)."""
         import re
+
         text_lower = text.strip().lower()
         if not text_lower.startswith("/modmode"):
             return False
@@ -194,7 +199,9 @@ class ModModeAgent(BaseAgent):
         await self._audit.log_mode_change(group_id, user_id, mode, True, special_user_id)
 
         mode_msg = (
-            "ALL USERS (normal chat, harmful content monitored)" if mode == "all" else f"SPECIAL MODE (only you + @{special_user_id} can speak)"
+            "ALL USERS (normal chat, harmful content monitored)"
+            if mode == "all"
+            else f"SPECIAL MODE (only you + @{special_user_id} can speak)"
         )
         await self._reply(
             f"🛡️ Moderator Mode ACTIVATED\nMode: {mode_msg}\nUse /modmode for dashboard",
@@ -210,6 +217,7 @@ class ModModeAgent(BaseAgent):
     def _parse_modmode_subcommand(self, text: str) -> str | None:
         """Extract subcommand from /modmode command, ignoring trailing punctuation."""
         import re
+
         text_lower = text.strip().lower()
         match = re.search(r"/modmode\s+(\w+)", text_lower)
         return match.group(1) if match else None
@@ -339,7 +347,9 @@ class ModModeAgent(BaseAgent):
             if info and info.get("mode") == "special":
                 special_user_id = info.get("special_user_id")
                 if special_user_id and target_user_id == special_user_id:
-                    await self._reply(f"❌ Cannot kick @{target_user_id} - protected as special user in SPECIAL mode", line_bot_api)
+                    await self._reply(
+                        f"❌ Cannot kick @{target_user_id} - protected as special user in SPECIAL mode", line_bot_api
+                    )
                     return True
 
         # Kick the user

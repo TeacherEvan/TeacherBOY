@@ -21,7 +21,7 @@ Goal: run Ms. Green locally (Docker) and connect it to LINE.
    - `LINE_CHANNEL_ACCESS_TOKEN`
 
 3. Recommended (better translation quality):
-   - `GITHUB_MODELS_PAT` (GitHub Models - preferred)
+   - `GEMINI_API_KEY` or `GOOGLE_API_KEY` (primary - Google AI Studio free tier)
    - `OPENROUTER_API_KEY` (fallback)
 
 ## 2) Run the bot
@@ -68,7 +68,7 @@ Follow: [docs/guides/line-setup.md](line-setup.md)
 
 ### Optional: AI + Web Search (DM-only for regular users)
 
-- **AI (OpenRouter):** `Ms. Green <your question>`
+- **AI (Gemini / fallback chain):** `Ms. Green <your question>`
 - **Web search (Brave Search):** `Ms. Green search <query>`
 
 Legacy `Zeus ...` commands may still be accepted for backward compatibility.
@@ -85,7 +85,7 @@ Access rules:
 3. In Space settings, add Secrets:
    - `LINE_CHANNEL_SECRET`
    - `LINE_CHANNEL_ACCESS_TOKEN`
-   - `GOOGLE_TRANSLATE_API_KEY` (recommended)
+   - `GEMINI_API_KEY` or `GOOGLE_API_KEY` (recommended — Google AI Studio free tier)
    - Optional: `ADMIN_SETUP_KEY`
 
 4. Set LINE webhook URL to:

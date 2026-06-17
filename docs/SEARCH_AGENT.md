@@ -151,7 +151,7 @@ SearchAgent.handle()
         │
         ├─► Get top 5-10 results
         │
-        ├─► LLM (GitHub Models/OpenRouter) summarizes results
+        ├─► LLM (Gemini primary, fallback chain) summarizes results
         │
         └─► Return formatted response with sources
 ```

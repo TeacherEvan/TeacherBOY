@@ -36,7 +36,7 @@ TeacherBOY is a FastAPI webhook app for LINE.
 - **MetricsService** (`src/services/metrics_service.py`): In-memory counters + **provider latency tracking** (avg ms per provider)
 - Shared `httpx.AsyncClient` pool created once in lifespan and injected into all services (translation, Convex, etc.)
 - Translation providers:
-  - Shared AI translation service (GitHub Models primary, OpenRouter fallback)
+  - Shared AI translation service (Gemini primary, OpenRouter fallback)
   - **Latency metrics recorded per provider** via `metrics_service.record_provider_latency()`
 
 - Session/rate-limit state:

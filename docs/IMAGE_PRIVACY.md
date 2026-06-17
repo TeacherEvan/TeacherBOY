@@ -22,7 +22,7 @@ image_bytes  →  base64_encode  →  image_data_url
 ```
 
 - **Format**: Data URL with base64 encoding (`data:image/jpeg;base64,...`)
-- **Purpose**: Vision API compatibility (GPT-4o requires base64)
+- **Purpose**: Vision API compatibility (Gemini vision requires base64)
 - **Storage**: Temporary Python variables
 
 ### 3. Processing Paths
@@ -30,10 +30,10 @@ image_bytes  →  base64_encode  →  image_data_url
 #### **ProfilerAgent (Facial Profiling)**
 
 ```text
-Download → Encode → Send to GPT-4o → DELETE ALL → Send response
+Download → Encode → Send to Vision AI (Gemini primary) → DELETE ALL → Send response
 ```
 
-- Image data is **immediately deleted** after GPT-4o returns analysis
+- Image data is **immediately deleted** after Vision AI returns analysis
 - No storage in session manager (one-shot analysis)
 - No storage in conversation memory
 - No storage in history logs
@@ -41,7 +41,7 @@ Download → Encode → Send to GPT-4o → DELETE ALL → Send response
 #### **ImageAnalyzerAgent (Q&A)**
 
 ```text
-Download → Encode → Store in Session → Wait for Question → Send to GPT-4o → DELETE ALL
+Download → Encode → Store in Session → Wait for Question → Send to Vision AI (Gemini primary) → DELETE ALL
 ```
 
 - Image stored temporarily in `ImageAnalyzerSessionManager` (60-second TTL)
@@ -99,7 +99,7 @@ del messages           # Clear vision API messages
 
 ### ✅ External APIs
 
-- **GitHub Models**: Receives image, returns text analysis, no storage
+- **Vision AI (Gemini primary, fallback chain)**: Receives image, returns text analysis, no storage
 - **LINE API**: Original image stored on LINE servers (user's responsibility)
 
 ## Session TTLs
@@ -117,7 +117,7 @@ del messages           # Clear vision API messages
 3. **No Audit Logs**: History logs do not contain image bytes or data URLs
 4. **Explicit Memory Cleanup**: `del` statements remove references for garbage collection
 5. **TTL Enforcement**: Session managers enforce 60-second expiration
-6. **No External Sharing**: Images are sent ONLY to GitHub Models API (GPT-4o)
+6. **No External Sharing**: Images are sent ONLY to Vision AI API (Gemini primary, fallback chain)
 
 ## Compliance Notes
 
@@ -154,7 +154,7 @@ del image_bytes  # Explicit cleanup
 
 # 3. Process (temporary)
 messages = build_vision_message(image_data_url)
-analysis = await gpt4o_vision(messages)
+analysis = await vision_ai(messages)
 del image_data_url  # Explicit cleanup
 del messages       # Explicit cleanup
 

@@ -31,6 +31,11 @@ def admin_agent():
         ]
         mock_settings.get_moderator_user_ids.return_value = []
 
+        # Also set privilege_service internal state for tests
+        privilege_service._env_admin_user_ids = ["U1234567890abcdef", "U9876543210fedcba"]
+        privilege_service._env_moderator_user_ids = []
+        privilege_service._settings_loaded = True
+
         # Create mock http_client for admin agent
         mock_http_client = Mock()
         agent = AdminAgent(http_client=mock_http_client, news_api_key="test_key")
@@ -1125,9 +1130,20 @@ def bootstrap_admin_agent():
     """Create admin agent with bootstrap key enabled but no preconfigured admins."""
     from unittest.mock import Mock
 
+    # Reset privilege_service for clean state
+    privilege_service._reset_for_testing()
+    if hasattr(rate_limiter, "reset_admin_destructive_limits_for_testing"):
+        rate_limiter.reset_admin_destructive_limits_for_testing()
+
     with patch("src.agents.admin_agent.settings") as mock_settings:
         mock_settings.get_admin_user_ids.return_value = []
         mock_settings.admin_setup_key = "setup-secret"
+
+        # Set privilege_service state (no env admins, bootstrap mode)
+        privilege_service._env_admin_user_ids = []
+        privilege_service._env_moderator_user_ids = []
+        privilege_service._settings_loaded = True
+
         # Create mock http_client for admin agent
         mock_http_client = Mock()
         agent = AdminAgent(http_client=mock_http_client, news_api_key="test_key")

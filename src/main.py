@@ -86,9 +86,9 @@ from src.services.memory_monitor_service import (
 )
 from src.services.message_buffer_service import message_buffer_service
 from src.services.metrics_service import metrics_service
-from src.services.n1_detector import n1_detector, query_cache
 from src.services.mod_audit_log import init_mod_audit_log, mod_audit_log
 from src.services.mod_mode_service import init_mod_mode_service
+from src.services.n1_detector import n1_detector, query_cache
 from src.services.news_session_manager import news_session_manager
 from src.services.nous_service import nous_inference_service
 from src.services.openrouter_service import openrouter_service
@@ -100,13 +100,12 @@ from src.services.scheduler_service import scheduler_service
 from src.services.startup_data_loader import startup_loader
 from src.services.translation_service import translation_service
 from src.services.warning_service import init_warning_service
-from src.utils.tracing import setup_tracing
 
 # ============================================================================
 # Correlation ID Context (must be before logging setup)
 # ============================================================================
-from src.utils.correlation import get_correlation_id, set_correlation_id, reset_correlation_id
-
+from src.utils.correlation import reset_correlation_id, set_correlation_id
+from src.utils.tracing import setup_tracing
 
 # ============================================================================
 # Logging Configuration
@@ -251,6 +250,15 @@ async def lifespan(app: FastAPI):
     nous_inference_service.set_client(http_client_pool)
     gemini_service.set_client(http_client_pool)
     logger.info("✅ HTTP client pool ready with connection pooling enabled")
+
+    # ========================================================================
+    # PHASE 2b: Privilege Service Initialization (Admin/Moderator Lists)
+    # ========================================================================
+    logger.info("🔐 Initializing privilege service (admin/moderator lists)...")
+    from src.services.privilege_service import privilege_service
+
+    privilege_service._ensure_settings_loaded()
+    logger.info("✅ Privilege service ready")
 
     # ========================================================================
     # PHASE 2a: Conversation Memory Initialization
@@ -873,7 +881,8 @@ async def metrics_dashboard() -> dict[str, Any]:
             "errors": errors,
             "error_rate": errors / count if count > 0 else 0.0,
             "avg_latency_ms": snapshot.agent_latency_ms_total.get(key, 0) / snapshot.agent_latency_ms_count.get(key, 1)
-            if snapshot.agent_latency_ms_count.get(key, 0) > 0 else 0.0,
+            if snapshot.agent_latency_ms_count.get(key, 0) > 0
+            else 0.0,
         }
 
     return {
@@ -893,7 +902,8 @@ async def metrics_dashboard() -> dict[str, Any]:
             "cache_misses": snapshot.cache_misses_total,
             "cache_hit_rate": (
                 snapshot.cache_hits_total / (snapshot.cache_hits_total + snapshot.cache_misses_total)
-                if (snapshot.cache_hits_total + snapshot.cache_misses_total) > 0 else 0.0
+                if (snapshot.cache_hits_total + snapshot.cache_misses_total) > 0
+                else 0.0
             ),
         },
         "providers": provider_summaries,
@@ -907,7 +917,8 @@ async def metrics_dashboard() -> dict[str, Any]:
             "errors": snapshot.connection_pool_errors,
             "utilization_percent": (
                 (snapshot.connection_pool_active_connections / snapshot.connection_pool_max_connections * 100)
-                if snapshot.connection_pool_max_connections > 0 else 0.0
+                if snapshot.connection_pool_max_connections > 0
+                else 0.0
             ),
         },
         "n1_queries": n1_stats,
@@ -1438,7 +1449,10 @@ async def webhook(request: Request) -> JSONResponse:
                             # Skip bot's own messages to avoid polluting date extraction with bot responses
                             user_id = getattr(event.source, "user_id", None) if event.source else None
                             if bot_user_id and user_id == bot_user_id:
-                                logger.debug("🔒 Skipping message buffer storage for bot's own message", extra={"correlation_id": correlation_id})
+                                logger.debug(
+                                    "🔒 Skipping message buffer storage for bot's own message",
+                                    extra={"correlation_id": correlation_id},
+                                )
                             else:
                                 chat_id = None
                                 if event.source:
@@ -1460,7 +1474,10 @@ async def webhook(request: Request) -> JSONResponse:
                             # CRITICAL: Check if message is from bot itself (prevent infinite loop)
                             # Skip agent routing for bot's own messages to prevent responding to itself
                             if bot_user_id and user_id == bot_user_id:
-                                logger.debug("🔒 Skipping agent routing for bot's own message (stored in buffer only)", extra={"correlation_id": correlation_id})
+                                logger.debug(
+                                    "🔒 Skipping agent routing for bot's own message (stored in buffer only)",
+                                    extra={"correlation_id": correlation_id},
+                                )
                                 continue
 
                             # Route text message to appropriate agent
@@ -1501,9 +1518,14 @@ async def webhook(request: Request) -> JSONResponse:
                                         customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
                                     ),
                                 )
-                                logger.info(f"✅ Sent welcome message to new friend {user_id}", extra={"correlation_id": correlation_id})
+                                logger.info(
+                                    f"✅ Sent welcome message to new friend {user_id}",
+                                    extra={"correlation_id": correlation_id},
+                                )
                             except Exception as e:
-                                logger.error(f"❌ Failed to send welcome message: {e}", extra={"correlation_id": correlation_id})
+                                logger.error(
+                                    f"❌ Failed to send welcome message: {e}", extra={"correlation_id": correlation_id}
+                                )
 
                     elif isinstance(event, UnfollowEvent):
                         # User blocked/removed bot

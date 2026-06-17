@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-from typing import Any, Optional
 
 from linebot.v3.messaging import (
     MessageAction,
@@ -187,6 +186,7 @@ class AdminModelHandler:
             return self._is_admin_check(user_id)
         # Default: check privilege service
         from src.services.privilege_service import privilege_service
+
         return privilege_service.is_admin(user_id) if user_id else False
 
     async def _send_reply(

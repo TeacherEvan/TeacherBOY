@@ -25,8 +25,8 @@ git push hf HEAD:main --force
 ```env
 LINE_CHANNEL_SECRET=your_channel_secret
 LINE_CHANNEL_ACCESS_TOKEN=your_access_token
-GITHUB_MODELS_PAT=your_github_models_pat
-OPENROUTER_API_KEY=your_openrouter_api_key  # Optional fallback
+GEMINI_API_KEY=your_gemini_api_key  # Primary (Google AI Studio free tier)
+OPENROUTER_API_KEY=your_openrouter_api_key  # Fallback
 ADMIN_USER_IDS=U1234567890,U0987654321  # Comma-separated LINE user IDs
 MODERATOR_USER_IDS=U1234567890  # Optional: Moderators get direct news access
 

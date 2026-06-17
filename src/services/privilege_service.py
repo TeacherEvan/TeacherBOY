@@ -41,19 +41,17 @@ class PrivilegeService:
         self._settings_loaded = False
 
     def _ensure_settings_loaded(self) -> None:
-        """Lazy-load admin/moderator lists from settings."""
+        """Load admin/moderator lists from settings. Fails fast on error."""
         if self._settings_loaded:
             return
-        try:
-            from src.config import settings
+        from src.config import settings
 
-            self._env_admin_user_ids = settings.get_admin_user_ids()
-            self._env_moderator_user_ids = settings.get_moderator_user_ids()
-            self._settings_loaded = True
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to load privilege settings: {e}")
-            self._env_admin_user_ids = []
-            self._env_moderator_user_ids = []
+        self._env_admin_user_ids = settings.get_admin_user_ids()
+        self._env_moderator_user_ids = settings.get_moderator_user_ids()
+        self._settings_loaded = True
+        logger.info(
+            f"✅ Privilege service loaded: {len(self._env_admin_user_ids)} admin(s), {len(self._env_moderator_user_ids)} moderator(s) from env"
+        )
 
     def claim_admin(self, user_id: str) -> None:
         """Grant in-memory admin rights for this running process."""

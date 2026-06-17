@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 
 @dataclass
@@ -52,6 +53,14 @@ class MetricsSnapshot:
     connection_pool_idle_connections: int = 0
     connection_pool_requests_queued: int = 0
     connection_pool_errors: int = 0
+
+    # Date extraction metrics
+    extraction_requests_total: int = 0
+    extraction_success_total: int = 0
+    extraction_fallback_total: int = 0
+    extraction_errors_total: int = 0
+    extraction_provider_usage: dict[str, int] = field(default_factory=dict)
+    extraction_event_count_total: int = 0
 
 
 class _BoundedSet:
@@ -129,6 +138,14 @@ class MetricsService:
     _connection_pool_idle_connections: int = 0
     _connection_pool_requests_queued: int = 0
     _connection_pool_errors: int = 0
+
+    # Date extraction metrics
+    _extraction_requests_total: int = 0
+    _extraction_success_total: int = 0
+    _extraction_fallback_total: int = 0
+    _extraction_errors_total: int = 0
+    _extraction_provider_used: dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    _extraction_event_count_total: int = 0
 
     def record_translation(self, provider: str, chat_id: str | None = None) -> None:
         self._translation_requests_total += 1
@@ -233,7 +250,9 @@ class MetricsService:
             return 0.0
         return self._provider_request_type_latency_total[key] / count
 
-    def record_agent_request(self, agent_name: str, message_type: str | None = None, duration_ms: float | None = None, success: bool = True) -> None:
+    def record_agent_request(
+        self, agent_name: str, message_type: str | None = None, duration_ms: float | None = None, success: bool = True
+    ) -> None:
         """Record an agent request for RED metrics.
 
         Args:
@@ -292,6 +311,48 @@ class MetricsService:
         """Record a connection pool error."""
         self._connection_pool_errors += 1
 
+    def record_extraction_request(self, provider: str | None, success: bool, event_count: int = 0, used_fallback: bool = False) -> None:
+        """Record a date extraction request attempt.
+
+        Args:
+            provider: Which provider was used (gemini, openrouter, etc.)
+            success: Whether the AI extraction succeeded
+            event_count: Number of events extracted
+            used_fallback: Whether regex fallback was used
+        """
+        self._extraction_requests_total += 1
+        if success:
+            self._extraction_success_total += 1
+        else:
+            self._extraction_errors_total += 1
+        if used_fallback:
+            self._extraction_fallback_total += 1
+        if provider:
+            self._extraction_provider_used[provider] += 1
+        if event_count > 0:
+            self._extraction_event_count_total += event_count
+
+    def get_extraction_stats(self) -> dict[str, Any]:
+        """Get extraction statistics."""
+        return {
+            "total_requests": self._extraction_requests_total,
+            "success_total": self._extraction_success_total,
+            "fallback_total": self._extraction_fallback_total,
+            "errors_total": self._extraction_errors_total,
+            "provider_usage": dict(self._extraction_provider_used),
+            "total_events_extracted": self._extraction_event_count_total,
+            "success_rate": (
+                self._extraction_success_total / self._extraction_requests_total
+                if self._extraction_requests_total > 0
+                else 0.0
+            ),
+            "fallback_rate": (
+                self._extraction_fallback_total / self._extraction_requests_total
+                if self._extraction_requests_total > 0
+                else 0.0
+            ),
+        }
+
     def get_started_at(self) -> datetime:
         return self._started_at
 
@@ -341,6 +402,12 @@ class MetricsService:
             connection_pool_idle_connections=self._connection_pool_idle_connections,
             connection_pool_requests_queued=self._connection_pool_requests_queued,
             connection_pool_errors=self._connection_pool_errors,
+            extraction_requests_total=self._extraction_requests_total,
+            extraction_success_total=self._extraction_success_total,
+            extraction_fallback_total=self._extraction_fallback_total,
+            extraction_errors_total=self._extraction_errors_total,
+            extraction_provider_usage=dict(self._extraction_provider_used),
+            extraction_event_count_total=self._extraction_event_count_total,
         )
 
 

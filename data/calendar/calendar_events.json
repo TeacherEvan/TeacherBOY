@@ -103,11 +103,11 @@
       "repository_event_id": null
     },
     {
-      "event_id": "3b89cd0a-e6b4-4129-814c-40b32a350fad",
+      "event_id": "f731580f-e017-4660-9162-72442487fb95",
       "user_id": "test_user_deletion_123",
       "chat_id": "user_test_user_deletion_123",
       "title": "User 1 Event",
-      "event_date": "2026-06-18",
+      "event_date": "2026-06-19",
       "description": "",
       "reminder_days": [
         0,
@@ -116,9 +116,9 @@
       "is_friend": true,
       "notification_target_user_id": "test_user_deletion_123",
       "notified_dates": [],
-      "created_at": "2026-06-16T19:36:20.921179+00:00",
+      "created_at": "2026-06-17T21:37:47.566124+00:00",
       "repository_event_id": null
     }
   ],
-  "updated_at": "2026-06-16T19:36:20.921224+00:00"
+  "updated_at": "2026-06-17T21:37:47.566167+00:00"
 }

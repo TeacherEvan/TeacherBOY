@@ -66,11 +66,16 @@ class AIReviewService:
         messages = [
             {
                 "role": "system",
-                "content": ("Extract date-bearing events for school staff planning. Return JSON only."),
+                "content": ("Find dates and events in messages. Return JSON array only."),
             },
             {
                 "role": "user",
                 "content": "\n".join(texts),
+            },
+            # Godmode prefill for Gemini - nudges model to start with JSON array
+            {
+                "role": "assistant",
+                "content": '[{"date":"',
             },
         ]
         return await self._complete(messages)

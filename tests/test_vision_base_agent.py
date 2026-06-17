@@ -5,7 +5,6 @@ from linebot.v3.messaging import MessagingApiBlob
 from linebot.v3.webhooks import MessageEvent, Source
 
 from src.agents.vision_base_agent import VisionBaseAgent
-from src.config import settings
 
 
 class TestVisionBaseAgent:
@@ -97,7 +96,7 @@ class TestVisionBaseAgent:
         """Test that error detail can be retrieved from services."""
         # The _get_vision_error_detail method dynamically imports openrouter_service
         mock_openrouter_service.get_last_error.return_value = (400, "Bad Request", "openrouter_model")
-        
+
         status, detail, model = vision_base_agent._get_vision_error_detail()
         assert status == 400
         assert detail == "Bad Request"
@@ -106,7 +105,7 @@ class TestVisionBaseAgent:
     def test_get_vision_error_detail_none(self, vision_base_agent, mock_openrouter_service):
         """Test when no error is available."""
         mock_openrouter_service.get_last_error.return_value = None
-        
+
         status, detail, model = vision_base_agent._get_vision_error_detail()
         assert status is None
         assert detail is None

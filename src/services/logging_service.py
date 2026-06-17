@@ -56,4 +56,5 @@ class LoggingService:
     def debug(self, message: str, extra: dict | None = None) -> None:
         _logger.debug(self._build_payload("DEBUG", message, extra))
 
+
 logging_service = LoggingService()

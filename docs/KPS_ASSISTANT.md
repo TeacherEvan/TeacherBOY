@@ -22,11 +22,12 @@ runtime identity.
 Automatic plain-Thai translation is disabled.
 Translation and summarization now happen only through explicit review-style flows.
 
-AI provider order:
+AI provider order (fallback chain):
 
-1. GitHub Models `openai/gpt-4o-mini`
-2. OpenRouter `openai/gpt-4o`
-3. Regex-only fallback for calendar date extraction
+1. Gemini `gemini-2.5-flash` (primary - free tier)
+2. OpenRouter `nvidia/nemotron-3-ultra-550b-a55b:free` (fallback)
+3. Hermes, HF Inference, Ollama (additional fallbacks)
+4. Regex-only fallback for calendar date extraction
 
 ## Persistence
 

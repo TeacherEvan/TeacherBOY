@@ -26,11 +26,22 @@ class NousResponse(BaseModel):
 # Available NOUS Portal free models (as of 2024)
 NOUS_FREE_MODELS = [
     {"id": "Hermes-3-Llama-3.1-70B", "name": "Hermes 3 70B", "vision": False, "description": "General chat, reasoning"},
-    {"id": "Hermes-3-Llama-3.1-70B-Vision", "name": "Hermes 3 70B Vision", "vision": True, "description": "Image analysis, vision tasks"},
+    {
+        "id": "Hermes-3-Llama-3.1-70B-Vision",
+        "name": "Hermes 3 70B Vision",
+        "vision": True,
+        "description": "Image analysis, vision tasks",
+    },
     {"id": "Hermes-3-Llama-3.1-8B", "name": "Hermes 3 8B", "vision": False, "description": "Fast, lightweight chat"},
     {"id": "Hermes-3-Llama-3.1-8B-Vision", "name": "Hermes 3 8B Vision", "vision": True, "description": "Fast vision tasks"},
-    {"id": "Nous-Hermes-2-Mixtral-8x7B-DPO", "name": "Hermes 2 Mixtral 8x7B", "vision": False, "description": "MoE model, strong reasoning"},
+    {
+        "id": "Nous-Hermes-2-Mixtral-8x7B-DPO",
+        "name": "Hermes 2 Mixtral 8x7B",
+        "vision": False,
+        "description": "MoE model, strong reasoning",
+    },
 ]
+
 
 class NousService:
     """Service for interacting with NOUS Portal API."""

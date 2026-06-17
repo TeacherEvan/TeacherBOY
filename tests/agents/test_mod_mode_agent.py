@@ -245,7 +245,7 @@ async def test_handle_unban_command(agent, mock_services, event_factory):
     mock_services["audit"].log_mode_change.assert_called_once()
 
 
-@ pytest.mark.asyncio
+@pytest.mark.asyncio
 async def test_should_handle_modmode_special_command_activates_mod_mode(agent, mock_services, event_factory):
     """Test that /modmode special is handled even when mod mode is not active (it activates mod mode)."""
     mock_services["mod_mode"].is_mod_mode_active = _make_async_mock(False)
@@ -256,7 +256,7 @@ async def test_should_handle_modmode_special_command_activates_mod_mode(agent, m
         assert result is True
 
 
-@ pytest.mark.asyncio
+@pytest.mark.asyncio
 async def test_should_handle_modmode_all_command_activates_mod_mode(agent, mock_services, event_factory):
     """Test that /modmode all is handled even when mod mode is not active (it activates mod mode)."""
     mock_services["mod_mode"].is_mod_mode_active = _make_async_mock(False)
@@ -267,7 +267,7 @@ async def test_should_handle_modmode_all_command_activates_mod_mode(agent, mock_
         assert result is True
 
 
-@ pytest.mark.asyncio
+@pytest.mark.asyncio
 async def test_should_handle_modmode_dashboard_requires_active_mod_mode(agent, mock_services, event_factory):
     """Test that /modmode dashboard is NOT handled when mod mode is not active (doesn't activate mod mode)."""
     mock_services["mod_mode"].is_mod_mode_active = _make_async_mock(False)
@@ -277,7 +277,7 @@ async def test_should_handle_modmode_dashboard_requires_active_mod_mode(agent, m
         assert result is False
 
 
-@ pytest.mark.asyncio
+@pytest.mark.asyncio
 async def test_should_handle_modmode_off_requires_active_mod_mode(agent, mock_services, event_factory):
     """Test that /modmode off is NOT handled when mod mode is not active."""
     mock_services["mod_mode"].is_mod_mode_active = _make_async_mock(False)
@@ -287,7 +287,7 @@ async def test_should_handle_modmode_off_requires_active_mod_mode(agent, mock_se
         assert result is False
 
 
-@ pytest.mark.asyncio
+@pytest.mark.asyncio
 async def test_should_handle_modmode_all_with_trailing_punctuation(agent, mock_services, event_factory):
     """Test that /modmode all... (with trailing punctuation) is handled."""
     mock_services["mod_mode"].is_mod_mode_active = _make_async_mock(False)
@@ -298,7 +298,7 @@ async def test_should_handle_modmode_all_with_trailing_punctuation(agent, mock_s
         assert result is True
 
 
-@ pytest.mark.asyncio
+@pytest.mark.asyncio
 async def test_should_handle_modmode_special_with_trailing_punctuation(agent, mock_services, event_factory):
     """Test that /modmode special... (with trailing punctuation) is handled."""
     mock_services["mod_mode"].is_mod_mode_active = _make_async_mock(False)

@@ -249,9 +249,7 @@ class RateLimiter:
         if destructive:
             # Check destructive limit (3 per minute)
             cutoff = now - self.admin_destructive_window
-            self._admin_destructive_history[user_id] = [
-                ts for ts in self._admin_destructive_history[user_id] if ts > cutoff
-            ]
+            self._admin_destructive_history[user_id] = [ts for ts in self._admin_destructive_history[user_id] if ts > cutoff]
             count = len(self._admin_destructive_history[user_id])
             if count >= self.admin_destructive_limit:
                 oldest = min(self._admin_destructive_history[user_id]) if self._admin_destructive_history[user_id] else now
@@ -262,9 +260,7 @@ class RateLimiter:
         else:
             # Check general admin limit (10 per minute for non-destructive)
             cutoff = now - self.admin_general_window
-            self._admin_general_history[user_id] = [
-                ts for ts in self._admin_general_history[user_id] if ts > cutoff
-            ]
+            self._admin_general_history[user_id] = [ts for ts in self._admin_general_history[user_id] if ts > cutoff]
             count = len(self._admin_general_history[user_id])
             if count >= self.admin_general_limit:
                 oldest = min(self._admin_general_history[user_id]) if self._admin_general_history[user_id] else now
@@ -415,8 +411,12 @@ class RateLimiter:
                 del self._admin_destructive_history[user_id]
 
         total_cleaned = (
-            len(chats_to_remove) + len(users_to_remove) + len(calendar_users_to_remove) + len(calendar_chats_to_remove)
-            + len(admin_general_users_to_remove) + len(admin_destructive_users_to_remove)
+            len(chats_to_remove)
+            + len(users_to_remove)
+            + len(calendar_users_to_remove)
+            + len(calendar_chats_to_remove)
+            + len(admin_general_users_to_remove)
+            + len(admin_destructive_users_to_remove)
         )
         if total_cleaned > 0:
             logger.debug(

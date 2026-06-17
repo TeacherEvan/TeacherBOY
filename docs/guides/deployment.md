@@ -41,7 +41,7 @@ Use this to validate your bot before deploying.
 4. Add env vars/secrets:
    - `LINE_CHANNEL_SECRET`
    - `LINE_CHANNEL_ACCESS_TOKEN`
-   - `GITHUB_MODELS_PAT` (recommended)
+   - `GEMINI_API_KEY` or `GOOGLE_API_KEY` (recommended — Google AI Studio free tier)
    - `OPENROUTER_API_KEY` (fallback)
    - Optional bootstrap: `ADMIN_SETUP_KEY`
 
@@ -165,8 +165,18 @@ High-level flow:
 
 ## Admin bootstrap (recommended)
 
-If you didn’t set `ADMIN_USER_IDS` yet, you can bootstrap safely:
+If you didn't set `ADMIN_USER_IDS` yet, you can bootstrap safely:
 
-- Set `ADMIN_SETUP_KEY` temporarily.
+- Set `ADMIN_SETUP_KEY` temporarily in your host environment/secrets.
 - In LINE, message: `/admin claim <ADMIN_SETUP_KEY>`.
-- Use the returned user id to set `ADMIN_USER_IDS`, restart, then remove `ADMIN_SETUP_KEY`.
+- **The response states "THIS WILL BE LOST ON RESTART."** You must then:
+  1. Add the returned user ID to `ADMIN_USER_IDS` in your host environment/secrets
+  2. Restart the service (or wait for auto-restart on HF Spaces)
+  3. Remove `ADMIN_SETUP_KEY`
+
+On Hugging Face Spaces:
+- Set `ADMIN_USER_IDS` in **Space Settings → Secrets** BEFORE removing `ADMIN_SETUP_KEY`
+- The Space will auto-restart with permanent admin access
+- Then remove `ADMIN_SETUP_KEY` from Secrets
+
+> ⚠️ **The claim is in-memory only for the current process.** Any config change (including removing `ADMIN_SETUP_KEY`) triggers a container restart on HF Spaces. Without `ADMIN_USER_IDS` set, you lose admin access after restart.

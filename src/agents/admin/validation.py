@@ -1,6 +1,5 @@
 """Validation schemas for admin commands using Pydantic."""
 
-from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -33,33 +32,33 @@ class AdminModelSetArgs(BaseModel):
 class AdminPurgeArgs(BaseModel):
     """Arguments for /admin purge command."""
 
-    target: Optional[str] = None  # chat_id or "all"
+    target: str | None = None  # chat_id or "all"
     confirm: bool = False
 
 
 class AdminResetArgs(BaseModel):
     """Arguments for /admin reset command."""
 
-    target: Optional[str] = None  # chat_id or "all"
+    target: str | None = None  # chat_id or "all"
     confirm: bool = False
 
 
 class AdminLeaveArgs(BaseModel):
     """Arguments for /admin leave command."""
 
-    chat_id: Optional[str] = None
+    chat_id: str | None = None
 
 
 class AdminSessionsArgs(BaseModel):
     """Arguments for /admin sessions command."""
 
-    limit: Optional[int] = Field(default=20, ge=1, le=100)
+    limit: int | None = Field(default=20, ge=1, le=100)
 
 
 class AdminGroupsArgs(BaseModel):
     """Arguments for /admin groups command."""
 
-    limit: Optional[int] = Field(default=20, ge=1, le=100)
+    limit: int | None = Field(default=20, ge=1, le=100)
 
 
 class AdminStatsArgs(BaseModel):
@@ -71,9 +70,9 @@ class AdminStatsArgs(BaseModel):
 class AdminMemoryArgs(BaseModel):
     """Arguments for /admin memory command."""
 
-    chat_id: Optional[str] = None
-    flush_mode: Optional[str] = None
-    days: Optional[int] = Field(default=None, ge=1, le=365)
+    chat_id: str | None = None
+    flush_mode: str | None = None
+    days: int | None = Field(default=None, ge=1, le=365)
     dry_run: bool = True
     confirm: bool = False
 

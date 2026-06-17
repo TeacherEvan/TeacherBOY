@@ -66,6 +66,38 @@ class Settings(BaseSettings):
         default=None, description="Comma-separated list of LINE user IDs authorized as moderators (can access news directly)"
     )
 
+    @field_validator("admin_user_ids", "moderator_user_ids", mode="before")
+    @classmethod
+    def _validate_user_id_list_format(cls, v: str | None) -> str | None:
+        """Validate format of comma-separated user ID lists for common mistakes."""
+        if v is None or not v.strip():
+            return v
+        stripped = v.strip()
+        # Check for common format mistakes
+        if stripped.startswith("[") and stripped.endswith("]"):
+            logger.warning(
+                f"⚠️  Admin/moderator user IDs appears to be a JSON array: '{stripped[:50]}...'. "
+                "Expected comma-separated values without brackets (e.g., 'U123,U456')."
+            )
+        if stripped.startswith("{") and stripped.endswith("}"):
+            logger.warning(
+                f"⚠️  Admin/moderator user IDs appears to be a JSON object: '{stripped[:50]}...'. "
+                "Expected comma-separated values without braces."
+            )
+        if "'" in stripped or '"' in stripped:
+            logger.warning(
+                f"⚠️  Admin/moderator user IDs contains quotes: '{stripped[:50]}...'. Expected bare IDs without quotes."
+            )
+        # Check for spaces around commas which might indicate copy-paste from JSON
+        if ", " in stripped and "," in stripped.replace(", ", ","):
+            has_space = any(part.strip() != part for part in stripped.split(","))
+            if has_space:
+                logger.warning(
+                    "⚠️  Admin/moderator user IDs contains spaces around commas. "
+                    "Expected format: 'U123,U456' not 'U123, U456'. Spaces will be stripped."
+                )
+        return v
+
     bot_identity_storage_path: str = Field(
         default="./data/bot_identity/profile.json",
         description="Local JSON storage for runtime bot name and aliases.",
@@ -513,7 +545,6 @@ class Settings(BaseSettings):
         default="last_7_days",
         description="Default date preset for log viewer.",
     )
-
 
     # ============================================================================
     profiler_enabled: bool = Field(

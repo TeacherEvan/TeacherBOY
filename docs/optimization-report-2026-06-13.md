@@ -122,15 +122,15 @@ The TeacherBOY/Ms. Green codebase is a **well-architected, production-grade mult
 
 ---
 
-## 4. Integrations (LINE, OpenRouter, Brave, Google, Gemini, GitHub Models, etc.)
+## 4. Integrations (LINE, OpenRouter, Brave, Google, Gemini, etc.)
 
 ### Current State
 - **LINE Bot SDK v3**: Webhook parsing, MessagingApi, Flex messages, Postback handling
-- **LLM Providers**: 7-provider fallback chain (Gemini → Hermes → OpenRouter → HF Inference → GitHub Models → Ollama)
+- **LLM Providers**: Fallback chain with Gemini first, then OpenRouter, Hermes, HF Inference, Ollama (configurable via `LLM_PROVIDER_PRIORITY`)
 - **Translation**: Google Cloud Translation (primary) → LibreTranslate → LLM fallback
 - **Search**: Brave Search API
 - **Calendar**: Google Calendar API (optional)
-- **Vision**: HF Inference API (Llama 3.2 Vision) + GitHub Models (GPT-4o) + OpenRouter
+- **Vision**: HF Inference API (Llama 3.2 Vision) + OpenRouter (Gemini vision) + fallback chain
 
 ### Strengths
 - Robust fallback chain with per-provider error tracking
@@ -172,7 +172,7 @@ The TeacherBOY/Ms. Green codebase is a **well-architected, production-grade mult
 
 ### Current State
 - **Primary**: Google Cloud Translation API (v2)
-- **Fallback**: LibreTranslate + LLM providers (Gemini, OpenRouter, GitHub Models, etc.)
+- **Fallback**: LibreTranslate + LLM providers (Gemini, OpenRouter, Hermes, HF Inference, Ollama)
 - **Detection**: `contains_thai()` regex `[\u0E00-\u0E7F]`
 - **Session-based**: Auto-starts on Thai detection, sleep/wake commands
 

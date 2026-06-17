@@ -48,14 +48,14 @@ from src.services.privilege_service import privilege_service
 from src.services.rate_limiter import rate_limiter
 from src.services.session_manager import session_manager
 
+from .admin.admin_dashboard_handler import AdminDashboardHandler
+from .admin.admin_model_handler import AdminModelHandler
 from .admin.dashboard_builder import (
     build_admin_dashboard,
     build_dashboard_delivery_failure_message,
     build_dashboard_handoff_message,
 )
 from .admin.destructive_action_flow import DestructiveActionFlow
-from .admin.admin_model_handler import AdminModelHandler
-from .admin.admin_dashboard_handler import AdminDashboardHandler
 from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
@@ -76,9 +76,7 @@ class AdminAgent(BaseAgent):
         )
         self._http_client = http_client
         self._news_data_service = news_data_service
-        self._admin_user_ids = settings.get_admin_user_ids()
         self._admin_setup_key = settings.admin_setup_key.strip() if isinstance(settings.admin_setup_key, str) else None
-        self._claimed_admin_user_id: str | None = None
         self._destructive_action_flow: DestructiveActionFlow | None = None
 
         # Initialize handlers
@@ -94,8 +92,11 @@ class AdminAgent(BaseAgent):
             persistence_backend=None,  # Will read from settings at runtime
         )
 
-        if self._admin_user_ids:
-            logger.info(f"✅ AdminAgent initialized with {len(self._admin_user_ids)} authorized admin(s)")
+        # Log admin status using centralized privilege service
+        privilege_service._ensure_settings_loaded()
+        env_admin_count = len(privilege_service._env_admin_user_ids)
+        if env_admin_count > 0:
+            logger.info(f"✅ AdminAgent initialized with {env_admin_count} authorized admin(s) from env")
         else:
             logger.warning("⚠️  AdminAgent initialized but no admin users configured (ADMIN_USER_IDS)")
 
@@ -124,11 +125,8 @@ class AdminAgent(BaseAgent):
         return "|".join(sorted(escaped, key=len, reverse=True))
 
     def _is_admin(self, user_id: str | None) -> bool:
-        if not user_id:
-            return False
-        if privilege_service.is_claimed_admin(user_id):
-            return True
-        return user_id in self._admin_user_ids
+        """Check if user is admin using centralized privilege service."""
+        return privilege_service.is_admin(user_id)
 
     def _parse_admin_command(self, text: str) -> tuple[str | None, str | None]:
         """Parse an admin command into (cmd, args).
@@ -364,26 +362,19 @@ class AdminAgent(BaseAgent):
             logger.warning(f"⚠️  Invalid admin claim attempt from user {user_id} in {chat_id}")
             return "❌ Invalid claim key."
 
-        if self._claimed_admin_user_id and self._claimed_admin_user_id != user_id:
-            return (
-                "❌ Admin was already claimed for this running instance.\n\n"
-                "Persist admin via ADMIN_USER_IDS in your host settings, then restart."
-            )
-
         # Grant in-memory admin for this process so user can immediately use /admin commands
-        if user_id not in self._admin_user_ids:
-            self._admin_user_ids.append(user_id)
-        self._claimed_admin_user_id = user_id
         privilege_service.claim_admin(user_id)
 
         return (
-            "✅ Admin claim successful (for this running instance).\n\n"
+            "✅ Admin claim successful (for THIS RUNNING INSTANCE ONLY).\n\n"
             f"Your LINE user ID: {user_id}\n"
             f"This chat ID: {chat_id}\n\n"
-            "To make it permanent:\n"
-            f"- Set ADMIN_USER_IDS={user_id} in your host environment\n"
-            "- Restart the service\n"
-            "- Remove ADMIN_SETUP_KEY afterwards"
+            "⚠️  THIS WILL BE LOST ON RESTART.\n\n"
+            "To make it PERMANENT:\n"
+            f"1. Set ADMIN_USER_IDS={user_id} in your HOST ENVIRONMENT/SECRETS\n"
+            f"2. Restart the service\n"
+            f"3. REMOVE ADMIN_SETUP_KEY afterwards\n\n"
+            "On HF Spaces: Set ADMIN_USER_IDS in Space Settings → Secrets BEFORE removing ADMIN_SETUP_KEY."
         )
 
     def _get_help_message(self) -> str:
@@ -754,7 +745,7 @@ class AdminAgent(BaseAgent):
         room_id = getattr(source, "room_id", None) if source else None
 
         is_claimed = bool(privilege_service.is_claimed_admin(user_id) if user_id else False)
-        is_env_admin = bool(user_id and user_id in (self._admin_user_ids or []))
+        is_env_admin = bool(user_id and user_id in privilege_service._env_admin_user_ids)
         is_admin = self._is_admin(user_id)
 
         lines: list[str] = []
@@ -2281,7 +2272,9 @@ class AdminAgent(BaseAgent):
                         line_bot_api.reply_message,
                         ReplyMessageRequest(
                             replyToken=event.reply_token,
-                            messages=[TextMessage(text="❌ Usage: /admin model set <model_id>", quickReply=None, quoteToken=None)],
+                            messages=[
+                                TextMessage(text="❌ Usage: /admin model set <model_id>", quickReply=None, quoteToken=None)
+                            ],
                             notificationDisabled=False,
                         ),
                     )
@@ -2295,7 +2288,13 @@ class AdminAgent(BaseAgent):
                         line_bot_api.reply_message,
                         ReplyMessageRequest(
                             replyToken=event.reply_token,
-                            messages=[TextMessage(text=f"❌ Unknown model: {subarg}\n\nValid models: {', '.join(valid_models)}", quickReply=None, quoteToken=None)],
+                            messages=[
+                                TextMessage(
+                                    text=f"❌ Unknown model: {subarg}\n\nValid models: {', '.join(valid_models)}",
+                                    quickReply=None,
+                                    quoteToken=None,
+                                )
+                            ],
                             notificationDisabled=False,
                         ),
                     )
@@ -2312,7 +2311,13 @@ class AdminAgent(BaseAgent):
                     line_bot_api.reply_message,
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
-                        messages=[TextMessage(text=f"✅ Default NOUS model set to: {subarg}\n\n⚠️ Change is in-memory only. Set NOUS_MODEL={subarg} in environment and restart to persist.", quickReply=None, quoteToken=None)],
+                        messages=[
+                            TextMessage(
+                                text=f"✅ Default NOUS model set to: {subarg}\n\n⚠️ Change is in-memory only. Set NOUS_MODEL={subarg} in environment and restart to persist.",
+                                quickReply=None,
+                                quoteToken=None,
+                            )
+                        ],
                         notificationDisabled=False,
                     ),
                 )
@@ -2322,7 +2327,13 @@ class AdminAgent(BaseAgent):
                     line_bot_api.reply_message,
                     ReplyMessageRequest(
                         replyToken=event.reply_token,
-                        messages=[TextMessage(text="❌ Unknown model subcommand. Use: list, vision, set <model_id>", quickReply=None, quoteToken=None)],
+                        messages=[
+                            TextMessage(
+                                text="❌ Unknown model subcommand. Use: list, vision, set <model_id>",
+                                quickReply=None,
+                                quoteToken=None,
+                            )
+                        ],
                         notificationDisabled=False,
                     ),
                 )
@@ -2385,7 +2396,7 @@ class AdminAgent(BaseAgent):
 
     def _build_model_quick_reply(self, models: list[dict]) -> "QuickReply | None":
         """Build QuickReply buttons for model selection."""
-        from linebot.v3.messaging import MessageAction, QuickReply, QuickReplyItem
+        from linebot.v3.messaging import QuickReply
 
         quick_reply_items = []
         for m in models[:11]:  # LINE limit: 13 items max

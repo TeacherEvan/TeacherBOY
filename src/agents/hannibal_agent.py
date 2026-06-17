@@ -33,8 +33,8 @@ from src.services.message_buffer_service import message_buffer_service
 from src.services.metrics_service import metrics_service
 from src.services.privilege_service import privilege_service
 from src.services.rate_limiter import RateLimiter
-from src.utils.tracing import get_tracer
 from src.utils.llm_fallback import chat_completion_with_fallback
+from src.utils.tracing import get_tracer
 
 from .base_agent import BaseAgent
 
@@ -118,14 +118,15 @@ class HannibalProfileAgent(BaseAgent):
             return False
 
         # Check if any LLM provider is configured
-        from src.utils.llm_fallback import chat_completion_with_fallback
         # Just check if any provider is available - the fallback handles it
-        available = any([
-            settings.is_openrouter_configured(),
-            settings.is_hermes_configured(),
-            settings.is_gemini_configured(),
-            settings.is_nous_configured(),
-        ])
+        available = any(
+            [
+                settings.is_openrouter_configured(),
+                settings.is_hermes_configured(),
+                settings.is_gemini_configured(),
+                settings.is_nous_configured(),
+            ]
+        )
         if not available:
             return False
 

@@ -197,7 +197,7 @@ When a banned user tries to rejoin:
 
 ### LLM-Based (Optional Fallback)
 - Used when keyword detection uncertain
-- Calls LLM via OpenRouter/GitHub Models/Hermes fallback
+- Calls LLM via fallback chain (Gemini first, then OpenRouter, Hermes, HF Inference, Ollama)
 - Classification: `SAFE` | `HARMFUL` | `BORDERLINE`
 
 ### Threshold

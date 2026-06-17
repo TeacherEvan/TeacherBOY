@@ -2,9 +2,7 @@
 
 ## Overview
 
-The Ms. Green Psychological Profiler analyzes photos and artwork using
-advanced vision AI (GPT-4o) to provide comprehensive behavioral and
-psychological assessments based on established frameworks:
+The Ms. Green Psychological Profiler analyzes photos and artwork using advanced vision AI (Gemini 2.5 Flash primary, with fallback chain) to provide comprehensive behavioral and psychological assessments based on established frameworks:
 
 - **FBI Behavioral Analysis Unit (BAU)** methodology
 - **Paul Ekman's FACS** (Facial Action Coding System) and 7 universal emotions
@@ -57,7 +55,7 @@ Ms. Green will:
 
 1. Send "🔬 Analyzing image... Please wait." message
 2. Download the image from LINE
-3. Send it to GPT-4o vision API for comprehensive analysis
+3. Send it to Vision AI API (Gemini primary, fallback chain) for comprehensive analysis
 4. Return detailed psychological profile
 
 ## Example Analysis Output
@@ -106,8 +104,9 @@ Edit `.env` to customize:
 # Enable/disable feature
 PROFILER_ENABLED=true
 
-# Vision model (must support images)
-PROFILER_MODEL=openai/gpt-4o
+# Vision model (must support images/vision)
+# Primary: Gemini free tier
+PROFILER_MODEL=gemini-2.5-flash
 
 # Analysis depth
 PROFILER_ANALYSIS_TYPE=full  # Options: full, quick, body, facial
@@ -164,22 +163,21 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 
 ### API Requirements
 
-**GitHub Models (Required):**
-
-- Free tier: <https://github.com/marketplace/models>
-- Create GitHub PAT with `models:read` scope
-- Set `GITHUB_MODELS_PAT` in `.env`
+**Vision AI (Required):**
+- **Primary:** Google AI Studio free tier — [Gemini](https://aistudio.google.com/)
+- Create API key at Google AI Studio
+- Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` in `.env`
+- **Fallback chain:** OpenRouter (free models), Hermes, HF Inference, Ollama
 
 **Model:**
-
-- Default: `openai/gpt-4o` (supports vision)
-- Alternative: `openai/gpt-4o-mini` (faster, less detailed)
+- Default: `gemini-2.5-flash` (supports vision)
+- Alternative: `gemini-2.0-flash` (faster)
 
 ## Troubleshooting
 
-### "ProfilerAgent: GitHub Models not configured"
+### "Vision AI not configured"
 
-→ Set `GITHUB_MODELS_PAT` in `.env` with valid GitHub PAT
+→ Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` in `.env` with valid Google AI Studio API key
 
 ### "Profiler not responding to images"
 
@@ -206,7 +204,7 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 **Data Handling:**
 
 - Images are NOT stored locally
-- Images are sent to GitHub Models API for analysis
+- Images are sent to Vision AI API (Gemini primary, fallback chain) for analysis
 - Analysis text is returned but not permanently logged
 - No facial recognition database is created
 

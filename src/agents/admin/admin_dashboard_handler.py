@@ -1,7 +1,7 @@
 """Admin Dashboard Handler - Handles admin dashboard commands and rendering."""
 
 import asyncio
-from typing import Any, Callable, Optional
+from collections.abc import Callable
 
 from linebot.v3.messaging import (
     FlexMessage,
@@ -53,6 +53,7 @@ class AdminDashboardHandler:
         pb = self._persistence_backend
         if pb is None:
             from src.agents.admin_agent import settings as admin_settings
+
             pb = admin_settings.persistence_backend
 
         return build_admin_dashboard(
@@ -180,6 +181,7 @@ class AdminDashboardHandler:
             return result
         # Default: check privilege service
         from src.services.privilege_service import privilege_service
+
         return privilege_service.is_admin(user_id) if user_id else False
 
     async def _is_private_chat(self, chat_id: str) -> bool:
