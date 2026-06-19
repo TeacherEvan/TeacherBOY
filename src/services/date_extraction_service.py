@@ -182,15 +182,9 @@ class DateExtractionService:
         """
         events: list[ExtractedEvent] = []
 
-        try:
-            data = json.loads(response)
-        except json.JSONDecodeError as e:
-            logger.warning("📅 Failed to parse AI response as JSON: %s", e)
-            logger.debug("📅 Raw response: %s", response[:500])
-            return []
-
-        if not isinstance(data, list):
-            logger.warning("📅 AI response is not a list")
+        data = _coerce_ai_response_to_list(response)
+        if data is None:
+            logger.warning("📅 Calendar event extraction response could not be parsed; events are being skipped")
             return []
 
         current_year = today.year
@@ -466,39 +460,84 @@ class DateExtractionService:
         return self._extraction_count
 
 
-_EVENT_KEYWORDS = (
-    "meeting",
-    "call",
-    "appointment",
-    "deadline",
-    "due",
-    "schedule",
-    "remind",
-    "reminder",
-    "party",
-    "event",
-    "interview",
-    "class",
-    "exam",
-    "conference",
-    "workshop",
-    "training",
-    "session",
-    "lunch",
-    "dinner",
-    "breakfast",
-    "dear all",
-    "everyone",
-    "team",
-    "ประชุม",
-    "นัด",
-    "เดดไลน์",
-    "กำหนดส่ง",
-    "ส่งงาน",
-    "สัมภาษณ์",
-    "สอบ",
-    "เรียน",
+_EVENT_KEYWORDS = frozenset(
+    {
+        "meeting",
+        "call",
+        "appointment",
+        "deadline",
+        "due",
+        "schedule",
+        "remind",
+        "reminder",
+        "party",
+        "event",
+        "interview",
+        "class",
+        "exam",
+        "conference",
+        "workshop",
+        "training",
+        "session",
+        "lunch",
+        "dinner",
+        "breakfast",
+        "dear all",
+        "everyone",
+        "team",
+        "ประชุม",
+        "นัด",
+        "เดดไลน์",
+        "กำหนดส่ง",
+        "ส่งงาน",
+        "สัมภาษณ์",
+        "สอบ",
+        "เรียน",
+    }
 )
+
+
+def _coerce_ai_response_to_list(response: str) -> list[dict[str, Any]] | None:
+    cleaned = response.strip()
+
+    try:
+        decoded = json.loads(cleaned)
+        if isinstance(decoded, list):
+            return decoded
+    except json.JSONDecodeError:
+        pass
+
+    if "```" in cleaned:
+        match = re.search(r"```(?:json)?\s*\n?(.+?)```", cleaned, re.DOTALL)
+        if match:
+            candidate = match.group(1).strip()
+            try:
+                decoded = json.loads(candidate)
+                if isinstance(decoded, list):
+                    return decoded
+            except json.JSONDecodeError:
+                pass
+        else:
+            candidate = re.sub(r"```(?:json)?\s*\n?", "", cleaned)
+            candidate = re.sub(r"\s*```\s*$", "", candidate).strip()
+            if candidate:
+                try:
+                    decoded = json.loads(candidate)
+                    if isinstance(decoded, list):
+                        return decoded
+                except json.JSONDecodeError:
+                    pass
+
+    match = re.search(r"\[.+\]", response, re.DOTALL)
+    if match:
+        try:
+            decoded = json.loads(match.group(0))
+            if isinstance(decoded, list):
+                return decoded
+        except json.JSONDecodeError:
+            pass
+
+    return None
 
 
 def _try_dateparser(value: str):
