@@ -88,7 +88,7 @@ class DateExtractionService:
     of dates and events in both English and Thai.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the date extraction service."""
         self._extraction_count = 0
         logger.info("📅 DateExtractionService initialized")
@@ -151,14 +151,14 @@ class DateExtractionService:
             events = self._deduplicate_events(events)[:max_events]
 
             self._extraction_count += 1
-            logger.info(f"📅 Extracted {len(events)} events from {len(messages)} messages")
+            logger.info("📅 Extracted %s events from %s messages", len(events), len(messages))
             metrics_service.record_extraction_request(
                 provider="gemini", success=True, event_count=len(events)
             )
             return events
 
         except Exception as e:
-            logger.error(f"📅 AI extraction failed: {e}", exc_info=True)
+            logger.error("📅 AI extraction failed: %s", e, exc_info=True)
             events = self._fallback_extraction(messages, today)
             metrics_service.record_extraction_request(
                 provider="gemini", success=False, used_fallback=True
@@ -180,92 +180,63 @@ class DateExtractionService:
         Returns:
             List of ExtractedEvent objects
         """
-        events = []
+        events: list[ExtractedEvent] = []
 
         try:
-            # Clean response (remove markdown code blocks and extra whitespace)
-            cleaned = response.strip()
+            data = json.loads(response)
+        except json.JSONDecodeError as e:
+            logger.warning("📅 Failed to parse AI response as JSON: %s", e)
+            logger.debug("📅 Raw response: %s", response[:500])
+            return []
 
-            # Remove markdown code blocks if present
-            if "```" in cleaned:
-                # Extract content between code blocks
-                match = re.search(r"```(?:json)?\s*\n?(.+?)```", cleaned, re.DOTALL)
-                if match:
-                    cleaned = match.group(1).strip()
-                else:
-                    # Try removing just the markers
-                    cleaned = re.sub(r"```(?:json)?\s*\n?", "", cleaned)
-                    cleaned = re.sub(r"\s*```\s*$", "", cleaned)
+        if not isinstance(data, list):
+            logger.warning("📅 AI response is not a list")
+            return []
 
-            # Try to extract JSON array if embedded in text
-            if not cleaned.startswith("["):
-                json_match = re.search(r"\[.+\]", cleaned, re.DOTALL)
-                if json_match:
-                    cleaned = json_match.group(0)
-                else:
-                    logger.warning(f"📅 Response doesn't contain JSON array: {cleaned[:100]}")
-                    return []
+        current_year = today.year
 
-            data = json.loads(cleaned)
+        for item in data:
+            try:
+                # Parse date
+                date_str = item.get("date", "")
 
-            if not isinstance(data, list):
-                logger.warning("📅 AI response is not a list")
-                return []
-
-            for item in data:
-                try:
-                    # Parse date
-                    date_str = item.get("date", "")
-
-                    # Validate date string format and check for placeholders
-                    if not date_str or "YYYY" in date_str or "MM" in date_str or "DD" in date_str:
-                        logger.warning(f"📅 Invalid date format with placeholders: {date_str}")
-                        continue
-
-                    try:
-                        event_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                    except ValueError as e:
-                        logger.warning(f"📅 Could not parse date '{date_str}': {e}")
-                        # Try alternative parsing with dateparser as fallback
-                        try:
-                            import dateparser
-
-                            dt = dateparser.parse(date_str)
-                            if dt:
-                                event_date = dt.date()
-                            else:
-                                continue
-                        except Exception:
-                            continue
-
-                    # Validate year is reasonable (not 1900 or 9999, etc.)
-                    current_year = today.year
-                    if event_date.year < current_year or event_date.year > current_year + 5:
-                        logger.warning(f"📅 Date year {event_date.year} is out of reasonable range")
-                        continue
-
-                    # Skip past dates
-                    if event_date < today:
-                        logger.debug(f"📅 Skipping past date: {event_date}")
-                        continue
-
-                    # Create event
-                    event = ExtractedEvent(
-                        event_date=event_date,
-                        title=str(item.get("title", "Event"))[:50],
-                        description=str(item.get("description", ""))[:200],
-                        source_text=str(item.get("source_text", ""))[:100],
-                        confidence=item.get("confidence", "medium"),
-                    )
-                    events.append(event)
-
-                except Exception as e:
-                    logger.debug(f"📅 Error parsing event item: {e}")
+                # Validate date string format and check for placeholders
+                if not date_str or "YYYY" in date_str or "MM" in date_str or "DD" in date_str:
+                    logger.warning("📅 Invalid date format with placeholders: %s", date_str)
                     continue
 
-        except json.JSONDecodeError as e:
-            logger.warning(f"📅 Failed to parse AI response as JSON: {e}")
-            logger.debug(f"📅 Raw response: {response[:500]}")
+                try:
+                    event_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+                except ValueError as e:
+                    logger.warning("📅 Could not parse date '%s': %s", date_str, e)
+                    fallback_dt = _try_dateparser(date_str)
+                    if fallback_dt is None:
+                        continue
+                    event_date = fallback_dt.date()
+
+                # Validate year is reasonable (not 1900 or 9999, etc.)
+                if event_date.year < current_year or event_date.year > current_year + 5:
+                    logger.warning("📅 Date year %s is out of reasonable range", event_date.year)
+                    continue
+
+                # Skip past dates
+                if event_date < today:
+                    logger.debug("📅 Skipping past date: %s", event_date)
+                    continue
+
+                # Create event
+                event = ExtractedEvent(
+                    event_date=event_date,
+                    title=str(item.get("title", "Event"))[:50],
+                    description=str(item.get("description", ""))[:200],
+                    source_text=str(item.get("source_text", ""))[:100],
+                    confidence=item.get("confidence", "medium"),
+                )
+                events.append(event)
+
+            except Exception as e:
+                logger.debug("📅 Error parsing event item: %s", e)
+                continue
 
         return events
 
@@ -284,54 +255,11 @@ class DateExtractionService:
         Returns:
             List of ExtractedEvent objects
         """
-        events = []
+        events: list[ExtractedEvent] = []
 
         # Best-effort: use dateparser when available for richer relative parsing
         # (e.g., "Friday", "next Friday", Thai relative phrases).
-        dateparser_parse = None
-        try:
-            import importlib
-
-            dateparser = importlib.import_module("dateparser")
-            dateparser_parse = getattr(dateparser, "parse", None)
-        except Exception:
-            dateparser_parse = None
-
-        # Heuristic: only attempt extraction when text looks event-like.
-        # This reduces false positives significantly.
-        event_keywords = [
-            "meeting",
-            "call",
-            "appointment",
-            "deadline",
-            "due",
-            "schedule",
-            "remind",
-            "reminder",
-            "party",
-            "event",
-            "interview",
-            "class",
-            "exam",
-            "conference",
-            "workshop",
-            "training",
-            "session",
-            "lunch",
-            "dinner",
-            "breakfast",
-            "dear all",  # Common meeting announcement pattern
-            "everyone",
-            "team",
-            "ประชุม",
-            "นัด",
-            "เดดไลน์",
-            "กำหนดส่ง",
-            "ส่งงาน",
-            "สัมภาษณ์",
-            "สอบ",
-            "เรียน",
-        ]
+        dateparser_parse = _get_dateparser_parse()
 
         # Simple patterns to match (cheap and reliable)
         patterns = [
@@ -366,7 +294,10 @@ class DateExtractionService:
 
             # Skip non-event-ish messages to reduce false positives.
             if (
-                not any(k in msg_lower for k in event_keywords)
+                not any(
+                    k in msg_lower
+                    for k in _EVENT_KEYWORDS
+                )
                 and not weekday_pattern.search(msg_lower)
                 and not month_pattern.search(msg_lower)
             ):
@@ -445,13 +376,12 @@ class DateExtractionService:
                     except ValueError:
                         continue
 
-        logger.info(f"📅 Fallback extraction found {len(events)} events")
+        logger.info("📅 Fallback extraction found %s events", len(events))
         return events
 
     def _extract_title_from_context(self, message: str, date_match: str) -> str:
         """
         Try to extract a meaningful title from the message context.
-        Enhanced to handle patterns like "Dear all, meeting on Friday".
 
         Args:
             message: Full message text
@@ -480,7 +410,7 @@ class DateExtractionService:
         event_patterns = [
             (r"([\w\s]+?)\s+(?:on|at|this|next|tomorrow|today)", r"\1"),  # "meeting on Friday" -> "meeting"
             (r"(?:have|having)\s+(?:a\s+)?([\w\s]+)", r"\1"),  # "having a workshop" -> "workshop"
-            (r"(?:let's|let\s+us)\s+([\w\s]+)", r"\1"),  # "let's review" -> "review"
+            (r"(?:let[' ]s|let\s+us)\s+([\w\s]+)", r"\1"),  # "let's review" -> "review"
         ]
 
         for search_pattern, _extract_pattern in event_patterns:
@@ -515,8 +445,8 @@ class DateExtractionService:
         Returns:
             Deduplicated list
         """
-        seen = set()
-        unique = []
+        seen: set[tuple[str, str]] = set()
+        unique: list[ExtractedEvent] = []
 
         for event in events:
             # Create a key from date and normalized title
@@ -534,6 +464,58 @@ class DateExtractionService:
     def get_extraction_count(self) -> int:
         """Get total number of extraction operations performed."""
         return self._extraction_count
+
+
+_EVENT_KEYWORDS = (
+    "meeting",
+    "call",
+    "appointment",
+    "deadline",
+    "due",
+    "schedule",
+    "remind",
+    "reminder",
+    "party",
+    "event",
+    "interview",
+    "class",
+    "exam",
+    "conference",
+    "workshop",
+    "training",
+    "session",
+    "lunch",
+    "dinner",
+    "breakfast",
+    "dear all",
+    "everyone",
+    "team",
+    "ประชุม",
+    "นัด",
+    "เดดไลน์",
+    "กำหนดส่ง",
+    "ส่งงาน",
+    "สัมภาษณ์",
+    "สอบ",
+    "เรียน",
+)
+
+
+def _try_dateparser(value: str):
+    try:
+        import dateparser
+
+        return dateparser.parse(value)
+    except Exception:
+        return None
+
+
+def _get_dateparser_parse() -> callable | None:  # type: ignore[type-arg]
+    try:
+        import dateparser
+    except Exception:
+        return None
+    return getattr(dateparser, "parse", None)
 
 
 # Singleton instance

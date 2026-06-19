@@ -93,6 +93,27 @@ Example images that work well:
 When multiple dates are detected, you can review them one by one or use the
 bulk-add option to save the remaining events with the same reminder selection.
 
+### 5. Chat Message Scraping
+
+Ms. Green can scan recent messages for dates and events through the scrape flow.
+
+**Commands:**
+
+- `Ms. Green scrape`
+- `Ms. Green scan`
+
+**Flow states:**
+
+- `SCRAPE_REVIEWING`
+- `SCRAPE_SELECTING`
+- `SCRAPE_REMINDER_DAYS`
+
+**Behavior:**
+
+- The bot proposes extracted events from recent messages.
+- Batch selection replies are handled only while the flow is active.
+- If a reply is stale or expired, Ms. Green returns an explicit stale-flow notice instead of guessing.
+
 ## Commands Reference
 
 ### View Commands
@@ -144,7 +165,7 @@ message.
 
 ### Supported Date Formats
 
-- ISO: `2025-06-15`
+- ISO: `YYYY-MM-DD`
 - Natural: `June 15, 2025` or `Jun 15`
 - Relative: `next Monday`, `in 3 days`
 - Thai style: `15/06/2025` (day/month/year)
@@ -163,13 +184,21 @@ Inputs that mix unsupported words and numbers are rejected instead of guessed.
 ## Scrape Recent Messages Flow
 
 1. **Trigger**: Send `Ms. Green scrape` or `Ms. Green scan`
-2. **Select**: Review the numbered candidates and toggle selections with numbers like `1,3`
-3. **Shortcuts**: Use `all`, `none`, `done`, or `cancel`
-4. **Preview**: `done` shows the exact selected titles and dates only
-5. **Shared reminders**: Choose one reminder profile and apply it to the selected batch
+2. **Review**: Examine each proposed event first
+3. **Select**: Accept or skip events one by one, or use shortcuts
+4. **Batch selection**: Toggle numbered candidates with values like `1,3`
+5. **Reminders**: Choose one reminder profile for the selected batch
+6. **Confirm**: The selected events are added with the shared reminder choice
+
+Useful scrape commands:
+
+- `yes` / `no`
+- `all` / `none`
+- `done` / `cancel`
 
 Important scrape behavior:
 
+- Review starts one event at a time before batch selection begins.
 - Selection starts empty for safety; nothing is added until you explicitly choose candidates.
 - `done` is rejected when nothing is selected.
 - Only the selected events are added after the reminder choice.
@@ -178,7 +207,7 @@ Important scrape behavior:
 
 ## Configuration
 
-## Persistence Backends
+### Persistence Backends
 
 Calendar persistence now supports two operator-selected modes:
 
@@ -189,7 +218,7 @@ When Convex is primary, the local calendar directory remains available as a cach
 
 ### Environment Variables
 
-```bash
+```text
 # Primary structured persistence backend
 PERSISTENCE_BACKEND=local
 
@@ -281,7 +310,7 @@ class CalendarState(Enum):
 ## Privacy and Security
 
 - **Chat Isolation**: Event visibility is scoped to the current chat.
-    Group events stay in that group, and direct-message events stay private.
+  Group events stay in that group, and direct-message events stay private.
 - **Flow Ownership**: Only the user who started a flow can continue interactive calendar prompts.
 - **Session Ownership**: Only the user who started a flow can interact
 - **Data Location**: Stored locally by default; HF Hub is optional
@@ -347,18 +376,31 @@ User: delete a1b2c3d4
 Ms. Green: ✅ Removed 1 event
 ```
 
-### Image Date Extraction
+### Scrape Batch Example
 
 ```text
-User: Ms. Green analyze this [sends school schedule image]
-Ms. Green: [Analysis response]
-      📅 I detected 3 dates:
-      1. 2025-06-09: Final Grades Due
-      2. 2025-07-03: New Enrollment
-      3. 2025-08-15: School Opens
-      Add to calendar?
+User: Ms. Green scrape
+Ms. Green: 🔍 Scanned 10 messages - found 3 event(s)!
+      📅 Event 1/3:
+      📌 Parent meeting
+      📆 June 25, 2026
+      Add this to calendar? (yes/no/skip all)
 User: yes
-Ms. Green: [Starts add flow for each date]
+Ms. Green: ✅ Adding: Parent meeting
+      When should I remind you?
+      • 7 - 7 days before
+      • 3 - 3 days before
+      • 1 - 1 day before
+      • all - All of the above
+      (Day-of reminder is always included)
+User: all
+Ms. Green: ✅ Added: Parent meeting
+      📅 Event 2/3:
+      📌 Soccer practice
+      📆 June 27, 2026
+      Add this to calendar? (yes/no/skip all)
+User: none
+Ms. Green: ✅ Finished adding all scraped events!
 ```
 
 ## Related Documentation

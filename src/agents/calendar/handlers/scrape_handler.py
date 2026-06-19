@@ -56,6 +56,7 @@ class ScrapeHandler(CalendarHandler):
         session = calendar_session_manager.get_session(chat_id)
         if session and session.state in (
             CalendarState.SCRAPE_REVIEWING,
+            CalendarState.SCRAPE_SELECTING,
             CalendarState.SCRAPE_REMINDER_DAYS,
         ):
             return True
@@ -80,7 +81,7 @@ class ScrapeHandler(CalendarHandler):
         if not session:
             return False
 
-        if session.state == CalendarState.SCRAPE_REVIEWING:
+        if session.state in {CalendarState.SCRAPE_REVIEWING, CalendarState.SCRAPE_SELECTING}:
             return await self._handle_scrape_review_response(event, text, line_bot_api, chat_id, user_id)
 
         if session.state == CalendarState.SCRAPE_REMINDER_DAYS:
