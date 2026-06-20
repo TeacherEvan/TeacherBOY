@@ -652,15 +652,12 @@ All admin commands are logged for audit purposes:
 
 ## Priority System
 
-Admin commands have the **highest priority (5)** in the agent routing system:
+Agent priority only influences routing order, not access scope.
 
-```text
-Priority 5:  AdminAgent (highest - processed first)
-Priority 10: TranslationAgent
-Priority 20: CalendarAgent
-```
+- `ModModeAgent` uses Priority 4
+- `AdminAgent` uses Priority 5
 
-This ensures admin commands are **always processed first**, even if the translation agent would normally handle the message.
+This means `ModModeAgent` evaluates before `AdminAgent` in mod-enabled groups, but mod commands still require admin authorization and `/admin` actions stay protected by `ADMIN_USER_IDS` and the destructive-action limit. A lower priority number here does not grant `ModModeAgent` broader admin rights.
 
 ## Limitations
 

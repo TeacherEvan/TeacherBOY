@@ -22,7 +22,7 @@
 
 ## Activation
 
-### Trigger
+### Triggers
 ```
 activate mod mode
 ```
@@ -31,11 +31,20 @@ activate mod mode
 - **Only by admin** (user in `ADMIN_USER_IDS` or claimed via `/admin claim`)
 - **Per-group independent** — each group has its own mod state
 
+```
+/modmode all
+/modmode special @user
+```
+- Shortcut to activate and set mode in one step
+- Same admin/group rules apply
+
 ### Activation Flow
-1. Admin sends `activate mod mode` in group
-2. Bot creates `modModeState` record in Convex (mode defaults to `all`)
-3. Bot replies with confirmation + dashboard link
-4. **ModModeAgent (Priority 4)** now intercepts ALL messages in that group
+1. Admin sends `activate mod mode`, `/modmode all`, or `/modmode special @user` in group
+2. Bot creates `modModeState` record in Convex and records the chosen mode
+3. ModModeAgent is now handling traffic for that group
+4. Bot replies with confirmation plus the next step (`/modmode` for status)
+
+### Activation & Mode Commands
 
 ---
 
@@ -79,9 +88,13 @@ activate mod mode
 
 > **Non-admins:** Commands silently ignored (no response)
 
+> **Current implementation status:** these `/modmode` text commands are the current working implementation. The Flex dashboard actions are implemented below.
+
 ---
 
 ## Admin Dashboard (Flex Message)
+
+> **Current implementation status:** dashboard layouts are defined in `ModDashboardBuilder`, and postback actions are documented, but sending the Flex Message from `ModModeAgent` is not fully implemented yet. Use the `/modmode` command handlers below as the working path for now.
 
 Trigger: `/modmode dashboard` or `/modmode`
 
