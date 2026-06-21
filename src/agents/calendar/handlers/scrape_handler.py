@@ -328,7 +328,7 @@ class ScrapeHandler(CalendarHandler):
 
         added_title = ""
         if event_data and calendar_service and user_id:
-            calendar_service.add_event(
+            await calendar_service.add_event_async(
                 user_id=user_id,
                 chat_id=chat_id,
                 title=event_data["title"],

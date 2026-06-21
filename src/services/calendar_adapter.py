@@ -173,7 +173,7 @@ class CalendarAdapter:
         # Local storage
         if self._local_service:
             try:
-                event = self._local_service.add_event(
+                event = await self._local_service.add_event_async(
                     user_id=user_id,
                     chat_id=chat_id,
                     title=title,
@@ -232,7 +232,7 @@ class CalendarAdapter:
         # Local storage
         if self._local_service:
             try:
-                events = self._local_service.get_chat_events(chat_id, include_past)
+                events = await self._local_service.get_chat_events_async(chat_id, include_past)
                 return [e.to_dict() for e in events]
             except Exception as e:
                 logger.error(f"❌ Local calendar get_chat_events failed: {e}")
@@ -281,7 +281,7 @@ class CalendarAdapter:
         # Local storage
         if self._local_service:
             try:
-                events = self._local_service.get_user_events(user_id, include_past)
+                events = await self._local_service.get_user_events_async(user_id, include_past)
                 return [e.to_dict() for e in events]
             except Exception as e:
                 logger.error(f"❌ Local calendar get_user_events failed: {e}")
@@ -317,7 +317,7 @@ class CalendarAdapter:
         # Local storage
         if self._local_service:
             try:
-                return self._local_service.remove_event(event_id, user_id)
+                return await self._local_service.remove_event_async(event_id, user_id)
             except Exception as e:
                 logger.error(f"❌ Local calendar remove_event failed: {e}")
                 return False
@@ -353,7 +353,7 @@ class CalendarAdapter:
         # Local storage
         if self._local_service:
             try:
-                return self._local_service.remove_events_by_ids(event_ids, user_id)
+                return await self._local_service.remove_events_by_ids_async(event_ids, user_id)
             except Exception as e:
                 logger.error(f"❌ Local calendar remove_events_by_ids failed: {e}")
                 return 0, len(event_ids)

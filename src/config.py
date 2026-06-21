@@ -124,7 +124,7 @@ class Settings(BaseSettings):
     translation_cache_ttl_seconds: int = Field(
         default=3600,
         ge=0,
-        description="TTL for translation cache in seconds (0 to disable) - TODO",
+        description="TTL for translation cache in seconds (0 to disable)",
     )
     translation_max_retries: int = Field(
         default=3,

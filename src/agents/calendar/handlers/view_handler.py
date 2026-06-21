@@ -109,7 +109,7 @@ class ViewHandler(CalendarHandler):
 
         # CRITICAL PRIVACY: Use get_chat_events() to ensure isolation
         # Group events stay in that group, private entries stay in DMs
-        events = calendar_service.get_chat_events(chat_id, requesting_user_id=user_id)
+        events = await calendar_service.get_chat_events_async(chat_id, requesting_user_id=user_id)
 
         if not events:
             # Determine chat context for messaging

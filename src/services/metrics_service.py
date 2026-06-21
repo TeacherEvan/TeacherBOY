@@ -311,7 +311,9 @@ class MetricsService:
         """Record a connection pool error."""
         self._connection_pool_errors += 1
 
-    def record_extraction_request(self, provider: str | None, success: bool, event_count: int = 0, used_fallback: bool = False) -> None:
+    def record_extraction_request(
+        self, provider: str | None, success: bool, event_count: int = 0, used_fallback: bool = False
+    ) -> None:
         """Record a date extraction request attempt.
 
         Args:

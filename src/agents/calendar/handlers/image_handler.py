@@ -169,7 +169,7 @@ class ImageHandler(CalendarHandler):
                         skipped_count += 1
                     else:
                         try:
-                            calendar_service.add_event(
+                            await calendar_service.add_event_async(
                                 user_id=user_id,
                                 chat_id=chat_id,
                                 title=date_info["title"],
@@ -297,7 +297,7 @@ class ImageHandler(CalendarHandler):
                     )
                 else:
                     try:
-                        calendar_service.add_event(
+                        await calendar_service.add_event_async(
                             user_id=user_id,
                             chat_id=chat_id,
                             title=event_data["title"],

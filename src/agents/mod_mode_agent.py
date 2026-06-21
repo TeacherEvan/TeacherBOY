@@ -457,7 +457,7 @@ class ModModeAgent(BaseAgent):
         await sender(event, line_bot_api, flex_dict, alt_text)
 
     async def _flex_via_reply(self, event, line_bot_api, flex_dict: dict, alt_text: str) -> None:
-        from linebot.v3.messaging import FlexContainer, FlexMessage, ReplyMessageRequest
+        from linebot.v3.messaging import FlexContainer, FlexMessage
 
         if not getattr(event, "reply_token", None):
             return

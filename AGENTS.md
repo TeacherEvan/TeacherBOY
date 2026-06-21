@@ -27,7 +27,7 @@ Python 3.11, FastAPI, LINE Bot SDK v3, async/await throughout.
 
 ## Key Constraints
 - **NEVER use Maton AI API key** in this project (Hermes agent uses it separately)
-- LLM fallback chain: gemini → openrouter → hermes → hf_inference → nous → ollama (configurable)
+- **LLM fallback chain:** gemini first; OpenRouter/Hermes/HF Inference/Nous/Ollama are fallbacks only if Gemini is unavailable (configurable)
 - All LLM providers use OpenAI-compatible API format
 - Pydantic Settings for config (env vars)
 - HuggingFace Hub used for persistent storage (conversations, calendar, documents, logs)
@@ -86,7 +86,7 @@ docker-compose up
 
 ## Key Services
 - `translation_service` - LINE translation pipeline
-- `openrouter_service` - LLM fallback provider (OpenRouter free models)
+- `openrouter_service` - Optional fallback LLM provider (used only if Gemini is unavailable)
 - `conversation_memory_service` - chat context persistence
 - `calendar_service` - event management + HF sync
 - `debrief_extraction_service` - structured lesson debriefs

@@ -461,7 +461,7 @@ class AddHandler(CalendarHandler):
             return True
 
         try:
-            new_event = calendar_service.add_event(
+            new_event = await calendar_service.add_event_async(
                 user_id=user_id,
                 chat_id=chat_id,
                 title=event_data["title"],
@@ -743,7 +743,7 @@ class AddHandler(CalendarHandler):
                 calendar_session_manager.end_session(chat_id)
                 return True
 
-            new_event = calendar_service.add_event(
+            new_event = await calendar_service.add_event_async(
                 user_id=user_id,
                 chat_id=chat_id,
                 title=event_data["title"],

@@ -134,9 +134,7 @@ class DateExtractionService:
             if not response:
                 logger.warning("📅 No response from AI, using fallback extraction")
                 events = self._fallback_extraction(messages, today)
-                metrics_service.record_extraction_request(
-                    provider=None, success=False, used_fallback=True
-                )
+                metrics_service.record_extraction_request(provider=None, success=False, used_fallback=True)
                 return events
 
             # Prepend Godmode prefill for Gemini (response may be completion only)
@@ -152,17 +150,13 @@ class DateExtractionService:
 
             self._extraction_count += 1
             logger.info("📅 Extracted %s events from %s messages", len(events), len(messages))
-            metrics_service.record_extraction_request(
-                provider="gemini", success=True, event_count=len(events)
-            )
+            metrics_service.record_extraction_request(provider="gemini", success=True, event_count=len(events))
             return events
 
         except Exception as e:
             logger.error("📅 AI extraction failed: %s", e, exc_info=True)
             events = self._fallback_extraction(messages, today)
-            metrics_service.record_extraction_request(
-                provider="gemini", success=False, used_fallback=True
-            )
+            metrics_service.record_extraction_request(provider="gemini", success=False, used_fallback=True)
             return events
 
     def _parse_extraction_response(
@@ -288,10 +282,7 @@ class DateExtractionService:
 
             # Skip non-event-ish messages to reduce false positives.
             if (
-                not any(
-                    k in msg_lower
-                    for k in _EVENT_KEYWORDS
-                )
+                not any(k in msg_lower for k in _EVENT_KEYWORDS)
                 and not weekday_pattern.search(msg_lower)
                 and not month_pattern.search(msg_lower)
             ):

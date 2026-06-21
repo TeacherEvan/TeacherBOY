@@ -10,7 +10,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from src.config import settings
 from src.services.gemini_service import gemini_service
@@ -59,9 +60,10 @@ def _record_failure(provider: str) -> None:
     if count >= _CIRCUIT_BREAKER_THRESHOLD:
         _provider_circuit_open_until[provider] = time.time() + _CIRCUIT_BREAKER_COOLDOWN_SECONDS
         logger.warning(
-            "Circuit breaker OPENED for %s after %d consecutive failures. "
-            "Provider blocked for %d seconds.",
-            provider, count, _CIRCUIT_BREAKER_COOLDOWN_SECONDS
+            "Circuit breaker OPENED for %s after %d consecutive failures. Provider blocked for %d seconds.",
+            provider,
+            count,
+            _CIRCUIT_BREAKER_COOLDOWN_SECONDS,
         )
 
 
@@ -93,21 +95,36 @@ async def _call_provider_with_resilience(
                 _record_success(provider)
                 logger.info(
                     "%s succeeded (attempt %d/%d, latency: %.2fs, total: %.2fs)",
-                    provider, attempt + 1, len(_RETRY_BACKOFF_SECONDS) + 1, latency, total_latency
+                    provider,
+                    attempt + 1,
+                    len(_RETRY_BACKOFF_SECONDS) + 1,
+                    latency,
+                    total_latency,
                 )
                 return result
             else:
-                logger.warning("%s returned empty result (attempt %d/%d)", provider, attempt + 1, len(_RETRY_BACKOFF_SECONDS) + 1)
+                logger.warning(
+                    "%s returned empty result (attempt %d/%d)", provider, attempt + 1, len(_RETRY_BACKOFF_SECONDS) + 1
+                )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             latency = time.time() - attempt_start
-            last_exception = asyncio.TimeoutError(f"{provider} timed out after {_TIMEOUT_SECONDS}s")
-            logger.warning("%s timed out after %.2fs (attempt %d/%d)", provider, latency, attempt + 1, len(_RETRY_BACKOFF_SECONDS) + 1)
+            last_exception = TimeoutError(f"{provider} timed out after {_TIMEOUT_SECONDS}s")
+            logger.warning(
+                "%s timed out after %.2fs (attempt %d/%d)", provider, latency, attempt + 1, len(_RETRY_BACKOFF_SECONDS) + 1
+            )
 
         except Exception as exc:
             latency = time.time() - attempt_start
             last_exception = exc
-            logger.warning("%s failed after %.2fs (attempt %d/%d): %s", provider, latency, attempt + 1, len(_RETRY_BACKOFF_SECONDS) + 1, exc)
+            logger.warning(
+                "%s failed after %.2fs (attempt %d/%d): %s",
+                provider,
+                latency,
+                attempt + 1,
+                len(_RETRY_BACKOFF_SECONDS) + 1,
+                exc,
+            )
 
         # If not the last attempt, wait before retry with exponential backoff
         if attempt < len(_RETRY_BACKOFF_SECONDS):
@@ -120,9 +137,13 @@ async def _call_provider_with_resilience(
     _record_failure(provider)
     logger.error(
         "%s failed after %d attempts (total latency: %.2fs). Last error: %s",
-        provider, len(_RETRY_BACKOFF_SECONDS) + 1, total_latency, last_exception
+        provider,
+        len(_RETRY_BACKOFF_SECONDS) + 1,
+        total_latency,
+        last_exception,
     )
     return None
+
 
 VisionMessages = list[dict[str, Any]]
 

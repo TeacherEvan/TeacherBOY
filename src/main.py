@@ -249,6 +249,8 @@ async def lifespan(app: FastAPI):
     brave_search_service.set_client(http_client_pool)
     nous_inference_service.set_client(http_client_pool)
     gemini_service.set_client(http_client_pool)
+    hermes_service.set_client(http_client_pool)
+    hf_inference_service.set_client(http_client_pool)
     logger.info("✅ HTTP client pool ready with connection pooling enabled")
 
     # ========================================================================

@@ -66,7 +66,7 @@ For the full variable reference and mounted-volume examples, see [Environment va
 - **🔥 Smart Auto-Detection:** Automatically starts when Thai text is detected
 - **🔄 Continuous Mode:** Translates EVERY message until you say "Thanks Ms Green!"
 - **😴 Sleep Mode:** Bot sleeps for 24 hours - say "Dear Ms. Green" alone to wake up
-- **🌐 AI Translation:** Shared AI translation service with Gemini free tier first and OpenRouter fallback
+- **🌐 AI Translation:** Shared AI translation service with Gemini free tier as primary; OpenRouter used only as fallback
 - **🛡️ Hallucination Prevention:** Detects incomplete sentences and prevents unwanted context injection
 - **💬 Bi-directional:** Thai 🇹🇭 → English 🇬🇧 and English 🇬🇧 → Thai 🇹🇭
 - **👥 Group Chat Support:** Works in 1-on-1, groups, and multi-person chats
@@ -118,7 +118,7 @@ For the full variable reference and mounted-volume examples, see [Environment va
 - **♿ Accessibility:** Helps neurodivergent users (autism) understand character expressions
 - **🎬 Creative Projects:** Art direction for music videos, storytelling, visual narratives
 - **⏱️ Rate Limiting:** 3 analyses/hour (admins unlimited)
-- **🤖 Vision AI:** GPT-4o multimodal analysis
+- **🤖 Vision AI:** Multimodal analysis via the configured vision provider
 - **Full Documentation:** [Profiler Usage Guide](docs/PROFILER_USAGE.md)
 
 ### Image Analyzer **NEW!**
@@ -129,14 +129,14 @@ For the full variable reference and mounted-volume examples, see [Environment va
   2. Ms. Green asks for the image (60 seconds timeout)
   3. Send your image
   4. Ms. Green asks what you want to know
-  5. Get your answer from GPT-4o vision
+  5. Get your answer from the configured vision model
 - **💡 Use Cases:**
   - Menu translation: "What would be most enjoyable on this menu to a westerner?"
   - Sign reading: "What does this sign say?"
   - Product identification: "What products are shown here?"
   - Any visual question about the image
 - **⏱️ Rate Limiting:** 5 analyses/hour (admins unlimited)
-- **🧠 Powered by:** GPT-4o vision via AI fallback chain (Gemini primary)
+- **🧠 Powered by:** Vision-capable AI via fallback chain (Gemini primary)
 
 ### Multi-Agent Architecture
 
@@ -169,7 +169,7 @@ For the full variable reference and mounted-volume examples, see [Environment va
 
 - **Framework:** Python 3.11+, FastAPI
 - **Platform:** LINE Messaging API v3 (Async)
-- **Translation:** Shared AI translation service backed by Gemini free tier and OpenRouter
+- **Translation:** Shared AI translation service backed by Gemini free tier
 - **Architecture:** Multi-agent system with modular design
 - **Libraries:** `line-bot-sdk`, `httpx`, `pydantic`
 
@@ -388,7 +388,7 @@ pytest --cov=src --cov-report=html
 
 - Smart Thai character detection
 - Continuous translation mode
-- Shared AI translation via Gemini free tier with OpenRouter fallback
+- Shared AI translation via Gemini free tier
 - Session management per chat
 - "Thanks Ms Green!" sleep command (24h)
 - "Dear Ms. Green" wake command
