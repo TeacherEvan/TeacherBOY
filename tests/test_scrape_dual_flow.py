@@ -23,10 +23,10 @@ def flow() -> ScrapeFlow:
 
 @pytest.mark.parametrize("text,expected", [
     ("scrape messages", True),
-    ("messages", True),
     ("scrape image", True),
     ("scan image", True),
     ("images", True),
+    ("messages", True),
     # These should NOT match as source selections
     ("scrape", False),
     ("hello", False),
@@ -68,6 +68,11 @@ async def test_initial_trigger_sends_quick_reply_with_two_options(flow: ScrapeFl
     # Both "Messages" and "Images" buttons must be present
     assert any("Message" in lbl for lbl in labels), f"No Messages button found in {labels}"
     assert any("Image" in lbl for lbl in labels), f"No Image button found in {labels}"
+    # Verify the button texts use the full prefixed command so should_handle() picks them up
+    texts = {item.action.text for item in msg.quick_reply.items}
+    assert any("Ms. Green" in t or "ms. green" in t.lower() for t in texts), (
+        f"Button texts must contain bot prefix; got {texts}"
+    )
 
 
 # ---------------------------------------------------------------------------

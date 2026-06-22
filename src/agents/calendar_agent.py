@@ -80,6 +80,9 @@ TRIGGERS_SCRAPE = [
     "ms. green scrape",
     "ms. green scan",
     "ms. green scan messages",
+    "ms. green scrape messages",  # source-selection choice → message scan
+    "ms. green scrape image",     # source-selection choice → image scan
+    "ms. green scan image",
 ]
 
 TRIGGERS_DISCRETE_SCRAPE = [
@@ -654,18 +657,21 @@ class CalendarAgent(BaseAgent):
                 if self._is_trigger(text, TRIGGERS_DISCRETE_SCRAPE):
                     return await self._handle_discrete_scrape(event, text, line_bot_api, chat_id, user_id)
 
-                # SCRAPE SOURCE SELECTION (response to dual-source prompt buttons)
-                if self.scrape_flow._is_scrape_source_selection(text):
-                    normalized = self.scrape_flow._normalize_followup_text(text)
-                    if normalized in {"scrape image", "scan image", "images"}:
+                # SCRAPE TRIGGER — decide which path based on the specific sub-command
+                if self._is_trigger(text, TRIGGERS_SCRAPE):
+                    _, rest = get_bot_identity_service().split_command_prefix(text)
+                    rest_lower = (rest or "").lower().strip()
+
+                    # Source-specific sub-commands (from quick-reply buttons)
+                    if rest_lower in {"scrape messages", "scan messages"}:
+                        return await self.scrape_flow.handle_scrape_trigger(event, text, line_bot_api, chat_id, user_id)
+
+                    if rest_lower in {"scrape image", "scan image"}:
                         return await self.scrape_flow.handle_scrape_image_trigger(
                             event, line_bot_api, chat_id, user_id
                         )
-                    # "scrape messages" / "messages" → full message scan
-                    return await self.scrape_flow.handle_scrape_trigger(event, text, line_bot_api, chat_id, user_id)
 
-                # SCRAPE TRIGGER — show source-selection prompt first
-                if self._is_trigger(text, TRIGGERS_SCRAPE):
+                    # Plain "scrape" / "scan" — show the source-choice prompt
                     return await self.scrape_flow.handle_scrape_initial_trigger(
                         event, text, line_bot_api, chat_id, user_id,
                         discrete_mode=getattr(getattr(event, "source", None), "type", None) in {"group", "room"},

@@ -123,12 +123,12 @@ class ScrapeFlow(CalendarFlowBase):
                 QuickReplyItem(
                     type="action",
                     imageUrl=None,
-                    action=MessageAction(label="💬 Chat Messages", text="scrape messages"),
+                    action=MessageAction(label="💬 Chat Messages", text="Ms. Green scrape messages"),
                 ),
                 QuickReplyItem(
                     type="action",
                     imageUrl=None,
-                    action=MessageAction(label="🖼️ Image Text", text="scrape image"),
+                    action=MessageAction(label="🖼️ Image Text", text="Ms. Green scrape image"),
                 ),
             ]
         )
