@@ -122,7 +122,7 @@ class ModModeAgent(BaseAgent):
 
             if self._mod_mode and not await self._mod_mode.is_user_allowed(group_id, user_id):
                 logger.warning(f"🔧 ModModeAgent: User {user_id} not allowed in special mode group {group_id}")
-                return await self._warn_user(group_id, user_id, line_bot_api, "Not allowed to speak in special mode")
+                return await self._warn_user(event, group_id, user_id, line_bot_api, "Not allowed to speak in special mode")
 
             if self._mod_mode and await self._should_detect_harmful(group_id, text):
                 logger.info(f"🔧 ModModeAgent: Checking harmful content for user={user_id}")
@@ -183,6 +183,7 @@ class ModModeAgent(BaseAgent):
             else f"SPECIAL MODE (only you + @{special_user_id} can speak)"
         )
         await self._reply(
+            event,
             f"🛡️ Moderator Mode ACTIVATED\nMode: {mode_msg}\nUse /modmode for dashboard",
             line_bot_api,
         )
@@ -216,23 +217,31 @@ class ModModeAgent(BaseAgent):
         if subcmd == "all":
             await self._mod_mode.activate_mod_mode(group_id, user_id, "all")
             await self._audit.log_mode_change(group_id, user_id, "all", True)
-            await self._reply("✅ Mod mode: ALL USERS (normal chat, harmful content monitored)", line_bot_api)
+            await self._reply(event, "✅ Mod mode: ALL USERS (normal chat, harmful content monitored)", line_bot_api)
             return True
 
         if subcmd == "special":
-            if not args:
-                await self._reply("Usage: /modmode special @user", line_bot_api)
+            special_id = None
+            if hasattr(event.message, "mention") and event.message.mention:
+                mentionees = getattr(event.message.mention, "mentionees", [])
+                if mentionees:
+                    special_id = mentionees[0].user_id
+            if not special_id and args:
+                special_id = args[0].lstrip("@")
+
+            if not special_id:
+                await self._reply(event, "Usage: /modmode special @user", line_bot_api)
                 return True
-            special_id = args[0].lstrip("@")
+
             await self._mod_mode.set_special_user(group_id, special_id)
             await self._audit.log_mode_change(group_id, user_id, "special", True, special_id)
-            await self._reply(f"✅ Mod mode: SPECIAL (only admin + @{special_id} can speak)", line_bot_api)
+            await self._reply(event, f"✅ Mod mode: SPECIAL (only admin + @{special_id} can speak)", line_bot_api)
             return True
 
         if subcmd == "off":
             await self._mod_mode.deactivate_mod_mode(group_id)
             await self._audit.log_mode_change(group_id, user_id, "all", False)
-            await self._reply("🛑 Moderator Mode DEACTIVATED", line_bot_api)
+            await self._reply(event, "🛑 Moderator Mode DEACTIVATED", line_bot_api)
             return True
 
         if subcmd == "dashboard":
@@ -256,7 +265,7 @@ class ModModeAgent(BaseAgent):
         if subcmd == "unban":
             return await self._handle_unban_command(event, line_bot_api, ["/modmode", "unban"] + args)
 
-        await self._reply("❌ Unknown /modmode command. Use /modmode dashboard", line_bot_api)
+        await self._reply(event, "❌ Unknown /modmode command. Use /modmode dashboard", line_bot_api)
         return True
 
     # ===== Kick/Warn/Ban =====
@@ -279,7 +288,7 @@ class ModModeAgent(BaseAgent):
             logger.error(f"❌ Failed to kick {user_id}: {e}")
             return False
 
-    async def _warn_user(self, group_id: str, user_id: str, line_bot_api: MessagingApi, reason: str) -> bool:
+    async def _warn_user(self, event, group_id: str, user_id: str, line_bot_api: MessagingApi, reason: str) -> bool:
         result = await self._warnings.warn_user(group_id, user_id, "system", reason)
         count = result["count"]
         await self._audit.log_warn(group_id, user_id, "system", reason, count)
@@ -287,9 +296,9 @@ class ModModeAgent(BaseAgent):
         if result["should_ban"]:
             await self._audit.log_ban(group_id, user_id, "system", f"Auto-ban after {count} warnings")
             await self._kick_user(group_id, user_id, line_bot_api, f"Auto-ban ({count} warnings)")
-            await self._reply(f"🔨 @{user_id} BANNED after {count} warnings", line_bot_api)
+            await self._reply(event, f"🔨 @{user_id} BANNED after {count} warnings", line_bot_api)
         else:
-            await self._reply(f"⚠️ @{user_id} Warning {count}/3: {reason}", line_bot_api)
+            await self._reply(event, f"⚠️ @{user_id} Warning {count}/3: {reason}", line_bot_api)
 
         return True
 
@@ -302,7 +311,7 @@ class ModModeAgent(BaseAgent):
             await self._reply(event, "Usage: /modmode kick @user_id", line_bot_api)
             return True
 
-        target_user_id = parts[2].lstrip("@")
+        target_user_id = self._get_target_user_id(event, parts)
         if not target_user_id:
             await self._reply(event, "❌ Invalid user ID", line_bot_api)
             return True
@@ -340,7 +349,7 @@ class ModModeAgent(BaseAgent):
             await self._reply(event, "Usage: /modmode warn @user_id [reason]", line_bot_api)
             return True
 
-        target_user_id = parts[2].lstrip("@")
+        target_user_id = self._get_target_user_id(event, parts)
         if not target_user_id:
             await self._reply(event, "❌ Invalid user ID", line_bot_api)
             return True
@@ -373,7 +382,7 @@ class ModModeAgent(BaseAgent):
             await self._reply(event, "Usage: /modmode ban @user_id [reason]", line_bot_api)
             return True
 
-        target_user_id = parts[2].lstrip("@")
+        target_user_id = self._get_target_user_id(event, parts)
         if not target_user_id:
             await self._reply(event, "❌ Invalid user ID", line_bot_api)
             return True
@@ -400,7 +409,7 @@ class ModModeAgent(BaseAgent):
             await self._reply(event, "Usage: /modmode unban @user_id", line_bot_api)
             return True
 
-        target_user_id = parts[2].lstrip("@")
+        target_user_id = self._get_target_user_id(event, parts)
         if not target_user_id:
             await self._reply(event, "❌ Invalid user ID", line_bot_api)
             return True
@@ -484,7 +493,7 @@ class ModModeAgent(BaseAgent):
         group_id = source.group_id if source.type == "group" else source.room_id
         user_id = source.user_id
         keywords = ", ".join(detection["matched_keywords"])
-        return await self._warn_user(group_id, user_id, line_bot_api, f"Harmful content: {keywords}")
+        return await self._warn_user(event, group_id, user_id, line_bot_api, f"Harmful content: {keywords}")
 
     # ===== Helpers =====
 
@@ -492,6 +501,15 @@ class ModModeAgent(BaseAgent):
         from src.services.privilege_service import privilege_service
 
         return privilege_service.is_admin(user_id)
+
+    def _get_target_user_id(self, event, parts: list[str]) -> str | None:
+        if hasattr(event.message, "mention") and event.message.mention:
+            mentionees = getattr(event.message.mention, "mentionees", [])
+            if mentionees:
+                return mentionees[0].user_id
+        if len(parts) >= 3:
+            return parts[2].lstrip("@")
+        return None
 
     async def _reply(self, event, payload, line_bot_api: MessagingApi, quick_reply=None) -> bool:
         from linebot.v3.messaging import ReplyMessageRequest, TextMessage

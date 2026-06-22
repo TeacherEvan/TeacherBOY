@@ -1111,8 +1111,9 @@ class TestReminderService:
 
         message = reminder_service._format_reminder_message(event, days_until=0)
 
-        assert "🚨" in message  # Urgent indicator
-        assert "TODAY" in message or "Important Meeting" in message
+        # New Ms. Green warm format checks
+        assert "Ms. Green" in message or "🔔" in message
+        assert "Today" in message or "Important Meeting" in message
 
     def test_format_reminder_message_upcoming(self, reminder_service):
         """Test upcoming reminder message formatting."""
@@ -1132,8 +1133,8 @@ class TestReminderService:
 
         message = reminder_service._format_reminder_message(event, days_until=7)
 
-        assert "📅" in message or "⏰" in message  # Calendar indicator
-        assert "7" in message or "days" in message
+        # New format: 📌 for 4+ days, days_until text contains "7"
+        assert "📌" in message or "in 7 days" in message or "Future Event" in message
 
     def test_stop_is_backward_compatible_without_scheduler(self, reminder_service):
         """Shutdown should tolerate legacy callers that invoke stop() directly."""

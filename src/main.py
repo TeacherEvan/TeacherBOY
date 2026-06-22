@@ -25,6 +25,7 @@ from linebot.v3.messaging import (
     ApiClient,
     Configuration,
     MessagingApi,
+    MessagingApiBlob,
     PushMessageRequest,  # For FollowEvent welcome message (push to user)
     TextMessage,
 )
@@ -384,6 +385,14 @@ async def lifespan(app: FastAPI):
         init_ban_list_service(convex_mod_repo)
         init_warning_service(convex_mod_repo)
         logger.info("✅ Mod Mode services initialized (ModModeService, BanListService, WarningService)")
+
+        if settings.is_calendar_configured():
+            from src.services.convex_calendar_repository import ConvexCalendarRepository
+            convex_calendar_repo = ConvexCalendarRepository(convex_client)
+            calendar_service.configure(
+                repository=convex_calendar_repo,
+            )
+            logger.info("✅ Convex Calendar Repository initialized")
 
         # Initialize ModAuditLog if HF Hub configured
         if settings.is_history_log_configured() and settings.hf_memory_token:
@@ -1439,6 +1448,7 @@ async def webhook(request: Request) -> JSONResponse:
         # Create API client for sending replies
         with ApiClient(configuration) as api_client:
             line_bot_api = MessagingApi(api_client)
+            blob_api = MessagingApiBlob(api_client)
 
             # Process each event
             for event in events:
@@ -1488,6 +1498,41 @@ async def webhook(request: Request) -> JSONResponse:
                         elif isinstance(event.message, ImageMessageContent):
                             # Route image message to ProfilerAgent via agent router
                             logger.info(f"📷 Received image message from {user_id}", extra={"correlation_id": correlation_id})
+                            
+                            # Download and save the image immediately in the background
+                            message_id = event.message.id
+                            chat_id = None
+                            if event.source:
+                                if getattr(event.source, "group_id", None):
+                                    chat_id = f"group_{event.source.group_id}"
+                                elif getattr(event.source, "room_id", None):
+                                    chat_id = f"room_{event.source.room_id}"
+                                elif getattr(event.source, "user_id", None):
+                                    chat_id = f"user_{event.source.user_id}"
+
+                            if chat_id and message_id:
+                                try:
+                                    logger.info(f"📸 Downloading and saving incoming image {message_id} in background...")
+                                    response = await asyncio.to_thread(blob_api.get_message_content, message_id)
+                                    if response is not None:
+                                        if isinstance(response, bytes):
+                                            image_bytes = response
+                                        elif isinstance(response, bytearray):
+                                            image_bytes = bytes(response)
+                                        elif hasattr(response, "read") and callable(getattr(response, "read", None)):
+                                            image_bytes = response.read()
+                                        else:
+                                            chunks = []
+                                            for chunk in response:
+                                                chunks.append(chunk)
+                                            image_bytes = b"".join(chunks)
+
+                                        # Store in filesystem
+                                        from src.services.image_storage_service import image_storage_service
+                                        image_storage_service.store_incoming_image(chat_id, message_id, image_bytes)
+                                except Exception as download_error:
+                                    logger.error(f"❌ Failed to download and store background image: {download_error}", exc_info=True)
+
                             await agent_router.route_message(event, line_bot_api)
 
                     elif isinstance(event, JoinEvent):

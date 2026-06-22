@@ -654,11 +654,22 @@ class CalendarAgent(BaseAgent):
                 if self._is_trigger(text, TRIGGERS_DISCRETE_SCRAPE):
                     return await self._handle_discrete_scrape(event, text, line_bot_api, chat_id, user_id)
 
-                # SCRAPE TRIGGER
-                if self._is_trigger(text, TRIGGERS_SCRAPE):
-                    if getattr(getattr(event, "source", None), "type", None) in {"group", "room"}:
-                        return await self._handle_discrete_scrape(event, text, line_bot_api, chat_id, user_id)
+                # SCRAPE SOURCE SELECTION (response to dual-source prompt buttons)
+                if self.scrape_flow._is_scrape_source_selection(text):
+                    normalized = self.scrape_flow._normalize_followup_text(text)
+                    if normalized in {"scrape image", "scan image", "images"}:
+                        return await self.scrape_flow.handle_scrape_image_trigger(
+                            event, line_bot_api, chat_id, user_id
+                        )
+                    # "scrape messages" / "messages" → full message scan
                     return await self.scrape_flow.handle_scrape_trigger(event, text, line_bot_api, chat_id, user_id)
+
+                # SCRAPE TRIGGER — show source-selection prompt first
+                if self._is_trigger(text, TRIGGERS_SCRAPE):
+                    return await self.scrape_flow.handle_scrape_initial_trigger(
+                        event, text, line_bot_api, chat_id, user_id,
+                        discrete_mode=getattr(getattr(event, "source", None), "type", None) in {"group", "room"},
+                    )
 
                 # INLINE ADD (zeus add [date] [title])
                 prefix, rest = get_bot_identity_service().split_command_prefix(text)

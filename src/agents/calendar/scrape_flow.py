@@ -82,6 +82,131 @@ class ScrapeFlow(CalendarFlowBase):
         normalized = ScrapeFlow._normalize_followup_text(text)
         return normalized in {"all", "7", "3", "1", "7 days", "3 days", "1 day"}
 
+    @staticmethod
+    def _is_scrape_source_selection(text: str) -> bool:
+        """Return True when text matches one of the dual-scrape source buttons."""
+        normalized = ScrapeFlow._normalize_followup_text(text)
+        return normalized in {
+            "scrape messages",
+            "messages",
+            "scrape image",
+            "scan image",
+            "images",
+        }
+
+    async def handle_scrape_initial_trigger(
+        self,
+        event: MessageEvent,
+        text: str,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: str | None,
+        discrete_mode: bool = False,
+    ) -> bool:
+        """
+        Entry point for the \"scrape\" command.
+
+        Shows a clean Flex-style quick-reply asking the user WHERE to scan:
+          💬 Scan Chat Messages  or  🖼️ Scan Image Text
+
+        The user's response is then routed back to:
+          - handle_scrape_trigger()     for \"scrape messages\"
+          - ImageAnalyzerAgent scrape   for \"scrape image\"
+        """
+        import asyncio
+
+        from linebot.v3.messaging import ReplyMessageRequest
+        from linebot.v3.messaging import TextMessage as TextMsg
+
+        quick_reply = QuickReply(
+            items=[
+                QuickReplyItem(
+                    type="action",
+                    imageUrl=None,
+                    action=MessageAction(label="💬 Chat Messages", text="scrape messages"),
+                ),
+                QuickReplyItem(
+                    type="action",
+                    imageUrl=None,
+                    action=MessageAction(label="🖼️ Image Text", text="scrape image"),
+                ),
+            ]
+        )
+
+        msg = TextMsg(
+            text=(
+                "🔍 Scrape Calendar Dates\n\n"
+                "Where would you like me to look for events?\n\n"
+                "💬 Chat Messages — I'll scan the last 100 messages for dates.\n"
+                "🖼️ Image Text — I'll extract dates from an image you send.\n\n"
+                "ต้องการให้สแกนหาวันที่จากที่ไหน?"
+            ),
+            quickReply=quick_reply,
+            quoteToken=None,
+        )
+
+        if event.reply_token:
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[msg],
+                    notificationDisabled=False,
+                ),
+            )
+        logger.info(f"🔍 Dual scrape source prompt sent for chat {chat_id}")
+        return True
+
+    async def handle_scrape_image_trigger(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        user_id: str | None,
+    ) -> bool:
+        """
+        Handle the \"scrape image\" source selection.
+
+        Delegates to ImageAnalyzerAgent's scrape session — the user will be prompted
+        to send a new or last image, then dates are extracted and added to the calendar.
+        """
+        import asyncio
+
+        from linebot.v3.messaging import ReplyMessageRequest
+        from linebot.v3.messaging import TextMessage as TextMsg
+
+        msg = TextMsg(
+            text=(
+                "🖼️ Image Scan selected!\n\n"
+                "Please send the image you'd like me to scan for dates.\n\n"
+                "(You have 60 seconds to send an image)\n\n"
+                "ส่งภาพที่ต้องการให้สแกนหาวันที่ (60 วินาที)"
+            ),
+            quickReply=None,
+            quoteToken=None,
+        )
+        if event.reply_token:
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
+                ReplyMessageRequest(
+                    replyToken=event.reply_token,
+                    messages=[msg],
+                    notificationDisabled=False,
+                ),
+            )
+
+        # Start an image analyzer session in "scrape" mode so that
+        # the next incoming image goes to OCR + date extraction.
+        try:
+            from src.services.image_analyzer_session_manager import image_analyzer_session_manager
+
+            await image_analyzer_session_manager.start_session(chat_id, user_id, analysis_mode="scrape")
+            logger.info(f"🖼️ Started image scrape session for chat {chat_id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to start image scrape session: {e}")
+
+        return True
+
     async def handle_scrape_trigger(
         self,
         event: MessageEvent,

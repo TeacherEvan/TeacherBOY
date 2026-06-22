@@ -98,7 +98,7 @@ class ImageAnalyzerSessionManager:
         self._last_images_ttl_seconds = 3600  # Last images expire after 1 hour
         self._max_last_images = 100  # Maximum number of last images to store
         self._cleanup_task: asyncio.Task | None = None
-        self._cleanup_interval_seconds = 604800  # Cleanup every 7 days (weekly)
+        self._cleanup_interval_seconds = 3600  # Cleanup every hour (decreased from weekly)
         # Locks for thread-safe access to shared dictionaries
         self._sessions_lock = asyncio.Lock()
         self._last_images_lock = asyncio.Lock()
@@ -473,6 +473,14 @@ class ImageAnalyzerSessionManager:
             logger.info(
                 f"🖼️ Cleaned up {len(expired_sessions)} expired sessions and {len(expired_last_images)} expired last images"
             )
+
+        # Clean up filesystem stored images
+        try:
+            from src.services.image_storage_service import image_storage_service
+            # Run cleanup in a thread to prevent blocking the async loop
+            await asyncio.to_thread(image_storage_service.cleanup_old_images)
+        except Exception as e:
+            logger.error(f"❌ Failed to run background image storage cleanup: {e}")
 
     async def _purge_oldest_last_images(self) -> None:
         """Remove oldest last images when size limit is exceeded."""

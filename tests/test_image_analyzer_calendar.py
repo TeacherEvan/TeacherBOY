@@ -336,3 +336,85 @@ class TestImageAnalyzerDateDetection:
         assert "---END_DATES---" not in stripped
         assert "Here is the analysis" in stripped
         assert "More text here" in stripped
+
+
+class TestImageAnalyzerScrapeCalendar:
+    """Tests for calendar integration specifically in scrape mode."""
+
+    @pytest.fixture
+    def mock_event(self):
+        """Create a mock LINE message event."""
+        event = MagicMock(spec=MessageEvent)
+        event.reply_token = "test_reply_token"
+        event.source = MagicMock(spec=Source)
+        event.source.user_id = "test_user_123"
+        event.source.group_id = None
+        event.source.room_id = None
+        event.source.type = "user"
+
+        message = MagicMock(spec=TextMessageContent)
+        message.type = "text"
+        message.text = "test query"
+        event.message = message
+
+        return event
+
+    @pytest.fixture
+    def mock_line_bot_api(self):
+        """Create a mock LINE Messaging API."""
+        api = MagicMock(spec=MessagingApi)
+        api.reply_message = MagicMock()
+        api.push_message = MagicMock()
+        return api
+
+    @pytest.fixture
+    def image_analyzer_agent(self):
+        """Create an ImageAnalyzerAgent instance."""
+        from src.agents.image_analyzer_agent import ImageAnalyzerAgent
+        return ImageAnalyzerAgent()
+
+    @pytest.mark.asyncio
+    async def test_scrape_mode_extracts_dates_and_offers_calendar(self, image_analyzer_agent, mock_event, mock_line_bot_api):
+        """Test that image scraping mode extracts dates and offers calendar integration."""
+        from src.services.image_analyzer_session_manager import image_analyzer_session_manager
+        chat_id = "user_test_user_123"
+        await image_analyzer_session_manager.start_session(chat_id, "test_user_123")
+        image_analyzer_session_manager._sessions[chat_id].image_data = "data:image/png;base64,abcdef"
+        image_analyzer_session_manager._sessions[chat_id].analysis_mode = "scrape"
+
+        mock_span = MagicMock()
+
+        scraped_text_with_dates = (
+            "Extracted text: Final project due on 2026-06-30.\n"
+            "---DATES_DETECTED---\n"
+            '[{"date": "2026-06-30", "title": "Final Project Due", "description": "Submit final report"}]\n'
+            "---END_DATES---"
+        )
+
+        with (
+            patch("src.agents.image_analyzer_agent.chat_completion_with_vision_fallback", new=AsyncMock(return_value=scraped_text_with_dates)),
+            patch("src.agents.image_analyzer_agent.settings") as mock_settings,
+            patch.object(image_analyzer_agent, "_offer_calendar_integration", new=AsyncMock()) as mock_offer,
+        ):
+            mock_settings.is_calendar_configured.return_value = True
+
+            result = await image_analyzer_agent._handle_question(
+                event=mock_event,
+                question="what text is here?",
+                chat_id=chat_id,
+                user_id="test_user_123",
+                line_bot_api=mock_line_bot_api,
+                span=mock_span,
+            )
+
+            # Verify
+            assert result is True
+            # The dates should have been extracted
+            mock_span.set_attribute.assert_any_call("dates.detected", 1)
+            # Calendar offer should have been called
+            mock_offer.assert_awaited_once()
+            called_dates = mock_offer.call_args[0][2]
+            assert len(called_dates) == 1
+            assert called_dates[0]["date"] == "2026-06-30"
+            assert called_dates[0]["title"] == "Final Project Due"
+

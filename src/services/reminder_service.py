@@ -34,7 +34,7 @@ class ReminderService:
         self._line_bot_api: Any | None = None
         self._calendar_service: Any | None = None
         self._scheduler_job_id: str | None = None
-        self._reminder_hour: int = 8  # Default 8 AM Bangkok
+        self._reminder_hour: int = 7  # Default 7 AM Bangkok (configurable)
         self._enabled: bool = True
 
     def configure(
@@ -239,60 +239,57 @@ class ReminderService:
         days_until: int,
     ) -> str:
         """
-        Format the reminder message text.
+        Format a warm, polite reminder in Ms. Green style.
 
         Args:
             event: CalendarEvent object
-            days_until: Days until event
+            days_until: Days until event (0 = today)
 
         Returns:
             Formatted message string
         """
-        # Format date
-        date_str = event.event_date.strftime("%b %d, %Y")
+        # Format event date
+        date_str = event.event_date.strftime("%A, %B %d, %Y")
 
-        # Build message based on urgency
+        # Time context phrasing
         if days_until == 0:
-            # Today - most urgent
-            header = "🔔 TODAY"
-            urgency_emoji = "🚨"
-            time_text = "is TODAY"
+            days_until_text = "Today 🌅"
+            greeting_extra = "I hope your morning is off to a wonderful start!"
+            thai_closing = "วันนี้เลยค่ะ ขอให้มีวันที่ดีนะคะ 😊"
         elif days_until == 1:
-            # Tomorrow
-            header = "⏰ TOMORROW"
-            urgency_emoji = "⚠️"
-            time_text = "is TOMORROW"
+            days_until_text = "Tomorrow"
+            greeting_extra = "I hope this message finds you well."
+            thai_closing = "พรุ่งนี้แล้วนะคะ เตรียมตัวด้วยนะคะ 💚"
         elif days_until <= 3:
-            # 2-3 days
-            header = f"⏰ In {days_until} days"
-            urgency_emoji = "📅"
-            time_text = f"in {days_until} days"
+            days_until_text = f"in {days_until} days"
+            greeting_extra = "I hope your day is going beautifully."
+            thai_closing = f"อีก {days_until} วันนะคะ 📅"
         else:
-            # 4+ days (typically 7)
-            header = f"📆 In {days_until} days"
-            urgency_emoji = "📌"
-            time_text = f"in {days_until} days"
+            days_until_text = f"in {days_until} days"
+            greeting_extra = "I hope this gentle note reaches you at a peaceful moment."
+            thai_closing = f"อีก {days_until} วันค่ะ 📌"
 
-        # Build message
         lines = [
-            f"{header}",
+            "🔔 Gentle Reminder from Ms. Green 💚",
             "",
-            f"{urgency_emoji} {event.title}",
-            f"📅 {date_str} ({time_text})",
+            f"Good morning, {greeting_extra}",
+            "",
+            "I would like to gently remind you of an upcoming event:",
+            "",
+            f"📌 {event.title}",
+            f"📅 {date_str} ({days_until_text})",
         ]
 
-        # Add description if present
+        # Optional description block
         if event.description:
             lines.append("")
             lines.append(f"📝 {event.description}")
 
-        # Add Thai translation for key parts
-        if days_until == 0:
-            lines.append("")
-            lines.append("วันนี้! อย่าลืมนะคะ 😊")
-        elif days_until == 1:
-            lines.append("")
-            lines.append("พรุ่งนี้แล้ว! เตรียมตัวด้วยนะคะ")
+        lines.append("")
+        lines.append(thai_closing)
+        lines.append("")
+        lines.append("Have a wonderful day ahead! 🌸")
+        lines.append("— Ms. Green 💚")
 
         return "\n".join(lines)
 

@@ -61,6 +61,8 @@ from src.services.rate_limiter import RateLimiter
 from src.utils.llm_fallback import chat_completion_with_vision_fallback
 from src.utils.tracing import get_tracer
 
+from src.services.image_storage_service import image_storage_service as _fs_image_store
+
 from .base_agent import BaseAgent
 
 # Instantiate debrief extraction service with the proper vision fallback
@@ -646,7 +648,16 @@ class ImageAnalyzerAgent(BaseAgent):
             return True
 
         if choice == "last":
+            # Try in-memory session cache first (from recent active analysis sessions)
             last_image = await image_analyzer_session_manager.get_last_image(chat_id)
+
+            # Fallback: check filesystem store (passively downloaded images from webhook)
+            if not last_image:
+                try:
+                    last_image = await asyncio.to_thread(_fs_image_store.get_last_image, chat_id, True)
+                except Exception as _fs_err:
+                    logger.warning(f"⚠️ Filesystem image lookup failed for {chat_id}: {_fs_err}")
+
             if not last_image:
                 msg = TextMessage(
                     text=(
@@ -918,7 +929,9 @@ class ImageAnalyzerAgent(BaseAgent):
                 "Include any text from signs, documents, screens, menus, labels, handwriting, etc. "
                 "Preserve line breaks and layout as much as possible. "
                 "If multiple languages are present, include all. "
-                "Do not add explanations or analysis - just the extracted text."
+                "Do not add explanations or analysis - just the extracted text. "
+                "Additionally, if you detect any dates, deadlines, events, or schedules in the text, "
+                "you MUST append the JSON formatted ---DATES_DETECTED--- section at the end as instructed."
             )
             scrape_messages = self._build_vision_message(image_data, scrape_prompt, scene_mode="literal")
 
@@ -957,6 +970,12 @@ class ImageAnalyzerAgent(BaseAgent):
             else:
                 response = f"⚡ EXTRACTED TEXT ⚡\n━━━━━━━━━━━━━━━━━\n\n{scraped_text}"
 
+            # Extract detected dates before formatting (which strips them)
+            detected_dates = self._extract_dates_from_analysis(response)
+            if detected_dates:
+                logger.info(f"📅 Detected {len(detected_dates)} dates in image scrape")
+                span.set_attribute("dates.detected", len(detected_dates))
+
             response = self._format_response(response)
 
             # Send via push (reply token already used for "analyzing" message)
@@ -977,6 +996,11 @@ class ImageAnalyzerAgent(BaseAgent):
                 )
 
             logger.info(f"✅ Text extraction sent for chat {chat_id}")
+
+            # Offer calendar integration if dates were detected
+            if detected_dates:
+                await self._offer_calendar_integration(event, line_bot_api, detected_dates, user_id, chat_id)
+
             await image_analyzer_session_manager.clear_session(chat_id)
             return True
         else:

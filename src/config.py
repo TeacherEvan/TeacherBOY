@@ -656,10 +656,10 @@ class Settings(BaseSettings):
         description="Enable calendar and reminder features.",
     )
     calendar_reminder_hour: int = Field(
-        default=8,
+        default=7,
         ge=0,
         le=23,
-        description="Hour of day (0-23) to send reminder notifications (default: 8 AM).",
+        description="Hour of day (0-23) to send reminder notifications (default: 7 AM).",
     )
     calendar_data_path: str = Field(
         default="./data/calendar",

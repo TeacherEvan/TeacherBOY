@@ -54,15 +54,16 @@ def test_daily_debrief_schema_converts_to_formatter():
     assert "Phonics" in message
     assert "cat, hat, bat, mat, sat" in message
     assert "solid, liquid, gas" in message
-    assert "high" in message.lower() or "High" in message
-    assert "medium" in message.lower() or "Medium" in message
-    assert "gentle suggestion" in message.lower()
+    # New format: comprehension shown as description, not raw level word
+    assert "Excellent" in message or "Good" in message  # high → Excellent, medium → Good
+    # New gentle review phrasing
+    assert "Gentle Home Review Suggestion" in message or "gentle" in message.lower()
     assert "short 'e' sound" in message
-    assert "positive note" in message.lower()
-    assert "smarter" in message.lower()
+    # New closing
     assert "Teacher Evan & The Ms. Green Team" in message
-    assert "👋" in message
     assert "🍎" in message
+    # Newsletter header
+    assert "Dear Parents" in message
 
 
 def test_format_single_session_backward_compatibility():

@@ -516,7 +516,7 @@ class TestProfilerConfig:
         """Test profiler configuration defaults."""
         from src.config import Settings
 
-        settings = Settings()
+        settings = Settings(_env_file=None)
 
         assert settings.profiler_enabled is True
         assert settings.profiler_model == "openai/gpt-4o"

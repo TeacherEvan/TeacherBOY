@@ -630,9 +630,10 @@ async def test_discrete_scrape_falls_back_in_chat_when_dm_not_available():
 
 @pytest.mark.asyncio
 async def test_calendar_agent_handles_group_scrape_trigger_via_discrete_flow():
+    """Group scrape now shows the dual-source prompt (Messages/Images) first."""
     agent = CalendarAgent()
     agent._is_friend = AsyncMock(return_value=False)
-    agent.scrape_flow.handle_scrape_trigger = AsyncMock(return_value=True)
+    agent.scrape_flow.handle_scrape_initial_trigger = AsyncMock(return_value=True)
     agent.add_flow.send_message = AsyncMock()
 
     event = MagicMock()
@@ -646,9 +647,10 @@ async def test_calendar_agent_handles_group_scrape_trigger_via_discrete_flow():
     handled = await agent.handle(event, "Ms. Green scrape", MagicMock())
 
     assert handled is True
-    agent.add_flow.send_message.assert_awaited_once()
-    agent.scrape_flow.handle_scrape_trigger.assert_awaited_once()
-    assert agent.scrape_flow.handle_scrape_trigger.await_args.kwargs["discrete_mode"] is False
+    # The new flow shows the source-choice prompt first; no immediate send_message
+    agent.scrape_flow.handle_scrape_initial_trigger.assert_awaited_once()
+    # discrete_mode should be True for group chats
+    assert agent.scrape_flow.handle_scrape_initial_trigger.await_args.kwargs.get("discrete_mode") is True
 
 
 @pytest.mark.asyncio

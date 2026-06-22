@@ -18,7 +18,6 @@ class DebriefFormatter:
         day_name = debrief.day_name
         date_str = debrief.date
 
-        # Try to parse and format date nicely
         try:
             from datetime import datetime
 
@@ -31,6 +30,7 @@ class DebriefFormatter:
         subject_emojis = {
             "science": "🔬",
             "english": "📖",
+            "phonics": "🔤",
             "mathematics": "🧮",
             "math": "🧮",
             "art": "🎨",
@@ -42,7 +42,6 @@ class DebriefFormatter:
             "language": "🗣️",
             "reading": "📚",
             "writing": "✍️",
-            "phonics": "🔤",
         }
 
         def get_subject_emoji(subject: str) -> str:
@@ -52,18 +51,24 @@ class DebriefFormatter:
                     return emoji
             return "✨"
 
-        # Build the message
         lines = []
-        lines.append(f"📅 *{formatted_date}* ✨")
-        lines.append("")
 
-        # Opening warmth
+        # ── Header ────────────────────────────────────────────────────────────
+        lines.append(f"📝 Daily Learning Journal — {formatted_date} 🌸")
+        lines.append("")
+        lines.append("Dear Parents,")
+        lines.append("")
         lines.append(
-            f"On this wonderful {day_name}, our students embarked on a beautiful journey of learning and discovery! 🌈"
+            "I hope this message finds you well and that your evening is off to a beautiful start. 😊"
+        )
+        lines.append("")
+        lines.append(
+            "Today our children had a wonderful day of discovery! "
+            "Here is a warm summary of what they experienced:"
         )
         lines.append("")
 
-        # Process each period
+        # ── Periods ───────────────────────────────────────────────────────────
         for i, period in enumerate(debrief.periods, 1):
             period_label = period.period or f"Period {i}"
             subject = period.subject or "Learning"
@@ -71,68 +76,51 @@ class DebriefFormatter:
             lesson = period.lesson or "the lesson"
             emoji = get_subject_emoji(subject)
 
-            # Period header
-            lines.append(f"{emoji} *{period_label} - {subject}*")
+            lines.append(f"{emoji} {period_label} — {subject} with {teacher}")
 
-            # Teacher and lesson description with warmth
-            lines.append(f"Our students had an intriguing lesson with *{teacher}* regarding *{lesson}*!")
+            lines.append(f"• Lesson Focus: {lesson}")
 
-            # Observations if available
-            if period.observations:
-                lines.append(f"💫 {period.observations}")
-
-            # Topics covered
             if period.topics_covered:
                 topics_str = ", ".join(period.topics_covered)
-                lines.append(f"📚 Topics explored: {topics_str}")
+                lines.append(f"• Topics Explored: {topics_str}")
 
-            # Key phrases
             if period.key_phrases_learned:
                 phrases_str = ", ".join(period.key_phrases_learned)
-                lines.append(f"🗣️ Key words practiced: {phrases_str}")
+                lines.append(f"• Key Vocabulary Practiced: {phrases_str}")
 
-            # Comprehension
-            comp_emoji = (
-                "🌟" if period.comprehension_level == "high" else "🌱" if period.comprehension_level == "medium" else "🌿"
+            if period.observations:
+                lines.append(f"• Observations: {period.observations}")
+
+            # Comprehension level
+            comp_map = {
+                "high": ("🌟", "Excellent — students grasped concepts with great confidence!"),
+                "medium": ("🌱", "Good — most students understood well; gentle review may help."),
+                "low": ("🌿", "Developing — a new concept; continued nurturing will help."),
+            }
+            comp_emoji, comp_text = comp_map.get(
+                period.comprehension_level, ("📊", period.comprehension_level.title())
             )
-            if period.comprehension_level == "high":
-                comp_text = f"{comp_emoji} Comprehension: *{period.comprehension_level.title()}* - All students participated actively and grasped concepts beautifully!"
-            elif period.comprehension_level == "medium":
-                comp_text = f"{comp_emoji} Comprehension: *{period.comprehension_level.title()}* - Most students understood well, some may benefit from gentle review."
-            else:
-                comp_text = f"{comp_emoji} Comprehension: *{period.comprehension_level.title()}* - This is a new concept; we'll continue nurturing understanding."
-            lines.append(comp_text)
+            lines.append(f"• Comprehension: {comp_emoji} {comp_text}")
 
-            # Suggested review
             if period.suggested_review:
                 review_str = "; ".join(period.suggested_review)
-                lines.append(f"📝 *Gentle suggestion for home:* {review_str}")
+                lines.append(f"🌱 Gentle Home Review Suggestion: {review_str}")
 
-            lines.append("")  # Empty line between periods
+            lines.append("")  # blank line between periods
 
-        # General observations
+        # ── General observations ───────────────────────────────────────────────
         if debrief.general_observations:
-            lines.append("🌸 *General Observations:*")
+            lines.append("🌸 General Observations:")
             lines.append(debrief.general_observations)
             lines.append("")
 
-        # Closing warmth
-        lines.append("🌟 What a wonderful day of learning and growth!")
-        lines.append("")
+        # ── Closing ───────────────────────────────────────────────────────────
         lines.append(
-            f"We end this beautiful {day_name} on a positive note, "
-            f"knowing all our students went home smarter than when they arrived "
-            f"and more prepared for their bright futures! 🌈"
+            "Wishing you all a peaceful and restful evening ahead. "
+            "Thank you for your continued love and trust. 💚"
         )
         lines.append("")
-        lines.append(
-            "As always, we deeply appreciate all your support and trust in us. "
-            "Wishing you a wonderful evening and a joyful weekend ahead! 🌙✨"
-        )
-        lines.append("")
-        lines.append("See you Monday! 👋🍎")
-        lines.append("")
-        lines.append("— *Teacher Evan & The Ms. Green Team* 💚")
+        lines.append("— Teacher Evan & The Ms. Green Team 🍎")
 
         return "\n".join(lines)
 
