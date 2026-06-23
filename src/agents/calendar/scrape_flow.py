@@ -58,7 +58,7 @@ class ScrapeFlow(CalendarFlowBase):
     @staticmethod
     def _parse_scan_limit(text: str) -> int:
         """Parse an optional scrape depth from the current runtime command prefix."""
-        scan_limit = 10
+        scan_limit = 100
         normalized = (text or "").strip()
         prefix, rest = get_bot_identity_service().split_command_prefix(normalized)
         candidate = rest if prefix else normalized
@@ -66,7 +66,7 @@ class ScrapeFlow(CalendarFlowBase):
         if match and match.group(1):
             try:
                 requested_limit = int(match.group(1))
-                scan_limit = max(1, min(requested_limit, 50))
+                scan_limit = max(1, min(requested_limit, 100))
                 logger.info(f"📊 User requested scan depth: {scan_limit}")
             except ValueError:
                 pass
@@ -80,7 +80,9 @@ class ScrapeFlow(CalendarFlowBase):
     @staticmethod
     def _is_explicit_scrape_reminder_followup(text: str) -> bool:
         normalized = ScrapeFlow._normalize_followup_text(text)
-        return normalized in {"all", "7", "3", "1", "7 days", "3 days", "1 day"}
+        if normalized in {"all", "7", "3", "1", "7 days", "3 days", "1 day", "done", "cancel"}:
+            return True
+        return bool(re.match(r"^toggle\s+(7|3|1)$", normalized))
 
     @staticmethod
     def _is_scrape_source_selection(text: str) -> bool:
@@ -299,9 +301,15 @@ class ScrapeFlow(CalendarFlowBase):
         # Store extracted events and move to review state
         calendar_session_manager.set_scraped_events(chat_id, events_data)
 
+        # Manually transition to SCRAPE_REVIEWING state
+        session = calendar_session_manager.get_session(chat_id)
+        if session:
+            session.state = CalendarState.SCRAPE_REVIEWING
+            session.update()
+
         discrete_target = calendar_session_manager.get_discrete_scrape_target(chat_id)
         if events_data:
-            await self.prompt_scrape_selection(
+            await self.prompt_scrape_review(
                 event,
                 line_bot_api,
                 chat_id,
@@ -385,6 +393,151 @@ class ScrapeFlow(CalendarFlowBase):
                 logger.info(f"📨 Sent discrete scrape prompt to user {discrete_target_user_id}")
             except Exception as e:
                 logger.error(f"❌ Failed to send discrete scrape push message: {e}", exc_info=True)
+                await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
+        else:
+            await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
+
+    async def prompt_scrape_review(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        header: str = "",
+        discrete_target_user_id: str | None = None,
+    ) -> None:
+        """Prompt user with the list of detected events and the choice to Add All or Add Individual."""
+        import asyncio
+        from linebot.v3.messaging import PushMessageRequest
+        from linebot.v3.messaging import TextMessage as TextMsg
+
+        session = calendar_session_manager.get_session(chat_id)
+        if not session:
+            await self.send_message(
+                event,
+                line_bot_api,
+                "❌ This scrape session is no longer available. Start 'Ms. Green scrape' again.",
+            )
+            return
+
+        lines = []
+        if header:
+            lines.append(header.rstrip())
+        lines.extend([
+            "🔍 Detected events:",
+            ""
+        ])
+
+        for index, item in enumerate(session.scraped_events, start=1):
+            date_obj = item.get("date") or item.get("event_date")
+            date_text = self.format_date_display(date_obj) if isinstance(date_obj, date) else "Unknown date"
+            lines.append(f"▫️ {index}. {item.get('title', 'Event')} ({date_text})")
+
+        lines.extend([
+            "",
+            "Would you like to add all detected events, or select individually?",
+            "ต้องการเพิ่มกิจกรรมทั้งหมด หรือเลือกทีละรายการ?"
+        ])
+        msg = "\n".join(lines)
+
+        quick_reply = QuickReply(
+            items=[
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="➕ Add All / เพิ่มทั้งหมด", text="add all")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✏️ Add Individual / เลือกเอง", text="add individual")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="❌ Cancel / ยกเลิก", text="cancel")),
+            ]
+        )
+
+        if discrete_target_user_id:
+            try:
+                await asyncio.to_thread(
+                    line_bot_api.push_message,
+                    PushMessageRequest(
+                        to=discrete_target_user_id,
+                        messages=[TextMsg(text=msg, quickReply=quick_reply, quoteToken=None)],
+                        notificationDisabled=False,
+                    ),
+                )
+                logger.info(f"📨 Sent discrete scrape review prompt to user {discrete_target_user_id}")
+            except Exception as e:
+                logger.error(f"❌ Failed to send discrete scrape review push message: {e}", exc_info=True)
+                await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
+        else:
+            await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
+
+    async def prompt_scrape_reminders(
+        self,
+        event: MessageEvent,
+        line_bot_api: MessagingApi,
+        chat_id: str,
+        discrete_target_user_id: str | None = None,
+    ) -> None:
+        """Prompt user with the multi-select reminder days toggle checklist."""
+        import asyncio
+        from linebot.v3.messaging import PushMessageRequest
+        from linebot.v3.messaging import TextMessage as TextMsg
+
+        session = calendar_session_manager.get_session(chat_id)
+        if not session:
+            await self.send_message(
+                event,
+                line_bot_api,
+                "❌ Scrape session expired. Start 'Ms. Green scrape' again.",
+            )
+            return
+
+        # Initialize default pending reminder days if not set
+        if session.pending_reminder_days is None:
+            session.pending_reminder_days = [7, 3, 1]
+            session.update()
+
+        days = session.pending_reminder_days
+
+        # Format checked/unchecked states
+        checked_7 = "✅" if 7 in days else "▫️"
+        checked_3 = "✅" if 3 in days else "▫️"
+        checked_1 = "✅" if 1 in days else "▫️"
+
+        # Selected events preview
+        selected_events = calendar_session_manager.get_selected_scraped_events(chat_id)
+        events_lines = []
+        for i, item in enumerate(selected_events, start=1):
+            date_obj = item.get("date") or item.get("event_date")
+            date_text = self.format_date_display(date_obj) if isinstance(date_obj, date) else "Unknown date"
+            events_lines.append(f"{i}. {item.get('title', 'Event')} ({date_text})")
+        events_preview = "\n".join(events_lines)
+
+        msg = (
+            f"📅 Selected events to add:\n{events_preview}\n\n"
+            f"🔔 Select reminders for your event(s):\n\n"
+            f"[{checked_7}] 7 Days before\n"
+            f"[{checked_3}] 3 Days before\n"
+            f"[{checked_1}] 1 Day before\n\n"
+            f"Click a button below to toggle, then click 'Confirm'.\n\n"
+            f"เลือกวันที่ต้องการให้แจ้งเตือน และกด Confirm"
+        )
+
+        quick_reply = QuickReply(
+            items=[
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label=f"{checked_7} 7 Days", text="toggle 7")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label=f"{checked_3} 3 Days", text="toggle 3")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label=f"{checked_1} 1 Day", text="toggle 1")),
+                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✅ Confirm / ยืนยัน", text="done")),
+            ]
+        )
+
+        if discrete_target_user_id:
+            try:
+                await asyncio.to_thread(
+                    line_bot_api.push_message,
+                    PushMessageRequest(
+                        to=discrete_target_user_id,
+                        messages=[TextMsg(text=msg, quickReply=quick_reply, quoteToken=None)],
+                        notificationDisabled=False,
+                    ),
+                )
+                logger.info(f"📨 Sent discrete reminders prompt to user {discrete_target_user_id}")
+            except Exception as e:
+                logger.error(f"❌ Failed to send discrete reminders push message: {e}", exc_info=True)
                 await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
         else:
             await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
@@ -504,13 +657,16 @@ class ScrapeFlow(CalendarFlowBase):
         chat_id: str,
         user_id: str | None,
     ) -> bool:
-        """Handle user response during scrape batch selection."""
+        """Handle user response during scrape batch selection or review."""
         active_chat_id = calendar_session_manager.resolve_discrete_scrape_chat_id(chat_id, user_id)
         session = calendar_session_manager.get_session(active_chat_id)
-        if not session or session.state != CalendarState.SCRAPE_SELECTING:
+        if not session or session.state not in (CalendarState.SCRAPE_REVIEWING, CalendarState.SCRAPE_SELECTING):
             if calendar_session_manager.had_recent_scrape_flow(
                 chat_id, user_id
-            ) and self._is_explicit_scrape_selection_followup(text):
+            ) and (
+                self._is_explicit_scrape_selection_followup(text) or
+                self._normalize_followup_text(text) in {"add all", "add individual"}
+            ):
                 await self.send_message(
                     event,
                     line_bot_api,
@@ -538,6 +694,42 @@ class ScrapeFlow(CalendarFlowBase):
             )
             return True
 
+        discrete_target = calendar_session_manager.get_discrete_scrape_target(active_chat_id)
+
+        # ----------------------------------------------------
+        # Handle state: SCRAPE_REVIEWING
+        # ----------------------------------------------------
+        if session.state == CalendarState.SCRAPE_REVIEWING:
+            if text_lower == "add all":
+                session.selected_scraped_indices = list(range(len(session.scraped_events)))
+                session.scrape_selection_revision += 1
+                session.state = CalendarState.SCRAPE_SELECTING
+                calendar_session_manager.finalize_scrape_selection(active_chat_id)
+                await self.prompt_scrape_reminders(event, line_bot_api, active_chat_id, discrete_target)
+                return True
+            elif text_lower == "add individual":
+                session.state = CalendarState.SCRAPE_SELECTING
+                session.update()
+                await self.prompt_scrape_selection(
+                    event,
+                    line_bot_api,
+                    active_chat_id,
+                    header="🗂️ Numbered Selection Mode / โหมดเลือกกิจกรรม:\n\n",
+                    discrete_target_user_id=discrete_target,
+                )
+                return True
+            else:
+                await self.send_message(
+                    event,
+                    line_bot_api,
+                    "❌ Invalid choice. Please choose 'Add All', 'Add Individual', or 'Cancel'.\n\n"
+                    "กรุณาเลือก 'Add All', 'Add Individual' หรือ 'Cancel'",
+                )
+                return True
+
+        # ----------------------------------------------------
+        # Handle state: SCRAPE_SELECTING
+        # ----------------------------------------------------
         if text_lower == "done":
             preview = calendar_session_manager.finalize_scrape_selection(active_chat_id)
             if not preview:
@@ -548,16 +740,7 @@ class ScrapeFlow(CalendarFlowBase):
                 )
                 return True
 
-            msg = self._format_selected_scrape_preview(preview["items"])
-            quick_reply = QuickReply(
-                items=[
-                    QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="7 days", text="7")),
-                    QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="3 days", text="3")),
-                    QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="1 day", text="1")),
-                    QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="All", text="all")),
-                ]
-            )
-            await self.send_message_with_quick_reply(event, line_bot_api, msg, quick_reply)
+            await self.prompt_scrape_reminders(event, line_bot_api, active_chat_id, discrete_target)
             return True
 
         updated_session = calendar_session_manager.apply_scrape_selection(active_chat_id, text_lower)
@@ -572,7 +755,13 @@ class ScrapeFlow(CalendarFlowBase):
 
         count = len(updated_session.selected_scraped_indices)
         header = f"🗂️ Selected {count} event{'s' if count != 1 else ''}.\n\n" if count else "🗂️ No events selected yet.\n\n"
-        await self.prompt_scrape_selection(event, line_bot_api, active_chat_id, header=header)
+        await self.prompt_scrape_selection(
+            event,
+            line_bot_api,
+            active_chat_id,
+            header=header,
+            discrete_target_user_id=discrete_target,
+        )
         return True
 
     async def handle_scrape_reminder_response(
@@ -588,6 +777,27 @@ class ScrapeFlow(CalendarFlowBase):
         text_lower = self._normalize_followup_text(text)
         active_chat_id = calendar_session_manager.resolve_discrete_scrape_chat_id(chat_id, user_id)
         calendar_service = calendar_service or self._calendar_service
+        
+        session = calendar_session_manager.get_session(active_chat_id)
+        if not session or session.state != CalendarState.SCRAPE_REMINDER_DAYS:
+            if calendar_session_manager.had_recent_scrape_flow(
+                chat_id, user_id
+            ) and self._is_explicit_scrape_reminder_followup(text):
+                await self.send_message(
+                    event,
+                    line_bot_api,
+                    "❌ This scrape flow is stale or expired. Start the scrape flow again.",
+                )
+                return True
+            return False
+
+        if not calendar_session_manager.is_session_owner(active_chat_id, user_id):
+            await self.send_message(
+                event,
+                line_bot_api,
+                "❌ Only the person who started this scrape flow can change it.",
+            )
+            return True
 
         if text_lower == "cancel":
             calendar_session_manager.end_session(active_chat_id)
@@ -598,96 +808,131 @@ class ScrapeFlow(CalendarFlowBase):
             )
             return True
 
-        # Parse reminder days
-        if text_lower == "all":
-            reminder_days = [7, 3, 1, 0]
-        elif text_lower in ["7", "7 days"]:
-            reminder_days = [7, 0]
-        elif text_lower in ["3", "3 days"]:
-            reminder_days = [3, 0]
-        elif text_lower in ["1", "1 day"]:
-            reminder_days = [1, 0]
-        else:
-            await self.send_message(
-                event, line_bot_api, "❌ Invalid selection. Please choose 7, 3, 1, or all.\n\nกรุณาเลือก 7, 3, 1 หรือ all"
-            )
-            return True
+        if session.pending_reminder_days is None:
+            session.pending_reminder_days = [7, 3, 1]
+            session.update()
 
-        confirmation = calendar_session_manager.validate_scrape_batch_confirmation(
-            active_chat_id,
-            user_id,
-        )
-        if not confirmation.get("ok"):
-            reason = confirmation.get("reason")
-            if reason == "wrong_owner":
-                message = "❌ Only the person who started this scrape flow can confirm it."
-            elif (
-                reason == "missing_session"
-                and calendar_session_manager.had_recent_scrape_flow(chat_id, user_id)
-                and self._is_explicit_scrape_reminder_followup(text)
-            ):
-                message = "❌ This scrape preview is stale or expired. Start the scrape flow again."
-            elif reason in {"stale_revision", "invalid_state"}:
-                message = "❌ This scrape preview is stale or expired. Start the scrape flow again."
-            elif reason == "no_selection":
-                message = "❌ Select at least one event before choosing reminders."
+        discrete_target = calendar_session_manager.get_discrete_scrape_target(active_chat_id)
+
+        # Handle toggle logic
+        toggle_match = re.match(r"^toggle\s+(7|3|1)$", text_lower)
+        if toggle_match:
+            day_toggled = int(toggle_match.group(1))
+            days = list(session.pending_reminder_days)
+            if day_toggled in days:
+                days.remove(day_toggled)
             else:
-                message = "❌ This scrape session is no longer valid. Start 'Ms. Green scrape' again."
-            await self.send_message(event, line_bot_api, message)
+                days.append(day_toggled)
+            session.pending_reminder_days = days
+            session.update()
+            await self.prompt_scrape_reminders(event, line_bot_api, active_chat_id, discrete_target)
             return True
 
-        if not calendar_service or not user_id:
-            await self.send_message(
-                event,
-                line_bot_api,
-                "❌ Cannot add events - service unavailable.",
+        # Handle old commands for compatibility/direct input
+        if text_lower in ["7", "7 days"]:
+            session.pending_reminder_days = [7]
+            session.update()
+            await self.prompt_scrape_reminders(event, line_bot_api, active_chat_id, discrete_target)
+            return True
+        elif text_lower in ["3", "3 days"]:
+            session.pending_reminder_days = [3]
+            session.update()
+            await self.prompt_scrape_reminders(event, line_bot_api, active_chat_id, discrete_target)
+            return True
+        elif text_lower in ["1", "1 day"]:
+            session.pending_reminder_days = [1]
+            session.update()
+            await self.prompt_scrape_reminders(event, line_bot_api, active_chat_id, discrete_target)
+            return True
+        elif text_lower == "all":
+            session.pending_reminder_days = [7, 3, 1]
+            session.update()
+            await self.prompt_scrape_reminders(event, line_bot_api, active_chat_id, discrete_target)
+            return True
+
+        # Done/Confirm
+        if text_lower == "done":
+            confirmation = calendar_session_manager.validate_scrape_batch_confirmation(
+                active_chat_id,
+                user_id,
             )
-            calendar_session_manager.end_session(active_chat_id)
-            return True
+            if not confirmation.get("ok"):
+                reason = confirmation.get("reason")
+                if reason == "wrong_owner":
+                    message = "❌ Only the person who started this scrape flow can confirm it."
+                else:
+                    message = "❌ This scrape session is no longer valid. Start 'Ms. Green scrape' again."
+                await self.send_message(event, line_bot_api, message)
+                return True
 
-        notification_target_user_id = calendar_session_manager.get_discrete_scrape_target(active_chat_id)
-        added_count = 0
-        failed_count = 0
-
-        for item in confirmation["items"]:
-            event_date = item.get("date") or item.get("event_date")
-            if not isinstance(event_date, date):
-                failed_count += 1
-                continue
-
-            try:
-                await calendar_service.add_event_async(
-                    user_id=user_id,
-                    chat_id=active_chat_id,
-                    title=str(item.get("title", "Event from chat")),
-                    event_date=event_date,
-                    description=str(item.get("description", "")),
-                    reminder_days=list(reminder_days),
-                    is_friend=bool(confirmation.get("is_friend")),
-                    notification_target_user_id=notification_target_user_id,
+            if not calendar_service or not user_id:
+                await self.send_message(
+                    event,
+                    line_bot_api,
+                    "❌ Cannot add events - service unavailable.",
                 )
-                added_count += 1
-            except Exception:
-                logger.exception("❌ Failed to add scraped batch event")
-                failed_count += 1
+                calendar_session_manager.end_session(active_chat_id)
+                return True
 
-        calendar_session_manager.end_session(active_chat_id)
+            reminder_days = list(session.pending_reminder_days)
+            if 0 not in reminder_days:
+                reminder_days.append(0)
 
-        if added_count > 0:
-            await self.send_message(
-                event,
-                line_bot_api,
-                f"✅ Added {added_count} selected event(s) to calendar!"
-                + ("" if failed_count == 0 else f" (Failed: {failed_count})")
-                + "\n\nเพิ่มกิจกรรมที่เลือกเรียบร้อยแล้ว",
-            )
-        else:
-            await self.send_message(
-                event,
-                line_bot_api,
-                "❌ No selected events were added.",
-            )
+            notification_target_user_id = calendar_session_manager.get_discrete_scrape_target(active_chat_id)
+            added_count = 0
+            failed_count = 0
 
+            for item in confirmation["items"]:
+                event_date = item.get("date") or item.get("event_date")
+                if not isinstance(event_date, date):
+                    failed_count += 1
+                    continue
+
+                try:
+                    await calendar_service.add_event_async(
+                        user_id=user_id,
+                        chat_id=active_chat_id,
+                        title=str(item.get("title", "Event from chat")),
+                        event_date=event_date,
+                        description=str(item.get("description", "")),
+                        reminder_days=list(reminder_days),
+                        is_friend=bool(confirmation.get("is_friend")),
+                        notification_target_user_id=notification_target_user_id,
+                    )
+                    added_count += 1
+                except Exception:
+                    logger.exception("❌ Failed to add scraped batch event")
+                    failed_count += 1
+
+            calendar_session_manager.end_session(active_chat_id)
+
+            if added_count > 0:
+                days_sorted = sorted(session.pending_reminder_days)
+                rem_text = ", ".join(f"{d} days" for d in days_sorted) if days_sorted else "no early"
+                await self.send_message(
+                    event,
+                    line_bot_api,
+                    f"✅ Added {added_count} selected event(s) to calendar!"
+                    + ("" if failed_count == 0 else f" (Failed: {failed_count})")
+                    + f"\n\nเพิ่มกิจกรรมที่เลือกเรียบร้อยแล้ว\n"
+                    f"🔔 Reminders: {rem_text} before + day-of",
+                )
+            else:
+                await self.send_message(
+                    event,
+                    line_bot_api,
+                    "❌ No selected events were added.",
+                )
+
+            return True
+
+        # Invalid choice
+        await self.send_message(
+            event,
+            line_bot_api,
+            "❌ Invalid command. Click the buttons to toggle options, then click 'Confirm'.\n\n"
+            "กรุณากดปุ่มเพื่อเลือกการแจ้งเตือน แล้วคลิก Confirm",
+        )
         return True
 
     async def handle_add_all_scraped_events(

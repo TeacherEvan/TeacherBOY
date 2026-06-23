@@ -740,6 +740,7 @@ class CalendarSessionManager:
                 continue
             if candidate.state not in {
                 CalendarState.SCRAPE_PROCESSING,
+                CalendarState.SCRAPE_REVIEWING,
                 CalendarState.SCRAPE_SELECTING,
                 CalendarState.SCRAPE_REMINDER_DAYS,
             }:

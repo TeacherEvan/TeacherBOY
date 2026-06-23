@@ -751,6 +751,14 @@ class CalendarAgent(BaseAgent):
                     return await self.add_flow.handle_add_confirmation(event, text, line_bot_api, active_chat_id, user_id)
 
                 # ScrapeFlow states
+                if state == CalendarState.SCRAPE_REVIEWING:
+                    normalized = self.scrape_flow._normalize_followup_text(text)
+                    if normalized not in {"add all", "add individual", "cancel"}:
+                        return False
+                    return await self.scrape_flow.handle_scrape_review_response(
+                        event, text, line_bot_api, active_chat_id, user_id
+                    )
+
                 if state == CalendarState.SCRAPE_SELECTING:
                     if not self.scrape_flow._is_explicit_scrape_selection_followup(text):
                         return False
@@ -842,26 +850,45 @@ class CalendarAgent(BaseAgent):
         line_bot_api: MessagingApi | None = None,
     ) -> None:
         """
-        Start processing dates extracted from an image.
+        Start processing dates extracted from an image by unifying with ScrapeFlow.
 
         Called by ImageAnalyzerAgent when dates are detected.
-
-        Args:
-            chat_id: Chat ID where the image was sent
-            user_id: User ID who sent the image
-            extracted_dates: List of detected dates from image analysis
-            is_friend: Whether the user is a friend of the bot
-            event: Optional LINE message event (for sending prompts)
-            line_bot_api: Optional LINE API client (for sending prompts)
         """
-        # Start extraction flow via session manager
-        calendar_session_manager.start_extraction_flow(chat_id, user_id, extracted_dates, is_friend)
+        # Start scrape flow via session manager
+        calendar_session_manager.start_scrape_flow(chat_id, user_id, [], is_friend)
 
-        # If event and line_bot_api provided, prompt for first date
-        if event and line_bot_api and extracted_dates:
-            current_date = calendar_session_manager.get_current_extracted_date(chat_id)
-            if current_date:
-                # Delegate to scrape_flow for prompting (uses same review UI)
-                await self.scrape_flow.prompt_scraped_event(
-                    event, line_bot_api, current_date, current=1, total=len(extracted_dates), show_add_all=True
-                )
+        # Convert/format the dates for scraped_events
+        from datetime import date
+        events_data = []
+        for entry in extracted_dates:
+            date_val = entry.get("date")
+            if not isinstance(date_val, date):
+                try:
+                    date_val = date.fromisoformat(str(date_val))
+                except Exception:
+                    date_val = date.today()
+            events_data.append({
+                "date": date_val,
+                "title": entry.get("title", "Event from image"),
+                "description": entry.get("description", ""),
+                "source_text": "Extracted from image",
+                "confidence": "high",
+            })
+
+        # Store events (sets state to SCRAPE_SELECTING)
+        calendar_session_manager.set_scraped_events(chat_id, events_data)
+
+        # Manually transition to SCRAPE_REVIEWING state
+        session = calendar_session_manager.get_session(chat_id)
+        if session:
+            session.state = CalendarState.SCRAPE_REVIEWING
+            session.update()
+
+        # Prompt with the Add All / Add Individual review UI
+        if event and line_bot_api and events_data:
+            await self.scrape_flow.prompt_scrape_review(
+                event=event,
+                line_bot_api=line_bot_api,
+                chat_id=chat_id,
+                header="🖼️ Image dates extracted!\n\n",
+            )

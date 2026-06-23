@@ -55,51 +55,26 @@ async def test_debrief_trigger_is_recognized(mock_trigger_event):
 
 
 @pytest.mark.asyncio
-async def test_debrief_image_uses_debrief_extraction_service(
+@pytest.mark.asyncio
+async def test_debrief_image_uses_direct_creative_vision_generation(
     mock_trigger_event,
     mock_image_event,
     mock_line_bot_api,
 ):
-    """Test that debrief mode uses DebriefExtractionService and DebriefFormatter."""
+    """Test that debrief mode uses direct creative vision call and bypasses DebriefExtractionService."""
     from src.agents.image_analyzer_agent import ImageAnalyzerAgent
-    from src.services.debrief_extraction_service import DailyDebriefSchema, PeriodDebriefSchema
 
     agent = ImageAnalyzerAgent()
-
-    # Create a mock daily debrief schema
-    mock_debrief = DailyDebriefSchema(
-        date="2026-01-15",
-        day_name="Thursday",
-        periods=[
-            PeriodDebriefSchema(
-                period="Period 1",
-                subject="Science",
-                teacher="Teacher Evan",
-                lesson="Photosynthesis",
-                topics_covered=["plants", "light"],
-                comprehension_level="high",
-                key_phrases_learned=["photosynthesis", "chlorophyll"],
-                suggested_review=["review plant cells"],
-                observations="Students engaged well",
-            )
-        ],
-        general_observations="Good day overall",
-        confidence_score=0.9,
-        notes=None,
-    )
 
     # Create a mock to_thread that actually executes the function
     async def mock_to_thread(func, *args, **kwargs):
         return await func(*args, **kwargs) if hasattr(func, "__await__") else func(*args, **kwargs)
 
     with (
-        patch("src.agents.image_analyzer_agent._debrief_extraction_service") as mock_debrief_service,
-        patch("src.agents.image_analyzer_agent.DebriefFormatter") as mock_formatter,
+        patch("src.agents.image_analyzer_agent.chat_completion_with_vision_fallback") as mock_fallback,
         patch("src.agents.image_analyzer_agent.image_analyzer_session_manager") as mock_session,
         patch("src.agents.image_analyzer_agent.asyncio.to_thread", new=mock_to_thread),
-        patch("src.agents.image_analyzer_agent.datetime") as mock_datetime,
     ):
-        mock_datetime.now.return_value.strftime.return_value = "2026-01-15"
         mock_session.get_image_and_question = AsyncMock(
             return_value=(
                 "data:image/jpeg;base64,abc",
@@ -108,8 +83,7 @@ async def test_debrief_image_uses_debrief_extraction_service(
             )
         )
         mock_session.clear_session = AsyncMock()
-        mock_debrief_service.extract_from_image = AsyncMock(return_value=mock_debrief)
-        mock_formatter.format_daily_debrief.return_value = "FORMATTED DEBRIEF"
+        mock_fallback.return_value = "Date 23/06\nat 08h48: I cooked steak\nat 09h45: Steak was done..."
 
         agent._send_analyzing_message = AsyncMock()
         agent._send_error_message = AsyncMock()
@@ -123,13 +97,11 @@ async def test_debrief_image_uses_debrief_extraction_service(
             MagicMock(),
         )
 
-        # Verify DebriefExtractionService was called
-        mock_debrief_service.extract_from_image.assert_awaited_once_with(
-            image_url_or_base64="data:image/jpeg;base64,abc",
-            chat_id="group_123",
-            date_str="2026-01-15",
-        )
-        # Verify DebriefFormatter was called
-        mock_formatter.format_daily_debrief.assert_called_once_with(mock_debrief)
+        # Verify chat_completion_with_vision_fallback was called
+        mock_fallback.assert_called_once()
+        call_args = mock_fallback.call_args[1]
+        assert "messages" in call_args
+        messages = call_args["messages"]
+        assert "expert creative journal writer" in messages[1]["content"][0]["text"]
         # Verify push_message was called with formatted debrief
         mock_line_bot_api.push_message.assert_called_once()

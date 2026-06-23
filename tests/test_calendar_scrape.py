@@ -313,13 +313,12 @@ async def test_scrape_flow_pushes_review_to_requester_dm_when_run_from_group():
     assert line_api.push_message.called
     push_request = line_api.push_message.call_args.args[0]
     pushed_message = push_request.messages[0]
-    assert "Select events to add" in pushed_message.text
+    assert "Would you like to add all detected events, or select individually?" in pushed_message.text
     assert "1. Exam papers due" in pushed_message.text
     assert [item.action.label for item in pushed_message.quick_reply.items] == [
-        "All",
-        "None",
-        "Done",
-        "Cancel",
+        "➕ Add All / เพิ่มทั้งหมด",
+        "✏️ Add Individual / เลือกเอง",
+        "❌ Cancel / ยกเลิก",
     ]
 
 
@@ -388,6 +387,18 @@ async def test_discrete_group_scrape_can_be_completed_from_requester_dm():
 
     handled = await flow.handle_scrape_review_response(
         dm_event,
+        "add individual",
+        line_api,
+        "user_U_REQ",
+        "U_REQ",
+    )
+
+    assert handled is True
+    selection_prompt = line_api.push_message.call_args_list[-1].args[0].messages[0].text
+    assert "Select events to add" in selection_prompt
+
+    handled = await flow.handle_scrape_review_response(
+        dm_event,
         "all",
         line_api,
         "user_U_REQ",
@@ -395,7 +406,7 @@ async def test_discrete_group_scrape_can_be_completed_from_requester_dm():
     )
 
     assert handled is True
-    selection_prompt = flow.send_message_with_quick_reply.await_args.args[2]
+    selection_prompt = line_api.push_message.call_args_list[-1].args[0].messages[0].text
     assert "Selected: 1, 2" in selection_prompt
 
     handled = await flow.handle_scrape_review_response(
@@ -407,13 +418,22 @@ async def test_discrete_group_scrape_can_be_completed_from_requester_dm():
     )
 
     assert handled is True
-    preview_text = flow.send_message_with_quick_reply.await_args.args[2]
+    preview_text = line_api.push_message.call_args_list[-1].args[0].messages[0].text
     assert "Exam papers due" in preview_text
     assert "Science fair" in preview_text
 
-    handled = await flow.handle_scrape_reminder_response(
+    await flow.handle_scrape_reminder_response(
         dm_event,
         "all",
+        line_api,
+        "user_U_REQ",
+        "U_REQ",
+        calendar_service=flow._calendar_service,
+    )
+
+    handled = await flow.handle_scrape_reminder_response(
+        dm_event,
+        "done",
         line_api,
         "user_U_REQ",
         "U_REQ",
@@ -929,7 +949,7 @@ class TestSCRAPE_SELECTINGScrapeFlowBatch:
         assert "Exam papers due" in preview_text
         assert "Science fair" in preview_text
         assert "Parent meeting" not in preview_text
-        assert "When should I remind you" in preview_text
+        assert "Select reminders for your event(s)" in preview_text
         assert calendar_session_manager.get_session("scrape_chat").state == CalendarState.SCRAPE_REMINDER_DAYS
 
     @pytest.mark.asyncio
@@ -950,9 +970,20 @@ class TestSCRAPE_SELECTINGScrapeFlowBatch:
 
         scrape_flow._calendar_service.add_event_async = AsyncMock()
 
-        handled = await scrape_flow.handle_scrape_reminder_response(
+        # Choose 'all' reminder days
+        await scrape_flow.handle_scrape_reminder_response(
             mock_event,
             "all",
+            mock_line_api,
+            "scrape_chat",
+            "U_SCRAPE",
+            calendar_service=scrape_flow._calendar_service,
+        )
+
+        # Confirm and save
+        handled = await scrape_flow.handle_scrape_reminder_response(
+            mock_event,
+            "done",
             mock_line_api,
             "scrape_chat",
             "U_SCRAPE",
@@ -986,9 +1017,20 @@ class TestSCRAPE_SELECTINGScrapeFlowBatch:
 
         scrape_flow._calendar_service.add_event_async = AsyncMock()
 
-        handled = await scrape_flow.handle_scrape_reminder_response(
+        # Choose '3' reminder days
+        await scrape_flow.handle_scrape_reminder_response(
             mock_event,
             "3",
+            mock_line_api,
+            "scrape_chat",
+            "U_SCRAPE",
+            calendar_service=scrape_flow._calendar_service,
+        )
+
+        # Confirm and save
+        handled = await scrape_flow.handle_scrape_reminder_response(
+            mock_event,
+            "done",
             mock_line_api,
             "scrape_chat",
             "U_SCRAPE",
@@ -1018,9 +1060,10 @@ class TestSCRAPE_SELECTINGScrapeFlowBatch:
         )
         scrape_flow._calendar_service.add_event_async = AsyncMock()
 
+        # Non-owner done should fail
         handled = await scrape_flow.handle_scrape_reminder_response(
             mock_event,
-            "all",
+            "done",
             mock_line_api,
             "scrape_chat",
             "U_OTHER",
@@ -1036,9 +1079,10 @@ class TestSCRAPE_SELECTINGScrapeFlowBatch:
         assert session is not None
         session.scrape_preview_revision += 1
 
+        # Stale revision done should fail
         handled = await scrape_flow.handle_scrape_reminder_response(
             mock_event,
-            "all",
+            "done",
             mock_line_api,
             "scrape_chat",
             "U_SCRAPE",
@@ -1050,6 +1094,7 @@ class TestSCRAPE_SELECTINGScrapeFlowBatch:
         assert (
             "stale" in scrape_flow.send_message.await_args.args[2].lower()
             or "expired" in scrape_flow.send_message.await_args.args[2].lower()
+            or "no longer valid" in scrape_flow.send_message.await_args.args[2].lower()
         )
 
     @pytest.mark.asyncio
@@ -1233,6 +1278,10 @@ async def test_agent_rejects_followup_after_scrape_completion_explicitly():
     completed = await agent.handle(event, "all", MagicMock())
 
     assert completed is True
+    assert calendar_session_manager.get_session("user_U_SCRAPE").state == CalendarState.SCRAPE_REMINDER_DAYS
+
+    completed_done = await agent.handle(event, "done", MagicMock())
+    assert completed_done is True
     assert calendar_session_manager.get_session("user_U_SCRAPE") is None
 
     should_handle = await agent.should_handle(event, "1,3")
@@ -1312,6 +1361,10 @@ async def test_agent_accepts_prefixed_scrape_reminder_followup():
     handled = await agent.handle(event, "Ms. Green 3", MagicMock())
 
     assert handled is True
+
+    completed = await agent.handle(event, "Ms. Green done", MagicMock())
+    assert completed is True
+
     added_reminder_days = [
         call.kwargs["reminder_days"] for call in agent.scrape_flow._calendar_service.add_event_async.await_args_list
     ]

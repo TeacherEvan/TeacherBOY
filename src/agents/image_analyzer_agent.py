@@ -449,6 +449,46 @@ class ImageAnalyzerAgent(BaseAgent):
                 await image_analyzer_session_manager.clear_session(chat_id)
                 return False
 
+    async def _generate_creative_debrief(self, image_data: str) -> str:
+        """Generate a creative first-person journal entry from the image."""
+        bangkok_tz = ZoneInfo("Asia/Bangkok")
+        date_str = datetime.now(bangkok_tz).strftime("%d/%m")
+        prompt = (
+            "You are an expert creative journal writer. Write a professional and engaging journal entry based on this image.\n\n"
+            "CRITICAL CONSTRAINTS:\n"
+            "1. Write in the first person (\"I\") as if the user is directly responsible for and involved in the photo. "
+            "Roleplay as the creator/owner of the scene (e.g., if a steak is shown, roleplay as the user who cooked and ate it).\n"
+            f"2. Include the date at the very top in format \"Date DD/MM\" (where DD/MM is {date_str}).\n"
+            "3. Include at least 5 creatively created timestamps in the entry describing the process, journey, or timeline surrounding the image "
+            "(e.g., \"at 08h48: I was in the mood to cook...\", \"at 09h45: Steak was done...\", \"at 10h00: ate the steak\").\n"
+            "4. Provide an imaginative description of the item/scene, detailing how the user prepared it (role-playing, creative, not necessarily literal or accurate).\n"
+            "5. The output should consist ONLY of the journal entry. Do not add standard bot headers, greetings to parents, closing signatures, or extra explanations."
+        )
+
+        messages = [
+            {
+                "role": "system",
+                "content": "You are an expert creative journal writer. You write only the raw journal entry under the requested constraints, with no headers, greetings, signatures, or assistant chit-chat."
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": image_data}}
+                ]
+            }
+        ]
+
+        logger.info("📖 Generating creative debrief via vision LLM fallback")
+        debrief_text = await chat_completion_with_vision_fallback(
+            messages=messages,
+            temperature=0.7,
+            max_tokens=2000,
+        )
+        if not debrief_text:
+            raise ValueError("Failed to generate creative journal entry from image.")
+        return debrief_text
+
     async def _process_direct_debrief(
         self,
         event: MessageEvent,
@@ -462,21 +502,14 @@ class ImageAnalyzerAgent(BaseAgent):
 
         await self._send_analyzing_message(event, line_bot_api)
 
-        # Use DebriefExtractionService for structured extraction
+        # Generate creative debrief
         try:
-            debrief = await _debrief_extraction_service.extract_from_image(
-                image_url_or_base64=image_data,
-                chat_id=chat_id,
-                date_str=datetime.now().strftime("%Y-%m-%d"),
-            )
+            formatted_msg = await self._generate_creative_debrief(image_data)
         except Exception as e:
             logger.error(f"❌ Debrief extraction failed: {e}")
             await self._send_error_message(event, line_bot_api, "Failed to analyze the image for debrief.")
             await image_analyzer_session_manager.clear_session(chat_id)
             return False
-
-        # Format using the new daily debrief formatter
-        formatted_msg = DebriefFormatter.format_daily_debrief(debrief)
 
         # Send via push (reply token already used for "analyzing" message)
         group_id = getattr(event.source, "group_id", None) if event.source else None
@@ -862,23 +895,16 @@ class ImageAnalyzerAgent(BaseAgent):
 
         # Build vision message
         if analysis_mode == "debrief":
-            # Use DebriefExtractionService for structured extraction
+            # Generate creative debrief
             try:
                 start_time = datetime.now(UTC)
-                debrief = await _debrief_extraction_service.extract_from_image(
-                    image_url_or_base64=image_data,
-                    chat_id=chat_id,
-                    date_str=datetime.now().strftime("%Y-%m-%d"),
-                )
+                formatted_msg = await self._generate_creative_debrief(image_data)
                 duration_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
             except Exception as e:
                 logger.error(f"❌ Debrief extraction failed: {e}")
                 await self._send_error_message(event, line_bot_api, "Failed to analyze the image for debrief.")
                 await image_analyzer_session_manager.clear_session(chat_id)
                 return False
-
-            # Format using the new daily debrief formatter
-            formatted_msg = DebriefFormatter.format_daily_debrief(debrief)
 
             # Save image metadata to HF (if enabled)
             if hasattr(image_analyzer_session_manager, "save_image_metadata"):
