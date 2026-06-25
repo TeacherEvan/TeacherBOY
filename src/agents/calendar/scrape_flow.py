@@ -485,10 +485,13 @@ class ScrapeFlow(CalendarFlowBase):
             )
             return
 
+        # Transition state to SCRAPE_REMINDER_DAYS
+        session.state = CalendarState.SCRAPE_REMINDER_DAYS
+
         # Initialize default pending reminder days if not set
         if session.pending_reminder_days is None:
             session.pending_reminder_days = [7, 3, 1]
-            session.update()
+        session.update()
 
         days = session.pending_reminder_days
 

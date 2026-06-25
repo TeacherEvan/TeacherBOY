@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from linebot.v3.messaging import (
@@ -9,6 +10,7 @@ from linebot.v3.messaging import (
     Configuration,
     MessagingApi,
     MessagingApiBlob,
+    PushMessageRequest,
     ReplyMessageRequest,
     TextMessage,
 )
@@ -47,7 +49,37 @@ class DocumentMemoryAgent(BaseAgent):
 
         if isinstance(event.message, TextMessageContent):
             prefix, rest = get_bot_identity_service().split_command_prefix(text)
-            return prefix is not None and rest.strip().lower().startswith("doc")
+            if prefix is None:
+                return False
+
+            rest_clean = rest.strip()
+            rest_lower = rest_clean.lower()
+
+            # Direct doc commands
+            if (
+                rest_lower.startswith("doc") or
+                rest_lower.startswith("analyze doc ") or
+                rest_lower.startswith("summarize doc ") or
+                rest_lower.startswith("doc analyze ") or
+                rest_lower.startswith("doc summarize ")
+            ):
+                return True
+
+            # Direct analyze/summarize followed by document ID/Name check
+            if rest_lower.startswith("analyze ") or rest_lower.startswith("summarize "):
+                parts = rest_clean.split(None, 1)
+                if len(parts) > 1:
+                    target = parts[1].strip()
+                    chat_id = self._get_chat_id(event)
+                    # Check if target is a valid doc ID (hex 32 chars)
+                    if re.match(r"^[a-f0-9]{32}$", target.lower()):
+                        doc_meta = await self._document_service.get_document(chat_id, target)
+                        if doc_meta:
+                            return True
+                    # Check if target matches doc file name fuzzy
+                    matches = self._document_service.find_by_name(chat_id, target)
+                    if matches:
+                        return True
 
         return False
 
@@ -110,7 +142,7 @@ class DocumentMemoryAgent(BaseAgent):
                 await self._send_reply(
                     event,
                     line_bot_api,
-                    "⚠️ Unsupported file type. Please upload PDF or DOCX only.",
+                    "⚠️ Unsupported file type. Please upload PDF, DOCX, or Excel only.",
                 )
                 return True
             await self._send_reply(event, line_bot_api, "❌ Failed to store document.")
@@ -143,6 +175,89 @@ class DocumentMemoryAgent(BaseAgent):
 
         rest = rest.strip()
         rest_lower = rest.lower()
+
+        # Check for analyze/summarize commands
+        target_doc = None
+        is_analyze = False
+
+        if rest_lower.startswith("analyze doc "):
+            target_doc = rest[len("analyze doc "):].strip()
+            is_analyze = True
+        elif rest_lower.startswith("summarize doc "):
+            target_doc = rest[len("summarize doc "):].strip()
+            is_analyze = True
+        elif rest_lower.startswith("doc analyze "):
+            target_doc = rest[len("doc analyze "):].strip()
+            is_analyze = True
+        elif rest_lower.startswith("doc summarize "):
+            target_doc = rest[len("doc summarize "):].strip()
+            is_analyze = True
+        elif rest_lower.startswith("analyze "):
+            target_doc = rest[len("analyze "):].strip()
+            is_analyze = True
+        elif rest_lower.startswith("summarize "):
+            target_doc = rest[len("summarize "):].strip()
+            is_analyze = True
+
+        if is_analyze and target_doc:
+            text_content = self._document_service.get_document_text(chat_id, target_doc)
+            doc_name = target_doc
+
+            if text_content is None:
+                # Fuzzy match by name
+                matches = self._document_service.find_by_name(chat_id, target_doc)
+                if matches:
+                    first_match = matches[0]
+                    doc_id = first_match.get("id")
+                    doc_name = first_match.get("file_name", target_doc)
+                    text_content = self._document_service.get_document_text(chat_id, doc_id)
+
+            if text_content is None:
+                await self._send_reply(event, line_bot_api, f"❌ Document not found: {target_doc}")
+                return True
+
+            # Send initial confirmation
+            await self._send_reply(event, line_bot_api, f"⏳ Summarizing and analyzing '{doc_name}'...")
+
+            # Call LLM fallback chain
+            from src.utils.llm_fallback import chat_completion_with_fallback
+
+            prompt = (
+                f"You are Ms. Green. Please analyze and summarize the following document content.\n"
+                f"Document Name: {doc_name}\n\n"
+                f"--- Start Content ---\n"
+                f"{text_content}\n"
+                f"--- End Content ---\n\n"
+                f"Under the following constraints, formulate a helpful and structured response for the user:\n"
+                f"1. Summarize the main topics, key themes, and important details of the document.\n"
+                f"2. Keep the summary professional, clear, and easy to read."
+            )
+
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are Ms. Green. You analyze and summarize document contents clearly and concisely for the user."
+                },
+                {"role": "user", "content": prompt}
+            ]
+
+            summary = await chat_completion_with_fallback(messages, temperature=0.7)
+            if not summary:
+                summary = "❌ Failed to generate document analysis. Please try again."
+
+            # Push the final result
+            source = getattr(event, "source", None)
+            target = getattr(source, "group_id", None) or getattr(source, "room_id", None) or getattr(source, "user_id", None)
+            if target:
+                await asyncio.to_thread(
+                    line_bot_api.push_message,
+                    PushMessageRequest(
+                        to=target,
+                        messages=[TextMessage(text=summary)],
+                        notificationDisabled=False,
+                    )
+                )
+            return True
 
         if rest_lower in ("docs", "docs list", "doc list"):
             docs = self._document_service.list_documents(chat_id)

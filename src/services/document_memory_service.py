@@ -33,6 +33,7 @@ DOC_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 SUPPORTED_EXTENSIONS = {
     ".pdf": "application/pdf",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 
 
@@ -204,6 +205,27 @@ class DocumentMemoryService(HFStorageMixin):
                 return "\n".join(p.text for p in doc.paragraphs if p.text)
             except Exception as e:
                 logger.warning(f"⚠️ DOCX extraction failed: {e}")
+                return ""
+
+        if ext == ".xlsx":
+            try:
+                import io
+
+                import openpyxl
+
+                wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+                parts = []
+                for sheet in wb.worksheets:
+                    sheet_text = []
+                    for row in sheet.iter_rows(values_only=True):
+                        row_text = [str(cell) for cell in row if cell is not None]
+                        if row_text:
+                            sheet_text.append(" | ".join(row_text))
+                    if sheet_text:
+                        parts.append(f"--- Sheet: {sheet.title} ---\n" + "\n".join(sheet_text))
+                return "\n\n".join(parts)
+            except Exception as e:
+                logger.warning(f"⚠️ Excel extraction failed: {e}")
                 return ""
 
         return ""

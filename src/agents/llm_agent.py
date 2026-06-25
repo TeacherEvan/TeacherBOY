@@ -450,6 +450,38 @@ class LLMAgent(BaseAgent):
         if not query:
             return False
 
+        # Check for video link analysis command
+        from src.services.video_link_analyzer_service import video_link_analyzer_service
+        is_video_analysis = False
+        video_url = None
+        query_lower = query.strip().lower()
+
+        if video_link_analyzer_service.has_video_link(query):
+            if query_lower.startswith(("analyze", "summarize", "examine", "look at")):
+                video_url = video_link_analyzer_service.extract_video_link(query)
+                is_video_analysis = True
+
+        if query_lower in ("analyze", "analyze this", "summarize", "summarize this", "analyze video", "summarize video"):
+            chat_id = self._get_chat_id(event)
+            memory = get_conversation_memory()
+            if memory:
+                messages = await memory.get_context_messages(chat_id)
+                for msg in reversed(messages):
+                    content = msg.get("content", "")
+                    if msg.get("role") == "user" and video_link_analyzer_service.has_video_link(content):
+                        video_url = video_link_analyzer_service.extract_video_link(content)
+                        is_video_analysis = True
+                        break
+
+        if is_video_analysis and video_url:
+            await self._send_reply(event, line_bot_api, "⏳ Summarizing and analyzing video link...")
+            summary = await video_link_analyzer_service.analyze_video_link(video_url)
+            if summary:
+                await self._send_reply(event, line_bot_api, summary)
+            else:
+                await self._send_reply(event, line_bot_api, "❌ Failed to analyze the video link.")
+            return True
+
         user_id = getattr(event.source, "user_id", None) if event.source else None
         is_private = self._is_private_chat(event)
         is_admin = privilege_service.is_admin(user_id)

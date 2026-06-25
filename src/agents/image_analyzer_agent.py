@@ -383,7 +383,55 @@ class ImageAnalyzerAgent(BaseAgent):
 
         # Case 5: Trigger phrase - start session (lowest priority, only if no active session)
         if message_type == "text" and text and self._is_trigger(text):
+            command_text = self._strip_identity_prefix(text)
+            if await self._is_doc_or_video_command(event, command_text, chat_id):
+                return False
             return True
+
+        return False
+
+    async def _is_doc_or_video_command(self, event: MessageEvent, command_text: str, chat_id: str) -> bool:
+        cmd_lower = command_text.strip().lower()
+
+        # 1. Document command check
+        if (
+            cmd_lower.startswith("doc") or
+            cmd_lower.startswith("analyze doc ") or
+            cmd_lower.startswith("summarize doc ") or
+            cmd_lower.startswith("doc analyze ") or
+            cmd_lower.startswith("doc summarize ")
+        ):
+            return True
+
+        if cmd_lower.startswith("analyze ") or cmd_lower.startswith("summarize "):
+            parts = command_text.strip().split(None, 1)
+            if len(parts) > 1:
+                target = parts[1].strip()
+                from src.services.document_memory_service import get_document_memory
+                doc_service = get_document_memory()
+                if doc_service:
+                    if doc_service.find_by_name(chat_id, target):
+                        return True
+                    if re.match(r"^[a-f0-9]{32}$", target.lower()):
+                        doc_meta = await doc_service.get_document(chat_id, target)
+                        if doc_meta:
+                            return True
+
+        # 2. Video command check (contains video link)
+        from src.services.video_link_analyzer_service import video_link_analyzer_service
+        if video_link_analyzer_service.has_video_link(command_text):
+            return True
+
+        # 3. Video command check ("analyze this" when recent history has video link)
+        if cmd_lower in ("analyze", "analyze this", "analyze video"):
+            from src.services.conversation_memory_service import get_conversation_memory
+            memory = get_conversation_memory()
+            if memory:
+                messages = await memory.get_context_messages(chat_id)
+                # Look at the most recent messages (e.g. last 3 messages)
+                for msg in reversed(messages[-3:]):
+                    if msg.get("role") == "user" and video_link_analyzer_service.has_video_link(msg.get("content", "")):
+                        return True
 
         return False
 

@@ -37,6 +37,7 @@ huggingface-hub==0.23.0
 # Document parsing
 pypdf==4.2.0
 python-docx==1.1.2
+openpyxl==3.1.2
 
 # Job-oriented Daily Journal tools
 easyocr==1.7.1
