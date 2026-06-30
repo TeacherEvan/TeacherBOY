@@ -307,3 +307,61 @@ async def test_should_handle_modmode_special_with_trailing_punctuation(agent, mo
     with patch("src.services.privilege_service.privilege_service.is_admin", return_value=True):
         result = await agent.should_handle(event, "/modmode special @U123...")
         assert result is True
+
+
+@pytest.fixture
+def agent_none_services():
+    return ModModeAgent(
+        mod_mode_service=None,
+        ban_list_service=None,
+        warning_service=None,
+        harmful_detector=None,
+        audit_log=None,
+        dashboard_builder=MagicMock(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_should_handle_commands_when_services_are_none(agent_none_services, event_factory):
+    # Activation command should still be handled (to show the service unavailable error message)
+    event1 = event_factory("activate mod mode", user_id="U456", group_id="C123")
+    with patch("src.services.privilege_service.privilege_service.is_admin", return_value=True):
+        assert await agent_none_services.should_handle(event1, "activate mod mode") is True
+
+    # Any /modmode command should be handled if admin
+    event2 = event_factory("/modmode dashboard", user_id="U456", group_id="C123")
+    with patch("src.services.privilege_service.privilege_service.is_admin", return_value=True):
+        assert await agent_none_services.should_handle(event2, "/modmode dashboard") is True
+
+
+@pytest.mark.asyncio
+async def test_handle_commands_when_services_are_none(agent_none_services, event_factory):
+    event = event_factory("/modmode dashboard", user_id="U456", group_id="C123")
+    line_bot_api = MagicMock()
+    with patch.object(agent_none_services, "_reply", new_callable=AsyncMock) as mock_reply:
+        with patch("src.services.privilege_service.privilege_service.is_admin", return_value=True):
+            result = await agent_none_services.handle(event, "/modmode dashboard", line_bot_api)
+            assert result is True
+            mock_reply.assert_called_once()
+            args, _ = mock_reply.call_args
+            assert "unavailable" in args[1].lower() or "not configured" in args[1].lower()
+
+
+@pytest.mark.asyncio
+async def test_warn_user_handles_none_audit(event_factory):
+    mock_warnings = AsyncMock()
+    mock_warnings.warn_user.return_value = {"count": 1, "should_ban": False, "reason": "spam"}
+    agent_no_audit = ModModeAgent(
+        mod_mode_service=AsyncMock(),
+        ban_list_service=AsyncMock(),
+        warning_service=mock_warnings,
+        harmful_detector=AsyncMock(),
+        audit_log=None,
+        dashboard_builder=MagicMock(),
+    )
+    event = event_factory("hello", user_id="U999", group_id="C123")
+    with patch.object(agent_no_audit, "_reply", new_callable=AsyncMock) as mock_reply:
+        res = await agent_no_audit._warn_user(event, "C123", "U999", MagicMock(), "spam")
+        assert res is True
+        mock_reply.assert_called_once()
+

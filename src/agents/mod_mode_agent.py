@@ -74,6 +74,10 @@ class ModModeAgent(BaseAgent):
             return is_admin
 
         if self._mod_mode is None:
+            if text.strip().lower().startswith("/modmode"):
+                is_admin = await self._is_admin(user_id)
+                logger.info(f"🔍 ModModeAgent: /modmode command detected (services None), is_admin={is_admin}")
+                return is_admin
             logger.warning("🔍 ModModeAgent: mod_mode service is None, cannot check mod mode, returning False")
             return False
 
@@ -106,6 +110,14 @@ class ModModeAgent(BaseAgent):
         user_id = getattr(source, "user_id", None)
 
         logger.info(f"🔧 ModModeAgent.handle: user={user_id}, group={group_id}, text='{text[:50]}'")
+
+        if self._mod_mode is None or self._ban_list is None or self._warnings is None:
+            await self._reply(
+                event,
+                "❌ Moderator Mode services are currently unavailable. Please verify that Convex is configured correctly.",
+                line_bot_api,
+            )
+            return True
 
         try:
             if self._is_activation_command(text):
@@ -175,7 +187,8 @@ class ModModeAgent(BaseAgent):
                 return True
 
         await self._mod_mode.activate_mod_mode(group_id, user_id, mode, special_user_id)
-        await self._audit.log_mode_change(group_id, user_id, mode, True, special_user_id)
+        if self._audit:
+            await self._audit.log_mode_change(group_id, user_id, mode, True, special_user_id)
 
         mode_msg = (
             "ALL USERS (normal chat, harmful content monitored)"
@@ -216,7 +229,8 @@ class ModModeAgent(BaseAgent):
 
         if subcmd == "all":
             await self._mod_mode.activate_mod_mode(group_id, user_id, "all")
-            await self._audit.log_mode_change(group_id, user_id, "all", True)
+            if self._audit:
+                await self._audit.log_mode_change(group_id, user_id, "all", True)
             await self._reply(event, "✅ Mod mode: ALL USERS (normal chat, harmful content monitored)", line_bot_api)
             return True
 
@@ -234,13 +248,15 @@ class ModModeAgent(BaseAgent):
                 return True
 
             await self._mod_mode.set_special_user(group_id, special_id)
-            await self._audit.log_mode_change(group_id, user_id, "special", True, special_id)
+            if self._audit:
+                await self._audit.log_mode_change(group_id, user_id, "special", True, special_id)
             await self._reply(event, f"✅ Mod mode: SPECIAL (only admin + @{special_id} can speak)", line_bot_api)
             return True
 
         if subcmd == "off":
             await self._mod_mode.deactivate_mod_mode(group_id)
-            await self._audit.log_mode_change(group_id, user_id, "all", False)
+            if self._audit:
+                await self._audit.log_mode_change(group_id, user_id, "all", False)
             await self._reply(event, "🛑 Moderator Mode DEACTIVATED", line_bot_api)
             return True
 
@@ -281,7 +297,8 @@ class ModModeAgent(BaseAgent):
         try:
             if hasattr(line_bot_api, "kick_users"):
                 line_bot_api.kick_users(group_id, [user_id])
-            await self._audit.log_kick(group_id, user_id, "system", reason)
+            if self._audit:
+                await self._audit.log_kick(group_id, user_id, "system", reason)
             logger.info(f"👢 Kicked banned user {user_id} from {group_id} (reason: {reason})")
             return True
         except Exception as e:
@@ -291,10 +308,12 @@ class ModModeAgent(BaseAgent):
     async def _warn_user(self, event, group_id: str, user_id: str, line_bot_api: MessagingApi, reason: str) -> bool:
         result = await self._warnings.warn_user(group_id, user_id, "system", reason)
         count = result["count"]
-        await self._audit.log_warn(group_id, user_id, "system", reason, count)
+        if self._audit:
+            await self._audit.log_warn(group_id, user_id, "system", reason, count)
 
         if result["should_ban"]:
-            await self._audit.log_ban(group_id, user_id, "system", f"Auto-ban after {count} warnings")
+            if self._audit:
+                await self._audit.log_ban(group_id, user_id, "system", f"Auto-ban after {count} warnings")
             await self._kick_user(group_id, user_id, line_bot_api, f"Auto-ban ({count} warnings)")
             await self._reply(event, f"🔨 @{user_id} BANNED after {count} warnings", line_bot_api)
         else:
@@ -333,7 +352,8 @@ class ModModeAgent(BaseAgent):
                     return True
 
         success = await self._kick_user(group_id, target_user_id, line_bot_api, "Kicked via /modmode kick")
-        await self._audit.log_kick(group_id, target_user_id, admin_id, "Kicked via /modmode kick")
+        if self._audit:
+            await self._audit.log_kick(group_id, target_user_id, admin_id, "Kicked via /modmode kick")
         if success:
             await self._reply(event, f"👢 Kicked @{target_user_id}", line_bot_api)
         else:
@@ -362,10 +382,12 @@ class ModModeAgent(BaseAgent):
 
         result = await self._warnings.warn_user(group_id, target_user_id, admin_id, reason)
         count = result["count"]
-        await self._audit.log_warn(group_id, target_user_id, admin_id, reason, count)
+        if self._audit:
+            await self._audit.log_warn(group_id, target_user_id, admin_id, reason, count)
 
         if result["should_ban"]:
-            await self._audit.log_ban(group_id, target_user_id, admin_id, f"Auto-ban after {count} warnings")
+            if self._audit:
+                await self._audit.log_ban(group_id, target_user_id, admin_id, f"Auto-ban after {count} warnings")
             await self._kick_user(group_id, target_user_id, line_bot_api, f"Auto-ban ({count} warnings)")
             await self._reply(event, f"🔨 @{target_user_id} BANNED after {count} warnings", line_bot_api)
         else:
@@ -394,9 +416,11 @@ class ModModeAgent(BaseAgent):
             return True
 
         await self._ban_list.ban_user(group_id, target_user_id, admin_id, reason)
-        await self._audit.log_ban(group_id, target_user_id, admin_id, reason)
+        if self._audit:
+            await self._audit.log_ban(group_id, target_user_id, admin_id, reason)
         await self._kick_user(group_id, target_user_id, line_bot_api, reason)
-        await self._audit.log_kick(group_id, target_user_id, admin_id, reason)
+        if self._audit:
+            await self._audit.log_kick(group_id, target_user_id, admin_id, reason)
         await self._reply(event, f"🔨 Banned and kicked @{target_user_id}: {reason}", line_bot_api)
         return True
 
@@ -420,7 +444,8 @@ class ModModeAgent(BaseAgent):
 
         success = await self._ban_list.unban_user(group_id, target_user_id)
         if success:
-            await self._audit.log_mode_change(group_id, admin_id, "unban", True, target_user_id)
+            if self._audit:
+                await self._audit.log_mode_change(group_id, admin_id, "unban", True, target_user_id)
             await self._reply(event, f"✅ Unbanned @{target_user_id}", line_bot_api)
         else:
             await self._reply(event, "❌ Failed to unban @{target_user_id} (not found?)", line_bot_api)

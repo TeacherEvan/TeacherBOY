@@ -14,6 +14,7 @@ def text_event():
     event.source.user_id = "UUSER"
     event.source.group_id = None
     event.source.room_id = None
+    event.reply_token = "test_reply_token"
     return event
 
 
@@ -68,7 +69,7 @@ async def test_document_memory_agent_handle_command_analyze(text_event):
     
     line_bot_api = MagicMock()
     
-    with patch("src.agents.document_memory_agent.chat_completion_with_fallback", new_callable=AsyncMock) as mock_llm:
+    with patch("src.utils.llm_fallback.chat_completion_with_fallback", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = "Summary of document."
         
         result = await agent.handle(text_event, "Ms. Green analyze doc 123", line_bot_api)
