@@ -238,14 +238,15 @@ When a banned user tries to rejoin:
 | `AUTO_KICK_REJOIN` | groupId, targetUserId |
 | `HARMFUL_DETECTED` | groupId, userId, text, classification, action |
 
-### Querying
-```bash
-# View today's audit log
-huggingface-cli download <HF_MEMORY_REPO> mod_audit/mod_audit_2026-06-12.jsonl --repo-type dataset
+### Querying and Decryption
 
-# Or via Python
-from huggingface_hub import hf_hub_download
-path = hf_hub_download(repo_id="...", filename="mod_audit/mod_audit_2026-06-12.jsonl", repo_type="dataset")
+Moderator mode audit logs are automatically buffered locally under `./data/mod_audit` and synced to Hugging Face Hub every 5 minutes (and on application shutdown) using a `CommitScheduler`.
+
+If log encryption is enabled via `HISTORY_LOG_ENCRYPTION_KEY`, the entries will be stored encrypted. You can use the decryption utility script to download and decrypt the logs:
+
+```bash
+# Run the log decryption utility (prompts for the key if not set in env)
+./scripts/decrypt_logs.py --repo EvilEvan/TeacherBOY-logs --out ./data/logs/decrypted
 ```
 
 ---

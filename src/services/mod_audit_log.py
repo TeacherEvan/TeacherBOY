@@ -5,20 +5,35 @@ import logging
 import os
 import time
 from datetime import datetime
+from pathlib import Path
 
-from huggingface_hub import HfApi
+from src.services.hf_storage_mixin import HFStorageMixin
 
 logger = logging.getLogger(__name__)
 
 
-class ModAuditLog:
+class ModAuditLog(HFStorageMixin):
     """Append-only audit log to HF Hub dataset."""
 
     def __init__(self, token: str, repo_id: str, local_path: str = "./data/mod_audit"):
-        self._api = HfApi(token=token)
+        self.hf_token = token
+        self.hf_repo_id = repo_id
+        self.storage_path = Path(local_path)
+        self.hf_sync_interval = 5
+        self.hf_squash_history = False
+        self.hf_path_in_repo = "mod_audit"
+        self._hf_enabled = bool(token and repo_id)
+
+        super().__init__()
         self._repo_id = repo_id
         self._local_path = local_path
         self._init_local_dir()
+
+        if self._hf_enabled:
+            self._setup_hf_storage()
+            self._api = self._hf_api
+        else:
+            self._api = None
 
     def _init_local_dir(self):
         """Initialize local directory for JSONL files."""
@@ -118,7 +133,8 @@ class ModAuditLog:
         )
 
     def close(self):
-        """Flush and close (placeholder for future CommitScheduler integration)."""
+        """Flush and close CommitScheduler."""
+        self.stop_hf_storage()
         logger.info("📜 ModAuditLog closed")
 
 

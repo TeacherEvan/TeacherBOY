@@ -704,11 +704,9 @@ class ScrapeFlow(CalendarFlowBase):
         # ----------------------------------------------------
         if session.state == CalendarState.SCRAPE_REVIEWING:
             if text_lower == "add all":
-                session.selected_scraped_indices = list(range(len(session.scraped_events)))
-                session.scrape_selection_revision += 1
-                session.state = CalendarState.SCRAPE_SELECTING
-                calendar_session_manager.finalize_scrape_selection(active_chat_id)
-                await self.prompt_scrape_reminders(event, line_bot_api, active_chat_id, discrete_target)
+                await self.handle_add_all_scraped_events(
+                    event, line_bot_api, active_chat_id, user_id, self._calendar_service
+                )
                 return True
             elif text_lower == "add individual":
                 session.state = CalendarState.SCRAPE_SELECTING

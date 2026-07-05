@@ -448,6 +448,56 @@ async def test_discrete_group_scrape_can_be_completed_from_requester_dm():
 
 
 @pytest.mark.asyncio
+async def test_scrape_flow_add_all_directly_adds_all_events():
+    from datetime import date
+    flow = ScrapeFlow(calendar_service=MagicMock())
+    flow.send_message = AsyncMock()
+    flow.send_message_with_quick_reply = AsyncMock()
+    flow._calendar_service.add_event_async = AsyncMock()
+
+    dm_event = MagicMock()
+    dm_event.reply_token = "dm-reply"
+    dm_event.source = MagicMock()
+    dm_event.source.user_id = "U_REQ"
+    dm_event.source.type = "user"
+
+    line_api = MagicMock()
+    line_api.push_message = MagicMock()
+    line_api.reply_message = MagicMock()
+
+    calendar_session_manager.start_scrape_flow(
+        "group_G1",
+        "U_REQ",
+        ["First event on 2026-06-05", "Second event on 2026-06-06"],
+        is_friend=True,
+    )
+    calendar_session_manager.set_discrete_scrape_target("group_G1", "U_REQ")
+    
+    events_data = [
+        {"date": date(2026, 6, 5), "title": "First event", "description": "", "source_text": "First event on 2026-06-05", "confidence": "high"},
+        {"date": date(2026, 6, 6), "title": "Second event", "description": "", "source_text": "Second event on 2026-06-06", "confidence": "high"},
+    ]
+    calendar_session_manager.set_scraped_events("group_G1", events_data)
+
+    session = calendar_session_manager.get_session("group_G1")
+    session.state = CalendarState.SCRAPE_REVIEWING
+    session.update()
+
+    handled = await flow.handle_scrape_review_response(
+        dm_event,
+        "add all",
+        line_api,
+        "user_U_REQ",
+        "U_REQ",
+    )
+
+    assert handled is True
+    assert flow._calendar_service.add_event_async.await_count == 2
+    assert calendar_session_manager.get_session("group_G1") is None
+
+
+
+@pytest.mark.asyncio
 async def test_calendar_agent_routes_discrete_dm_scrape_followups():
     agent = CalendarAgent()
     agent.scrape_flow.handle_scrape_review_response = AsyncMock(return_value=True)

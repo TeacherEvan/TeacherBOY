@@ -15,8 +15,8 @@ def _make_async_mock(return_value):
 
 @pytest.fixture
 def mock_hf():
-    with patch("src.services.mod_audit_log.HfApi") as mock:
-        yield mock
+    with patch("huggingface_hub.HfApi") as mock_api, patch("huggingface_hub.CommitScheduler") as mock_sched:
+        yield mock_api, mock_sched
 
 
 @pytest.fixture
@@ -50,3 +50,32 @@ async def test_log_ban(audit_log):
 async def test_log_mode_change(audit_log):
     with patch("src.services.mod_audit_log.open", MagicMock()):
         await audit_log.log_mode_change("C123", "U456", "all", True)
+
+
+def test_mod_audit_log_hf_integration(mock_hf):
+    from pathlib import Path
+    mock_api_cls, mock_sched_cls = mock_hf
+
+    with patch("src.services.mod_audit_log.os.makedirs"):
+        log = ModAuditLog(token="test_token", repo_id="test/repo", local_path="./test_mod_audit")
+
+        assert log.hf_token == "test_token"
+        assert log.hf_repo_id == "test/repo"
+        assert log.storage_path == Path("./test_mod_audit")
+        assert log.hf_sync_interval == 5
+        assert log.hf_squash_history is False
+        assert log.hf_path_in_repo == "mod_audit"
+        assert log._hf_enabled is True
+
+        mock_api_cls.assert_called_once_with(token="test_token")
+        mock_api_cls.return_value.create_repo.assert_called_once_with(
+            repo_id="test/repo",
+            repo_type="dataset",
+            private=True,
+            exist_ok=True,
+        )
+        mock_sched_cls.assert_called_once()
+
+        log.close()
+        mock_sched_cls.return_value.stop.assert_called_once()
+

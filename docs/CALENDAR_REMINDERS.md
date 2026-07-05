@@ -184,13 +184,17 @@ Inputs that mix unsupported words and numbers are rejected instead of guessed.
 ## Scrape Recent Messages Flow
 
 1. **Trigger**: Send `Ms. Green scrape` or `Ms. Green scan`
-2. **Review**: Examine each proposed event first
-3. **Select**: Accept or skip events one by one, or use shortcuts
-4. **Batch selection**: Toggle numbered candidates with values like `1,3`
-5. **Reminders**: Choose one reminder profile for the selected batch
-6. **Confirm**: The selected events are added with the shared reminder choice
+2. **First Review Screen**: You are presented with a quick reply interface containing:
+   - **Add All / เพิ่มทั้งหมด**: Instantly adds all detected events to the calendar using default reminder settings (7 days, 3 days, 1 day before + day-of) and terminates the session.
+   - **Add Individual / เลือกเอง**: Proceeds to the itemized checkbox selection screen.
+   - **Cancel / ยกเลิก**: Cancels the scraping session.
+3. **Itemized Selection (if Add Individual is selected)**:
+   - Toggle numbered candidates with values like `1,3`.
+   - Use `all` / `none` shortcuts.
+   - Choose one reminder profile for the selected batch.
+   - Confirm by sending `done`.
 
-Useful scrape commands:
+Useful scrape commands in itemized selection:
 
 - `yes` / `no`
 - `all` / `none`
@@ -198,8 +202,8 @@ Useful scrape commands:
 
 Important scrape behavior:
 
-- Review starts one event at a time before batch selection begins.
-- Selection starts empty for safety; nothing is added until you explicitly choose candidates.
+- `Add All` adds all events immediately with default reminders.
+- `Add Individual` selection starts empty for safety; nothing is added until you explicitly choose candidates and type `done`.
 - `done` is rejected when nothing is selected.
 - Only the selected events are added after the reminder choice.
 - The reminder choice is shared across the whole selected batch.

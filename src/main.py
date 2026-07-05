@@ -744,6 +744,11 @@ async def lifespan(app: FastAPI):
         document_svc.stop()
         logger.info("✅ Document memory scheduler stopped")
 
+    from src.services.mod_audit_log import mod_audit_log
+    if mod_audit_log:
+        mod_audit_log.close()
+        logger.info("✅ Mod audit log scheduler stopped")
+
     await http_client_pool.aclose()
     logger.info("✅ HTTP client pool closed")
 
