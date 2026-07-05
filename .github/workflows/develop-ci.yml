@@ -1,13 +1,13 @@
-name: Main CI/CD
+name: Develop CI
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
   pull_request:
-    branches: [main]
+    branches: [develop]
 
 concurrency:
-  group: main-ci-${{ github.workflow }}-${{ github.ref }}
+  group: develop-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -64,52 +64,3 @@ jobs:
           LINE_CHANNEL_SECRET: test_secret
           LINE_CHANNEL_ACCESS_TOKEN: test_token
         run: pytest -v --tb=short
-
-  docker-build:
-    name: Validate Docker build
-    needs: unit-test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          tags: teacherboy:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  deploy:
-    name: Deploy to Hugging Face
-    needs: [unit-test, docker-build]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          lfs: true
-      - name: Push to Hugging Face Space
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          set -euo pipefail
-          export GIT_TERMINAL_PROMPT=0
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git remote remove hf >/dev/null 2>&1 || true
-          git remote add hf "https://TeacherEvan:${HF_TOKEN}@huggingface.co/spaces/EvilEvan/TeacherBOY" || true
-
-          git ls-remote hf >/dev/null 2>&1 || { echo "Missing HF_TOKEN or bad remote"; exit 1; }
-
-          remote_sha="$(git ls-remote hf refs/heads/main | awk '{print $1}')"
-          if [ -n "${remote_sha}" ]; then
-            git push --force-with-lease=refs/heads/main:${remote_sha} hf HEAD:main
-          else
-            git push hf HEAD:main
-          fi
