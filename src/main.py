@@ -87,7 +87,7 @@ from src.services.memory_monitor_service import (
 )
 from src.services.message_buffer_service import message_buffer_service
 from src.services.metrics_service import metrics_service
-from src.services.mod_audit_log import init_mod_audit_log, mod_audit_log
+from src.services.mod_audit_log import get_mod_audit_log, init_mod_audit_log
 from src.services.mod_mode_service import init_mod_mode_service
 from src.services.n1_detector import n1_detector, query_cache
 from src.services.news_session_manager import news_session_manager
@@ -540,7 +540,7 @@ async def lifespan(app: FastAPI):
         ban_list_service=ban_list_svc,
         warning_service=warning_svc,
         harmful_detector=harmful_content_detector,
-        audit_log=mod_audit_log,
+        audit_log=get_mod_audit_log(),
         dashboard_builder=mod_dashboard,
     )
     agent_router.register_agent(mod_mode_agent)
