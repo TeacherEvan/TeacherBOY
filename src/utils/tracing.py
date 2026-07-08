@@ -194,6 +194,6 @@ def create_span(name: str, attributes: dict | None = None):
         if attributes:
             for key, value in attributes.items():
                 # Convert non-primitives to strings for OTLP compatibility
-                attr_val = value if isinstance(value, (bool, int, float, str)) else str(value)
+                attr_val = value if isinstance(value, bool | int | float | str) else str(value)
                 span.set_attribute(key, attr_val)
         yield span

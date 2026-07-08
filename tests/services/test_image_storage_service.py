@@ -1,10 +1,10 @@
 """
 Tests for ImageStorageService — filesystem-based image lifecycle management.
 """
+
 from __future__ import annotations
 
 import json
-import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -25,6 +25,7 @@ FAKE_JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 100  # minimal JPEG-like bytes
 # ---------------------------------------------------------------------------
 # Directory namespacing
 # ---------------------------------------------------------------------------
+
 
 class TestDirectoryIsolation:
     def test_different_chats_get_different_directories(self, storage: ImageStorageService) -> None:
@@ -52,6 +53,7 @@ class TestDirectoryIsolation:
 # ---------------------------------------------------------------------------
 # Image storage and metadata
 # ---------------------------------------------------------------------------
+
 
 class TestStoreIncomingImage:
     def test_stores_jpeg_file(self, storage: ImageStorageService) -> None:
@@ -92,6 +94,7 @@ class TestStoreIncomingImage:
 # get_last_image
 # ---------------------------------------------------------------------------
 
+
 class TestGetLastImage:
     def test_returns_none_when_no_images(self, storage: ImageStorageService) -> None:
         result = storage.get_last_image("empty_chat", mark_enquired=False)
@@ -116,6 +119,7 @@ class TestGetLastImage:
 # ---------------------------------------------------------------------------
 # Cleanup logic
 # ---------------------------------------------------------------------------
+
 
 class TestCleanupOldImages:
     def _backdate_json(self, json_path: Path, hours_ago: float) -> None:

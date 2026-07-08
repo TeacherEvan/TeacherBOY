@@ -57,11 +57,11 @@ class DocumentMemoryAgent(BaseAgent):
 
             # Direct doc commands
             if (
-                rest_lower.startswith("doc") or
-                rest_lower.startswith("analyze doc ") or
-                rest_lower.startswith("summarize doc ") or
-                rest_lower.startswith("doc analyze ") or
-                rest_lower.startswith("doc summarize ")
+                rest_lower.startswith("doc")
+                or rest_lower.startswith("analyze doc ")
+                or rest_lower.startswith("summarize doc ")
+                or rest_lower.startswith("doc analyze ")
+                or rest_lower.startswith("doc summarize ")
             ):
                 return True
 
@@ -181,22 +181,22 @@ class DocumentMemoryAgent(BaseAgent):
         is_analyze = False
 
         if rest_lower.startswith("analyze doc "):
-            target_doc = rest[len("analyze doc "):].strip()
+            target_doc = rest[len("analyze doc ") :].strip()
             is_analyze = True
         elif rest_lower.startswith("summarize doc "):
-            target_doc = rest[len("summarize doc "):].strip()
+            target_doc = rest[len("summarize doc ") :].strip()
             is_analyze = True
         elif rest_lower.startswith("doc analyze "):
-            target_doc = rest[len("doc analyze "):].strip()
+            target_doc = rest[len("doc analyze ") :].strip()
             is_analyze = True
         elif rest_lower.startswith("doc summarize "):
-            target_doc = rest[len("doc summarize "):].strip()
+            target_doc = rest[len("doc summarize ") :].strip()
             is_analyze = True
         elif rest_lower.startswith("analyze "):
-            target_doc = rest[len("analyze "):].strip()
+            target_doc = rest[len("analyze ") :].strip()
             is_analyze = True
         elif rest_lower.startswith("summarize "):
-            target_doc = rest[len("summarize "):].strip()
+            target_doc = rest[len("summarize ") :].strip()
             is_analyze = True
 
         if is_analyze and target_doc:
@@ -236,9 +236,9 @@ class DocumentMemoryAgent(BaseAgent):
             messages = [
                 {
                     "role": "system",
-                    "content": "You are Ms. Green. You analyze and summarize document contents clearly and concisely for the user."
+                    "content": "You are Ms. Green. You analyze and summarize document contents clearly and concisely for the user.",
                 },
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ]
 
             summary = await chat_completion_with_fallback(messages, temperature=0.7)
@@ -255,7 +255,7 @@ class DocumentMemoryAgent(BaseAgent):
                         to=target,
                         messages=[TextMessage(text=summary)],
                         notificationDisabled=False,
-                    )
+                    ),
                 )
             return True
 

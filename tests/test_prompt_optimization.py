@@ -319,9 +319,9 @@ def test_metrics_cost_estimation():
     # 18K × $0.01 = $0.18
     expected_cost = 0.18
 
-    assert abs(cost_estimate["vision_cost_usd"] - expected_cost) < 0.01, (
-        f"Cost estimate {cost_estimate['vision_cost_usd']} != expected {expected_cost}"
-    )
+    assert (
+        abs(cost_estimate["vision_cost_usd"] - expected_cost) < 0.01
+    ), f"Cost estimate {cost_estimate['vision_cost_usd']} != expected {expected_cost}"
 
     assert cost_estimate["vision_tokens"] == 18000
 

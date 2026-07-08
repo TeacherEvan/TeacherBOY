@@ -1,5 +1,6 @@
 """Tests for SSRF guard utilities."""
 
+import socket
 from unittest.mock import patch
 
 import pytest
@@ -159,7 +160,3 @@ class TestAssertSafeURL:
         with patch("src.utils.ssrf_guard.resolve_all_ips", return_value=["8.8.8.8"]):
             result = assert_safe_url(url, allowed_hosts={"custom.api.example.com"})
             assert result == url
-
-
-# Need to import socket for mocking
-import socket

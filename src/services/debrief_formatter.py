@@ -58,13 +58,10 @@ class DebriefFormatter:
         lines.append("")
         lines.append("Dear Parents,")
         lines.append("")
-        lines.append(
-            "I hope this message finds you well and that your evening is off to a beautiful start. 😊"
-        )
+        lines.append("I hope this message finds you well and that your evening is off to a beautiful start. 😊")
         lines.append("")
         lines.append(
-            "Today our children had a wonderful day of discovery! "
-            "Here is a warm summary of what they experienced:"
+            "Today our children had a wonderful day of discovery! " "Here is a warm summary of what they experienced:"
         )
         lines.append("")
 
@@ -97,9 +94,7 @@ class DebriefFormatter:
                 "medium": ("🌱", "Good — most students understood well; gentle review may help."),
                 "low": ("🌿", "Developing — a new concept; continued nurturing will help."),
             }
-            comp_emoji, comp_text = comp_map.get(
-                period.comprehension_level, ("📊", period.comprehension_level.title())
-            )
+            comp_emoji, comp_text = comp_map.get(period.comprehension_level, ("📊", period.comprehension_level.title()))
             lines.append(f"• Comprehension: {comp_emoji} {comp_text}")
 
             if period.suggested_review:
@@ -116,8 +111,7 @@ class DebriefFormatter:
 
         # ── Closing ───────────────────────────────────────────────────────────
         lines.append(
-            "Wishing you all a peaceful and restful evening ahead. "
-            "Thank you for your continued love and trust. 💚"
+            "Wishing you all a peaceful and restful evening ahead. " "Thank you for your continued love and trust. 💚"
         )
         lines.append("")
         lines.append("— Teacher Evan & The Ms. Green Team 🍎")
