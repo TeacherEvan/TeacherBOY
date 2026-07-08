@@ -1090,7 +1090,7 @@ class TestAdminAgent:
             # Verify a valid message type was returned
             from linebot.v3.messaging import FlexMessage, TextMessage
 
-            assert isinstance(message, (TextMessage, FlexMessage))
+            assert isinstance(message, TextMessage | FlexMessage)
 
     @pytest.mark.asyncio
     async def test_handle_purge_command(self, admin_agent, mock_event, mock_line_bot_api):

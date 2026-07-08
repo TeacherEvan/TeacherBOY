@@ -450,6 +450,7 @@ async def test_discrete_group_scrape_can_be_completed_from_requester_dm():
 @pytest.mark.asyncio
 async def test_scrape_flow_add_all_directly_adds_all_events():
     from datetime import date
+
     flow = ScrapeFlow(calendar_service=MagicMock())
     flow.send_message = AsyncMock()
     flow.send_message_with_quick_reply = AsyncMock()
@@ -472,10 +473,22 @@ async def test_scrape_flow_add_all_directly_adds_all_events():
         is_friend=True,
     )
     calendar_session_manager.set_discrete_scrape_target("group_G1", "U_REQ")
-    
+
     events_data = [
-        {"date": date(2026, 6, 5), "title": "First event", "description": "", "source_text": "First event on 2026-06-05", "confidence": "high"},
-        {"date": date(2026, 6, 6), "title": "Second event", "description": "", "source_text": "Second event on 2026-06-06", "confidence": "high"},
+        {
+            "date": date(2026, 6, 5),
+            "title": "First event",
+            "description": "",
+            "source_text": "First event on 2026-06-05",
+            "confidence": "high",
+        },
+        {
+            "date": date(2026, 6, 6),
+            "title": "Second event",
+            "description": "",
+            "source_text": "Second event on 2026-06-06",
+            "confidence": "high",
+        },
     ]
     calendar_session_manager.set_scraped_events("group_G1", events_data)
 
@@ -494,7 +507,6 @@ async def test_scrape_flow_add_all_directly_adds_all_events():
     assert handled is True
     assert flow._calendar_service.add_event_async.await_count == 2
     assert calendar_session_manager.get_session("group_G1") is None
-
 
 
 @pytest.mark.asyncio

@@ -371,12 +371,14 @@ class TestImageAnalyzerScrapeCalendar:
     def image_analyzer_agent(self):
         """Create an ImageAnalyzerAgent instance."""
         from src.agents.image_analyzer_agent import ImageAnalyzerAgent
+
         return ImageAnalyzerAgent()
 
     @pytest.mark.asyncio
     async def test_scrape_mode_extracts_dates_and_offers_calendar(self, image_analyzer_agent, mock_event, mock_line_bot_api):
         """Test that image scraping mode extracts dates and offers calendar integration."""
         from src.services.image_analyzer_session_manager import image_analyzer_session_manager
+
         chat_id = "user_test_user_123"
         await image_analyzer_session_manager.start_session(chat_id, "test_user_123")
         image_analyzer_session_manager._sessions[chat_id].image_data = "data:image/png;base64,abcdef"
@@ -392,7 +394,10 @@ class TestImageAnalyzerScrapeCalendar:
         )
 
         with (
-            patch("src.agents.image_analyzer_agent.chat_completion_with_vision_fallback", new=AsyncMock(return_value=scraped_text_with_dates)),
+            patch(
+                "src.agents.image_analyzer_agent.chat_completion_with_vision_fallback",
+                new=AsyncMock(return_value=scraped_text_with_dates),
+            ),
             patch("src.agents.image_analyzer_agent.settings") as mock_settings,
             patch.object(image_analyzer_agent, "_offer_calendar_integration", new=AsyncMock()) as mock_offer,
         ):
@@ -417,4 +422,3 @@ class TestImageAnalyzerScrapeCalendar:
             assert len(called_dates) == 1
             assert called_dates[0]["date"] == "2026-06-30"
             assert called_dates[0]["title"] == "Final Project Due"
-

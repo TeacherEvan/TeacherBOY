@@ -278,10 +278,10 @@ async def chat_completion_with_vision_fallback(
     """
     Provider-priority vision completion.
 
-    Tries vision-capable providers in configured priority order. Currently this
-    assumes Hermes, then OpenRouter, then GitHub Models if they report
-    configured/vision-configured state. A provider can skip vision by leaving
-    `chat_completion_with_vision(...)` unimplemented or returning None.
+    Tries vision-capable providers in the configured priority order
+    (`settings.get_llm_provider_priority()`, default: Gemini first). A provider
+    can skip vision by leaving `chat_completion_with_vision(...)` unimplemented
+    or returning None.
     """
     priority = settings.get_llm_provider_priority()
 

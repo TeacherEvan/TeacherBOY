@@ -636,11 +636,11 @@ class NewsDataService:
             def _fmt(asset: dict) -> dict[str, str]:
                 price = asset.get("usd", None)
                 change = asset.get("usd_24h_change", None)
-                if isinstance(price, (int, float)):
+                if isinstance(price, int | float):
                     price_str = f"${price:,.2f}"
                 else:
                     price_str = "N/A"
-                if isinstance(change, (int, float)):
+                if isinstance(change, int | float):
                     change_str = f"{change:+.2f}%"
                 else:
                     change_str = "N/A"

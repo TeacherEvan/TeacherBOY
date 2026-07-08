@@ -87,7 +87,7 @@ from src.services.memory_monitor_service import (
 )
 from src.services.message_buffer_service import message_buffer_service
 from src.services.metrics_service import metrics_service
-from src.services.mod_audit_log import init_mod_audit_log, mod_audit_log
+from src.services.mod_audit_log import get_mod_audit_log, init_mod_audit_log
 from src.services.mod_mode_service import init_mod_mode_service
 from src.services.n1_detector import n1_detector, query_cache
 from src.services.news_session_manager import news_session_manager
@@ -388,6 +388,7 @@ async def lifespan(app: FastAPI):
 
         if settings.is_calendar_configured():
             from src.services.convex_calendar_repository import ConvexCalendarRepository
+
             convex_calendar_repo = ConvexCalendarRepository(convex_client)
             calendar_service.configure(
                 repository=convex_calendar_repo,
@@ -540,7 +541,7 @@ async def lifespan(app: FastAPI):
         ban_list_service=ban_list_svc,
         warning_service=warning_svc,
         harmful_detector=harmful_content_detector,
-        audit_log=mod_audit_log,
+        audit_log=get_mod_audit_log(),
         dashboard_builder=mod_dashboard,
     )
     agent_router.register_agent(mod_mode_agent)
@@ -745,6 +746,7 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Document memory scheduler stopped")
 
     from src.services.mod_audit_log import mod_audit_log
+
     if mod_audit_log:
         mod_audit_log.close()
         logger.info("✅ Mod audit log scheduler stopped")
@@ -1503,7 +1505,7 @@ async def webhook(request: Request) -> JSONResponse:
                         elif isinstance(event.message, ImageMessageContent):
                             # Route image message to ProfilerAgent via agent router
                             logger.info(f"📷 Received image message from {user_id}", extra={"correlation_id": correlation_id})
-                            
+
                             # Download and save the image immediately in the background
                             message_id = event.message.id
                             chat_id = None
@@ -1534,9 +1536,12 @@ async def webhook(request: Request) -> JSONResponse:
 
                                         # Store in filesystem
                                         from src.services.image_storage_service import image_storage_service
+
                                         image_storage_service.store_incoming_image(chat_id, message_id, image_bytes)
                                 except Exception as download_error:
-                                    logger.error(f"❌ Failed to download and store background image: {download_error}", exc_info=True)
+                                    logger.error(
+                                        f"❌ Failed to download and store background image: {download_error}", exc_info=True
+                                    )
 
                             await agent_router.route_message(event, line_bot_api)
 
