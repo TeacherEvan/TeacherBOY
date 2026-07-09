@@ -183,6 +183,41 @@ class HFStorageMixin:
                 # Filter by subfolder
                 target_files = [f for f in target_files if f.startswith(repo_path)]
 
+            # CRITICAL FIX: Prior buggy starts uploaded data nested one level too
+            # deep (e.g. "conversations/conversations/<hash>.json"). Skip any file
+            # that lives deeper than the intended subfolder so we don't replay
+            # corrupted data; those should be purged from the repo manually.
+            nested_corrupted = 0
+            if repo_path:
+                flat_targets = []
+                for f in target_files:
+                    rel = f[len(repo_path):].lstrip("/")
+                    if "/" in rel:
+                        nested_corrupted += 1
+                        continue
+                    flat_targets.append(f)
+                if nested_corrupted:
+                    logger.warning(
+                        f"⚠️ Skipping {nested_corrupted} nested/corrupted file(s) under "
+                        f"'{repo_path}/' (e.g. '{repo_path}/{repo_path}/...'). Purge them "
+                        f"from the HF dataset to reclaim space."
+                    )
+                target_files = flat_targets
+
+            # CRITICAL FIX: The sync folder (self._hf_sync_folder) already
+            # represents hf_path_in_repo (e.g. "./data/conversations" maps to
+            # repo path "conversations/"). Downloading the full repo path
+            # ("conversations/<hash>.json") INTO that folder double-nests the
+            # file ("./data/conversations/conversations/<hash>.json"), which the
+            # CommitScheduler then re-syncs back to the repo, producing unbounded
+            # "conversations/conversations/..." growth and a startup that never
+            # finishes. Pass the PARENT as local_dir so the subfolder is created
+            # exactly once.
+            if self.hf_path_in_repo:
+                local_dir = str(self._hf_sync_folder.parent)
+            else:
+                local_dir = str(self._hf_sync_folder)
+
             loaded = 0
             for filename in target_files[:max_files]:
                 try:
@@ -191,7 +226,8 @@ class HFStorageMixin:
                         filename=filename,
                         repo_type=self.hf_repo_type,
                         token=self.hf_token,
-                        local_dir=str(self._hf_sync_folder),
+                        local_dir=local_dir,
+                        local_dir_use_symlinks=False,
                     )
 
                     import json
