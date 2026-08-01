@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from linebot.v3.messaging import MessagingApi
-from linebot.v3.webhooks import MessageEvent, ImageMessageContent
+from linebot.v3.webhooks import MessageEvent
 
 from src.config import settings
 from src.services.image_analyzer_session_manager import image_analyzer_session_manager
@@ -55,7 +55,7 @@ class ReceiptAgent(BaseAgent):
 
     async def _is_user_linked(self, line_user_id: str) -> bool:
         """Check if LINE user is linked to a Budget Boss account.
-        
+
         For now, we assume any user can send receipts. In production,
         this could check against a linked users table.
         """
@@ -108,11 +108,11 @@ class ReceiptAgent(BaseAgent):
 
     def _has_vision_provider(self) -> bool:
         """Check if any vision-capable provider is configured."""
-        from src.services.hermes_service import hermes_service
-        from src.services.openrouter_service import openrouter_service
         from src.services.gemini_service import gemini_service
+        from src.services.hermes_service import hermes_service
         from src.services.hf_inference_service import hf_inference_service
-        
+        from src.services.openrouter_service import openrouter_service
+
         return (
             hermes_service.is_vision_configured()
             or openrouter_service.is_configured()
@@ -122,7 +122,7 @@ class ReceiptAgent(BaseAgent):
 
     async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """Process receipt image: fetch, OCR via Gemini, send to Budget Boss, reply."""
-        chat_id = self._get_chat_id(event)
+        _chat_id = self._get_chat_id(event)
         user_id = getattr(event.source, "user_id", None) if event.source else None
         message_id = getattr(event.message, "id", None)
 
@@ -184,7 +184,7 @@ class ReceiptAgent(BaseAgent):
         """Fetch image from LINE and return as data URL."""
         try:
             from linebot.v3.messaging import ApiClient, Configuration, MessagingApiBlob
-            
+
             access_token = settings.line_channel_access_token
             if not access_token:
                 logger.error("No LINE channel access token")
@@ -196,10 +196,10 @@ class ReceiptAgent(BaseAgent):
                 # Run in thread since the SDK is sync
                 import asyncio
                 content = await asyncio.to_thread(blob_api.get_message_content, message_id)
-                
+
                 if not content:
                     return None
-                    
+
                 # Convert bytes to base64 data URL
                 import base64
                 b64 = base64.b64encode(content).decode("utf-8")
@@ -211,7 +211,7 @@ class ReceiptAgent(BaseAgent):
                     mime = "image/jpeg"
                 elif content[:4] == b"RIFF" and content[8:12] == b"WEBP":
                     mime = "image/webp"
-                    
+
                 return f"data:{mime};base64,{b64}"
         except Exception as e:
             logger.error(f"ReceiptAgent: failed to fetch image: {e}")
@@ -226,11 +226,16 @@ class ReceiptAgent(BaseAgent):
         """Reply with Flex card showing receipt summary and deep link."""
         try:
             from linebot.v3.messaging import (
-                FlexMessage, FlexContainer, FlexBubble, FlexBox, FlexText,
-                FlexSeparator, FlexButton, FlexAction, URIAction,
-                ReplyMessageRequest
+                FlexBox,
+                FlexBubble,
+                FlexButton,
+                FlexMessage,
+                FlexSeparator,
+                FlexText,
+                ReplyMessageRequest,
+                URIAction,
             )
-            
+
             fields = result.get("fields", {})
             merchant = fields.get("merchant", {}).get("value", "Unknown")
             total = fields.get("total", {}).get("value", 0)
@@ -238,11 +243,11 @@ class ReceiptAgent(BaseAgent):
             currency = fields.get("currency", {}).get("value", "USD")
             confidence = result.get("confidence", {})
             total_conf = confidence.get("total", 0)
-            
+
             # Format currency
             currency_symbols = {"USD": "$", "EUR": "€", "GBP": "£", "THB": "฿", "JPY": "¥", "ZAR": "R"}
             symbol = currency_symbols.get(currency, currency)
-            
+
             # Build Flex bubble
             bubble = FlexBubble(
                 header=FlexBox(
@@ -300,7 +305,7 @@ class ReceiptAgent(BaseAgent):
                     ],
                 ),
             )
-            
+
             flex_msg = FlexMessage(alt_text="Receipt scanned", contents=bubble)
             await line_bot_api.reply_message(
                 ReplyMessageRequest(reply_token=event.reply_token, messages=[flex_msg])
