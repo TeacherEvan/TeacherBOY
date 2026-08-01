@@ -63,7 +63,7 @@ class ReceiptAgent(BaseAgent):
 
     async def _is_receipt_enabled(self, chat_id: str) -> bool:
         """Check if receipt feature is enabled."""
-        return getattr(settings, 'receipt_agent_enabled', True)
+        return getattr(settings, "receipt_agent_enabled", True)
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
         """Handle bare image when no higher-priority agent is waiting."""
@@ -195,6 +195,7 @@ class ReceiptAgent(BaseAgent):
                 blob_api = MessagingApiBlob(api_client)
                 # Run in thread since the SDK is sync
                 import asyncio
+
                 content = await asyncio.to_thread(blob_api.get_message_content, message_id)
 
                 if not content:
@@ -202,6 +203,7 @@ class ReceiptAgent(BaseAgent):
 
                 # Convert bytes to base64 data URL
                 import base64
+
                 b64 = base64.b64encode(content).decode("utf-8")
                 # Detect mime type from first bytes or default
                 mime = "image/jpeg"
@@ -307,9 +309,7 @@ class ReceiptAgent(BaseAgent):
             )
 
             flex_msg = FlexMessage(alt_text="Receipt scanned", contents=bubble)
-            await line_bot_api.reply_message(
-                ReplyMessageRequest(reply_token=event.reply_token, messages=[flex_msg])
-            )
+            await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[flex_msg]))
         except Exception as e:
             logger.error(f"ReceiptAgent: failed to send success reply: {e}")
             # Fallback to simple text
@@ -322,6 +322,5 @@ class ReceiptAgent(BaseAgent):
     async def _reply_text(self, line_bot_api: MessagingApi, event: MessageEvent, text: str) -> None:
         """Reply with simple text message."""
         from linebot.v3.messaging import ReplyMessageRequest, TextMessage
-        await line_bot_api.reply_message(
-            ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=text)])
-        )
+
+        await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=text)]))

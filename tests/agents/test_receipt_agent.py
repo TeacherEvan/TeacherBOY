@@ -32,10 +32,10 @@ async def test_receipt_agent_should_handle_bare_image_no_sessions():
     _user_id = "test_user"
 
     # Mock no active sessions
-    with patch.object(image_analyzer_session_manager, 'is_waiting_for_image', return_value=False):
-        with patch.object(profiler_session_manager, 'is_waiting_for_image', return_value=False):
-            with patch.object(agent, '_is_user_linked', return_value=True):
-                with patch.object(agent, '_is_receipt_enabled', return_value=True):
+    with patch.object(image_analyzer_session_manager, "is_waiting_for_image", return_value=False):
+        with patch.object(profiler_session_manager, "is_waiting_for_image", return_value=False):
+            with patch.object(agent, "_is_user_linked", return_value=True):
+                with patch.object(agent, "_is_receipt_enabled", return_value=True):
                     result = await agent.should_handle(event, "")
                     assert result is True
 
@@ -52,10 +52,10 @@ async def test_receipt_agent_should_not_handle_when_image_analyzer_waiting():
     event.source._user_id = "test_user"
     event.source.group_id = "test_group"
 
-    with patch.object(image_analyzer_session_manager, 'is_waiting_for_image', return_value=True):
-        with patch.object(profiler_session_manager, 'is_waiting_for_image', return_value=False):
-            with patch.object(agent, '_is_user_linked', return_value=True):
-                with patch.object(agent, '_is_receipt_enabled', return_value=True):
+    with patch.object(image_analyzer_session_manager, "is_waiting_for_image", return_value=True):
+        with patch.object(profiler_session_manager, "is_waiting_for_image", return_value=False):
+            with patch.object(agent, "_is_user_linked", return_value=True):
+                with patch.object(agent, "_is_receipt_enabled", return_value=True):
                     result = await agent.should_handle(event, "")
                     assert result is False
 
@@ -72,10 +72,10 @@ async def test_receipt_agent_should_not_handle_when_profiler_waiting():
     event.source._user_id = "test_user"
     event.source.group_id = "test_group"
 
-    with patch.object(image_analyzer_session_manager, 'is_waiting_for_image', return_value=False):
-        with patch.object(profiler_session_manager, 'is_waiting_for_image', return_value=True):
-            with patch.object(agent, '_is_user_linked', return_value=True):
-                with patch.object(agent, '_is_receipt_enabled', return_value=True):
+    with patch.object(image_analyzer_session_manager, "is_waiting_for_image", return_value=False):
+        with patch.object(profiler_session_manager, "is_waiting_for_image", return_value=True):
+            with patch.object(agent, "_is_user_linked", return_value=True):
+                with patch.object(agent, "_is_receipt_enabled", return_value=True):
                     result = await agent.should_handle(event, "")
                     assert result is False
 
@@ -106,9 +106,9 @@ async def test_receipt_agent_should_not_handle_unlinked_user():
     event.source._user_id = "test_user"
     event.source.group_id = "test_group"
 
-    with patch.object(image_analyzer_session_manager, 'is_waiting_for_image', return_value=False):
-        with patch.object(profiler_session_manager, 'is_waiting_for_image', return_value=False):
-            with patch.object(agent, '_is_user_linked', return_value=False):
+    with patch.object(image_analyzer_session_manager, "is_waiting_for_image", return_value=False):
+        with patch.object(profiler_session_manager, "is_waiting_for_image", return_value=False):
+            with patch.object(agent, "_is_user_linked", return_value=False):
                 result = await agent.should_handle(event, "")
                 assert result is False
 
@@ -125,9 +125,9 @@ async def test_receipt_agent_should_not_handle_disabled():
     event.source._user_id = "test_user"
     event.source.group_id = "test_group"
 
-    with patch.object(image_analyzer_session_manager, 'is_waiting_for_image', return_value=False):
-        with patch.object(profiler_session_manager, 'is_waiting_for_image', return_value=False):
-            with patch.object(agent, '_is_user_linked', return_value=True):
-                with patch.object(agent, '_is_receipt_enabled', return_value=False):
+    with patch.object(image_analyzer_session_manager, "is_waiting_for_image", return_value=False):
+        with patch.object(profiler_session_manager, "is_waiting_for_image", return_value=False):
+            with patch.object(agent, "_is_user_linked", return_value=True):
+                with patch.object(agent, "_is_receipt_enabled", return_value=False):
                     result = await agent.should_handle(event, "")
                     assert result is False

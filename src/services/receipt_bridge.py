@@ -24,12 +24,14 @@ def gemini_text_to_ocr_payload(text: str, country_hint: str = "TH") -> dict:
 
     ocr_lines = []
     for idx, line_text in enumerate(lines):
-        ocr_lines.append({
-            "text": line_text,
-            "conf": 85.0,
-            "y": float(idx * 100),  # arbitrary spacing, order preserved
-            "words": [],  # no word-level boxes from Gemini
-        })
+        ocr_lines.append(
+            {
+                "text": line_text,
+                "conf": 85.0,
+                "y": float(idx * 100),  # arbitrary spacing, order preserved
+                "words": [],  # no word-level boxes from Gemini
+            }
+        )
 
     return {
         "lines": ocr_lines,
