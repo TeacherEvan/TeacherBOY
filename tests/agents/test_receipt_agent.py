@@ -25,7 +25,7 @@ async def test_receipt_agent_should_handle_bare_image_no_sessions():
     event.message = MagicMock(spec=ImageMessageContent)
     event.message.type = "image"
     event.source = MagicMock()
-    event.source._user_id = "test_user"
+    event.source.user_id = "test_user"
     event.source.group_id = "test_group"
 
     _chat_id = "test_group"
@@ -49,7 +49,7 @@ async def test_receipt_agent_should_not_handle_when_image_analyzer_waiting():
     event.message = MagicMock(spec=ImageMessageContent)
     event.message.type = "image"
     event.source = MagicMock()
-    event.source._user_id = "test_user"
+    event.source.user_id = "test_user"
     event.source.group_id = "test_group"
 
     with patch.object(image_analyzer_session_manager, "is_waiting_for_image", return_value=True):
@@ -69,7 +69,7 @@ async def test_receipt_agent_should_not_handle_when_profiler_waiting():
     event.message = MagicMock(spec=ImageMessageContent)
     event.message.type = "image"
     event.source = MagicMock()
-    event.source._user_id = "test_user"
+    event.source.user_id = "test_user"
     event.source.group_id = "test_group"
 
     with patch.object(image_analyzer_session_manager, "is_waiting_for_image", return_value=False):
@@ -103,7 +103,7 @@ async def test_receipt_agent_should_not_handle_unlinked_user():
     event.message = MagicMock(spec=ImageMessageContent)
     event.message.type = "image"
     event.source = MagicMock()
-    event.source._user_id = "test_user"
+    event.source.user_id = "test_user"
     event.source.group_id = "test_group"
 
     with patch.object(image_analyzer_session_manager, "is_waiting_for_image", return_value=False):
@@ -122,7 +122,7 @@ async def test_receipt_agent_should_not_handle_disabled():
     event.message = MagicMock(spec=ImageMessageContent)
     event.message.type = "image"
     event.source = MagicMock()
-    event.source._user_id = "test_user"
+    event.source.user_id = "test_user"
     event.source.group_id = "test_group"
 
     with patch.object(image_analyzer_session_manager, "is_waiting_for_image", return_value=False):
