@@ -191,7 +191,7 @@ class HFStorageMixin:
             if repo_path:
                 flat_targets = []
                 for f in target_files:
-                    rel = f[len(repo_path):].lstrip("/")
+                    rel = f[len(repo_path) :].lstrip("/")
                     if "/" in rel:
                         nested_corrupted += 1
                         continue
