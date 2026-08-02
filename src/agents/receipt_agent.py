@@ -44,13 +44,26 @@ class ReceiptAgent(BaseAgent):
         return 8
 
     def _get_chat_id(self, event: MessageEvent) -> str:
-        """Extract chat ID from event (group_id > user_id)."""
+        """Extract the session chat ID.
+
+        MUST stay byte-identical to `ImageAnalyzerAgent._get_chat_id` and
+        `ProfilerAgent._get_chat_id` (both priority 7). Those agents key their
+        waiting-for-image sessions with the `group_`/`room_`/`user_` prefixes;
+        this agent's gate in `should_handle` looks the session up in *their*
+        managers, so an unprefixed key silently misses every session and the
+        anti-cannibalisation guarantee becomes a no-op.
+        """
         if event.source and hasattr(event.source, "group_id"):
             group_id = getattr(event.source, "group_id", None)
             if group_id:
-                return group_id
-        if event.source and hasattr(event.source, "user_id"):
-            return getattr(event.source, "user_id", "unknown")
+                return f"group_{group_id}"
+        if event.source and hasattr(event.source, "room_id"):
+            room_id = getattr(event.source, "room_id", None)
+            if room_id:
+                return f"room_{room_id}"
+        if event.source:
+            user_id = getattr(event.source, "user_id", "unknown")
+            return f"user_{user_id}"
         return "unknown"
 
     async def _is_user_linked(self, line_user_id: str) -> bool:
