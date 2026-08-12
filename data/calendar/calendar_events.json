@@ -1,0 +1,56 @@
+{
+  "events": [
+    {
+      "event_id": "95adfd97-1e1d-47dc-aeb2-59ea8007792c",
+      "user_id": "U5390303cc145d53483ee15b4ec61d8f0",
+      "chat_id": "group_Caf46e5b4b72b2605d38d23576db03407",
+      "title": "22/06/2026",
+      "event_date": "2026-06-22",
+      "description": "",
+      "reminder_days": [
+        0,
+        3
+      ],
+      "is_friend": true,
+      "notification_target_user_id": "U5390303cc145d53483ee15b4ec61d8f0",
+      "notified_dates": [],
+      "created_at": "2026-06-13T02:40:09.677649+00:00",
+      "repository_event_id": null
+    },
+    {
+      "event_id": "f1c91913-ff11-4c0e-8cf0-cb4fef29e2fb",
+      "user_id": "U5390303cc145d53483ee15b4ec61d8f0",
+      "chat_id": "group_Caf46e5b4b72b2605d38d23576db03407",
+      "title": "Event",
+      "event_date": "2026-06-22",
+      "description": "",
+      "reminder_days": [
+        0,
+        3
+      ],
+      "is_friend": true,
+      "notification_target_user_id": "U5390303cc145d53483ee15b4ec61d8f0",
+      "notified_dates": [],
+      "created_at": "2026-06-13T02:40:09.679792+00:00",
+      "repository_event_id": null
+    },
+    {
+      "event_id": "d106721a-ccdd-4db3-9517-0743396b0377",
+      "user_id": "test_user_deletion_123",
+      "chat_id": "user_test_user_deletion_123",
+      "title": "User 1 Event",
+      "event_date": "2026-07-09",
+      "description": "",
+      "reminder_days": [
+        0,
+        1
+      ],
+      "is_friend": true,
+      "notification_target_user_id": "test_user_deletion_123",
+      "notified_dates": [],
+      "created_at": "2026-07-08T05:22:43.027294+00:00",
+      "repository_event_id": null
+    }
+  ],
+  "updated_at": "2026-07-08T05:22:43.027316+00:00"
+}

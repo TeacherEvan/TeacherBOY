@@ -1,16 +1,16 @@
-"""Base agent class for TeacherBOY multi-agent system."""
+"""Base agent class for the multi-agent system."""
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional
-from linebot.v3.webhooks import MessageEvent, TextMessageContent
+
 from linebot.v3.messaging import MessagingApi
+from linebot.v3.webhooks import MessageEvent
 
 logger = logging.getLogger(__name__)
 
 
 class BaseAgent(ABC):
-    """Base class for all agents in TeacherBOY."""
+    """Base class for all agents in the assistant system."""
 
     def __init__(self, name: str, description: str):
         """
@@ -40,9 +40,7 @@ class BaseAgent(ABC):
         pass
 
     @abstractmethod
-    async def handle(
-        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
-    ) -> bool:
+    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """
         Process the message.
 

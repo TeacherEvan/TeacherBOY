@@ -1,0 +1,38 @@
+# Handler for add mode selection
+# This code should be inserted before the _start_original_live_bulk_add method in calendar_agent.py
+
+async def _handle_add_mode_selection(
+    self,
+    event: MessageEvent,
+    text: str,
+    line_bot_api: MessagingApi,
+    chat_id: str,
+    user_id: Optional[str]
+) -> bool:
+    """Handle user's choice between scan/listen/manual modes."""
+    choice = text.strip()
+    
+    if choice == "1":
+        # User wants to scan recent messages
+        calendar_session_manager.end_session(chat_id)
+        return await self._handle_scrape_trigger(
+            event, line_bot_api, chat_id, user_id
+        )
+    elif choice == "2":
+        # User wants to listen for new messages
+        calendar_session_manager.end_session(chat_id)
+        return await self._start_original_live_bulk_add(
+            event, line_bot_api, chat_id, user_id
+        )
+    elif choice == "3":
+        # User wants manual add
+        calendar_session_manager.end_session(chat_id)
+        return await self._start_add_flow(
+            event, line_bot_api, chat_id, user_id
+        )
+    else:
+        await self._send_message(
+            event, line_bot_api,
+            "❌ Invalid choice. Please reply with 1, 2, or 3.\n\nกรุณาเลือก 1, 2 หรือ 3"
+        )
+        return True

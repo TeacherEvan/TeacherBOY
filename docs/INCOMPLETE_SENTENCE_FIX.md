@@ -23,8 +23,7 @@ TRANSLATION_DETECT_INCOMPLETE=true  # Default: enabled
 
 No code changes needed! The fix is applied automatically in:
 
-- `google_translation.py` (Google Translate API)
-- `translation_service.py` (LibreTranslate API)
+- `ai_translation_service.py` (shared AI translation orchestration)
 
 ## Manual Usage
 
@@ -57,7 +56,7 @@ pytest tests/test_incomplete_sentence_detection.py -v
 
 Watch for these warnings:
 
-```
+```text
 ⚠️ Detected incomplete sentence: 'so i tried' → Appended '...' to prevent translation hallucination
 ```
 
@@ -78,8 +77,7 @@ export TRANSLATION_DETECT_INCOMPLETE=false
 
 - ✅ `src/utils/text_preprocessing.py` - Detection logic
 - ✅ `src/config.py` - Configuration
-- ✅ `src/services/google_translation.py` - Integration
-- ✅ `src/services/translation_service.py` - Integration
+- ✅ `src/services/ai_translation_service.py` - Integration
 - ✅ `tests/test_incomplete_sentence_detection.py` - Tests (14 passing)
 
 ## Status

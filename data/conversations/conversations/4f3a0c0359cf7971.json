@@ -1,0 +1,22 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "thank you",
+      "timestamp": "2026-06-13T11:11:49.956017+00:00",
+      "user_id": "U5390303cc145d53483ee15b4ec61d8f0"
+    },
+    {
+      "role": "assistant",
+      "content": "You’re welcome.",
+      "timestamp": "2026-06-13T11:11:55.952043+00:00"
+    }
+  ],
+  "last_activity": "2026-06-13T11:11:55.952043+00:00",
+  "metadata": {
+    "created_at": "2026-06-13T11:11:49.956017+00:00",
+    "user_ids": [
+      "U5390303cc145d53483ee15b4ec61d8f0"
+    ]
+  }
+}

@@ -1,11 +1,14 @@
 """Session state management for tracking active translation sessions."""
 
-import logging
 import hashlib
-from typing import Dict, Set, List, Tuple
+import logging
+import re
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+# Pre-compiled regex patterns for performance
+_THAI_CHAR_PATTERN = re.compile(r"[\u0E00-\u0E7F]")
 
 
 class SessionManager:
@@ -16,6 +19,7 @@ class SessionManager:
         dedup_window_seconds: int = 60,
         max_history_size: int = 50,
         default_sleep_hours: int = 24,
+        echo_window_seconds: int = 2,
     ):
         """
         Initialize session manager.
@@ -24,19 +28,27 @@ class SessionManager:
             dedup_window_seconds: Time window for duplicate detection (default: 60s)
             max_history_size: Maximum messages to track per chat (default: 50)
             default_sleep_hours: Default sleep duration in hours (default: 24)
+            echo_window_seconds: Time window for cross-language echo suppression (default: 2s)
         """
         # Dictionary: {chat_id: {user_id, started_at, message_count}}
-        self._active_sessions: Dict[str, dict] = {}
+        self._active_sessions: dict[str, dict] = {}
         # Set of chat IDs where translation is always on
-        self._always_on_chats: Set[str] = set()
+        self._always_on_chats: set[str] = set()
         # Message deduplication: {chat_id: [(message_hash, timestamp), ...]}
-        self._message_history: Dict[str, List[Tuple[str, datetime]]] = {}
+        self._message_history: dict[str, list[tuple[str, datetime]]] = {}
+        # Message hash sets for O(1) duplicate lookup: {chat_id: {hash, ...}}
+        self._message_hashes: dict[str, set[str]] = {}
         # Sleep mode: {chat_id: wake_at_datetime}
-        self._sleeping_chats: Dict[str, datetime] = {}
+        self._sleeping_chats: dict[str, datetime] = {}
+        # Recent language messages for echo suppression: {chat_id: (language, timestamp)}
+        self._recent_language_messages: dict[str, tuple[str, datetime]] = {}
+        # Last cleanup time per chat: {chat_id: datetime}
+        self._last_cleanup: dict[str, datetime] = {}
         # Configuration
         self._max_history_size = max_history_size
         self._dedup_window_seconds = dedup_window_seconds
         self._default_sleep_hours = default_sleep_hours
+        self._echo_window_seconds = echo_window_seconds
 
     def is_session_active(self, chat_id: str) -> bool:
         """Check if translation session is active for a chat (not sleeping)."""
@@ -85,7 +97,7 @@ class SessionManager:
             return 0
         return int(remaining.total_seconds() / 3600) + 1  # Round up
 
-    def sleep_chat(self, chat_id: str, hours: int = None):
+    def sleep_chat(self, chat_id: str, hours: int | None = None):
         """
         Put a chat to sleep for specified hours.
 
@@ -103,9 +115,7 @@ class SessionManager:
         if chat_id in self._active_sessions:
             self._active_sessions.pop(chat_id)
 
-        logger.info(
-            f"😴 Chat {chat_id} put to sleep for {hours} hours (wake at {wake_at})"
-        )
+        logger.info(f"😴 Chat {chat_id} put to sleep for {hours} hours (wake at {wake_at})")
 
     def wake_chat(self, chat_id: str) -> bool:
         """
@@ -136,9 +146,7 @@ class SessionManager:
         """End translation session for a chat. Returns True if session existed."""
         if chat_id in self._active_sessions:
             session = self._active_sessions.pop(chat_id)
-            logger.info(
-                f"Ended translation session for chat {chat_id}. Messages translated: {session['message_count']}"
-            )
+            logger.info(f"Ended translation session for chat {chat_id}. Messages translated: {session['message_count']}")
             return True
         return False
 
@@ -187,6 +195,22 @@ class SessionManager:
         """
         return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
+    def _cleanup_chat_history(self, chat_id: str, now: datetime) -> None:
+        """Clean up old messages for a chat if needed."""
+        last_cleanup = self._last_cleanup.get(chat_id)
+        # Only cleanup if it's been more than dedup_window_seconds since last cleanup
+        # or if history exceeds 2x max size (indicating many expired entries)
+        if last_cleanup and (now - last_cleanup).total_seconds() < self._dedup_window_seconds:
+            if len(self._message_history[chat_id]) <= self._max_history_size * 2:
+                return
+
+        cutoff_time = now - timedelta(seconds=self._dedup_window_seconds)
+        valid_entries = [(hash_val, ts) for hash_val, ts in self._message_history[chat_id] if ts > cutoff_time]
+
+        self._message_history[chat_id] = valid_entries
+        self._message_hashes[chat_id] = {hash_val for hash_val, _ in valid_entries}
+        self._last_cleanup[chat_id] = now
+
     def is_duplicate_message(self, chat_id: str, text: str) -> bool:
         """
         Check if message is a duplicate (same content within dedup window).
@@ -204,33 +228,33 @@ class SessionManager:
         # Initialize history for new chats
         if chat_id not in self._message_history:
             self._message_history[chat_id] = []
+            self._message_hashes[chat_id] = set()
+            self._last_cleanup[chat_id] = now
 
-        # Clean up old messages outside dedup window
-        cutoff_time = now - timedelta(seconds=self._dedup_window_seconds)
-        self._message_history[chat_id] = [
-            (hash_val, ts)
-            for hash_val, ts in self._message_history[chat_id]
-            if ts > cutoff_time
-        ]
+        # Lazy cleanup - only when needed
+        self._cleanup_chat_history(chat_id, now)
 
-        # Check for duplicate
-        for hash_val, timestamp in self._message_history[chat_id]:
-            if hash_val == message_hash:
-                age_seconds = (now - timestamp).total_seconds()
-                logger.warning(
-                    f"🔁 Duplicate message detected in chat {chat_id} "
-                    f"(last seen {age_seconds:.1f}s ago)"
-                )
-                return True
+        # Check for duplicate using set (O(1))
+        if message_hash in self._message_hashes[chat_id]:
+            # Find the timestamp for logging
+            for hash_val, timestamp in self._message_history[chat_id]:
+                if hash_val == message_hash:
+                    age_seconds = (now - timestamp).total_seconds()
+                    logger.warning(f"🔁 Duplicate message detected in chat {chat_id} (last seen {age_seconds:.1f}s ago)")
+                    break
+            return True
 
         # Not a duplicate - record this message
         self._message_history[chat_id].append((message_hash, now))
+        self._message_hashes[chat_id].add(message_hash)
 
         # Trim history to max size (keep most recent)
         if len(self._message_history[chat_id]) > self._max_history_size:
-            self._message_history[chat_id] = self._message_history[chat_id][
-                -self._max_history_size :
-            ]
+            # Remove oldest entries and update hash set
+            removed = self._message_history[chat_id][: -self._max_history_size]
+            self._message_history[chat_id] = self._message_history[chat_id][-self._max_history_size :]
+            for hash_val, _ in removed:
+                self._message_hashes[chat_id].discard(hash_val)
 
         return False
 
@@ -243,7 +267,9 @@ class SessionManager:
         """
         if chat_id in self._message_history:
             del self._message_history[chat_id]
-            logger.info(f"🧹 Cleared message history for chat {chat_id}")
+        if chat_id in self._message_hashes:
+            del self._message_hashes[chat_id]
+        logger.info(f"🧹 Cleared message history for chat {chat_id}")
 
     def get_active_sessions(self) -> dict:
         """
@@ -262,6 +288,39 @@ class SessionManager:
             Dictionary of sleeping chats {chat_id: wake_at_datetime}
         """
         return self._sleeping_chats.copy()
+
+    def _detect_message_language(self, text: str) -> str:
+        # Simple heuristic: detect Thai characters vs others
+        return "th" if bool(_THAI_CHAR_PATTERN.search(text)) else "en"
+
+    def should_ignore_cross_language_echo(
+        self,
+        chat_id: str,
+        text: str,
+        *,
+        now: datetime | None = None,
+        now_offset_seconds: int | None = None,
+    ) -> bool:
+        """Return True if the message should be ignored as a cross-language echo.
+
+        If a message in a different language than the previous message in the same chat
+        arrives within the echo window, treat it as an echo and ignore it.
+        """
+        current_time = now or datetime.now()
+        if now_offset_seconds is not None:
+            current_time = datetime.now() + timedelta(seconds=now_offset_seconds)
+
+        language = self._detect_message_language(text)
+        previous = self._recent_language_messages.get(chat_id)
+        # Record current message language and time
+        self._recent_language_messages[chat_id] = (language, current_time)
+
+        if previous is None:
+            return False
+
+        previous_language, previous_time = previous
+        age_seconds = (current_time - previous_time).total_seconds()
+        return previous_language != language and age_seconds < self._echo_window_seconds
 
 
 # Singleton instance

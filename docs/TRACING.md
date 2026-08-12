@@ -1,35 +1,37 @@
-# Tracing (OpenTelemetry)
+# Tracing
 
-TeacherBOY supports OpenTelemetry tracing for:
+Ms. Green supports optional OpenTelemetry tracing for runtime debugging and performance inspection.
 
-- Incoming FastAPI requests
-- Outgoing `httpx` calls (Google Translate / LibreTranslate)
-- Minimal custom spans for agent routing and translation provider selection
+## Enable tracing
 
-## Quick start (VS Code AI Toolkit)
+Set these environment variables:
 
-1. In VS Code, open the command palette and run:
+```env
+ENABLE_TRACING=True
+OTEL_SERVICE_NAME=Ms. Green
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+```
 
-   - `AI Toolkit: Open Tracing`
+## What gets traced
 
-   This starts the local trace collector and opens the trace viewer.
+- FastAPI request handling
+- Webhook processing
+- Agent routing
+- Selected service calls through the shared async runtime
 
-2. Enable tracing in your `.env`:
+## Local workflow
 
-   ```env
-   ENABLE_TRACING=True
-   OTEL_SERVICE_NAME=TeacherBOY
-   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
-   ```
-
-3. Start the app:
-
-   - Local: `python -m uvicorn src.main:app --reload --port 8000`
-   - Docker: `docker-compose up --build`
-
-4. Send a message through LINE (or hit `/webhook` in dev) and check the trace viewer.
+1. Start an OTLP-compatible collector or tracing backend.
+2. Run Ms. Green normally.
+3. In VS Code, use `AI Toolkit: Open Tracing` if you have the AI Toolkit extension configured.
 
 ## Notes
 
-- Tracing is optional and won’t block startup if exporter/collector isn’t reachable.
-- The default AI Toolkit OTLP endpoint is `http://localhost:4318` (HTTP).
+- Tracing is off by default.
+- It is intended for diagnostics and observability, not required for normal bot operation.
+
+---
+
+**Last Updated:** 2026-05-30  
+**Audience:** Developers  
+**Status:** Stable

@@ -1,0 +1,33 @@
+============================= test session starts =============================
+platform win32 -- Python 3.10.11, pytest-7.4.3, pluggy-1.6.0
+rootdir: C:\Users\eboth\OneDrive\Documents\vs\TeacherBOY
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.12.0, asyncio-0.21.1, cov-4.1.0
+asyncio: mode=auto
+collected 218 items
+
+tests\test_admin_agent.py ...........................                    [ 12%]
+tests\test_incomplete_sentence_detection.py ..............               [ 18%]
+tests\test_main.py ....                                                  [ 20%]
+tests\test_message_handler.py ...                                        [ 22%]
+tests\test_metrics_service.py ..............                             [ 28%]
+tests\test_moderator_news.py ..........                                  [ 33%]
+tests\test_news_agent.py .....                                           [ 35%]
+tests\test_news_extended.py ...................                          [ 44%]
+tests\test_news_fixes.py ..........                                      [ 48%]
+tests\test_news_fixes_integration.py ...                                 [ 50%]
+tests\test_news_format_optimization.py ..................                [ 58%]
+tests\test_news_language_display.py .......                              [ 61%]
+tests\test_news_menu_urls.py ....                                        [ 63%]
+tests\test_news_trigger_priority.py .......                              [ 66%]
+tests\test_news_user_ownership.py ......                                 [ 69%]
+tests\test_private_help.py ..                                            [ 70%]
+tests\test_rate_limiter.py ......                                        [ 72%]
+tests\test_session_manager.py ...................                        [ 81%]
+tests\test_special_news_agent.py ....                                    [ 83%]
+tests\test_text_preprocessing.py ....................                    [ 92%]
+tests\test_translation_service.py ........                               [ 96%]
+tests\test_translation_with_parentheses.py ........                      [100%]
+
+======================= 218 passed, 1 warning in 16.30s =======================

@@ -1,0 +1,155 @@
+"""HF Hub audit logging for Moderator Mode actions."""
+
+import json
+import logging
+import os
+import time
+from datetime import datetime
+from pathlib import Path
+
+from src.services.hf_storage_mixin import HFStorageMixin
+
+logger = logging.getLogger(__name__)
+
+
+class ModAuditLog(HFStorageMixin):
+    """Append-only audit log to HF Hub dataset."""
+
+    def __init__(self, token: str, repo_id: str, local_path: str = "./data/mod_audit"):
+        self.hf_token = token
+        self.hf_repo_id = repo_id
+        self.storage_path = Path(local_path)
+        self.hf_sync_interval = 5
+        self.hf_squash_history = False
+        self.hf_path_in_repo = "mod_audit"
+        self._hf_enabled = bool(token and repo_id)
+
+        super().__init__()
+        self._repo_id = repo_id
+        self._local_path = local_path
+        self._init_local_dir()
+
+        if self._hf_enabled:
+            self._setup_hf_storage()
+            self._api = self._hf_api
+        else:
+            self._api = None
+
+    def _init_local_dir(self):
+        """Initialize local directory for JSONL files."""
+        os.makedirs(self._local_path, exist_ok=True)
+        logger.info(f"📜 ModAuditLog initialized: {self._repo_id}")
+
+    def _write_local(self, entry: dict):
+        """Write entry to local JSONL file."""
+        filename = f"mod_audit_{datetime.now().strftime('%Y-%m-%d')}.jsonl"
+        filepath = os.path.join(self._local_path, filename)
+        with open(filepath, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    async def log_action(
+        self,
+        action: str,
+        group_id: str,
+        target_user_id: str,
+        actor_user_id: str,
+        details: dict | None = None,
+    ):
+        """Log a moderation action."""
+        entry = {
+            "timestamp": int(time.time() * 1000),
+            "action": action,  # "kick", "warn", "ban", "unban", "mode_activate", "mode_deactivate", "mode_change"
+            "groupId": group_id,
+            "targetUserId": target_user_id,
+            "actorUserId": actor_user_id,
+            "details": details or {},
+        }
+        self._write_local(entry)
+        logger.info(f"📜 Audit: {action} group={group_id} target={target_user_id} by={actor_user_id}")
+
+    async def log_kick(
+        self,
+        group_id: str,
+        target_user_id: str,
+        actor_user_id: str,
+        reason: str | None = None,
+    ):
+        await self.log_action("kick", group_id, target_user_id, actor_user_id, {"reason": reason})
+
+    async def log_warn(
+        self,
+        group_id: str,
+        target_user_id: str,
+        actor_user_id: str,
+        reason: str,
+        warning_count: int,
+    ):
+        await self.log_action(
+            "warn",
+            group_id,
+            target_user_id,
+            actor_user_id,
+            {
+                "reason": reason,
+                "warningCount": warning_count,
+            },
+        )
+
+    async def log_ban(
+        self,
+        group_id: str,
+        target_user_id: str,
+        actor_user_id: str,
+        reason: str | None = None,
+    ):
+        await self.log_action("ban", group_id, target_user_id, actor_user_id, {"reason": reason})
+
+    async def log_unban(
+        self,
+        group_id: str,
+        target_user_id: str,
+        actor_user_id: str,
+    ):
+        await self.log_action("unban", group_id, target_user_id, actor_user_id, {})
+
+    async def log_mode_change(
+        self,
+        group_id: str,
+        actor_user_id: str,
+        mode: str,
+        is_active: bool,
+        special_user_id: str | None = None,
+    ):
+        await self.log_action(
+            "mode_change",
+            group_id,
+            actor_user_id,
+            actor_user_id,
+            {
+                "mode": mode,
+                "isActive": is_active,
+                "specialUserId": special_user_id,
+            },
+        )
+
+    def close(self):
+        """Flush and close CommitScheduler."""
+        self.stop_hf_storage()
+        logger.info("📜 ModAuditLog closed")
+
+
+# Singleton instance - used by main.py and other modules
+# Requires HF Hub to be configured
+mod_audit_log: ModAuditLog | None = None
+
+
+def get_mod_audit_log() -> ModAuditLog | None:
+    """Get the global mod audit log instance."""
+    return mod_audit_log
+
+
+def init_mod_audit_log(token: str, repo_id: str, local_path: str = "./data/mod_audit") -> ModAuditLog:
+    """Initialize the global mod audit log."""
+    global mod_audit_log
+    mod_audit_log = ModAuditLog(token, repo_id, local_path)
+    return mod_audit_log

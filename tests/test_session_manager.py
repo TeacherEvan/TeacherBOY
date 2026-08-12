@@ -1,7 +1,7 @@
 """Tests for session manager deduplication."""
 
 import pytest
-from datetime import datetime, timedelta
+
 from src.services.session_manager import SessionManager
 
 
@@ -223,3 +223,31 @@ class TestSessionManagerSleepWake:
         # Check states
         assert manager.is_sleeping(chat_id_1) is True
         assert manager.is_sleeping(chat_id_2) is False
+
+
+def test_marks_second_cross_language_message_within_two_seconds_as_echo():
+    manager = SessionManager()
+
+    assert manager.should_ignore_cross_language_echo("group_123", "สวัสดี", now_offset_seconds=0) is False
+    assert manager.should_ignore_cross_language_echo("group_123", "hello", now_offset_seconds=1) is True
+
+
+def test_keeps_first_message_when_order_is_reversed():
+    manager = SessionManager()
+
+    assert manager.should_ignore_cross_language_echo("group_123", "hello", now_offset_seconds=0) is False
+    assert manager.should_ignore_cross_language_echo("group_123", "สวัสดี", now_offset_seconds=1) is True
+
+
+def test_does_not_ignore_after_two_second_window():
+    manager = SessionManager()
+
+    assert manager.should_ignore_cross_language_echo("group_123", "สวัสดี", now_offset_seconds=0) is False
+    assert manager.should_ignore_cross_language_echo("group_123", "hello", now_offset_seconds=3) is False
+
+
+def test_does_not_ignore_same_language_messages():
+    manager = SessionManager()
+
+    assert manager.should_ignore_cross_language_echo("group_123", "hello", now_offset_seconds=0) is False
+    assert manager.should_ignore_cross_language_echo("group_123", "how are you", now_offset_seconds=1) is False

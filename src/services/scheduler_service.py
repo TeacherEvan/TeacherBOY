@@ -1,10 +1,10 @@
 """Scheduler service for managing scheduled tasks using APScheduler."""
 
 import logging
-from typing import Optional
+
+import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class SchedulerService:
 
     def __init__(self):
         """Initialize the scheduler service."""
-        self.scheduler: Optional[AsyncIOScheduler] = None
+        self.scheduler: AsyncIOScheduler | None = None
         self.timezone = pytz.timezone("Asia/Bangkok")  # Adjust timezone as needed
 
     def start(self):
@@ -49,9 +49,7 @@ class SchedulerService:
 
         try:
             trigger = CronTrigger(hour=hour, minute=minute, timezone=self.timezone)
-            self.scheduler.add_job(
-                func, trigger=trigger, id=name, name=name, replace_existing=True
-            )
+            self.scheduler.add_job(func, trigger=trigger, id=name, name=name, replace_existing=True)
             logger.info(f"✅ Scheduled daily job '{name}' at {hour:02d}:{minute:02d}")
         except Exception as e:
             logger.error(f"❌ Error adding scheduled job '{name}': {e}")

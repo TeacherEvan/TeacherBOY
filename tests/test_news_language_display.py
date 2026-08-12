@@ -1,8 +1,11 @@
 """Test news language-specific display functionality."""
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+
 from src.agents.news_agent import NewsAgent
+from src.services.ai_translation_service import AITranslationResult
 from src.services.news_data_service import NewsDataService
 
 
@@ -10,22 +13,25 @@ from src.services.news_data_service import NewsDataService
 def mock_news_data_service():
     """Create a mock NewsDataService."""
     service = MagicMock(spec=NewsDataService)
-    service.get_weather_data = AsyncMock(return_value={
-        "temperature": "25",
-        "pm25": "45",
-        "will_rain": False
-    })
-    service.get_news_headlines = AsyncMock(return_value=[
-        {"title": "Thailand announces new policy", "url": "https://example.com/1"},
-        {"title": "Bangkok traffic update", "url": "https://example.com/2"},
-    ])
+    service.get_weather_data = AsyncMock(return_value={"temperature": "25", "pm25": "45", "will_rain": False})
+    service.get_news_headlines = AsyncMock(
+        return_value=[
+            {"title": "Thailand announces new policy", "url": "https://example.com/1"},
+            {"title": "Bangkok traffic update", "url": "https://example.com/2"},
+        ]
+    )
     return service
 
 
 @pytest.fixture
 def news_agent(mock_news_data_service):
     """Create NewsAgent with mocked service."""
-    return NewsAgent(news_data_service=mock_news_data_service)
+    ai_translation_service = MagicMock()
+    ai_translation_service.translate = AsyncMock()
+    return NewsAgent(
+        news_data_service=mock_news_data_service,
+        ai_translation_service=ai_translation_service,
+    )
 
 
 @pytest.mark.asyncio
@@ -35,29 +41,60 @@ async def test_headlines_translated_to_thai(news_agent):
         {"title": "Breaking news today", "url": "https://example.com/1"},
         {"title": "Weather report", "url": "https://example.com/2"},
     ]
-    
-    # Mock translation services
-    with patch.object(news_agent.google_translate, 'is_configured', return_value=True), \
-         patch.object(news_agent.google_translate, 'translate', new_callable=AsyncMock) as mock_translate:
-        
-        # Configure mock to return Thai text
-        mock_translate.side_effect = [
-            "ข่าวด่วนวันนี้",  # Breaking news today
-            "รายงานสภาพอากาศ"   # Weather report
+
+    news_agent.ai_translation_service.translate.side_effect = [
+        AITranslationResult(text="ข่าวด่วนวันนี้", provider="github_models"),
+        AITranslationResult(text="รายงานสภาพอากาศ", provider="github_models"),
+    ]
+
+    translated = await news_agent._translate_headlines_to_thai(headlines)
+
+    assert len(translated) == 2
+    assert translated[0]["title"] == "ข่าวด่วนวันนี้"
+    assert translated[1]["title"] == "รายงานสภาพอากาศ"
+    assert translated[0]["url"] == "https://example.com/1"
+    assert translated[1]["url"] == "https://example.com/2"
+
+    assert news_agent.ai_translation_service.translate.await_count == 2
+    news_agent.ai_translation_service.translate.assert_any_await(
+        "Breaking news today",
+        source_lang="en",
+        target_lang="th",
+    )
+    news_agent.ai_translation_service.translate.assert_any_await(
+        "Weather report",
+        source_lang="en",
+        target_lang="th",
+    )
+
+
+@pytest.mark.asyncio
+async def test_headlines_use_shared_ai_translation_service(mock_news_data_service):
+    ai_translation_service = MagicMock()
+    ai_translation_service.translate = AsyncMock(
+        return_value=AITranslationResult(
+            text="ข่าวด่วนวันนี้",
+            provider="github_models",
+        )
+    )
+
+    agent = NewsAgent(
+        news_data_service=mock_news_data_service,
+        ai_translation_service=ai_translation_service,
+    )
+
+    translated = await agent._translate_headlines_to_thai(
+        [
+            {"title": "Breaking news today", "url": "https://example.com/1"},
         ]
-        
-        translated = await news_agent._translate_headlines_to_thai(headlines)
-        
-        assert len(translated) == 2
-        assert translated[0]["title"] == "ข่าวด่วนวันนี้"
-        assert translated[1]["title"] == "รายงานสภาพอากาศ"
-        assert translated[0]["url"] == "https://example.com/1"
-        assert translated[1]["url"] == "https://example.com/2"
-        
-        # Verify translate was called correctly
-        assert mock_translate.call_count == 2
-        mock_translate.assert_any_call(text="Breaking news today", target_lang="th", source_lang="en")
-        mock_translate.assert_any_call(text="Weather report", target_lang="th", source_lang="en")
+    )
+
+    assert translated[0]["title"] == "ข่าวด่วนวันนี้"
+    ai_translation_service.translate.assert_awaited_once_with(
+        "Breaking news today",
+        source_lang="en",
+        target_lang="th",
+    )
 
 
 @pytest.mark.asyncio
@@ -67,9 +104,9 @@ async def test_headlines_fallback_messages_not_translated(news_agent):
         {"title": "News unavailable", "url": ""},
         {"title": "Visit Bangkok Post", "url": "https://www.bangkokpost.com"},
     ]
-    
+
     translated = await news_agent._translate_headlines_to_thai(headlines)
-    
+
     # Fallback messages should remain unchanged
     assert translated[0]["title"] == "News unavailable"
     assert translated[1]["title"] == "Visit Bangkok Post"
@@ -81,39 +118,34 @@ async def test_headlines_translation_error_fallback(news_agent):
     headlines = [
         {"title": "Important news", "url": "https://example.com/1"},
     ]
-    
-    # Mock both translation services to fail
-    with patch.object(news_agent.google_translate, 'is_configured', return_value=True), \
-         patch.object(news_agent.google_translate, 'translate', new_callable=AsyncMock) as mock_google, \
-         patch.object(news_agent.libre_translate, 'translate', new_callable=AsyncMock) as mock_libre:
-        
-        # Both services fail
-        mock_google.side_effect = Exception("Translation failed")
-        mock_libre.side_effect = Exception("Translation failed")
-        
-        translated = await news_agent._translate_headlines_to_thai(headlines)
-        
-        # Should return original English
-        assert translated[0]["title"] == "Important news"
+
+    news_agent.ai_translation_service.translate.side_effect = Exception("Translation failed")
+
+    translated = await news_agent._translate_headlines_to_thai(headlines)
+
+    assert translated[0]["title"] == "Important news"
 
 
 @pytest.mark.asyncio
-async def test_headlines_libre_fallback(news_agent):
-    """Test that LibreTranslate is used when Google Translate is not configured."""
+async def test_headlines_use_ai_translation_result(news_agent):
+    """Test that the shared AI translation result is used for Thai headlines."""
     headlines = [
         {"title": "Test headline", "url": "https://example.com/1"},
     ]
-    
-    # Mock Google as not configured, LibreTranslate as working
-    with patch.object(news_agent.google_translate, 'is_configured', return_value=False), \
-         patch.object(news_agent.libre_translate, 'translate', new_callable=AsyncMock) as mock_libre:
-        
-        mock_libre.return_value = "หัวข้อทดสอบ"
-        
-        translated = await news_agent._translate_headlines_to_thai(headlines)
-        
-        assert translated[0]["title"] == "หัวข้อทดสอบ"
-        mock_libre.assert_called_once_with(text="Test headline", source_lang="en", target_lang="th")
+
+    news_agent.ai_translation_service.translate.return_value = AITranslationResult(
+        text="หัวข้อทดสอบ",
+        provider="openrouter",
+    )
+
+    translated = await news_agent._translate_headlines_to_thai(headlines)
+
+    assert translated[0]["title"] == "หัวข้อทดสอบ"
+    news_agent.ai_translation_service.translate.assert_awaited_once_with(
+        "Test headline",
+        source_lang="en",
+        target_lang="th",
+    )
 
 
 @pytest.mark.asyncio
@@ -121,9 +153,9 @@ async def test_english_headlines_not_translated(news_agent, mock_news_data_servi
     """Test that headlines remain in English when language='en'."""
     # This test verifies that we don't translate when English is selected
     # The current implementation fetches English RSS and uses it directly
-    
+
     headlines = await mock_news_data_service.get_news_headlines("en")
-    
+
     # Verify headlines are in English (not translated)
     assert all("title" in h and "url" in h for h in headlines)
     # English headlines should be returned as-is (tested via service mock)
@@ -145,9 +177,9 @@ async def test_menu_format_uses_translated_headlines(news_agent):
         "usdt": {"price_usd": "$1.00", "change_24h_percent": "+0.00%"},
     }
     exchange = {"usd": "0.028", "jpy": "4.000", "zar": "0.490", "aud": "0.041", "gbp": "0.021", "rub": "2.400"}
-    
+
     menu = news_agent._format_menu_thai(weather, headlines_thai, holidays, indices, crypto, exchange)
-    
+
     # Verify Thai headlines appear in menu
     assert "ข่าวแรก" in menu
     assert "ข่าวที่สอง" in menu
@@ -170,9 +202,9 @@ async def test_menu_format_english_headlines(news_agent):
         "usdt": {"price_usd": "$1.00", "change_24h_percent": "+0.00%"},
     }
     exchange = {"usd": "0.028", "jpy": "4.000", "zar": "0.490", "aud": "0.041", "gbp": "0.021", "rub": "2.400"}
-    
+
     menu = news_agent._format_menu_english(weather, headlines_en, holidays, indices, crypto, exchange)
-    
+
     # Verify English headlines appear in menu
     assert "First news" in menu
     assert "Second news" in menu

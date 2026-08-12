@@ -1,7 +1,9 @@
 """Tests for news menu URL display inline."""
 
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+
 from src.agents.news_agent import NewsAgent
 from src.services.news_data_service import NewsDataService
 
@@ -92,10 +94,7 @@ class TestNewsMenuURLDisplay:
     def test_menu_with_all_headlines_having_urls(self, news_agent):
         """Test menu when all headlines have valid URLs."""
         weather = {"temperature": "28", "pm25": "35", "will_rain": None}
-        headlines = [
-            {"title": f"News {i}", "url": f"https://example.com/news{i}"}
-            for i in range(1, 6)
-        ]
+        headlines = [{"title": f"News {i}", "url": f"https://example.com/news{i}"} for i in range(1, 6)]
         holidays = []
         indices = {"S&P 500": "N/A", "DJIA": "N/A", "FTSE 100": "N/A"}
         crypto = {

@@ -1,0 +1,19 @@
+{
+  "events": [
+    {
+      "event_id": "17d71613-7f27-40af-ab7e-5e046d6a3cce",
+      "user_id": "U001",
+      "chat_id": "group_A",
+      "title": "Test Event",
+      "event_date": "2026-05-31",
+      "description": "",
+      "reminder_days": [
+        0
+      ],
+      "is_friend": false,
+      "notified_dates": [],
+      "created_at": "2026-05-30T06:06:49.113855+00:00"
+    }
+  ],
+  "updated_at": "2026-05-30T06:06:49.113877+00:00"
+}

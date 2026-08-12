@@ -1,9 +1,7 @@
-"""Flex Message templates for TeacherBOY."""
+"""Flex Message templates for Ms. Green."""
 
 
-def create_translation_flex(
-    original_text: str, translated_text: str, source_lang: str, target_lang: str
-) -> dict:
+def create_translation_flex(original_text: str, translated_text: str, source_lang: str, target_lang: str) -> dict:
     """
     Create a Flex Message bubble for translation result.
 
@@ -39,7 +37,7 @@ def create_translation_flex(
                     "contents": [
                         {
                             "type": "text",
-                            "text": "TeacherBOY",
+                            "text": "Ms. Green",
                             "weight": "bold",
                             "color": primary_color,
                             "size": "sm",
@@ -123,7 +121,7 @@ def create_translation_flex(
             "contents": [
                 {
                     "type": "text",
-                    "text": "Powered by LibreTranslate",
+                    "text": "Powered by AI translation",
                     "size": "xxs",
                     "color": "#aaaaaa",
                     "align": "center",

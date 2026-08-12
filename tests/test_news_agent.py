@@ -1,7 +1,9 @@
 """Basic smoke tests for NewsAgent functionality."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 from src.agents.news_agent import NewsAgent
 from src.services.news_data_service import NewsDataService
 from src.services.news_session_manager import news_session_manager
@@ -40,12 +42,12 @@ async def test_news_trigger_detection(news_agent):
     mock_event = MagicMock()
     mock_event.source = MagicMock()
     mock_event.source.user_id = "test_user"
-    
+
     # Test trigger words
     assert await news_agent.should_handle(mock_event, "news")
     assert await news_agent.should_handle(mock_event, "News")
     assert await news_agent.should_handle(mock_event, "ข่าว")
-    
+
     # Test non-trigger words
     assert not await news_agent.should_handle(mock_event, "hello")
     assert not await news_agent.should_handle(mock_event, "translate")
@@ -57,7 +59,7 @@ async def test_line_system_message_ignored(news_agent):
     mock_event = MagicMock()
     mock_event.source = MagicMock()
     mock_event.source.user_id = "test_user"
-    
+
     # LINE system messages should be ignored
     assert not await news_agent.should_handle(mock_event, "[System]")
     assert not await news_agent.should_handle(mock_event, "[Name]")
@@ -66,23 +68,23 @@ async def test_line_system_message_ignored(news_agent):
 def test_session_manager_initialization():
     """Test that session manager initializes correctly."""
     chat_id = "user_test123"
-    
+
     # Clean up any existing session
     news_session_manager.end_news_flow(chat_id)
-    
+
     # Should not be in flow initially
     assert not news_session_manager.is_in_news_flow(chat_id)
-    
+
     # Start news flow (now goes directly to main_menu with language detection)
     news_session_manager.start_news_flow(chat_id)
     assert news_session_manager.is_in_news_flow(chat_id)
-    
+
     # Get session state - now starts at main_menu, not language_selection
     session = news_session_manager.get_session_state(chat_id)
     assert session is not None
     assert session["step"] == "main_menu"  # Changed: skip language selection
     assert session["language"] is None  # Will be set by caller after auto-detection
-    
+
     # Clean up
     news_session_manager.end_news_flow(chat_id)
     assert not news_session_manager.is_in_news_flow(chat_id)
@@ -91,18 +93,18 @@ def test_session_manager_initialization():
 def test_session_language_selection():
     """Test language selection in session."""
     chat_id = "user_test456"
-    
+
     # Clean up
     news_session_manager.end_news_flow(chat_id)
-    
+
     # Start and select language
     news_session_manager.start_news_flow(chat_id)
     news_session_manager.set_language(chat_id, "th")
-    
+
     session = news_session_manager.get_session_state(chat_id)
     assert session is not None, "Session should exist after set_language"
     assert session["language"] == "th"
     assert session["step"] == "main_menu"
-    
+
     # Clean up
     news_session_manager.end_news_flow(chat_id)

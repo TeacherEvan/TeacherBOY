@@ -1,7 +1,7 @@
 """Tests for enhanced metrics service functionality."""
 
-import pytest
 from datetime import datetime
+
 from src.services.metrics_service import MetricsService, MetricsSnapshot
 
 

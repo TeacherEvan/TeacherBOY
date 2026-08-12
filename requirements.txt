@@ -3,11 +3,12 @@ uvicorn[standard]==0.24.0
 line-bot-sdk==3.6.0
 httpx[http2]==0.25.2
 python-dotenv==1.0.0
-pydantic==2.5.0
+pydantic>=2.7.0,<3.0.0
 pydantic-settings==2.1.0
 langdetect==1.0.9
 holidays==0.41.0
 feedparser==6.0.10
+cachetools==5.3.0
 
 # Tracing / Observability (OpenTelemetry)
 opentelemetry-api==1.29.0
@@ -15,17 +16,47 @@ opentelemetry-sdk==1.29.0
 opentelemetry-exporter-otlp==1.29.0
 opentelemetry-instrumentation-fastapi==0.50b0
 opentelemetry-instrumentation-httpx==0.50b0
+opentelemetry-instrumentation-logging==0.50b0
 
 # Scheduler for timed events
 apscheduler==3.10.4
 pytz==2024.1
+
+# Date parsing for calendar feature
+python-dateutil==2.8.2
+dateparser==1.2.0
 
 # Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
 pytest-cov==4.1.0
 
-# Code Quality
-black==23.11.0
-flake8==6.1.0
+# Optional dependencies for conversation memory persistence
+huggingface-hub==0.23.0
+
+# Document parsing
+pypdf==4.2.0
+python-docx==1.1.2
+openpyxl==3.1.2
+
+# Job-oriented Daily Journal tools
+easyocr==1.7.1
+reportlab==4.2.0
+
+# Optional Google Calendar integration
+google-api-python-client>=2.100.0
+google-auth-oauthlib>=1.1.0
+google-auth-httplib2>=0.2.0
+
+# Structured logging
+loguru==0.7.2
+
+# Structured LLM output (debrief extraction with Pydantic)
+instructor==1.3.0
+
+# Security
+cryptography>=42.0.0
+
+# Code Quality (ruff replaces black + flake8)
+ruff==0.4.8
 mypy==1.7.1

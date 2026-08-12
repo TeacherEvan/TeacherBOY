@@ -1,6 +1,5 @@
 """Tests for incomplete sentence detection to prevent translation hallucination."""
 
-import pytest
 from src.utils.text_preprocessing import detect_incomplete_sentence
 
 
@@ -11,7 +10,7 @@ class TestIncompleteSentenceDetection:
         """Test the exact failing case from the bug report."""
         text = "Also (Mayu) was abcent yesterday and went home today so i tried"
         result, was_incomplete = detect_incomplete_sentence(text)
-        
+
         assert was_incomplete is True
         assert result == text + "..."
         assert result.endswith("so i tried...")
@@ -25,7 +24,7 @@ class TestIncompleteSentenceDetection:
             "We should try therefore",
             "It was nice however",
         ]
-        
+
         for text in test_cases:
             result, was_incomplete = detect_incomplete_sentence(text)
             assert was_incomplete is True, f"Failed to detect: {text}"
@@ -40,7 +39,7 @@ class TestIncompleteSentenceDetection:
             "because we thought",
             "so you hoped",
         ]
-        
+
         for text in test_cases:
             result, was_incomplete = detect_incomplete_sentence(text)
             assert was_incomplete is True, f"Failed to detect: {text}"
@@ -58,7 +57,7 @@ class TestIncompleteSentenceDetection:
             "She forgot",
             "They remembered",
         ]
-        
+
         for text in test_cases:
             result, was_incomplete = detect_incomplete_sentence(text)
             assert was_incomplete is True, f"Failed to detect: {text}"
@@ -75,7 +74,7 @@ class TestIncompleteSentenceDetection:
             "I tried my best",  # Has object "my best"
             "She wanted a cookie",  # Has object "a cookie"
         ]
-        
+
         for text in test_cases:
             result, was_incomplete = detect_incomplete_sentence(text)
             assert was_incomplete is False, f"False positive: {text}"
@@ -85,7 +84,7 @@ class TestIncompleteSentenceDetection:
         """Test that text already ending with ellipsis is not modified."""
         text = "I was thinking..."
         result, was_incomplete = detect_incomplete_sentence(text)
-        
+
         assert was_incomplete is False
         assert result == text
 
@@ -96,7 +95,7 @@ class TestIncompleteSentenceDetection:
             "What did you try?",
             "How are you?",
         ]
-        
+
         for text in test_cases:
             result, was_incomplete = detect_incomplete_sentence(text)
             # These might be flagged depending on verb patterns, but shouldn't cause issues
@@ -112,7 +111,7 @@ class TestIncompleteSentenceDetection:
             ("so i tried", True),
             ("HELLO WORLD", False),
         ]
-        
+
         for text, should_be_incomplete in test_cases:
             result, was_incomplete = detect_incomplete_sentence(text)
             assert was_incomplete == should_be_incomplete, f"Failed: {text}"
@@ -124,7 +123,7 @@ class TestIncompleteSentenceDetection:
             "  so i tried",
             "  so i tried  ",
         ]
-        
+
         for text in test_cases:
             result, was_incomplete = detect_incomplete_sentence(text)
             assert was_incomplete is True
@@ -136,7 +135,7 @@ class TestIncompleteSentenceDetection:
         """Test detection when only the last sentence is incomplete."""
         text = "I went to the store. She was there too. But then we"
         result, was_incomplete = detect_incomplete_sentence(text)
-        
+
         assert was_incomplete is True
         assert result.endswith("...")
 
@@ -147,17 +146,16 @@ class TestIncompleteSentenceDetection:
             ("I sent the report but forgot", True),
             ("The meeting went well so we decided", True),
             ("Please check the document because", True),
-            
             # Complete messages that should pass through
             ("I sent the report to the team", False),
             ("The meeting went well today", False),
             ("Please check the document when you can", False),
         ]
-        
+
         for text, should_be_incomplete in test_cases:
             result, was_incomplete = detect_incomplete_sentence(text)
             assert was_incomplete == should_be_incomplete, f"Failed: {text}"
-            
+
             if should_be_incomplete:
                 assert result.endswith("...")
             else:
@@ -170,16 +168,16 @@ class TestIntegrationWithTranslation:
     def test_problematic_message_preprocessing(self):
         """Test the exact message from the bug report through preprocessing."""
         original = "Also (Mayu) was abcent yesterday and went home today so i tried"
-        
+
         # Step 1: Detect incompleteness
         processed, was_incomplete = detect_incomplete_sentence(original)
-        
+
         assert was_incomplete is True
         assert "..." in processed
-        
+
         # Step 2: Verify parentheses are still present
         assert "(Mayu)" in processed
-        
+
         # The processed text should now be less ambiguous for translation
         # "so i tried..." clearly signals incompleteness vs "so i tried"
         expected = original + "..."
@@ -189,7 +187,7 @@ class TestIntegrationWithTranslation:
         """Test edge case: empty string."""
         text = ""
         result, was_incomplete = detect_incomplete_sentence(text)
-        
+
         assert was_incomplete is False
         assert result == ""
 
@@ -197,6 +195,6 @@ class TestIntegrationWithTranslation:
         """Test edge case: only whitespace."""
         text = "   "
         result, was_incomplete = detect_incomplete_sentence(text)
-        
+
         assert was_incomplete is False
         assert result == "   "

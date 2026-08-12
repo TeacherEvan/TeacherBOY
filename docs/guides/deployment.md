@@ -39,10 +39,10 @@ Use this to validate your bot before deploying.
 2. Runtime: Docker.
 3. Internal port: `8000`.
 4. Add env vars/secrets:
-
    - `LINE_CHANNEL_SECRET`
    - `LINE_CHANNEL_ACCESS_TOKEN`
-   - `GOOGLE_TRANSLATE_API_KEY` (recommended)
+   - `GEMINI_API_KEY` or `GOOGLE_API_KEY` (recommended — Google AI Studio free tier)
+   - `OPENROUTER_API_KEY` (fallback)
    - Optional bootstrap: `ADMIN_SETUP_KEY`
 
 5. Deploy.
@@ -58,9 +58,19 @@ Key notes:
 - Configure LINE to call: `https://<your-space-host>.hf.space/webhook`
 - Store secrets in **Space Settings → Secrets** (do not commit `.env`).
 
+Gotcha (common cause of "it deployed but features are missing"):
+
+- Do not keep two copies of the app code (e.g., both top-level `src/` and a nested `TeacherBOY/src/`).
+- The Docker build runs `uvicorn src.main:app` and typically only copies the
+   top-level `src/`, so any nested `src/` changes will be ignored unless the
+   Dockerfile copy paths are updated.
+
 ### Push updates (recommended workflow)
 
 Spaces are git repos. Pushing triggers an automatic rebuild/restart.
+
+Treat the Space as a deployment target, not as a peer branch to merge with.
+GitHub `main` should remain the source of truth.
 
 1. Add the Space as a remote (once):
 
@@ -80,20 +90,22 @@ Spaces are git repos. Pushing triggers an automatic rebuild/restart.
 3. Push to Hugging Face:
 
    ```bash
-   git push hf main
+   git push --force-with-lease hf main:main
    ```
 
    Authentication:
-
    - Username: your Hugging Face username
    - Password: a Hugging Face **Access Token** (not your account password)
 
 If you initially uploaded files via the web UI, the Space may have a different git history.
-If you control the Space and want your local repo to be the source of truth, you can sync with:
+Because this repository treats GitHub as authoritative, the first
+repo-driven deploy should intentionally overwrite the Space branch:
 
 ```bash
-git push --force-with-lease hf main
+git push --force-with-lease hf main:main
 ```
+
+After this switch, avoid direct edits in the Hugging Face Space UI. Make changes in this repository and redeploy from Git.
 
 ### VS Code one-click push
 
@@ -103,6 +115,30 @@ This repo includes tasks:
 - `hf:push`
 
 Run them via **Tasks: Run Task**.
+
+### Optional minimal `hf-deploy` branch
+
+If you want the Hugging Face Space git repo to stay smaller than the main
+development repo, this repository includes `cleanup_hf_space.sh` for a
+deployment-only branch.
+
+Use this only on a dedicated branch and only when pushing to the `hf` remote:
+
+```bash
+git checkout -b hf-deploy main
+./cleanup_hf_space.sh
+git add -A
+git commit -m "chore(hf): minimal production build"
+git push hf hf-deploy:main --force-with-lease
+git checkout main
+git branch -D hf-deploy
+```
+
+Important:
+
+- Never run the cleanup script on `main`.
+- Never push the cleaned branch to `origin`.
+- `README.md` must remain in the Space root because Hugging Face displays it.
 
 ## Azure Container Apps
 
@@ -129,8 +165,18 @@ High-level flow:
 
 ## Admin bootstrap (recommended)
 
-If you didn’t set `ADMIN_USER_IDS` yet, you can bootstrap safely:
+If you didn't set `ADMIN_USER_IDS` yet, you can bootstrap safely:
 
-- Set `ADMIN_SETUP_KEY` temporarily.
+- Set `ADMIN_SETUP_KEY` temporarily in your host environment/secrets.
 - In LINE, message: `/admin claim <ADMIN_SETUP_KEY>`.
-- Use the returned user id to set `ADMIN_USER_IDS`, restart, then remove `ADMIN_SETUP_KEY`.
+- **The response states "THIS WILL BE LOST ON RESTART."** You must then:
+  1. Add the returned user ID to `ADMIN_USER_IDS` in your host environment/secrets
+  2. Restart the service (or wait for auto-restart on HF Spaces)
+  3. Remove `ADMIN_SETUP_KEY`
+
+On Hugging Face Spaces:
+- Set `ADMIN_USER_IDS` in **Space Settings → Secrets** BEFORE removing `ADMIN_SETUP_KEY`
+- The Space will auto-restart with permanent admin access
+- Then remove `ADMIN_SETUP_KEY` from Secrets
+
+> ⚠️ **The claim is in-memory only for the current process.** Any config change (including removing `ADMIN_SETUP_KEY`) triggers a container restart on HF Spaces. Without `ADMIN_USER_IDS` set, you lose admin access after restart.

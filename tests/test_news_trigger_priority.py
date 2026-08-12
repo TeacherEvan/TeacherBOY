@@ -5,13 +5,15 @@ news trigger keywords ("news", "ข่าว") before NewsAgent could handle the
 causing translation instead of showing the news menu.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from src.agents.translation_agent import TranslationAgent
+
+import pytest
+
 from src.agents.news_agent import NewsAgent
+from src.agents.translation_agent import TranslationAgent
 from src.services.news_data_service import NewsDataService
-from src.services.session_manager import session_manager
 from src.services.news_session_manager import news_session_manager
+from src.services.session_manager import session_manager
 
 
 @pytest.fixture
@@ -64,11 +66,11 @@ async def test_translation_agent_skips_news_trigger(translation_agent, mock_even
     # Clean up any existing session
     chat_id = "group_test_group_456"
     session_manager.end_session(chat_id)
-    
+
     # Test that TranslationAgent skips "news"
     should_handle = await translation_agent.should_handle(mock_event_group, "news")
     assert not should_handle, "TranslationAgent should NOT handle 'news' trigger"
-    
+
     # Test that TranslationAgent skips "ข่าว"
     should_handle = await translation_agent.should_handle(mock_event_group, "ข่าว")
     assert not should_handle, "TranslationAgent should NOT handle 'ข่าว' trigger"
@@ -76,11 +78,11 @@ async def test_translation_agent_skips_news_trigger(translation_agent, mock_even
     # Thai transliteration: "นิวส์"
     should_handle = await translation_agent.should_handle(mock_event_group, "นิวส์")
     assert not should_handle, "TranslationAgent should NOT handle 'นิวส์' trigger"
-    
+
     # Test with different casing
     should_handle = await translation_agent.should_handle(mock_event_group, "News")
     assert not should_handle, "TranslationAgent should NOT handle 'News' trigger"
-    
+
     should_handle = await translation_agent.should_handle(mock_event_group, "NEWS")
     assert not should_handle, "TranslationAgent should NOT handle 'NEWS' trigger"
 
@@ -89,16 +91,16 @@ async def test_translation_agent_skips_news_trigger(translation_agent, mock_even
 async def test_translation_agent_skips_news_even_with_active_session(translation_agent, mock_event_group):
     """Test that TranslationAgent skips news triggers even when translation session is active."""
     chat_id = "group_test_group_456"
-    
+
     # Start a translation session
     session_manager.start_session(chat_id, "test_user_123")
     assert session_manager.is_session_active(chat_id), "Session should be active"
-    
+
     try:
         # Even with active session, TranslationAgent should skip news triggers
         should_handle = await translation_agent.should_handle(mock_event_group, "news")
         assert not should_handle, "TranslationAgent should NOT handle 'news' even with active session"
-        
+
         should_handle = await translation_agent.should_handle(mock_event_group, "ข่าว")
         assert not should_handle, "TranslationAgent should NOT handle 'ข่าว' even with active session"
 
@@ -110,17 +112,17 @@ async def test_translation_agent_skips_news_even_with_active_session(translation
 
 
 @pytest.mark.asyncio
-async def test_translation_agent_handles_regular_thai_text(translation_agent, mock_event_group):
-    """Test that TranslationAgent still handles regular Thai text (not news triggers)."""
+async def test_translation_agent_auto_handles_thai_text(translation_agent, mock_event_group):
+    """Thai text should auto-start translation session (behavior restored Jun 2)."""
     chat_id = "group_test_group_456"
     session_manager.end_session(chat_id)
-    
-    # TranslationAgent should handle Thai text
+
+    # TranslationAgent SHOULD handle plain Thai text (auto-translation enabled).
     should_handle = await translation_agent.should_handle(mock_event_group, "สวัสดี")
-    assert should_handle, "TranslationAgent should handle regular Thai text"
-    
+    assert should_handle, "TranslationAgent should handle Thai text to auto-start session"
+
     should_handle = await translation_agent.should_handle(mock_event_group, "ขอบคุณครับ")
-    assert should_handle, "TranslationAgent should handle regular Thai text"
+    assert should_handle, "TranslationAgent should handle Thai text to auto-start session"
 
 
 @pytest.mark.asyncio
@@ -128,11 +130,11 @@ async def test_news_agent_handles_news_trigger(news_agent, mock_event_group):
     """Test that NewsAgent handles news trigger keywords."""
     chat_id = "group_test_group_456"
     news_session_manager.end_news_flow(chat_id)
-    
+
     # NewsAgent should handle "news"
     should_handle = await news_agent.should_handle(mock_event_group, "news")
     assert should_handle, "NewsAgent should handle 'news' trigger"
-    
+
     # NewsAgent should handle "ข่าว"
     should_handle = await news_agent.should_handle(mock_event_group, "ข่าว")
     assert should_handle, "NewsAgent should handle 'ข่าว' trigger"
@@ -140,7 +142,7 @@ async def test_news_agent_handles_news_trigger(news_agent, mock_event_group):
     # NewsAgent should handle Thai transliteration: "นิวส์"
     should_handle = await news_agent.should_handle(mock_event_group, "นิวส์")
     assert should_handle, "NewsAgent should handle 'นิวส์' trigger"
-    
+
     # Clean up
     news_session_manager.end_news_flow(chat_id)
 
@@ -149,15 +151,15 @@ async def test_news_agent_handles_news_trigger(news_agent, mock_event_group):
 async def test_priority_order_correct():
     """Test that agent priorities are set correctly for proper routing."""
     translation_agent = TranslationAgent()
-    
+
     mock_http_client = AsyncMock()
     news_data_service = NewsDataService(http_client=mock_http_client, news_api_key=None)
     news_agent = NewsAgent(news_data_service=news_data_service)
-    
+
     # Verify priorities
     assert translation_agent.get_priority() == 10, "TranslationAgent priority should be 10"
     assert news_agent.get_priority() == 15, "NewsAgent priority should be 15"
-    
+
     # Lower number = higher priority, so TranslationAgent runs FIRST
     # But it should skip news triggers to let NewsAgent handle them
 
@@ -178,7 +180,7 @@ async def test_is_news_trigger_method(translation_agent):
     assert translation_agent.is_news_trigger("news!")
     assert translation_agent.is_news_trigger("ข่าว.")
     assert translation_agent.is_news_trigger("นิวส์!")
-    
+
     # Negative cases
     assert not translation_agent.is_news_trigger("new")
     assert not translation_agent.is_news_trigger("newspaper")
@@ -196,8 +198,10 @@ async def test_news_agent_thai_alias_sets_th_language(news_agent, mock_event_gro
     mock_line_bot_api = MagicMock()
     mock_event_group.reply_token = "reply_token_123"
 
-    with patch.object(news_agent, "_is_friend", new_callable=AsyncMock, return_value=True), \
-         patch.object(news_agent, "_send_main_menu", new_callable=AsyncMock) as mock_send_menu:
+    with (
+        patch.object(news_agent, "_is_friend", new_callable=AsyncMock, return_value=True),
+        patch.object(news_agent, "_send_main_menu", new_callable=AsyncMock) as mock_send_menu,
+    ):
         handled = await news_agent.handle(mock_event_group, "นิวส์", mock_line_bot_api)
         assert handled is True
         assert mock_send_menu.call_count == 1

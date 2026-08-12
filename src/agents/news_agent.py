@@ -3,31 +3,35 @@
 Auto-detects language from trigger: 'news' = English, 'ข่าว' = Thai (no selection prompt).
 """
 
+import asyncio
 import logging
 import re
-from datetime import datetime
-from typing import List, Dict, Optional
-from linebot.v3.webhooks import MessageEvent
+from datetime import UTC, datetime
+
 from linebot.v3.messaging import (
     MessagingApi,
     ReplyMessageRequest,
     TextMessage,
 )
 from linebot.v3.messaging.exceptions import ApiException
+from linebot.v3.webhooks import MessageEvent
+
+from src.config import settings
+from src.services.ai_translation_service import (
+    ai_translation_service as default_ai_translation_service,
+)
+from src.services.metrics_service import metrics_service
+from src.services.news_data_service import NewsDataService
+from src.services.news_session_manager import news_session_manager
+from src.services.privilege_service import privilege_service
+from src.services.rate_limiter import RateLimiter
 
 from .base_agent import BaseAgent
-from src.services.news_session_manager import news_session_manager
-from src.services.news_data_service import NewsDataService
-from src.services.rate_limiter import RateLimiter
-from src.services.metrics_service import metrics_service
-from src.config import settings
 
 logger = logging.getLogger(__name__)
 
 # Rate limiters for news requests
-news_rate_limiter_friend = RateLimiter(
-    max_requests=1, time_window_seconds=3600
-)  # 1/hour for friends
+news_rate_limiter_friend = RateLimiter(max_requests=1, time_window_seconds=3600)  # 1/hour for friends
 
 
 class NewsAgent(BaseAgent):
@@ -35,34 +39,21 @@ class NewsAgent(BaseAgent):
 
     _NEWS_TRIGGERS = {"news", "ข่าว", "นิวส์"}
 
-    def __init__(self, news_data_service: NewsDataService):
+    def __init__(
+        self,
+        news_data_service: NewsDataService,
+        ai_translation_service=default_ai_translation_service,
+    ):
         super().__init__(
             name="NewsAgent",
             description="Weather, air quality, and news headlines for Bangkok",
         )
         self.news_service = news_data_service
-        self._admin_user_ids = settings.get_admin_user_ids()
-        self._moderator_user_ids = settings.get_moderator_user_ids()
-        # Import translation services for headline translation
-        from src.services.google_translation import google_translation_service
-        from src.services.translation_service import (
-            translation_service as libre_translation,
-        )
+        self.ai_translation_service = ai_translation_service
 
-        self.google_translate = google_translation_service
-        self.libre_translate = libre_translation
-
-    def _is_admin(self, user_id: Optional[str]) -> bool:
-        """Check if user is an admin (admins bypass rate limits)."""
-        return user_id in self._admin_user_ids if user_id else False
-
-    def _is_moderator(self, user_id: Optional[str]) -> bool:
-        """Check if user is a moderator (moderators get direct news access like admins)."""
-        return user_id in self._moderator_user_ids if user_id else False
-
-    def _is_privileged_user(self, user_id: Optional[str]) -> bool:
-        """Check if user is admin or moderator (both get same privileges)."""
-        return self._is_admin(user_id) or self._is_moderator(user_id)
+        # Cache friendship checks to avoid repeated LINE API calls.
+        # {user_id: (is_friend, cached_at_utc)}
+        self._friend_cache: dict[str, tuple[bool, datetime]] = {}
 
     def get_priority(self) -> int:
         """News agent priority - runs after Translation (10)."""
@@ -96,7 +87,7 @@ class NewsAgent(BaseAgent):
 
     def _is_thai_text(self, text: str) -> bool:
         """Return True when text contains Thai characters."""
-        return any("\u0E00" <= char <= "\u0E7F" for char in text)
+        return any("\u0e00" <= char <= "\u0e7f" for char in text)
 
     def _is_news_trigger(self, text: str) -> bool:
         """Check if text is a news trigger word."""
@@ -105,13 +96,13 @@ class NewsAgent(BaseAgent):
 
     def _is_shutdown_phrase(self, text: str) -> bool:
         """
-        Check if text is a shutdown phrase ("amen").
+        Check if text is a shutdown phrase ("Thanks Ms Green!").
 
         This allows users to exit news flow immediately.
         """
         text_lower = text.lower().strip()
-        # Simple pattern for "amen" with optional punctuation
-        shutdown_pattern = r"^amen[\s.!]*$"
+        # Simple pattern for "Thanks Ms Green!" with optional punctuation
+        shutdown_pattern = r"^thanks ms green[\s.!]*$"
         return bool(re.search(shutdown_pattern, text_lower))
 
     def _is_group_chat(self, event: MessageEvent) -> bool:
@@ -126,12 +117,20 @@ class NewsAgent(BaseAgent):
         """Check if user is a friend of the bot; LINE returns error for non-friends."""
         user_id = getattr(event.source, "user_id", None) if event.source else None
         if not user_id:
-            logger.warning(f"📰 No user_id found for friendship check")
+            logger.warning("📰 No user_id found for friendship check")
             return False
 
+        cached = self._friend_cache.get(user_id)
+        if cached:
+            is_friend, cached_at = cached
+            age = (datetime.now(UTC) - cached_at).total_seconds()
+            if age < settings.friend_cache_ttl_seconds:
+                return is_friend
+
         try:
-            line_bot_api.get_profile(user_id)
+            await asyncio.to_thread(line_bot_api.get_profile, user_id)
             logger.info(f"📰 User {user_id} is a friend (verified via LINE API)")
+            self._friend_cache[user_id] = (True, datetime.now(UTC))
             return True
         except ApiException as e:
             status = getattr(e, "status_code", "unknown")
@@ -139,11 +138,10 @@ class NewsAgent(BaseAgent):
                 f"📰 User {user_id} is NOT a friend (ApiException: {status})",
                 exc_info=False,
             )
+            self._friend_cache[user_id] = (False, datetime.now(UTC))
             return False
         except Exception as e:
-            logger.warning(
-                f"📰 Friendship check failed for {user_id}: {e}", exc_info=False
-            )
+            logger.warning(f"📰 Friendship check failed for {user_id}: {e}", exc_info=False)
             return False
 
     async def should_handle(self, event: MessageEvent, text: str) -> bool:
@@ -172,9 +170,7 @@ class NewsAgent(BaseAgent):
 
         return False
 
-    async def handle(
-        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
-    ) -> bool:
+    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """Process news-related messages through multi-step flow."""
         chat_id = self._get_chat_id(event)
         session = news_session_manager.get_session_state(chat_id)
@@ -191,27 +187,24 @@ class NewsAgent(BaseAgent):
                     quoteToken=None,
                 )
                 if event.reply_token:
-                    line_bot_api.reply_message(
+                    await asyncio.to_thread(
+                        line_bot_api.reply_message,
                         ReplyMessageRequest(
                             replyToken=event.reply_token,
                             messages=[goodbye_msg],
                             notificationDisabled=False,
-                        )
+                        ),
                     )
-                logger.info(
-                    f"📰 User ended news session with shutdown phrase in chat {chat_id}"
-                )
+                logger.info(f"📰 User ended news session with shutdown phrase in chat {chat_id}")
                 return True
 
             # Private chats: respond with translation of trigger only UNLESS user is admin/moderator
             if not self._is_group_chat(event):
                 if self._is_news_trigger(text):
                     # Check if user is privileged (admin or moderator)
-                    if self._is_privileged_user(user_id):
+                    if privilege_service.is_privileged(user_id):
                         # Admins/moderators get full news menu even in private chat
-                        logger.info(
-                            f"📰 Privileged user {user_id} accessing news in private chat"
-                        )
+                        logger.info(f"📰 Privileged user {user_id} accessing news in private chat")
                         # No rate limit for privileged users - proceed to start news flow
                     else:
                         # Regular users get translation only
@@ -223,35 +216,29 @@ class NewsAgent(BaseAgent):
             # Check if user is session owner (only they can interact)
             if session and not news_session_manager.is_session_owner(chat_id, user_id):
                 # Silently ignore - another user trying to interact with someone else's session
-                logger.debug(
-                    f"📰 User {user_id} tried to interact with news session owned by {session.get('user_id')}"
-                )
+                logger.debug(f"📰 User {user_id} tried to interact with news session owned by {session.get('user_id')}")
                 return True  # Handled but ignored
 
             # Step 1: News trigger - start flow with auto-detected language
             if not session and self._is_news_trigger(text):
-                user_id = (
-                    getattr(event.source, "user_id", None) if event.source else None
-                )
+                user_id = getattr(event.source, "user_id", None) if event.source else None
 
                 # Check if user is privileged (admin or moderator)
-                is_privileged = self._is_privileged_user(user_id)
+                is_privileged = privilege_service.is_privileged(user_id)
 
-                # For non-privileged users in groups: check friendship
-                if not is_privileged:
-                    # Only check friendship in group chats
-                    if self._is_group_chat(event):
-                        is_friend = await self._is_friend(event, line_bot_api)
-                        if not is_friend:
-                            await self._send_trigger_translation(
-                                event, line_bot_api, text
-                            )
-                            return True
-                    # Private chat non-privileged users are already handled above
+                # Group chats now get the same universal feature set.
+                # We keep the privilege flag only for private-chat behavior and
+                # rate-limit bypasses, not for feature availability inside groups.
+                if self._is_group_chat(event):
+                    if is_privileged:
+                        logger.info(f"🔓 Privileged user {user_id} accessing news in group chat {chat_id}")
+                    else:
+                        logger.info(f"📰 Non-privileged user {user_id} accessing news in group chat {chat_id}")
 
                 # Rate limit check (skip for privileged users)
                 if not is_privileged:
-                    # Friends get 1/hour
+                    # Regular group users share the same universal menu, but still
+                    # inherit the standard 1/hour rate limit.
                     limiter = news_rate_limiter_friend
                     max_requests = 1
 
@@ -259,17 +246,11 @@ class NewsAgent(BaseAgent):
                         metrics_service.record_rate_limited()
                         remaining = limiter.get_remaining_requests(chat_id)
                         reset_seconds = limiter.get_reset_time(chat_id)
-                        await self._send_rate_limit_message(
-                            event, line_bot_api, max_requests, remaining, reset_seconds
-                        )
-                        logger.warning(
-                            f"⚠️  Rate limited news request for chat {chat_id}"
-                        )
+                        await self._send_rate_limit_message(event, line_bot_api, max_requests, remaining, reset_seconds)
+                        logger.warning(f"⚠️  Rate limited news request for chat {chat_id}")
                         return True
                 elif user_id:
-                    logger.debug(
-                        f"🔓 Privileged user {user_id} bypassed news rate limit"
-                    )
+                    logger.info(f"🔓 Privileged user {user_id} bypassed news rate limit in chat {chat_id}")
 
                 # Track successful news request (menu will be shown)
                 metrics_service.record_news_request(chat_id)
@@ -286,9 +267,7 @@ class NewsAgent(BaseAgent):
 
             # Step 2: Main menu - handle selections
             if session and session["step"] == "main_menu":
-                return await self._handle_main_menu(
-                    event, text, line_bot_api, chat_id, session
-                )
+                return await self._handle_main_menu(event, text, line_bot_api, chat_id, session)
 
             # Step 3: Headline detail - return to menu
             if session and session["step"] == "headline_detail":
@@ -304,26 +283,7 @@ class NewsAgent(BaseAgent):
             news_session_manager.end_news_flow(chat_id)
             return False
 
-    async def _send_language_selection(
-        self, event: MessageEvent, line_bot_api: MessagingApi
-    ):
-        """Send language selection prompt."""
-        message = "📰 News / ข่าว\n\nSelect language:\n1 = Thai (ไทย)\n2 = English"
-
-        text_msg = TextMessage(text=message, quickReply=None, quoteToken=None)
-
-        if event.reply_token:
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    replyToken=event.reply_token,
-                    messages=[text_msg],
-                    notificationDisabled=False,
-                )
-            )
-
-    async def _send_main_menu(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
+    async def _send_main_menu(self, event: MessageEvent, line_bot_api: MessagingApi, language: str):
         """Fetch data and send main menu with weather and news."""
         chat_id = self._get_chat_id(event)
 
@@ -378,18 +338,17 @@ class NewsAgent(BaseAgent):
         text_msg = TextMessage(text=message, quickReply=None, quoteToken=None)
 
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[text_msg],
                     notificationDisabled=False,
-                )
+                ),
             )
 
-    async def _translate_headlines_to_thai(
-        self, headlines: List[Dict[str, str]]
-    ) -> List[Dict[str, str]]:
-        """Translate English headlines to Thai."""
+    async def _translate_headlines_to_thai(self, headlines: list[dict[str, str]]) -> list[dict[str, str]]:
+        """Translate English headlines to Thai using the shared AI service."""
         translated_headlines = []
 
         for headline in headlines:
@@ -401,30 +360,20 @@ class NewsAgent(BaseAgent):
                 translated_headlines.append(headline)
                 continue
 
-            # Try Google Translate first, fallback to LibreTranslate
-            translated_title = None
-            if self.google_translate.is_configured():
-                try:
-                    translated_title = await self.google_translate.translate(
-                        text=title, target_lang="th", source_lang="en"
-                    )
-                except Exception as e:
-                    logger.warning(f"Google Translate failed for headline: {e}")
+            translated_title = title
+            try:
+                result = await self.ai_translation_service.translate(
+                    title,
+                    source_lang="en",
+                    target_lang="th",
+                )
+            except Exception as e:
+                logger.warning(f"AI translation failed for headline: {e}")
+            else:
+                if result and result.text:
+                    translated_title = result.text
 
-            # Fallback to LibreTranslate
-            if not translated_title:
-                try:
-                    translated_title = await self.libre_translate.translate(
-                        text=title, source_lang="en", target_lang="th"
-                    )
-                except Exception as e:
-                    logger.warning(f"LibreTranslate failed for headline: {e}")
-                    # Use original English if translation fails
-                    translated_title = title
-
-            translated_headlines.append(
-                {"title": translated_title or title, "url": url}
-            )
+            translated_headlines.append({"title": translated_title, "url": url})
 
         return translated_headlines
 
@@ -476,9 +425,7 @@ class NewsAgent(BaseAgent):
         """Get current time in HH:MM format for data freshness indicator."""
         return datetime.now().strftime("%H:%M")
 
-    def _format_indices_with_context(
-        self, indices: dict, language: str = "en"
-    ) -> tuple:
+    def _format_indices_with_context(self, indices: dict, language: str = "en") -> tuple:
         """
         Format market indices with context for N/A values.
 
@@ -541,9 +488,7 @@ class NewsAgent(BaseAgent):
         temp = weather.get("temperature", "N/A")
         pm25 = weather.get("pm25", "N/A")
         will_rain = weather.get("will_rain")
-        rain_text = (
-            "ใช่ (Yes)" if will_rain else "ไม่ (No)" if will_rain is not None else "N/A"
-        )
+        rain_text = "ใช่ (Yes)" if will_rain else "ไม่ (No)" if will_rain is not None else "N/A"
 
         timestamp = self._format_timestamp()
         pm25_display = self._get_pm25_context(pm25, "th")
@@ -585,7 +530,7 @@ class NewsAgent(BaseAgent):
             if url and url.strip():
                 msg += f"   🔗 {url}\n"
             else:
-                msg += f"   ⚠️ ลิงก์ไม่พร้อมใช้งาน\n"
+                msg += "   ⚠️ ลิงก์ไม่พร้อมใช้งาน\n"
 
         return msg
 
@@ -644,7 +589,7 @@ class NewsAgent(BaseAgent):
             if url and url.strip():
                 msg += f"   🔗 {url}\n"
             else:
-                msg += f"   ⚠️ Link unavailable\n"
+                msg += "   ⚠️ Link unavailable\n"
 
         return msg
 
@@ -674,9 +619,7 @@ class NewsAgent(BaseAgent):
             try:
                 index = int(normalized) - 1
             except ValueError:
-                await self._send_invalid_choice(
-                    event, line_bot_api, session["language"]
-                )
+                await self._send_invalid_choice(event, line_bot_api, session["language"])
                 return True
 
             cached_data = session.get("cached_data", {})
@@ -685,16 +628,14 @@ class NewsAgent(BaseAgent):
             if index < len(headlines):
                 headline = headlines[index]
                 # Log headline data for debugging
-                logger.info(f"📰 User selected headline {index+1}: title='{headline.get('title', '')[:50]}...', has_url={bool(headline.get('url'))}")
-                news_session_manager.select_headline(chat_id, index)
-                await self._send_headline_detail(
-                    event, line_bot_api, headline, session["language"]
+                logger.info(
+                    f"📰 User selected headline {index + 1}: title='{headline.get('title', '')[:50]}...', has_url={bool(headline.get('url'))}"
                 )
+                news_session_manager.select_headline(chat_id, index)
+                await self._send_headline_detail(event, line_bot_api, headline, session["language"])
                 return True
             else:
-                await self._send_invalid_choice(
-                    event, line_bot_api, session["language"]
-                )
+                await self._send_invalid_choice(event, line_bot_api, session["language"])
                 return True
 
         else:
@@ -731,193 +672,16 @@ class NewsAgent(BaseAgent):
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
 
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[text_msg],
                     notificationDisabled=False,
-                )
+                ),
             )
 
-    async def _send_color_sunset_sunrise(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
-        """Send lucky color of day + sunset/sunrise times."""
-        try:
-            color_data = await self.news_service.get_color_of_day()
-            time_data = await self.news_service.get_sunset_sunrise_times()
-
-            if language == "th":
-                color_name = color_data.get("color_name_th", "ไม่ทราบ")
-                msg = f"🎨 สีแม่น้ำวันนี้: {color_name}\n"
-                msg += f"   (ฐานะดี / Lucky)\n\n"
-                msg += f"🌅 พระอาทิตย์ขึ้น: {time_data.get('sunrise', 'N/A')}\n"
-                msg += f"🌇 พระอาทิตย์ตก: {time_data.get('sunset', 'N/A')}"
-            else:
-                color_name = color_data.get("color_name_en", "Unknown")
-                msg = f"🎨 Lucky color: {color_name}\n\n"
-                msg += f"🌅 Sunrise: {time_data.get('sunrise', 'N/A')}\n"
-                msg += f"🌇 Sunset: {time_data.get('sunset', 'N/A')}"
-
-            text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-            if event.reply_token:
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        replyToken=event.reply_token,
-                        messages=[text_msg],
-                        notificationDisabled=False,
-                    )
-                )
-        except Exception as e:
-            logger.error(f"📰 Error sending color/sunset: {e}", exc_info=True)
-            await self._send_error_message(event, line_bot_api)
-
-    async def _send_holidays_markets(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
-        """Send Thai holidays + SET market info."""
-        try:
-            holidays = await self.news_service.get_thai_holidays()
-
-            if language == "th":
-                msg = "📅 วันหยุดราชการ (ต.ค.-ธ.ค.):\n"
-                for holiday in holidays[:3]:  # Top 3 holidays
-                    date = holiday.get("date", "")
-                    name = holiday.get("name_th", "")
-                    msg += f"• {date}: {name}\n"
-                msg += "\n🏛️ ตลาดหุ้น SET (ปิด):\n"
-                msg += "• วันเสาร์-อาทิตย์\n"
-                msg += "• วันหยุดราชการ"
-            else:
-                msg = "📅 Thai Holidays (Oct-Dec):\n"
-                for holiday in holidays[:3]:  # Top 3 holidays
-                    date = holiday.get("date", "")
-                    name = holiday.get("name_en", "")
-                    msg += f"• {date}: {name}\n"
-                msg += "\n🏛️ SET Market (Closed):\n"
-                msg += "• Saturday-Sunday\n"
-                msg += "• Thai holidays"
-
-            text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-            if event.reply_token:
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        replyToken=event.reply_token,
-                        messages=[text_msg],
-                        notificationDisabled=False,
-                    )
-                )
-        except Exception as e:
-            logger.error(f"📰 Error sending holidays/markets: {e}", exc_info=True)
-            await self._send_error_message(event, line_bot_api)
-
-    async def _send_crypto_exchange(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
-        """Send Bitcoin price + exchange rates."""
-        try:
-            btc_data = await self.news_service.get_bitcoin_price()
-            rates_data = await self.news_service.get_exchange_rates()
-
-            if language == "th":
-                msg = f"₿ Bitcoin (USD): {btc_data.get('price_usd', 'N/A')}\n"
-                msg += f"   24h: {btc_data.get('change_24h_percent', 'N/A')}\n\n"
-                msg += "💱 อัตราแลก (1 THB):\n"
-                msg += f"• USD: {rates_data.get('thb_usd', 'N/A')}\n"
-                msg += f"• ZAR: {rates_data.get('thb_zar', 'N/A')}\n"
-                msg += f"• CNY: {rates_data.get('thb_cny', 'N/A')}"
-            else:
-                msg = f"₿ Bitcoin (USD): {btc_data.get('price_usd', 'N/A')}\n"
-                msg += f"   24h: {btc_data.get('change_24h_percent', 'N/A')}\n\n"
-                msg += "💱 Exchange (1 THB):\n"
-                msg += f"• USD: {rates_data.get('thb_usd', 'N/A')}\n"
-                msg += f"• ZAR: {rates_data.get('thb_zar', 'N/A')}\n"
-                msg += f"• CNY: {rates_data.get('thb_cny', 'N/A')}"
-
-            text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-            if event.reply_token:
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        replyToken=event.reply_token,
-                        messages=[text_msg],
-                        notificationDisabled=False,
-                    )
-                )
-        except Exception as e:
-            logger.error(f"📰 Error sending crypto/exchange: {e}", exc_info=True)
-            await self._send_error_message(event, line_bot_api)
-
-    async def _send_festivals(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
-        """Send upcoming festivals."""
-        try:
-            festivals = await self.news_service.get_upcoming_festivals()
-
-            if language == "th":
-                msg = "🎉 เทศกาลที่กำลังจะมาถึง (กทม./พัทยา):\n\n"
-                for fest in festivals:
-                    name = fest.get("name", "")
-                    date = fest.get("date", "")
-                    msg += f"• {name}\n  📅 {date}\n"
-            else:
-                msg = "🎉 Upcoming Festivals (BKK/Pattaya):\n\n"
-                for fest in festivals:
-                    name = fest.get("name", "")
-                    date = fest.get("date", "")
-                    msg += f"• {name}\n  📅 {date}\n"
-
-            text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-            if event.reply_token:
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        replyToken=event.reply_token,
-                        messages=[text_msg],
-                        notificationDisabled=False,
-                    )
-                )
-        except Exception as e:
-            logger.error(f"📰 Error sending festivals: {e}", exc_info=True)
-            await self._send_error_message(event, line_bot_api)
-
-    async def _send_resources(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
-        """Send API resources list."""
-        msg = ""
-        if language == "th":
-            msg = "📚 แหล่งข้อมูล / Resources:\n\n"
-            msg += "🌡️ สภาพอากาศ: Open-Meteo\n"
-            msg += "https://open-meteo.com\n\n"
-            msg += "📰 ข่าว:\n"
-            msg += "• ThaiPBS: https://news.thaipbs.or.th\n"
-            msg += "• Bangkok Post: https://bangkokpost.com\n"
-            msg += "• The Nation: https://nationthailand.com\n\n"
-            msg += "ขอบคุณที่ใช้บริการ! 🙏"
-        else:
-            msg = "📚 Resources:\n\n"
-            msg += "🌡️ Weather: Open-Meteo\n"
-            msg += "https://open-meteo.com\n\n"
-            msg += "📰 News:\n"
-            msg += "• ThaiPBS: https://news.thaipbs.or.th/en\n"
-            msg += "• Bangkok Post: https://bangkokpost.com\n"
-            msg += "• The Nation: https://nationthailand.com\n\n"
-            msg += "Thank you for using TeacherBOY! 🙏"
-
-        text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
-
-        if event.reply_token:
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    replyToken=event.reply_token,
-                    messages=[text_msg],
-                    notificationDisabled=False,
-                )
-            )
-
-    async def _send_trigger_translation(
-        self, event: MessageEvent, line_bot_api: MessagingApi, text: str
-    ):
+    async def _send_trigger_translation(self, event: MessageEvent, line_bot_api: MessagingApi, text: str):
         """Translate the trigger word to the other language (group/non-friend or private)."""
         trigger_text = self._normalize_trigger_text(text)
         if trigger_text == "news":
@@ -930,17 +694,16 @@ class NewsAgent(BaseAgent):
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
 
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[text_msg],
                     notificationDisabled=False,
-                )
+                ),
             )
 
-    async def _send_invalid_choice(
-        self, event: MessageEvent, line_bot_api: MessagingApi, language: str
-    ):
+    async def _send_invalid_choice(self, event: MessageEvent, line_bot_api: MessagingApi, language: str):
         """Send invalid choice message."""
         if language == "th":
             msg = "❌ กรุณาเลือก 1-5 (หัวข้อข่าว)"
@@ -950,12 +713,13 @@ class NewsAgent(BaseAgent):
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
 
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[text_msg],
                     notificationDisabled=False,
-                )
+                ),
             )
 
     async def _send_rate_limit_message(
@@ -981,17 +745,16 @@ class NewsAgent(BaseAgent):
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
 
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[text_msg],
                     notificationDisabled=False,
-                )
+                ),
             )
 
-    async def _send_error_message(
-        self, event: MessageEvent, line_bot_api: MessagingApi
-    ):
+    async def _send_error_message(self, event: MessageEvent, line_bot_api: MessagingApi):
         """Send error message when something goes wrong."""
         msg = "❌ Sorry, something went wrong. Please try again later.\n"
         msg += "ขออภัย เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง"
@@ -999,10 +762,11 @@ class NewsAgent(BaseAgent):
         text_msg = TextMessage(text=msg, quickReply=None, quoteToken=None)
 
         if event.reply_token:
-            line_bot_api.reply_message(
+            await asyncio.to_thread(
+                line_bot_api.reply_message,
                 ReplyMessageRequest(
                     replyToken=event.reply_token,
                     messages=[text_msg],
                     notificationDisabled=False,
-                )
+                ),
             )

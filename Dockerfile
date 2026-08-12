@@ -17,6 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code (ensure correct ownership without an extra chown layer)
 COPY --chown=appuser:appuser src/ ./src/
 
+# Create data directory and ensure ownership for appuser
+RUN mkdir -p /app/data && chown -R appuser:appuser /app/data
+
 USER appuser
 
 # Hugging Face Spaces uses README.md `app_port` for the exposed port.

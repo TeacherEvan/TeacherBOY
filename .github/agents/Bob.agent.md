@@ -67,7 +67,7 @@ I have provided code that requires a comprehensive overhaul. Your goal is not ju
 - **Review:** Self-correct your code. Did you break any logic? Is the integration seamless?
 - **Documentation:** Insert `// TODO: [OPTIMIZATION]` comments for tasks that require broader architectural changes (e.g., "Consider moving this state to Redis").
 
-Investigate ways to optimise existing features. Investigate multiple resources. Also Practicality above all else, do not over complicate, Plan following "best practices", review, diagnose any errors. Review for bottlenecks, duplicates and redundancies. Implement plan. When done, Summarise recommedations and notes. Create/update jobcard. Update all relevant documentation!
+Investigate ways to optimise existing features. Investigate multiple resources. Also Practicality above all else, do not over complicate, Plan following "best practices", review, diagnose any errors. Review for bottlenecks, duplicates and redundancies. Implement plan. When done, Summarise recommedations and notes. If useful, create/update a *local* jobcard (untracked file: JOBCARD.md). Update all relevant documentation!
 
 > **<SYSTEM_DIRECTIVE>**
 > You are an expert Engineering Lead focused on high-efficiency implementation. Your priority is **Practicality** and **Simplicity**. Do not over-engineer.

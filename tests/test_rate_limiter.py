@@ -1,7 +1,10 @@
 """Tests for rate limiter service."""
 
+from datetime import datetime
+from unittest.mock import patch
+
 import pytest
-from datetime import datetime, timedelta
+
 from src.services.rate_limiter import RateLimiter
 
 
@@ -102,3 +105,67 @@ class TestRateLimiter:
 
         # Verify history is cleaned
         assert limiter.get_remaining_requests(chat_id) == 3
+
+    def test_admin_destructive_cleanup_uses_utc_consistently(self):
+        """Admin destructive reservations should survive cleanup when UTC expiry has not passed."""
+
+        class FixedDateTime(datetime):
+            _utc_now = datetime(2026, 5, 31, 12, 0, 0)
+            _local_now = datetime(2026, 5, 31, 19, 0, 0)
+
+            @classmethod
+            def utcnow(cls):
+                return cls._utc_now
+
+            @classmethod
+            def now(cls, tz=None):
+                if tz is not None:
+                    return tz.fromutc(cls._local_now.replace(tzinfo=tz))
+                return cls._local_now
+
+        limiter = RateLimiter()
+
+        with patch("src.services.rate_limiter.datetime", FixedDateTime):
+            reserved, message = limiter.reserve_admin_destructive_request(
+                user_id="U-admin",
+                target_chat_id="group_C999",
+                token="tok-1",
+                expires_at=FixedDateTime(2026, 5, 31, 12, 5, 0),
+            )
+
+            assert reserved is True
+            assert message is None
+
+            limiter.cleanup_old_entries()
+
+            reserved_again, second_message = limiter.reserve_admin_destructive_request(
+                user_id="U-admin",
+                target_chat_id="group_C999",
+                token="tok-2",
+                expires_at=FixedDateTime(2026, 5, 31, 12, 5, 0),
+            )
+
+        assert reserved_again is False
+        assert "already pending" in second_message.lower()
+
+    def test_admin_destructive_cleanup_uses_same_lock_as_reserve_and_release(self):
+        """Cleanup should acquire the admin destructive lock before mutating reservations."""
+
+        class CountingLock:
+            def __init__(self):
+                self.enter_count = 0
+
+            def __enter__(self):
+                self.enter_count += 1
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        limiter = RateLimiter()
+        counting_lock = CountingLock()
+        limiter._admin_destructive_lock = counting_lock  # type: ignore[assignment]
+
+        limiter.cleanup_old_entries()
+
+        assert counting_lock.enter_count == 1

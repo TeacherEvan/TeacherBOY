@@ -3,19 +3,88 @@ name: Sync to Hugging Face Hub
 on:
     push:
         branches: [main]
+        paths:
+            - 'src/**'
+            - 'scripts/**'
+            - 'docs/**'
+            - 'README.md'
+            - 'Dockerfile'
+            - 'requirements.txt'
+            - 'data/**'
+            - '.github/workflows/huggingface_sync.yml'
 
     # to run this workflow manually from the Actions tab
     workflow_dispatch:
 
+permissions:
+    contents: read
+
+concurrency:
+    group: huggingface-sync-${{ github.ref }}
+    cancel-in-progress: true
+
 jobs:
     sync-to-hub:
+        if: github.ref_name == 'main'
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
                   fetch-depth: 0
                   lfs: true
-            - name: Push to hub
+                  persist-credentials: false
+                  submodules: false
+                  ref: ${{ github.ref_name }}
+            - name: Sync to hub
               env:
                   HF_TOKEN: ${{ secrets.HF_TOKEN }}
-              run: git push https://TeacherEvan:$HF_TOKEN@huggingface.co/spaces/EvilEvan/TeacherBOY main
+              run: |
+                  set -euo pipefail
+                  export GIT_TERMINAL_PROMPT=0
+                  trap 'git remote remove hf >/dev/null 2>&1 || true' EXIT
+
+                  if [ -z "${HF_TOKEN:-}" ]; then
+                      echo "HF_TOKEN secret is required for Hugging Face sync."
+                      exit 1
+                  fi
+
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+                  HF_REMOTE_URL="https://TeacherEvan:${HF_TOKEN}@huggingface.co/spaces/EvilEvan/TeacherBOY"
+
+                  if git remote get-url hf >/dev/null 2>&1; then
+                      git remote set-url hf "${HF_REMOTE_URL}"
+                  else
+                      git remote add hf "${HF_REMOTE_URL}"
+                  fi
+
+                  if ! git ls-remote hf >/dev/null 2>&1; then
+                      echo "Unable to access the Hugging Face remote. Check HF_TOKEN and remote availability."
+                      exit 1
+                  fi
+
+                  remote_sha="$(git ls-remote hf refs/heads/main | awk '{print $1}')"
+
+                  if [ -n "${remote_sha}" ] && ! printf '%s' "${remote_sha}" | grep -Eq '^[0-9a-f]{40}$'; then
+                      echo "Unexpected SHA for Hugging Face main: ${remote_sha}"
+                      exit 1
+                  fi
+
+                  if [ -n "${remote_sha}" ]; then
+                      echo "Publishing GitHub main to Hugging Face Space main (repo-authoritative deploy)."
+                      git push --force-with-lease=refs/heads/main:${remote_sha} hf HEAD:main
+                  else
+                      echo "Hugging Face branch 'main' does not exist yet; creating it from GitHub main."
+                      git push hf HEAD:main
+                  fi
+
+            - name: Verify remote main commit
+              env:
+                  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  remote_sha="$(git ls-remote https://TeacherEvan:${HF_TOKEN}@huggingface.co/spaces/EvilEvan/TeacherBOY refs/heads/main | awk '{print $1}')"
+                  head_sha="$(git rev-parse HEAD)"
+                  echo "HF main commit: ${remote_sha}"
+                  test "${remote_sha}" = "${head_sha}"

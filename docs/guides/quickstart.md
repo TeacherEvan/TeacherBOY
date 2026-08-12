@@ -1,6 +1,6 @@
 # Quick Start
 
-Goal: run TeacherBOY locally (Docker) and connect it to LINE.
+Goal: run Ms. Green locally (Docker) and connect it to LINE.
 
 ## Prerequisites
 
@@ -17,27 +17,26 @@ Goal: run TeacherBOY locally (Docker) and connect it to LINE.
    ```
 
 2. Fill in at minimum:
-
    - `LINE_CHANNEL_SECRET`
    - `LINE_CHANNEL_ACCESS_TOKEN`
 
 3. Recommended (better translation quality):
-
-   - `GOOGLE_TRANSLATE_API_KEY`
+   - `GEMINI_API_KEY` or `GOOGLE_API_KEY` (primary - Google AI Studio free tier)
+   - `OPENROUTER_API_KEY` (fallback)
 
 ## 2) Run the bot
 
 ### Option A: Docker (recommended)
 
 ```bash
-docker build -t teacherboy .
-docker run --env-file .env -p 8000:8000 teacherboy
+docker build -t ms-green .
+docker run --env-file .env -p 8000:8000 ms-green
 ```
 
 Health endpoints:
 
 - `GET http://localhost:8000/health`
-- `GET http://localhost:8000/readiness`
+- `GET http://localhost:8000/readiness` — reports startup readiness once the service is serving requests, and may return `503` when startup data is not loaded or agents are not registered
 
 ### Option B: Python (dev)
 
@@ -64,20 +63,35 @@ Follow: [docs/guides/line-setup.md](line-setup.md)
 
 - Send a Thai message (e.g., `สวัสดีครับ`) to start translation mode.
 - Send English/Thai messages; the bot replies with translations.
-- Stop/sleep: `amen`
-- Wake: `TeacherBoy`
+- Stop/sleep: `Thanks Ms Green!`
+- Wake: `Dear Ms. Green`
+
+### Optional: AI + Web Search (DM-only for regular users)
+
+- **AI (Gemini / fallback chain):** `Ms. Green <your question>`
+- **Web search (Brave Search):** `Ms. Green search <query>`
+
+Legacy `Zeus ...` commands may still be accepted for backward compatibility.
+
+Access rules:
+
+- **Admins:** can use these commands anywhere
+- **Regular users:** must use these commands in **DM (1-on-1)**
 
 ## Deploy on Hugging Face Spaces (Docker)
 
 1. Create a Space: <https://huggingface.co/new-space> (SDK: Docker)
 2. Push this repo to the Space (Git remote) and wait for build.
 3. In Space settings, add Secrets:
-
    - `LINE_CHANNEL_SECRET`
    - `LINE_CHANNEL_ACCESS_TOKEN`
-   - `GOOGLE_TRANSLATE_API_KEY` (recommended)
+   - `GEMINI_API_KEY` or `GOOGLE_API_KEY` (recommended — Google AI Studio free tier)
    - Optional: `ADMIN_SETUP_KEY`
 
 4. Set LINE webhook URL to:
 
 - `https://<your-username>-<your-space>.hf.space/webhook`
+
+Gotcha:
+
+- Avoid having both a top-level `src/` and a nested `TeacherBOY/src/`. Docker Spaces typically runs `uvicorn src.main:app` from the top-level `src/`, so nested code won’t take effect unless the Dockerfile copy paths are updated.

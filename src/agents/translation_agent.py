@@ -1,28 +1,36 @@
 """Translation agent - Handles Thai/English translation with session management."""
 
+import asyncio
 import logging
 import re
-from typing import Optional
-from linebot.v3.webhooks import MessageEvent
+
 from linebot.v3.messaging import (
+    FlexContainer,
+    FlexMessage,
     MessagingApi,
     ReplyMessageRequest,
     TextMessage,
-    FlexMessage,
-    FlexContainer,
 )
+from linebot.v3.webhooks import MessageEvent
+
+from src.services.ai_translation_service import (
+    ai_translation_service as default_ai_translation_service,
+)
+from src.services.bot_identity_service import get_bot_identity_service
+from src.services.metrics_service import metrics_service
+from src.services.privilege_service import privilege_service
+from src.services.rate_limiter import rate_limiter
+from src.services.session_manager import session_manager
+from src.utils.tracing import get_tracer
 
 from .base_agent import BaseAgent
-from src.services.translation_service import translation_service
-from src.services.google_translation import google_translation_service
-from src.services.session_manager import session_manager
-from src.services.rate_limiter import rate_limiter
-from src.services.metrics_service import metrics_service
-from src.utils.tracing import get_tracer
-from src.config import settings
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
+
+# Pre-compiled regex patterns for performance
+_THAI_CHAR_PATTERN = re.compile(r"[\u0E00-\u0E7F]")
+_NEWS_TRIGGER_CLEANUP_PATTERN = re.compile(r"[\s.!?]+$")
 
 
 class TranslationAgent(BaseAgent):
@@ -30,61 +38,50 @@ class TranslationAgent(BaseAgent):
 
     _NEWS_TRIGGERS = {"news", "ข่าว", "นิวส์"}
 
-    def __init__(self):
+    def __init__(self, ai_translation_service=default_ai_translation_service):
         super().__init__(
             name="TranslationAgent",
             description="Thai/English translation with continuous session mode",
         )
-        self._admin_user_ids = settings.get_admin_user_ids()
+        self.ai_translation_service = ai_translation_service
 
     def get_priority(self) -> int:
         """Translation has high priority."""
         return 10
 
-    def _is_admin(self, user_id: Optional[str]) -> bool:
-        """Check if user is an admin (admins bypass rate limits)."""
-        return user_id in self._admin_user_ids if user_id else False
-
     def contains_thai(self, text: str) -> bool:
         """Check if text contains Thai characters."""
-        return bool(re.search(r"[\u0E00-\u0E7F]", text))
+        return bool(_THAI_CHAR_PATTERN.search(text))
 
     def is_sleep_command(self, text: str) -> bool:
         """
-        Check if text is a sleep command (puts bot to sleep for 24 hours).
-
-        Sleep pattern: "amen" (case insensitive)
+        Check if text is a sleep command (puts bot to sleep indefinitely until admin wakes it).
+        Sleep patterns: "ms. green stop", "thank you ms. green", "good night ms. green"
         """
         text_lower = text.lower().strip()
-        # Simple pattern for "amen" with optional punctuation
-        sleep_pattern = r"^amen[\s.!]*$"
+
+        # Build pattern dynamically based on identity
+        aliases = get_bot_identity_service().get_profile().aliases
+        escaped = [re.escape(alias) for alias in aliases]
+        alias_pattern = "|".join(sorted(escaped, key=len, reverse=True))
+
+        sleep_pattern = (
+            rf"^(good\s*night\s*(?:{alias_pattern})|sleep\s*(?:{alias_pattern})|"
+            rf"(?:{alias_pattern})\s*sleep|thanks ms green|"
+            rf"(?:{alias_pattern})\s*stop|thank\s*you\s*(?:{alias_pattern}))[\s.!]*$"
+        )
         return bool(re.search(sleep_pattern, text_lower))
 
     def is_wake_command(self, text: str) -> bool:
         """
         Check if text is a wake command (wakes bot from sleep).
 
-        Wake pattern: "TeacherBoy" alone (exact match, not among other text)
-        Handles common typos: teacherboi, teacherboy, teacherbiy, etc.
+        Wake pattern: Any message starting with the configured bot identity.
         """
-        # Allow for case-insensitive "teacherboy" with common typos and optional trailing punctuation/whitespace
-        teacher_pattern = r"^teacher(?:boy|boi|biy|boj|boii)[\s.!]*$"
-        return bool(re.match(teacher_pattern, text.lower().strip()))
-
-    def is_help_command(self, text: str) -> bool:
-        """Check if text is a help command for the bot."""
-        text_lower = text.lower().strip()
-        teacher_pattern = r"teacher(?:boy|boi|biy|boj|boii)"
-        help_patterns = [
-            rf"^{teacher_pattern}\s+--help[\s.!?]*$",
-            rf"^{teacher_pattern}\s+help[\s.!?]*$",
-        ]
-        return any(re.match(pattern, text_lower) for pattern in help_patterns)
-
-    def is_private_help_command(self, text: str) -> bool:
-        """Return True for plain 'help' (intended for 1:1 chat)."""
-        text_clean = re.sub(r"[\s.!?]+$", "", text.lower().strip())
-        return text_clean == "help"
+        if self.is_sleep_command(text):
+            return False
+        prefix, _ = get_bot_identity_service().split_command_prefix(text)
+        return prefix is not None
 
     def _is_private_chat(self, event: MessageEvent) -> bool:
         if event.source and getattr(event.source, "group_id", None):
@@ -93,28 +90,6 @@ class TranslationAgent(BaseAgent):
             return False
         return True
 
-    def _get_contextual_help(self, is_admin: bool) -> str:
-        msg = (
-            "Help\n"
-            "━━━━━━━━━━━━\n\n"
-            "User commands:\n"
-            "- TeacherBoy  (wake)\n"
-            "- amen  (sleep 24h)\n"
-            "- help  (this message)\n"
-            "- news / ข่าว  (private: keyword translation only; admins/mods get full menu)\n"
-        )
-        if is_admin:
-            msg += (
-                "\nAdmin commands:\n"
-                "- /admin help\n"
-                "- /admin stats\n"
-                "- /admin leave ... (confirmation)\n"
-                "- /admin purge ... (confirmation)\n"
-                "- /admin confirm <token>\n"
-                "- /admin cancel <token>\n"
-            )
-        return msg
-
     def is_exit_command(self, text: str) -> bool:
         """Check if text is an exit command (ends session but doesn't sleep)."""
         # Sleep command is now the primary way to exit
@@ -122,7 +97,7 @@ class TranslationAgent(BaseAgent):
 
     def is_news_trigger(self, text: str) -> bool:
         """Check if text is a news trigger word (should be handled by NewsAgent)."""
-        text_clean = re.sub(r"[\s.!?]+$", "", text.lower().strip())
+        text_clean = _NEWS_TRIGGER_CLEANUP_PATTERN.sub("", text.lower().strip())
         return text_clean in self._NEWS_TRIGGERS
 
     def is_special_news_command(self, text: str) -> bool:
@@ -142,20 +117,43 @@ class TranslationAgent(BaseAgent):
         """
         chat_id = self._get_chat_id(event)
 
-        # Always handle help command (even if sleeping)
-        if self.is_help_command(text):
-            return True
-
-        # Plain help in private chat
-        if self._is_private_chat(event) and self.is_private_help_command(text):
-            return True
-
         # Always handle wake command (even if not sleeping)
         if self.is_wake_command(text):
             return True
 
+        # Always handle sleep commands (even if no active translation session).
+        # Exception: if the chat is currently in a NewsAgent flow, let NewsAgent
+        # own the shutdown phrase so it can exit its flow cleanly.
+        if self.is_sleep_command(text):
+            user_id = getattr(event.source, "user_id", None) if event.source else None
+            if session_manager.is_sleeping(chat_id) and not privilege_service.is_privileged(user_id):
+                return False
+            try:
+                from src.services.news_session_manager import news_session_manager
+            except ImportError as exc:
+                logger.warning(
+                    "⚠️ news_session_manager not available when handling sleep command: %s",
+                    exc,
+                    exc_info=True,
+                )
+            else:
+                try:
+                    if news_session_manager.is_in_news_flow(chat_id):
+                        return False
+                except Exception as exc:
+                    logger.error(
+                        "❌ Error while checking news flow state in TranslationAgent: %s",
+                        exc,
+                        exc_info=True,
+                    )
+            return True
+
         # Don't handle anything else if sleeping
         if session_manager.is_sleeping(chat_id):
+            # Only admin waking the bot via Thai string starts a new session
+            user_id = getattr(event.source, "user_id", None) if event.source else None
+            if privilege_service.is_admin(user_id) and self.contains_thai(text):
+                return True
             return False
 
         # Always handle sleep commands (like wake commands)
@@ -170,12 +168,15 @@ class TranslationAgent(BaseAgent):
         if self.is_special_news_command(text):
             return False
 
-        # Handle if Thai detected or session is active
-        return self.contains_thai(text) or session_manager.is_session_active(chat_id)
+        # Auto-start translation when Thai text is detected.
+        if self.contains_thai(text):
+            return True
 
-    async def handle(
-        self, event: MessageEvent, text: str, line_bot_api: MessagingApi
-    ) -> bool:
+        # Auto-translation is disabled. Only explicit wake/help/sleep paths and
+        # already-active sessions should be handled here.
+        return session_manager.is_session_active(chat_id)
+
+    async def handle(self, event: MessageEvent, text: str, line_bot_api: MessagingApi) -> bool:
         """Process translation request."""
         chat_id = self._get_chat_id(event)
         user_id = getattr(event.source, "user_id", None) if event.source else None
@@ -183,54 +184,6 @@ class TranslationAgent(BaseAgent):
         with tracer.start_as_current_span("translation_agent.handle") as span:
             span.set_attribute("chat.id", chat_id)
             try:
-                # Help command
-                if self.is_help_command(text):
-                    span.set_attribute("translation.command", "help")
-                    help_message = TextMessage(
-                        text=(
-                            "TeacherBOY Help\n"
-                            "━━━━━━━━━━━━\n\n"
-                            "Wake the bot:\n"
-                            "- TeacherBoy\n\n"
-                            "Put the bot to sleep (24h):\n"
-                            "- amen\n\n"
-                            "Admin (if enabled):\n"
-                            "- TeacherBoy admin help\n"
-                            "- /admin help\n\n"
-                            "Tips:\n"
-                            "- Send Thai to start auto-translation\n"
-                            "- Translation continues until sleep"
-                        ),
-                        quickReply=None,
-                        quoteToken=None,
-                    )
-                    if event.reply_token:
-                        line_bot_api.reply_message(
-                            ReplyMessageRequest(
-                                replyToken=event.reply_token,
-                                messages=[help_message],
-                                notificationDisabled=False,
-                            )
-                        )
-                    return True
-
-                # Private chat: contextual help (plain 'help')
-                if self._is_private_chat(event) and self.is_private_help_command(text):
-                    span.set_attribute("translation.command", "help_private")
-                    help_text = self._get_contextual_help(self._is_admin(user_id))
-                    help_message = TextMessage(
-                        text=help_text, quickReply=None, quoteToken=None
-                    )
-                    if event.reply_token:
-                        line_bot_api.reply_message(
-                            ReplyMessageRequest(
-                                replyToken=event.reply_token,
-                                messages=[help_message],
-                                notificationDisabled=False,
-                            )
-                        )
-                    return True
-
                 # Handle wake command
                 if self.is_wake_command(text):
                     span.set_attribute("translation.command", "wake")
@@ -238,12 +191,13 @@ class TranslationAgent(BaseAgent):
                         session_manager.wake_chat(chat_id)
                         wake_message = self._create_wake_message()
                         if event.reply_token:
-                            line_bot_api.reply_message(
+                            await asyncio.to_thread(
+                                line_bot_api.reply_message,
                                 ReplyMessageRequest(
                                     replyToken=event.reply_token,
                                     messages=[wake_message],
                                     notificationDisabled=False,
-                                )
+                                ),
                             )
                         logger.info(f"☀️ Chat {chat_id} woken up by user")
                     else:
@@ -254,49 +208,58 @@ class TranslationAgent(BaseAgent):
                             quoteToken=None,
                         )
                         if event.reply_token:
-                            line_bot_api.reply_message(
+                            await asyncio.to_thread(
+                                line_bot_api.reply_message,
                                 ReplyMessageRequest(
                                     replyToken=event.reply_token,
                                     messages=[already_awake_msg],
                                     notificationDisabled=False,
-                                )
+                                ),
                             )
                         logger.info(f"✅ Chat {chat_id} confirmed awake status")
                     return True
 
                 # Handle sleep command
                 if self.is_sleep_command(text):
-                    span.set_attribute("translation.command", "sleep")
-                    session_manager.sleep_chat(chat_id, hours=24)
-                    sleep_message = self._create_sleep_message()
-                    if event.reply_token:
-                        line_bot_api.reply_message(
-                            ReplyMessageRequest(
-                                replyToken=event.reply_token,
-                                messages=[sleep_message],
-                                notificationDisabled=False,
+                    if not privilege_service.is_privileged(user_id):
+                        logger.info(f"⚠️ User {user_id} tried to stop translations but lacks privileges.")
+                        # Fall through to standard translation or ignore
+                        # For a seamless experience, we just let it be translated.
+                    else:
+                        span.set_attribute("translation.command", "sleep")
+                        # Sleep indefinitely (100 years = 876000 hours) until admin wakes via Thai
+                        session_manager.sleep_chat(chat_id, hours=876000)
+                        sleep_message = self._create_sleep_message()
+                        if event.reply_token:
+                            await asyncio.to_thread(
+                                line_bot_api.reply_message,
+                                ReplyMessageRequest(
+                                    replyToken=event.reply_token,
+                                    messages=[sleep_message],
+                                    notificationDisabled=False,
+                                ),
                             )
-                        )
-                    logger.info(f"😴 Chat {chat_id} put to sleep for 24 hours")
-                    return True
+                        logger.info(f"😴 Chat {chat_id} put to sleep indefinitely by {user_id}")
+                        return True
 
                 # Check for rate limiting (skip for admins)
-                if not self._is_admin(user_id) and not rate_limiter.is_allowed(chat_id):
+                if not privilege_service.is_admin(user_id) and not rate_limiter.is_allowed(chat_id, user_id):
                     span.set_attribute("translation.rate_limited", True)
                     metrics_service.record_rate_limited()
-                    reset_seconds = rate_limiter.get_reset_time(chat_id)
-                    rate_limit_message = self._create_rate_limit_message(reset_seconds)
+                    reset_seconds = rate_limiter.get_reset_time(chat_id, user_id)
+                    rate_limit_message = self._create_rate_limit_message(reset_seconds, user_id)
                     if event.reply_token:
-                        line_bot_api.reply_message(
+                        await asyncio.to_thread(
+                            line_bot_api.reply_message,
                             ReplyMessageRequest(
                                 replyToken=event.reply_token,
                                 messages=[rate_limit_message],
                                 notificationDisabled=False,
-                            )
+                            ),
                         )
-                    logger.warning(f"⚠️  Rate limited chat {chat_id}")
+                    logger.warning(f"⚠️  Rate limited chat {chat_id}, user {user_id}")
                     return True
-                elif self._is_admin(user_id):
+                elif privilege_service.is_admin(user_id):
                     logger.debug(f"🔓 Admin {user_id} bypassed rate limit")
 
                 # Check for duplicate message
@@ -309,6 +272,11 @@ class TranslationAgent(BaseAgent):
                 # Start session if Thai detected
                 if self.contains_thai(text):
                     span.set_attribute("translation.detected", "th")
+                    if session_manager.is_sleeping(chat_id):
+                        if privilege_service.is_admin(user_id):
+                            session_manager.wake_chat(chat_id)
+                            logger.info(f"☀️ Chat {chat_id} woken up by Admin sending Thai")
+
                     if not session_manager.is_session_active(chat_id):
                         session_manager.start_session(chat_id, user_id or "unknown")
                         logger.info(f"🔥 Translation session started for chat {chat_id}")
@@ -320,17 +288,16 @@ class TranslationAgent(BaseAgent):
 
                 if translated_text:
                     # Send simple text message as requested
-                    text_message = TextMessage(
-                        text=translated_text, quickReply=None, quoteToken=None
-                    )
+                    text_message = TextMessage(text=translated_text, quickReply=None, quoteToken=None)
 
                     if event.reply_token:
-                        line_bot_api.reply_message(
+                        await asyncio.to_thread(
+                            line_bot_api.reply_message,
                             ReplyMessageRequest(
                                 replyToken=event.reply_token,
                                 messages=[text_message],
                                 notificationDisabled=False,
-                            )
+                            ),
                         )
                     logger.info(f"✅ Translation sent for chat {chat_id}")
                     span.set_attribute("translation.success", True)
@@ -346,34 +313,49 @@ class TranslationAgent(BaseAgent):
                 span.set_attribute("translation.error", True)
                 return False
 
-    async def _translate_message(self, text: str, chat_id: Optional[str] = None) -> str:
-        """Translate using Google (primary) or LibreTranslate (fallback)."""
-        # Try Google Translate first
-        if google_translation_service.is_configured():
-            with tracer.start_as_current_span("translation.translate.google") as span:
-                span.set_attribute("translation.provider", "google")
-                result = await google_translation_service.auto_translate(text)
-            if result:
-                metrics_service.record_translation("google", chat_id)
-                return result
-            logger.warning("⚠️  Google Translate failed, trying LibreTranslate...")
+    async def _translate_message(self, text: str, chat_id: str | None = None) -> str:
+        if not text or not text.strip():
+            return ""
 
-        # Fallback to LibreTranslate
-        with tracer.start_as_current_span("translation.translate.libre") as span:
-            span.set_attribute("translation.provider", "libretranslate")
-            if self.contains_thai(text):
-                result = await translation_service.translate(text, "th", "en")
-            else:
-                result = await translation_service.translate(text, "en", "th")
+        source_lang = "th" if self.contains_thai(text) else "en"
+        target_lang = "en" if source_lang == "th" else "th"
+        normalized = text.strip()
+
+        # Always translate - remove passthrough for short English
+        result = await self.ai_translation_service.translate(
+            normalized,
+            source_lang=source_lang,
+            target_lang=target_lang,
+        )
 
         if result:
-            metrics_service.record_translation("libre", chat_id)
-            return result
+            metrics_service.record_translation(result.provider, chat_id)
+            return result.text
 
-        # Record final failure only if both providers failed
         metrics_service.record_failed_translation()
-        return "Translation failed"
-        return "Translation failed"
+        provider_errors = []
+        for provider_name, provider_obj, _, _ in [
+            ("nous", self.ai_translation_service.nous, None, None),
+            ("github_models", self.ai_translation_service.github_models, None, None),
+            ("openrouter", self.ai_translation_service.openrouter, None, None),
+            ("libretranslate", self.ai_translation_service.libre_translate, None, None),
+            ("hermes", self.ai_translation_service.hermes, None, None),
+        ]:
+            if not provider_obj.is_configured():
+                continue
+            status, err, model = provider_obj.get_last_error()
+            entry = f"{provider_name}: "
+            if status is not None:
+                entry += f"status={status}, "
+            if model:
+                entry += f"model={model}, "
+            if err:
+                entry += f"error={err}"
+            provider_errors.append(entry.rstrip(", "))
+
+        last = "; ".join(provider_errors) if provider_errors else "no response/not used"
+        logger.error("Translation failed: %s", last)
+        return f"[Translation failed] {text}"
 
     def _get_chat_id(self, event: MessageEvent) -> str:
         """Extract chat ID from event."""
@@ -418,11 +400,12 @@ class TranslationAgent(BaseAgent):
         """
         # Modern color palette
         primary_color = "#667EEA"  # Indigo
-        secondary_color = "#764BA2"  # Purple
         success_color = "#10B981"  # Emerald
         text_primary = "#1F2937"  # Gray-800
         text_secondary = "#6B7280"  # Gray-500
         text_muted = "#9CA3AF"  # Gray-400
+        palette = f"{primary_color}{success_color}{text_primary}{text_secondary}{text_muted}"
+        logger.debug("palette_loaded:%s", palette)
 
         # Language emoji mapping
         lang_emoji = {"Thai": "🇹🇭", "English": "🇬🇧"}
@@ -445,7 +428,7 @@ class TranslationAgent(BaseAgent):
                             },
                             {
                                 "type": "text",
-                                "text": "TeacherBOY Translate",
+                                "text": "Ms. Green Translate",
                                 "weight": "bold",
                                 "size": "lg",
                                 "color": "#ffffff",
@@ -615,7 +598,7 @@ class TranslationAgent(BaseAgent):
                         "contents": [
                             {
                                 "type": "text",
-                                "text": '💡 Tip: Say "amen" to sleep for 24h',
+                                "text": '💡 Tip: Say "Thanks Ms Green!" to sleep for 24h',
                                 "size": "xxs",
                                 "color": text_muted,
                                 "align": "center",
@@ -744,12 +727,13 @@ class TranslationAgent(BaseAgent):
             quickReply=None,
         )
 
-    def _create_rate_limit_message(self, reset_seconds: int) -> TextMessage:
+    def _create_rate_limit_message(self, reset_seconds: int, user_id: str | None = None) -> TextMessage:
         """
         Create a friendly rate limit notification message.
 
         Args:
             reset_seconds: Seconds until rate limit resets
+            user_id: Unused; retained for compatibility
 
         Returns:
             TextMessage with rate limit notification
@@ -759,7 +743,8 @@ class TranslationAgent(BaseAgent):
             "คุณแปลเร็วเกินไปค่ะ!\n\n"
             f"Please wait {reset_seconds} seconds\n"
             "กรุณารอสักครู่นะคะ 😊\n\n"
-            "💡 Limit: 10 translations per minute"
+            "💡 Limit: 10 translations per minute\n\n"
+            "💎 Premium users get higher limits!"
         )
 
         return TextMessage(text=message_text, quickReply=None, quoteToken=None)
@@ -774,9 +759,7 @@ class TranslationAgent(BaseAgent):
             TextMessage with sleep notification
         """
         message_text = (
-            "😴 ราตรีสวัสดิ์ Good Night!\n\n"
-            "TeacherBOY is sleeping for 24 hours.\n\n"
-            '☀️ Say "TeacherBoy" to wake me up anytime!'
+            '😴 ราตรีสวัสดิ์ Good Night!\n\nMs. Green is sleeping for 24 hours.\n\n☀️ Say "Ms. Green" to wake me up anytime!'
         )
 
         return TextMessage(text=message_text, quickReply=None, quoteToken=None)
@@ -790,10 +773,6 @@ class TranslationAgent(BaseAgent):
         Returns:
             TextMessage with wake notification
         """
-        message_text = (
-            "☀️ สวัสดี! Good Morning!\n\n"
-            "TeacherBOY is now awake and ready!\n\n"
-            "🚀 Send Thai text to start translating!"
-        )
+        message_text = "☀️ สวัสดี! Good Morning!\n\nMs. Green is now awake and ready!\n\n🚀 Send Thai text to start translating!"
 
         return TextMessage(text=message_text, quickReply=None, quoteToken=None)

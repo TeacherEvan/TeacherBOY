@@ -65,3 +65,33 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
+# Local scratch
+roo
+roo/
+
+# Local tracking notes (do not commit)
+JOBCARD.md
+
+# Google OAuth credentials (sensitive)
+client_secret*.json
+data/google_credentials.json
+data/google_token.json
+node_modules/
+.convex/
+
+# Tool/agent directories
+.kilo/
+.worktrees/
+.roo/
+.roomodes
+
+# Misc scratch files
+diff.txt
+cleanup_hf_space.sh
+form_translation.txt
+temp_handler_code.txt
+test_output.txt
+
+# MyPy cache
+.mypy_cache/

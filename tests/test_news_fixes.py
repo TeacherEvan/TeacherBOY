@@ -1,12 +1,14 @@
 """Tests for news feature fixes: headline links and RSS error handling."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from src.agents.news_agent import NewsAgent
 from src.agents.special_news_agent import SpecialNewsAgent
 from src.services.news_data_service import NewsDataService
-from src.services.special_news_service import SpecialNewsService
 from src.services.news_session_manager import news_session_manager
+from src.services.special_news_service import SpecialNewsService
 
 
 @pytest.fixture
@@ -69,19 +71,19 @@ class TestHeadlineLinkFixes:
         chat_id = "group_test_group"
         news_session_manager.start_news_flow(chat_id, "test_user")
         news_session_manager.set_language(chat_id, "en")
-        news_session_manager.set_cached_data(chat_id, {
-            "headlines": [
-                {"title": "Test headline with link", "url": "https://example.com/article1"},
-                {"title": "Another headline", "url": "https://example.com/article2"},
-            ]
-        })
+        news_session_manager.set_cached_data(
+            chat_id,
+            {
+                "headlines": [
+                    {"title": "Test headline with link", "url": "https://example.com/article1"},
+                    {"title": "Another headline", "url": "https://example.com/article2"},
+                ]
+            },
+        )
 
         # Simulate user selecting headline #1
         await news_agent._send_headline_detail(
-            mock_event, 
-            mock_line_bot_api,
-            {"title": "Test headline with link", "url": "https://example.com/article1"},
-            "en"
+            mock_event, mock_line_bot_api, {"title": "Test headline with link", "url": "https://example.com/article1"}, "en"
         )
 
         # Verify reply was sent with correct content
@@ -104,10 +106,7 @@ class TestHeadlineLinkFixes:
 
         # Simulate headline without URL
         await news_agent._send_headline_detail(
-            mock_event,
-            mock_line_bot_api,
-            {"title": "Headline without link", "url": ""},
-            "en"
+            mock_event, mock_line_bot_api, {"title": "Headline without link", "url": ""}, "en"
         )
 
         # Verify reply contains warning
@@ -128,12 +127,7 @@ class TestHeadlineLinkFixes:
         news_session_manager.set_language(chat_id, "th")
 
         # Simulate headline without URL in Thai
-        await news_agent._send_headline_detail(
-            mock_event,
-            mock_line_bot_api,
-            {"title": "ข่าวทดสอบ", "url": ""},
-            "th"
-        )
+        await news_agent._send_headline_detail(mock_event, mock_line_bot_api, {"title": "ข่าวทดสอบ", "url": ""}, "th")
 
         # Verify Thai warning
         assert mock_line_bot_api.reply_message.called
@@ -153,10 +147,7 @@ class TestSpecialNewsRSSFixes:
         """Helper to extract headline lines from formatted section text."""
         lines = formatted_text.split("\n")
         # Filter for lines that start with numbers (1., 2., etc.) but not section headers or messages
-        return [
-            line.strip() for line in lines 
-            if line.strip() and any(line.strip().startswith(f"{i}.") for i in range(1, 10))
-        ]
+        return [line.strip() for line in lines if line.strip() and any(line.strip().startswith(f"{i}.") for i in range(1, 10))]
 
     @pytest.mark.asyncio
     async def test_format_section_skips_unavailable_items(self, special_news_agent):
@@ -170,13 +161,13 @@ class TestSpecialNewsRSSFixes:
         ]
 
         result = special_news_agent._format_section("🧳 **Test Section**", items)
-        
+
         # Should only show real headlines, skip unavailable
         assert "Real headline 1" in result
         assert "Real headline 2" in result
         assert "(unavailable)" not in result
         assert result.count("https://example.com/") == 2
-        
+
         # Verify sequential numbering (1, 2) not (1, 3)
         headline_lines = self._extract_headline_lines(result)
         assert headline_lines[0].startswith("1.")
@@ -191,10 +182,10 @@ class TestSpecialNewsRSSFixes:
         ]
 
         result = special_news_agent._format_section("🧳 **Test Section**", items)
-        
+
         # First item should have warning emoji, second should not
         headline_lines = self._extract_headline_lines(result)
-        
+
         # Should have both headlines
         assert len(headline_lines) == 2
         # First one has warning emoji
@@ -212,7 +203,7 @@ class TestSpecialNewsRSSFixes:
         ]
 
         result = special_news_agent._format_section("🧳 **Test Section**", items)
-        
+
         # Should show "No news available" message
         assert "No news available at this moment" in result
         assert "(unavailable)" not in result
@@ -232,15 +223,15 @@ class TestSpecialNewsRSSFixes:
         </rss>"""
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "application/rss+xml"}
-        
+
         special_news_service._client.get = AsyncMock(return_value=mock_response)
-        
+
         result = await special_news_service.fetch_rss_items("https://example.com/feed.xml")
-        
+
         # Verify timeout is 15 seconds (increased from 10)
         call_kwargs = special_news_service._client.get.call_args[1]
         assert call_kwargs["timeout"] == 15.0
-        
+
         # Verify we got the result
         assert len(result) == 1
         assert result[0]["title"] == "Test Article"
@@ -257,11 +248,11 @@ class TestSpecialNewsRSSFixes:
         </rss>"""
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "application/rss+xml"}
-        
+
         special_news_service._client.get = AsyncMock(return_value=mock_response)
-        
+
         result = await special_news_service.fetch_rss_items("https://example.com/empty.xml")
-        
+
         # Should return empty list, not crash
         assert result == []
 
@@ -270,20 +261,20 @@ class TestSpecialNewsRSSFixes:
         """Test that error messages include troubleshooting hints."""
         # Mock all feeds to return empty
         special_news_agent._service.fetch_rss_items = AsyncMock(return_value=[])
-        
+
         # Private chat event
         mock_event.source.group_id = None
         mock_event.source.room_id = None
-        
+
         # Make user a friend
         mock_line_bot_api.get_profile = MagicMock(return_value={"userId": "test_user"})
-        
+
         result = await special_news_agent.handle(mock_event, "/special news", mock_line_bot_api)
-        
+
         # Verify error message was sent
         assert result is True
         assert mock_line_bot_api.reply_message.called
-        
+
         reply_msg = mock_line_bot_api.reply_message.call_args[0][0].messages[0].text
         # Should include troubleshooting hints
         assert "Network connectivity" in reply_msg or "RSS feed" in reply_msg or "server downtime" in reply_msg
@@ -295,27 +286,33 @@ class TestRSSParsingLogging:
     @pytest.mark.asyncio
     async def test_news_data_service_logs_missing_urls(self, news_data_service):
         """Test that NewsDataService logs warnings for missing URLs."""
-        with patch('feedparser.parse') as mock_parse:
-            # Mock feedparser to return entries with missing URLs
-            mock_feed = MagicMock()
-            mock_entry1 = MagicMock()
-            mock_entry1.title = "Article with URL"
-            mock_entry1.link = "https://example.com/1"
-            
-            mock_entry2 = MagicMock()
-            mock_entry2.title = "Article without URL"
-            mock_entry2.link = ""
-            
-            mock_feed.entries = [mock_entry1, mock_entry2]
-            mock_parse.return_value = mock_feed
-            
-            with patch('src.services.news_data_service.logger') as mock_logger:
-                result = news_data_service._parse_rss_feed("https://example.com/feed")
-                
-                # Should log warning for missing URL
-                warning_calls = [call for call in mock_logger.warning.call_args_list 
-                               if "has no URL" in str(call)]
-                assert len(warning_calls) > 0
-                
-                # Should still return both articles
-                assert len(result) == 2
+        # Mock HTTP client to return RSS feed with entries that have missing URLs
+        mock_response = MagicMock()
+        mock_response.text = """<?xml version="1.0"?>
+        <rss version="2.0">
+            <channel>
+                <item>
+                    <title>Article with URL</title>
+                    <link>https://example.com/1</link>
+                </item>
+                <item>
+                    <title>Article without URL</title>
+                    <link></link>
+                </item>
+            </channel>
+        </rss>"""
+        mock_response.status_code = 200
+
+        news_data_service.client.get = AsyncMock(return_value=mock_response)
+
+        with patch("src.services.news_data_service.logger") as mock_logger:
+            result = await news_data_service._parse_rss_feed("https://example.com/feed")
+
+            # Should log warning for missing URL
+            warning_calls = [call for call in mock_logger.warning.call_args_list if "has no URL" in str(call)]
+            assert len(warning_calls) > 0
+
+            # Should still return both articles
+            assert len(result) == 2
+            assert result[0]["url"] == "https://example.com/1"
+            assert result[1]["url"] == ""

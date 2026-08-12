@@ -1,5 +1,5 @@
 ---
-title: TeacherBOY
+title: Ms. Green
 emoji: 👨‍🏫
 colorFrom: blue
 colorTo: green
@@ -7,15 +7,19 @@ sdk: docker
 app_port: 8000
 ---
 
-## TeacherBOY 👨‍🏫
+## Ms. Green 👨‍🏫
 
-**SMOOTH automatic Thai - English translator with Multi-Agent Architecture for LINE.**
+> **Repository note:** The repository is still named **TeacherBOY**, but the
+> public bot identity and documentation target are now **Ms. Green**.
 
-TeacherBOY is a high-performance, asynchronous LINE Bot featuring a modular multi-agent system. The Translation Agent provides intelligent Thai/English translation with smart session management. Easily extensible with additional specialized agents.
+**Runtime-configurable staff assistant with explicit AI review, DM follow-up, and multi-agent LINE workflows.**
+
+Ms. Green is a high-performance, asynchronous LINE Bot featuring a modular
+multi-agent system. The default runtime identity is now `Ms. Green`, with
+explicit review flows layered on top of calendar, search, LLM, image, and news
+features.
 
 ## 📚 Documentation
-
-**[📖 Complete Documentation Index](DOCUMENTATION_INDEX.md)** - Browse all documentation files organized by category
 
 ### Quick Links
 
@@ -26,31 +30,58 @@ TeacherBOY is a high-performance, asynchronous LINE Bot featuring a modular mult
 - **[🏗️ Architecture](docs/architecture/overview.md)**
 - **[🤖 Agents](docs/architecture/agents.md)**
 - **[🔧 Admin Commands](docs/ADMIN_COMMANDS.md)**
+- **[🏫 KPS Assistant](docs/KPS_ASSISTANT.md)**
 - **[🔎 Tracing](docs/TRACING.md)**
+- **[🛠️ Maintainer Notes](docs/reference/maintainers.md)**
+- **[🧭 Environment Reference](docs/reference/environment.md)**
 
-Legacy docs at repo root are kept for backward compatibility.
+The `docs/` folder is the maintained documentation source of truth.
+
+## 🗂️ Persistence Model
+
+Ms. Green uses mounted local paths for filesystem state and separate Hugging
+Face dataset repositories for optional cloud persistence.
+
+- `CONVERSATION_STORAGE_PATH` is the local working/cache directory for HF-backed
+  conversation sync; restart persistence still depends on `HF_MEMORY_TOKEN`
+  and `HF_MEMORY_REPO_ID`.
+- `BOT_IDENTITY_STORAGE_PATH` stores runtime identity overrides.
+- `STAFF_MEMORY_STORAGE_PATH` stores review-agent staff memory.
+- Scheduled jobs remain runtime-only; there is no persisted APScheduler task store in the current implementation.
+
+For the full variable reference and mounted-volume examples, see [Environment variables](docs/reference/environment.md).
 
 ## 🚀 Features
+
+### Ms. Green Review Flow
+
+- **🪪 Runtime Identity:** Display name and aliases are persisted across restarts
+- **📝 Explicit Review:** `Ms. Green review` translates and summarizes the last recent non-English message on request only
+- **📨 DM Follow-Up:** Review results go directly to the requesting user
+- **📌 Weekly Summary:** `Ms. Green what's important this week?` combines calendar items and structured staff memory
+- **🤝 Staff Framing:** `Ms. Green who do you work for?` returns the fixed staff-assistant answer
 
 ### Translation Agent (Primary)
 
 - **🔥 Smart Auto-Detection:** Automatically starts when Thai text is detected
-- **🔄 Continuous Mode:** Translates EVERY message until you say "amen"
-- **😴 Sleep Mode:** Bot sleeps for 24 hours - say "TeacherBoy" alone to wake up
-- **🌐 Professional Quality:** Google Translate (primary) + LibreTranslate (fallback)
-- **�️ Hallucination Prevention:** Detects incomplete sentences and prevents unwanted context injection
+- **🔄 Continuous Mode:** Translates EVERY message until you say "Thanks Ms Green!"
+- **😴 Sleep Mode:** Bot sleeps for 24 hours - say "Dear Ms. Green" alone to wake up
+- **🌐 AI Translation:** Shared AI translation service with Gemini free tier as primary; OpenRouter used only as fallback
+- **🛡️ Hallucination Prevention:** Detects incomplete sentences and prevents unwanted context injection
 - **💬 Bi-directional:** Thai 🇹🇭 → English 🇬🇧 and English 🇬🇧 → Thai 🇹🇭
 - **👥 Group Chat Support:** Works in 1-on-1, groups, and multi-person chats
 - **📝 Text-Only Responses:** Clean, simple text translations (no distracting cards)
 - **🤫 Silent Join:** Bot joins groups silently - only speaks when Thai is detected
 - **👋 Welcome Message:** Sends "Welcome friend / ยินดีต้อนรับเพื่อน" when added as friend
 - **🎯 Session Management:** Independent sessions per chat
-- **📋 Parentheses Preservation:** Names and notes in (parentheses) are never translated- **⏱️ Rate Limiting:** 10 requests per minute (admins unlimited)
+- **📋 Parentheses Preservation:** Names and notes in (parentheses) are never translated
+- **⏱️ Rate Limiting:** 10 requests per minute for normal translation traffic; destructive admin requests are limited to 3 per 10 minutes per admin
 
 ### News Agent **NEW!**
 
 - **📰 Real-time News:** Bangkok weather, air quality, PM2.5, and Thai news headlines
-- **🌡️ Weather Data:** Temperature and 5-hour rain forecast via Open-Meteo (no API key for non-commercial use; subject to Open-Meteo terms)
+- **🌡️ Weather Data:** Temperature and 5-hour rain forecast via Open-Meteo
+  (no API key for non-commercial use; subject to Open-Meteo terms)
 - **💨 Air Quality:** PM2.5 levels for Bangkok
 - **📱 Auto-Language Detection:** Type "news" for English or "ข่าว" for Thai
 - **🔒 Friend-Gated Access:** Full menu for friends in groups (1 request/hour), translation only for others
@@ -66,6 +97,47 @@ Legacy docs at repo root are kept for backward compatibility.
 - **Trigger:** Type `news` or `ข่าว` to start
 - **📰 Special News:** `/special news` in DM provides interactive carousel with tourism, sports, international headlines
 
+### 🤖 Ms. Green AI (LLM Agent) **NEW!**
+
+- **🤖 Ask Ms. Green:** `Ms. Green <question>`
+- **🌡️ Warmth (Temperature):** Configure via `LLM_TEMPERATURE` (default: `1.0`)
+- **🧊 Wise Persona (Default):** Controlled by `LLM_SYSTEM_PROMPT` (optional override); calm, gentle, and exceptionally wise, without fairy-tale styling
+- **👥 Group Access Policy:**
+  - Admins can use Ms. Green anywhere
+  - Non-admins follow `MS_GREEN_GROUP_ACCESS_MODE`:
+    - `all` (default)
+    - `allowlist` with `GREEN_ALLOWED_GROUP_IDS`
+    - `denylist` with `GREEN_DENIED_GROUP_IDS`
+- **🧑‍💼 Boss Easter Egg:** If asked "who is boss", replies with exactly: `Evan...`
+
+### Psychological Profiler **NEW!**
+
+- **🔬 FBI/Ekman/Navarro Frameworks:** Professional behavioral analysis
+- **📸 Trigger-Based:** Send `Ms. Green profile` then your image
+- **🎨 Fictional Artwork Support:** Analyze anime, manga, pencil drawings, concept art
+- **♿ Accessibility:** Helps neurodivergent users (autism) understand character expressions
+- **🎬 Creative Projects:** Art direction for music videos, storytelling, visual narratives
+- **⏱️ Rate Limiting:** 3 analyses/hour (admins unlimited)
+- **🤖 Vision AI:** Multimodal analysis via the configured vision provider
+- **Full Documentation:** [Profiler Usage Guide](docs/PROFILER_USAGE.md)
+
+### Image Analyzer **NEW!**
+
+- **🖼️ General Image Q&A:** Ask Ms. Green questions about any image
+- **🔄 Multi-Step Flow:**
+  1. Trigger: `Ms. Green analyze this` / `analyze image` / `examine this`
+  2. Ms. Green asks for the image (60 seconds timeout)
+  3. Send your image
+  4. Ms. Green asks what you want to know
+  5. Get your answer from the configured vision model
+- **💡 Use Cases:**
+  - Menu translation: "What would be most enjoyable on this menu to a westerner?"
+  - Sign reading: "What does this sign say?"
+  - Product identification: "What products are shown here?"
+  - Any visual question about the image
+- **⏱️ Rate Limiting:** 5 analyses/hour (admins unlimited)
+- **🧠 Powered by:** Vision-capable AI via fallback chain (Gemini primary)
+
 ### Multi-Agent Architecture
 
 - **🏗️ Modular Design:** Easy to add agents with different capabilities
@@ -73,8 +145,18 @@ Legacy docs at repo root are kept for backward compatibility.
 - **🔌 Extensible:** Add math solver, code review, quiz agents, and more!
 - **🎨 Clean API:** Simple `BaseAgent` class to inherit from
 - **📊 Priority System:** Control which agent handles messages first
-- **🔧 Admin Commands:** In-chat control commands for authorized admins **NEW!**
+- **🔧 Admin Commands:** In-chat control commands for authorized admins
 - **📊 Admin Stats:** Enhanced dashboard with current tourism news headlines
+- **💭 Conversation Memory:** Multi-turn context for the Ms. Green LLM agent with optional HF Hub persistence **NEW!**
+- **📜 History Logging:** Comprehensive audit trail with encryption and cloud backup **NEW!**
+
+### Structured Persistence
+
+- **🧱 Optional Convex Backend:** Set `PERSISTENCE_BACKEND=convex` to make Convex the primary structured persistence backend.
+- **🗓️ Calendar + Reminders:** Calendar events and reminder state can now persist through Convex when selected as primary.
+- **📝 Review Staff Memory:** Review-agent staff memory can now persist through Convex when selected as primary.
+- **⚙️ Future Admin Settings Target:** The admin-only config window is not implemented yet, but Convex `appSettings` is now the intended persistence target for that work.
+- **↩️ Rollback Path:** Set `PERSISTENCE_BACKEND=local` and restart the app to return to the local/HF-backed runtime path.
 
 ### Performance & Scalability
 
@@ -87,7 +169,7 @@ Legacy docs at repo root are kept for backward compatibility.
 
 - **Framework:** Python 3.11+, FastAPI
 - **Platform:** LINE Messaging API v3 (Async)
-- **Translation:** Google Cloud Translation API (primary), LibreTranslate (fallback)
+- **Translation:** Shared AI translation service backed by Gemini free tier
 - **Architecture:** Multi-agent system with modular design
 - **Libraries:** `line-bot-sdk`, `httpx`, `pydantic`
 
@@ -95,18 +177,26 @@ Legacy docs at repo root are kept for backward compatibility.
 
 ### 1. Get LINE Tokens
 
-See **[LINE Setup Guide](docs/LINE_SETUP.md)** for detailed instructions.
+See **[LINE Setup Guide](docs/guides/line-setup.md)** for detailed instructions.
 
 **Already have tokens?** Create a `.env` file:
 
 ```env
-# Primary Agent - TeacherBOY (Translation)
+# Primary Agent - Ms. Green
 LINE_CHANNEL_SECRET=your_channel_secret
 LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
 
-# Translation APIs
-GOOGLE_TRANSLATE_API_KEY=your_google_api_key  # Recommended!
-LIBRETRANSLATE_API_URL=https://libretranslate.de/translate
+# AI translation providers (Gemini free tier primary)
+GEMINI_API_KEY=your_gemini_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key  # Optional fallback
+
+# Structured persistence backend
+PERSISTENCE_BACKEND=local  # set to convex to use Convex as primary
+CONVEX_DEPLOYMENT_URL=
+CONVEX_SYNC_TOKEN=
+CONVEX_REQUEST_TIMEOUT_SECONDS=10
+# Optional: require Convex health before readiness turns green
+CONVEX_REQUIRE_HEALTHCHECK_ON_STARTUP=false
 
 # News Agent (optional)
 # NEWS_API_KEY is deprecated (headlines use RSS feeds; no key required)
@@ -115,18 +205,33 @@ LIBRETRANSLATE_API_URL=https://libretranslate.de/translate
 # Optional: Additional agents
 ADDITIONAL_AGENTS=
 
+# Ms. Green AI (optional)
+LLM_TEMPERATURE=1.0
+# Group/room policy for non-admin Ms. Green usage: all|allowlist|denylist
+MS_GREEN_GROUP_ACCESS_MODE=all
+GREEN_ALLOWED_GROUP_IDS=
+GREEN_DENIED_GROUP_IDS=
+# Optional: override Ms. Green persona
+# LLM_SYSTEM_PROMPT=
+
 # Admin Control (for bot management)
 ADMIN_USER_IDS=
 
+# Optional: named recipients for admin push messaging
+# Format: USER_<ALIAS>=<LINE_USER_ID>
+USER_BOSS=
+
 DEBUG=False
 ```
+
+When `PERSISTENCE_BACKEND=convex`, the runtime uses Convex for structured calendar and staff-memory persistence. If you need to roll back quickly, change it back to `local` and restart the service.
 
 ### 2. Run Locally
 
 ```bash
 # With Docker (recommended)
-docker build -t teacherboy .
-docker run --env-file .env -p 8000:8000 teacherboy
+docker build -t ms-green-assistant .
+docker run --env-file .env -p 8000:8000 ms-green-assistant
 
 # Or with Python directly
 pip install -r requirements.txt
@@ -155,21 +260,21 @@ ngrok http 8000
 - Send: `สวัสดีครับ` → Translation mode starts! 🔥
 - Send: `Hello` → Translates to Thai automatically
 - Send: `How are you?` → Keeps translating
-- Say: `amen` → Bot sleeps for 24 hours 😴
-- Say: `TeacherBoy` → Bot wakes up! ☀️
+- Say: `Thanks Ms Green!` → Bot sleeps for 24 hours 😴
+- Say: `Dear Ms. Green` → Bot wakes up! ☀️
 
-**The bot will translate EVERY message until you say "amen"!**
+**The bot will translate EVERY message until you say "Thanks Ms Green!"!**
 
-**Need help?** See **[Quick Start Guide](QUICK_START.md)** or **[Deployment Guide](DEPLOYMENT_GUIDE.md)** for detailed instructions.
+**Need help?** See **[Quick Start Guide](docs/guides/quickstart.md)** or **[Deployment Guide](docs/guides/deployment.md)**.
 
 ### 6. Admin & Moderator Setup (Optional)
 
-For bot management and privileged access, TeacherBOY supports two levels:
+For bot management and privileged access, Ms. Green supports two levels:
 
 **Admin Users (Full Control):**
 
 - `/admin` commands for bot management (status, sleep, wake, reset, etc.)
-- Unlimited API access (bypass rate limits)
+- Bypass standard translation/news rate limits; destructive admin requests are limited to 3 per 10 minutes per admin
 - Direct news access without translation
 
 **Moderator Users (News Access):**
@@ -184,19 +289,23 @@ For bot management and privileged access, TeacherBOY supports two levels:
 2. Add to `.env`:
    - Admins: `ADMIN_USER_IDS=U1234567890abcdef`
    - Moderators: `MODERATOR_USER_IDS=U9876543210fedcba,U1111222233334444`
+   - Optional named recipients (admin push): `USER_BOSS=Uaaaaaaaaaaaaaaaa`
 3. Restart bot
 
 **See [Admin Commands Guide](docs/ADMIN_COMMANDS.md) for complete documentation.**
 
 ## 🏗️ Architecture
 
-TeacherBOY uses a **modular multi-agent architecture** where messages are routed to specialized agents based on content and context.
+Ms. Green uses a **modular multi-agent architecture** where messages are
+routed to specialized agents based on content and context.
 
 ```text
 LINE Webhook → Agent Router → [TranslationAgent | MathAgent | CodeAgent | ...]
 ```
 
-**Want to understand how it all works?** See **[Architecture Guide](ARCHITECTURE.md)** and **[Multi-Agent Guide](MULTI_AGENT_GUIDE.md)** for:
+**Want to understand how it all works?**
+See **[Architecture Guide](docs/architecture/overview.md)** and
+**[Agents Guide](docs/architecture/agents.md)** for:
 
 - Complete data flow diagrams
 - Webhook explanation
@@ -213,8 +322,7 @@ src/
 │   └── translation_agent.py  # Translation logic
 ├── handlers/            # Event handlers (join, leave, members)
 ├── services/            # Translation & session management
-│   ├── translation_service.py     # LibreTranslate
-│   ├── google_translation.py      # Google API
+│   ├── ai_translation_service.py  # Shared AI translation
 │   └── session_manager.py         # Session state
 ├── config.py           # Environment configuration
 └── main.py             # FastAPI entry point
@@ -222,7 +330,7 @@ src/
 
 ## 🤖 Adding Custom Agents
 
-Building new agents is simple! See **[Multi-Agent Guide](MULTI_AGENT_GUIDE.md)** for complete tutorial.
+Building new agents is simple! See **[Agents Guide](docs/architecture/agents.md)** for the pattern and priority rules.
 
 ```python
 from src.agents.base_agent import BaseAgent
@@ -280,10 +388,10 @@ pytest --cov=src --cov-report=html
 
 - Smart Thai character detection
 - Continuous translation mode
-- Google Translate + LibreTranslate fallback
+- Shared AI translation via Gemini free tier
 - Session management per chat
-- "amen" sleep command (24h)
-- "TeacherBoy" wake command
+- "Thanks Ms Green!" sleep command (24h)
+- "Dear Ms. Green" wake command
 - Rate limiting (10 translations/minute)
 
 ✅ **Group Chat Support:**
@@ -308,8 +416,8 @@ pytest --cov=src --cov-report=html
 - **VPS** - Full control (DigitalOcean, AWS, etc.)
 - **Render.com** - Simple alternative to Heroku
 
-See **[Deployment Guide](DEPLOYMENT_GUIDE.md)** for complete instructions for each option.
+See **[Deployment Guide](docs/guides/deployment.md)** for complete instructions for each option.
 
-## �� License
+## 📄 License
 
 MIT

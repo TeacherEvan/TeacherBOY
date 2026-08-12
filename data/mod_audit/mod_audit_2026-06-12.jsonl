@@ -1,0 +1,35 @@
+{"timestamp": 1781277096609, "action": "kick", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "spam"}}
+{"timestamp": 1781277096611, "action": "warn", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "inappropriate", "warningCount": 1}}
+{"timestamp": 1781277096614, "action": "ban", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "spam"}}
+{"timestamp": 1781277096616, "action": "unban", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {}}
+{"timestamp": 1781277096618, "action": "mode_change", "groupId": "C123", "targetUserId": "U456", "actorUserId": "U456", "details": {"mode": "all", "isActive": true, "specialUserId": null}}
+{"timestamp": 1781277096620, "action": "mode_change", "groupId": "C123", "targetUserId": "U456", "actorUserId": "U456", "details": {"mode": "special", "isActive": true, "specialUserId": "U789"}}
+{"timestamp": 1781277096622, "action": "test_action", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"detail": "test"}}
+{"timestamp": 1781277377449, "action": "kick", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "spam"}}
+{"timestamp": 1781277377451, "action": "warn", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "inappropriate", "warningCount": 1}}
+{"timestamp": 1781277377453, "action": "ban", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "spam"}}
+{"timestamp": 1781277377454, "action": "unban", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {}}
+{"timestamp": 1781277377456, "action": "mode_change", "groupId": "C123", "targetUserId": "U456", "actorUserId": "U456", "details": {"mode": "all", "isActive": true, "specialUserId": null}}
+{"timestamp": 1781277377458, "action": "mode_change", "groupId": "C123", "targetUserId": "U456", "actorUserId": "U456", "details": {"mode": "special", "isActive": true, "specialUserId": "U789"}}
+{"timestamp": 1781277377459, "action": "test_action", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"detail": "test"}}
+{"timestamp": 1781277583872, "action": "kick", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "spam"}}
+{"timestamp": 1781277583874, "action": "warn", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "inappropriate", "warningCount": 1}}
+{"timestamp": 1781277583876, "action": "ban", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "spam"}}
+{"timestamp": 1781277583877, "action": "unban", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {}}
+{"timestamp": 1781277583879, "action": "mode_change", "groupId": "C123", "targetUserId": "U456", "actorUserId": "U456", "details": {"mode": "all", "isActive": true, "specialUserId": null}}
+{"timestamp": 1781277583881, "action": "mode_change", "groupId": "C123", "targetUserId": "U456", "actorUserId": "U456", "details": {"mode": "special", "isActive": true, "specialUserId": "U789"}}
+{"timestamp": 1781277583883, "action": "test_action", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"detail": "test"}}
+{"timestamp": 1781277761699, "action": "kick", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "spam"}}
+{"timestamp": 1781277761701, "action": "warn", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "inappropriate", "warningCount": 1}}
+{"timestamp": 1781277761702, "action": "ban", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "spam"}}
+{"timestamp": 1781277761704, "action": "unban", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {}}
+{"timestamp": 1781277761705, "action": "mode_change", "groupId": "C123", "targetUserId": "U456", "actorUserId": "U456", "details": {"mode": "all", "isActive": true, "specialUserId": null}}
+{"timestamp": 1781277761707, "action": "mode_change", "groupId": "C123", "targetUserId": "U456", "actorUserId": "U456", "details": {"mode": "special", "isActive": true, "specialUserId": "U789"}}
+{"timestamp": 1781277761708, "action": "test_action", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"detail": "test"}}
+{"timestamp": 1781278083178, "action": "kick", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "spam"}}
+{"timestamp": 1781278083180, "action": "warn", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "inappropriate", "warningCount": 1}}
+{"timestamp": 1781278083181, "action": "ban", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"reason": "spam"}}
+{"timestamp": 1781278083183, "action": "unban", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {}}
+{"timestamp": 1781278083184, "action": "mode_change", "groupId": "C123", "targetUserId": "U456", "actorUserId": "U456", "details": {"mode": "all", "isActive": true, "specialUserId": null}}
+{"timestamp": 1781278083186, "action": "mode_change", "groupId": "C123", "targetUserId": "U456", "actorUserId": "U456", "details": {"mode": "special", "isActive": true, "specialUserId": "U789"}}
+{"timestamp": 1781278083187, "action": "test_action", "groupId": "C123", "targetUserId": "U999", "actorUserId": "U456", "details": {"detail": "test"}}
