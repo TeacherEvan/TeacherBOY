@@ -199,7 +199,7 @@ class DebriefExtractionService:
                     structured_payload
                     if isinstance(structured_payload, str)
                     else json.dumps(structured_payload)
-                    if isinstance(structured_payload, (dict, list))
+                    if isinstance(structured_payload, dict | list)
                     else str(structured_payload)
                 )
             except Exception:
