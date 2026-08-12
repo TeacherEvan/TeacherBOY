@@ -252,7 +252,7 @@ class ConvexCalendarRepository:
     def _deserialize_created_at(self, value: Any) -> datetime | None:
         if value in {None, ""}:
             return None
-        if isinstance(value, (int, float)):
+        if isinstance(value, int | float):
             return datetime.fromtimestamp(float(value) / 1000, tz=UTC)
         if isinstance(value, str):
             return datetime.fromisoformat(value.replace("Z", "+00:00"))
