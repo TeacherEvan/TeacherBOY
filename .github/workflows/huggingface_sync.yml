@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
     sync-to-hub:
-        if: github.ref_name == 'main'
+        if: github.ref_name == 'main' && vars.ENABLE_HF_SYNC == 'true'
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
