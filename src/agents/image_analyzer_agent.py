@@ -47,21 +47,19 @@ from linebot.v3.webhooks import MessageEvent
 from src.config import settings
 from src.services.bot_identity_service import get_bot_identity_service
 from src.services.debrief_extraction_service import DebriefExtractionService
-from src.services.debrief_formatter import DebriefFormatter
 from src.services.gemini_service import gemini_service
 from src.services.hermes_service import hermes_service
 from src.services.hf_inference_service import hf_inference_service
 from src.services.image_analyzer_session_manager import (
     image_analyzer_session_manager,
 )
+from src.services.image_storage_service import image_storage_service as _fs_image_store
 from src.services.metrics_service import metrics_service
 from src.services.openrouter_service import openrouter_service
 from src.services.privilege_service import privilege_service
 from src.services.rate_limiter import RateLimiter
 from src.utils.llm_fallback import chat_completion_with_vision_fallback
 from src.utils.tracing import get_tracer
-
-from src.services.image_storage_service import image_storage_service as _fs_image_store
 
 from .base_agent import BaseAgent
 
@@ -395,11 +393,11 @@ class ImageAnalyzerAgent(BaseAgent):
 
         # 1. Document command check
         if (
-            cmd_lower.startswith("doc") or
-            cmd_lower.startswith("analyze doc ") or
-            cmd_lower.startswith("summarize doc ") or
-            cmd_lower.startswith("doc analyze ") or
-            cmd_lower.startswith("doc summarize ")
+            cmd_lower.startswith("doc")
+            or cmd_lower.startswith("analyze doc ")
+            or cmd_lower.startswith("summarize doc ")
+            or cmd_lower.startswith("doc analyze ")
+            or cmd_lower.startswith("doc summarize ")
         ):
             return True
 
@@ -408,6 +406,7 @@ class ImageAnalyzerAgent(BaseAgent):
             if len(parts) > 1:
                 target = parts[1].strip()
                 from src.services.document_memory_service import get_document_memory
+
                 doc_service = get_document_memory()
                 if doc_service:
                     if doc_service.find_by_name(chat_id, target):
@@ -419,12 +418,14 @@ class ImageAnalyzerAgent(BaseAgent):
 
         # 2. Video command check (contains video link)
         from src.services.video_link_analyzer_service import video_link_analyzer_service
+
         if video_link_analyzer_service.has_video_link(command_text):
             return True
 
         # 3. Video command check ("analyze this" when recent history has video link)
         if cmd_lower in ("analyze", "analyze this", "analyze video"):
             from src.services.conversation_memory_service import get_conversation_memory
+
             memory = get_conversation_memory()
             if memory:
                 messages = await memory.get_context_messages(chat_id)
@@ -504,11 +505,11 @@ class ImageAnalyzerAgent(BaseAgent):
         prompt = (
             "You are an expert creative journal writer. Write a professional and engaging journal entry based on this image.\n\n"
             "CRITICAL CONSTRAINTS:\n"
-            "1. Write in the first person (\"I\") as if the user is directly responsible for and involved in the photo. "
+            '1. Write in the first person ("I") as if the user is directly responsible for and involved in the photo. '
             "Roleplay as the creator/owner of the scene (e.g., if a steak is shown, roleplay as the user who cooked and ate it).\n"
-            f"2. Include the date at the very top in format \"Date DD/MM\" (where DD/MM is {date_str}).\n"
+            f'2. Include the date at the very top in format "Date DD/MM" (where DD/MM is {date_str}).\n'
             "3. Include at least 5 creatively created timestamps in the entry describing the process, journey, or timeline surrounding the image "
-            "(e.g., \"at 08h48: I was in the mood to cook...\", \"at 09h45: Steak was done...\", \"at 10h00: ate the steak\").\n"
+            '(e.g., "at 08h48: I was in the mood to cook...", "at 09h45: Steak was done...", "at 10h00: ate the steak").\n'
             "4. Provide an imaginative description of the item/scene, detailing how the user prepared it (role-playing, creative, not necessarily literal or accurate).\n"
             "5. The output should consist ONLY of the journal entry. Do not add standard bot headers, greetings to parents, closing signatures, or extra explanations."
         )
@@ -516,15 +517,12 @@ class ImageAnalyzerAgent(BaseAgent):
         messages = [
             {
                 "role": "system",
-                "content": "You are an expert creative journal writer. You write only the raw journal entry under the requested constraints, with no headers, greetings, signatures, or assistant chit-chat."
+                "content": "You are an expert creative journal writer. You write only the raw journal entry under the requested constraints, with no headers, greetings, signatures, or assistant chit-chat.",
             },
             {
                 "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": image_data}}
-                ]
-            }
+                "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": image_data}}],
+            },
         ]
 
         logger.info("📖 Generating creative debrief via vision LLM fallback")

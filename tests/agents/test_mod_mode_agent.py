@@ -364,4 +364,3 @@ async def test_warn_user_handles_none_audit(event_factory):
         res = await agent_no_audit._warn_user(event, "C123", "U999", MagicMock(), "spam")
         assert res is True
         mock_reply.assert_called_once()
-

@@ -530,7 +530,7 @@ class TestProfilerConfig:
         settings = Settings()
 
         # Should return False when GitHub Models not configured
-        assert settings.is_profiler_configured() == True  # profiler_enabled is True
+        assert settings.is_profiler_configured() is True  # profiler_enabled is True
 
 
 class TestAgentRouterImageHandling:

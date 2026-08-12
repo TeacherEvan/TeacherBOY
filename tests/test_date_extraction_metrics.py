@@ -1,6 +1,5 @@
 """Tests for DateExtractionService metrics tracking."""
 
-from datetime import date
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -20,7 +19,6 @@ class TestDateExtractionMetrics:
 
         service = DateExtractionService()
         messages = ["Meeting tomorrow at 10am"]
-        today = date.today()
 
         # Call fallback directly (no AI client = fallback)
         events = await service.extract_events_from_messages(messages)
@@ -59,13 +57,10 @@ class TestDateExtractionMetrics:
     async def test_ai_extraction_failure_fallback_records_both(self, mock_ai_review):
         """Test that AI failure followed by fallback records both error and fallback."""
         # Mock AI to fail
-        mock_ai_review.extract_calendar_candidates = AsyncMock(
-            side_effect=Exception("API Error")
-        )
+        mock_ai_review.extract_calendar_candidates = AsyncMock(side_effect=Exception("API Error"))
 
         service = DateExtractionService()
         messages = ["Meeting tomorrow"]
-        today = date.today()
 
         events = await service.extract_events_from_messages(messages)
 

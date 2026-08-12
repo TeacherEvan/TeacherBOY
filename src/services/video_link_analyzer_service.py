@@ -3,18 +3,19 @@
 import logging
 import re
 from typing import Any
+
 import httpx
+
 from src.utils.llm_fallback import chat_completion_with_fallback
 
 logger = logging.getLogger(__name__)
 
 # Video link detection pattern - matches YouTube, TikTok, Vimeo, Facebook, and Instagram links
 VIDEO_LINK_PATTERN = re.compile(
-    r"https?://(?:www\.)?(?:"
-    r"youtube\.com|youtu\.be|tiktok\.com|vimeo\.com|facebook\.com|instagram\.com"
-    r")\S*",
-    re.IGNORECASE
+    r"https?://(?:www\.)?(?:" r"youtube\.com|youtu\.be|tiktok\.com|vimeo\.com|facebook\.com|instagram\.com" r")\S*",
+    re.IGNORECASE,
 )
+
 
 class VideoLinkAnalyzerService:
     """Service to fetch video link metadata and generate a structured summary using LLM fallback chain."""
@@ -61,7 +62,9 @@ class VideoLinkAnalyzerService:
         pattern = rf'<meta\s+[^>]*?(?:property|name)=["\']{re.escape(name_or_property)}["\']\s+[^>]*?content=["\'](.*?)["\']'
         match = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
         if not match:
-            pattern_rev = rf'<meta\s+[^>]*?content=["\'](.*?)["\']\s+[^>]*?(?:property|name)=["\']{re.escape(name_or_property)}["\']'
+            pattern_rev = (
+                rf'<meta\s+[^>]*?content=["\'](.*?)["\']\s+[^>]*?(?:property|name)=["\']{re.escape(name_or_property)}["\']'
+            )
             match = re.search(pattern_rev, html, re.IGNORECASE | re.DOTALL)
         return match.group(1).strip() if match else None
 
@@ -69,7 +72,9 @@ class VideoLinkAnalyzerService:
         """Fetch general page HTML and extract metadata using regexes."""
         metadata = {}
         try:
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
             response = await self._client.get(url, headers=headers)
             if response.status_code == 200:
                 html = response.text
@@ -142,17 +147,15 @@ class VideoLinkAnalyzerService:
         messages = [
             {
                 "role": "system",
-                "content": "You are Ms. Green. You analyze video/link information based on metadata. You do not analyze actual video frames/pixels, but summarize the context, author, and description of the linked video for the user."
+                "content": "You are Ms. Green. You analyze video/link information based on metadata. You do not analyze actual video frames/pixels, but summarize the context, author, and description of the linked video for the user.",
             },
-            {
-                "role": "user",
-                "content": prompt
-            }
+            {"role": "user", "content": prompt},
         ]
 
         # Call LLM fallback chain
         summary = await chat_completion_with_fallback(messages, temperature=0.7)
         return summary
+
 
 # Singleton instance
 video_link_analyzer_service = VideoLinkAnalyzerService()

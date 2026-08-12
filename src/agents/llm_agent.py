@@ -452,6 +452,7 @@ class LLMAgent(BaseAgent):
 
         # Check for video link analysis command
         from src.services.video_link_analyzer_service import video_link_analyzer_service
+
         is_video_analysis = False
         video_url = None
         query_lower = query.strip().lower()

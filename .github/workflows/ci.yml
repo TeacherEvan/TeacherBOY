@@ -61,8 +61,8 @@ jobs:
           pip install pytest==7.4.3 pytest-asyncio==0.21.1 pytest-cov==4.1.0
       - name: Run pytest
         env:
-          LINE_CHANNEL_SECRET: test_secret
-          LINE_CHANNEL_ACCESS_TOKEN: test_token
+          LINE_CHANNEL_SECRET: ZXhhbXBsZXNlY3JldGZvcmNpMjAyNg==
+          LINE_CHANNEL_ACCESS_TOKEN: dW1teWNyZWRlbnRpYWx0b2tlZW5mb3JjaWl0ZXN0aW5nMjAyNg==
         run: pytest -v --tb=short
 
   docker-build:
