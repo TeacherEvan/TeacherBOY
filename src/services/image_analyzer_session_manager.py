@@ -477,6 +477,7 @@ class ImageAnalyzerSessionManager:
         # Clean up filesystem stored images
         try:
             from src.services.image_storage_service import image_storage_service
+
             # Run cleanup in a thread to prevent blocking the async loop
             await asyncio.to_thread(image_storage_service.cleanup_old_images)
         except Exception as e:

@@ -407,6 +407,7 @@ class ScrapeFlow(CalendarFlowBase):
     ) -> None:
         """Prompt user with the list of detected events and the choice to Add All or Add Individual."""
         import asyncio
+
         from linebot.v3.messaging import PushMessageRequest
         from linebot.v3.messaging import TextMessage as TextMsg
 
@@ -422,27 +423,32 @@ class ScrapeFlow(CalendarFlowBase):
         lines = []
         if header:
             lines.append(header.rstrip())
-        lines.extend([
-            "🔍 Detected events:",
-            ""
-        ])
+        lines.extend(["🔍 Detected events:", ""])
 
         for index, item in enumerate(session.scraped_events, start=1):
             date_obj = item.get("date") or item.get("event_date")
             date_text = self.format_date_display(date_obj) if isinstance(date_obj, date) else "Unknown date"
             lines.append(f"▫️ {index}. {item.get('title', 'Event')} ({date_text})")
 
-        lines.extend([
-            "",
-            "Would you like to add all detected events, or select individually?",
-            "ต้องการเพิ่มกิจกรรมทั้งหมด หรือเลือกทีละรายการ?"
-        ])
+        lines.extend(
+            [
+                "",
+                "Would you like to add all detected events, or select individually?",
+                "ต้องการเพิ่มกิจกรรมทั้งหมด หรือเลือกทีละรายการ?",
+            ]
+        )
         msg = "\n".join(lines)
 
         quick_reply = QuickReply(
             items=[
-                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="➕ Add All / เพิ่มทั้งหมด", text="add all")),
-                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✏️ Add Individual / เลือกเอง", text="add individual")),
+                QuickReplyItem(
+                    type="action", imageUrl=None, action=MessageAction(label="➕ Add All / เพิ่มทั้งหมด", text="add all")
+                ),
+                QuickReplyItem(
+                    type="action",
+                    imageUrl=None,
+                    action=MessageAction(label="✏️ Add Individual / เลือกเอง", text="add individual"),
+                ),
                 QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="❌ Cancel / ยกเลิก", text="cancel")),
             ]
         )
@@ -473,6 +479,7 @@ class ScrapeFlow(CalendarFlowBase):
     ) -> None:
         """Prompt user with the multi-select reminder days toggle checklist."""
         import asyncio
+
         from linebot.v3.messaging import PushMessageRequest
         from linebot.v3.messaging import TextMessage as TextMsg
 
@@ -521,9 +528,15 @@ class ScrapeFlow(CalendarFlowBase):
 
         quick_reply = QuickReply(
             items=[
-                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label=f"{checked_7} 7 Days", text="toggle 7")),
-                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label=f"{checked_3} 3 Days", text="toggle 3")),
-                QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label=f"{checked_1} 1 Day", text="toggle 1")),
+                QuickReplyItem(
+                    type="action", imageUrl=None, action=MessageAction(label=f"{checked_7} 7 Days", text="toggle 7")
+                ),
+                QuickReplyItem(
+                    type="action", imageUrl=None, action=MessageAction(label=f"{checked_3} 3 Days", text="toggle 3")
+                ),
+                QuickReplyItem(
+                    type="action", imageUrl=None, action=MessageAction(label=f"{checked_1} 1 Day", text="toggle 1")
+                ),
                 QuickReplyItem(type="action", imageUrl=None, action=MessageAction(label="✅ Confirm / ยืนยัน", text="done")),
             ]
         )
@@ -664,11 +677,9 @@ class ScrapeFlow(CalendarFlowBase):
         active_chat_id = calendar_session_manager.resolve_discrete_scrape_chat_id(chat_id, user_id)
         session = calendar_session_manager.get_session(active_chat_id)
         if not session or session.state not in (CalendarState.SCRAPE_REVIEWING, CalendarState.SCRAPE_SELECTING):
-            if calendar_session_manager.had_recent_scrape_flow(
-                chat_id, user_id
-            ) and (
-                self._is_explicit_scrape_selection_followup(text) or
-                self._normalize_followup_text(text) in {"add all", "add individual"}
+            if calendar_session_manager.had_recent_scrape_flow(chat_id, user_id) and (
+                self._is_explicit_scrape_selection_followup(text)
+                or self._normalize_followup_text(text) in {"add all", "add individual"}
             ):
                 await self.send_message(
                     event,
@@ -704,9 +715,7 @@ class ScrapeFlow(CalendarFlowBase):
         # ----------------------------------------------------
         if session.state == CalendarState.SCRAPE_REVIEWING:
             if text_lower == "add all":
-                await self.handle_add_all_scraped_events(
-                    event, line_bot_api, active_chat_id, user_id, self._calendar_service
-                )
+                await self.handle_add_all_scraped_events(event, line_bot_api, active_chat_id, user_id, self._calendar_service)
                 return True
             elif text_lower == "add individual":
                 session.state = CalendarState.SCRAPE_SELECTING
@@ -778,7 +787,7 @@ class ScrapeFlow(CalendarFlowBase):
         text_lower = self._normalize_followup_text(text)
         active_chat_id = calendar_session_manager.resolve_discrete_scrape_chat_id(chat_id, user_id)
         calendar_service = calendar_service or self._calendar_service
-        
+
         session = calendar_session_manager.get_session(active_chat_id)
         if not session or session.state != CalendarState.SCRAPE_REMINDER_DAYS:
             if calendar_session_manager.had_recent_scrape_flow(

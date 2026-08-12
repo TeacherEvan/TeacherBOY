@@ -162,4 +162,4 @@ class TestAssertSafeURL:
 
 
 # Need to import socket for mocking
-import socket
+import socket  # noqa: E402

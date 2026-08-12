@@ -54,6 +54,7 @@ async def test_log_mode_change(audit_log):
 
 def test_mod_audit_log_hf_integration(mock_hf):
     from pathlib import Path
+
     mock_api_cls, mock_sched_cls = mock_hf
 
     with patch("src.services.mod_audit_log.os.makedirs"):
@@ -78,4 +79,3 @@ def test_mod_audit_log_hf_integration(mock_hf):
 
         log.close()
         mock_sched_cls.return_value.stop.assert_called_once()
-

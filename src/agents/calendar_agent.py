@@ -81,7 +81,7 @@ TRIGGERS_SCRAPE = [
     "ms. green scan",
     "ms. green scan messages",
     "ms. green scrape messages",  # source-selection choice → message scan
-    "ms. green scrape image",     # source-selection choice → image scan
+    "ms. green scrape image",  # source-selection choice → image scan
     "ms. green scan image",
 ]
 
@@ -667,13 +667,15 @@ class CalendarAgent(BaseAgent):
                         return await self.scrape_flow.handle_scrape_trigger(event, text, line_bot_api, chat_id, user_id)
 
                     if rest_lower in {"scrape image", "scan image"}:
-                        return await self.scrape_flow.handle_scrape_image_trigger(
-                            event, line_bot_api, chat_id, user_id
-                        )
+                        return await self.scrape_flow.handle_scrape_image_trigger(event, line_bot_api, chat_id, user_id)
 
                     # Plain "scrape" / "scan" — show the source-choice prompt
                     return await self.scrape_flow.handle_scrape_initial_trigger(
-                        event, text, line_bot_api, chat_id, user_id,
+                        event,
+                        text,
+                        line_bot_api,
+                        chat_id,
+                        user_id,
                         discrete_mode=getattr(getattr(event, "source", None), "type", None) in {"group", "room"},
                     )
 
@@ -859,6 +861,7 @@ class CalendarAgent(BaseAgent):
 
         # Convert/format the dates for scraped_events
         from datetime import date
+
         events_data = []
         for entry in extracted_dates:
             date_val = entry.get("date")
@@ -867,13 +870,15 @@ class CalendarAgent(BaseAgent):
                     date_val = date.fromisoformat(str(date_val))
                 except Exception:
                     date_val = date.today()
-            events_data.append({
-                "date": date_val,
-                "title": entry.get("title", "Event from image"),
-                "description": entry.get("description", ""),
-                "source_text": "Extracted from image",
-                "confidence": "high",
-            })
+            events_data.append(
+                {
+                    "date": date_val,
+                    "title": entry.get("title", "Event from image"),
+                    "description": entry.get("description", ""),
+                    "source_text": "Extracted from image",
+                    "confidence": "high",
+                }
+            )
 
         # Store events (sets state to SCRAPE_SELECTING)
         calendar_session_manager.set_scraped_events(chat_id, events_data)
