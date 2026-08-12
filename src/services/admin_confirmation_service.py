@@ -135,7 +135,7 @@ class AdminConfirmationService:
             pass
         else:
             if copied is not value:
-                if isinstance(value, (dict, list, tuple, set, bytearray)):
+                if isinstance(value, dict | list | tuple | set | bytearray):
                     return copied
                 if self._has_custom_object_state(value):
                     return copied

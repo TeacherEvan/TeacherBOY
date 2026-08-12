@@ -21,7 +21,7 @@ TeacherBOY is a FastAPI webhook app for LINE.
 - **ModModeAgent** (Priority 4): Group moderation — activation, modes (all/special), kick/warn/ban, 3-strike warnings, harmful content detection, ban list with auto-kick, Flex dashboard. Intercepts FIRST in mod-enabled groups.
 - Admin Agent (priority 5): in-chat operations, only registered when configured.
 - Search Agent (priority 8): Brave Search via `Ms. Green search ...` (DM-only for non-admins).
-- LLM Agent (priority 9): OpenRouter chat via `Ms. Green ...` (DM-only for non-admins).
+- LLM Agent (priority 9): Gemini-first chat via `Ms. Green ...` (DM-only for non-admins); falls back to Hermes/OpenRouter/GitHub Models if Gemini unavailable.
 - Translation Agent (priority 10): Thai ↔ English translation with session + dedup + rate limiting.
 - Special News Agent (priority 12): `/special news` (DM-only).
 - News Agent (priority 15): `news` / `ข่าว` (friend-gated in groups; translation-only for non-friends).

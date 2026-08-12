@@ -24,6 +24,56 @@ logger = logging.getLogger(__name__)
 _TRACING_INITIALIZED = False
 
 
+class _SafeOTLPExporter:
+    """Proxy around OTLPSpanExporter that swallows connection errors.
+
+    OTLPSpanExporter opens its socket lazily on the first export(), so an
+    unreachable collector (e.g. AI Toolkit not running on localhost:4318) is not
+    detected at setup time; instead the BatchSpanProcessor's background thread
+    raises ConnectionRefusedError and spams ERROR tracebacks. Wrapping export()
+    lets us silently return FAILURE instead of letting the SDK log the exception.
+    """
+
+    def __init__(self, exporter, endpoint: str) -> None:
+        self._exporter = exporter
+        self._endpoint = endpoint
+
+    def export(self, spans):  # type: ignore[no-untyped-def]
+        try:
+            return self._exporter.export(spans)
+        except Exception as exc:  # noqa: BLE001 - downgrade noisy transport errors
+            if _is_connection_error(exc):
+                _sdk_trace_export = importlib.import_module("opentelemetry.sdk.trace.export")
+                logger.debug(
+                    "OTLP export skipped: collector unavailable at %s (%s)",
+                    self._endpoint,
+                    type(exc).__name__,
+                )
+                return _sdk_trace_export.SpanExportResult.FAILURE
+            raise
+
+    def shutdown(self) -> None:  # type: ignore[no-untyped-def]
+        self._exporter.shutdown()
+
+    def force_flush(self, timeout_millis: int = 30000) -> bool:  # type: ignore[no-untyped-def]
+        return self._exporter.force_flush(timeout_millis)
+
+
+def _is_connection_error(exc: Exception) -> bool:
+    try:
+        requests_mod = importlib.import_module("requests")
+        urllib3_mod = importlib.import_module("urllib3")
+        connection_errors = (
+            requests_mod.exceptions.ConnectionError,
+            urllib3_mod.exceptions.NewConnectionError,
+            ConnectionError,
+            OSError,
+        )
+    except Exception:
+        connection_errors = (ConnectionError, OSError)
+    return isinstance(exc, connection_errors)
+
+
 def setup_tracing(app: FastAPI, settings: Settings) -> None:
     """Initialize OpenTelemetry tracing if enabled.
 
@@ -66,7 +116,8 @@ def setup_tracing(app: FastAPI, settings: Settings) -> None:
             # Try OTLP exporter first, fall back to console
             try:
                 otlp_exporter_instance = OTLPSpanExporter(endpoint=settings.otel_exporter_otlp_endpoint)
-                provider.add_span_processor(BatchSpanProcessor(otlp_exporter_instance))
+                safe_exporter = _SafeOTLPExporter(otlp_exporter_instance, settings.otel_exporter_otlp_endpoint)
+                provider.add_span_processor(BatchSpanProcessor(safe_exporter))
                 logger.info(
                     "✅ Tracing enabled with OTLP exporter (service=%s, otlp=%s)",
                     settings.otel_service_name,
@@ -143,6 +194,6 @@ def create_span(name: str, attributes: dict | None = None):
         if attributes:
             for key, value in attributes.items():
                 # Convert non-primitives to strings for OTLP compatibility
-                attr_val = value if isinstance(value, (bool, int, float, str)) else str(value)
+                attr_val = value if isinstance(value, bool | int | float | str) else str(value)
                 span.set_attribute(key, attr_val)
         yield span
