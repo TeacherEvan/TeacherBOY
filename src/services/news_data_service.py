@@ -1,10 +1,9 @@
 """News data retrieval service with caching for weather and news APIs."""
 
-import csv
-import io
 import logging
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote
 
 import feedparser
 import holidays
@@ -664,7 +663,8 @@ class NewsDataService:
         """
         Get headline market indices (best-effort, no API key).
 
-        Source: stooq.com CSV endpoint.
+        Source: Yahoo Finance chart endpoint (stooq.com's free CSV quote
+        endpoint was discontinued and 404s for all symbols).
 
         Returns:
             Dict of index labels to formatted strings.
@@ -675,11 +675,21 @@ class NewsDataService:
             logger.info("📈 Using cached market indices")
             return cached
 
-        # Symbols are best-effort; stooq uses caret-prefixed names for indices.
+        # Yahoo Finance ticker symbols (caret-prefixed index tickers).
         symbol_map = {
-            "S&P 500": "^spx",
-            "DJIA": "^dji",
-            "FTSE 100": "^ftse",
+            "S&P 500": "^GSPC",
+            "DJIA": "^DJI",
+            "FTSE 100": "^FTSE",
+        }
+
+        # stooq 404s; Yahoo also 429s the default python-httpx UA, so send a
+        # browser User-Agent on this one call only (scoped, shared client untouched).
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+            ),
+            "Accept": "application/json",
         }
 
         result: dict[str, str] = {label: "N/A" for label in symbol_map}
@@ -691,41 +701,30 @@ class NewsDataService:
 
         try:
             for label, symbol in symbol_map.items():
-                url = f"https://stooq.com/q/l/?s={symbol}&f=sd2t2ohlcv&h&e=csv"
-                resp = await self.client.get(url, timeout=10.0)
+                url = (
+                    "https://query1.finance.yahoo.com/v8/finance/chart/"
+                    f"{quote(symbol)}?interval=1d&range=1d"
+                )
+                resp = await self.client.get(url, headers=headers, timeout=10.0)
                 resp.raise_for_status()
 
-                # CSV is usually: Symbol,Date,Time,Open,High,Low,Close,Volume
-                content = resp.text.strip()
-                if not content:
+                data = resp.json()
+                result_node = (data or {}).get("chart", {}).get("result")
+                if not result_node:
                     continue
 
-                reader = csv.DictReader(io.StringIO(content))
-                row = next(reader, None)
-                if not row:
+                meta = result_node[0].get("meta", {})
+                price = meta.get("regularMarketPrice")
+                prev_close = meta.get("chartPreviousClose") or meta.get("previousClose")
+
+                if price is None:
                     continue
 
-                close_raw = row.get("Close")
-                open_raw = row.get("Open")
-
-                try:
-                    close_val = float(str(close_raw)) if close_raw not in (None, "", "N/A") else None
-                except ValueError:
-                    close_val = None
-
-                try:
-                    open_val = float(str(open_raw)) if open_raw not in (None, "", "N/A") else None
-                except ValueError:
-                    open_val = None
-
-                if close_val is None:
-                    continue
-
-                if open_val and open_val != 0:
-                    change_pct = ((close_val - open_val) / open_val) * 100.0
-                    result[label] = f"{close_val:,.2f} ({change_pct:+.2f}%)"
+                if prev_close and prev_close != 0:
+                    change_pct = ((price - prev_close) / prev_close) * 100.0
+                    result[label] = f"{price:,.2f} ({change_pct:+.2f}%)"
                 else:
-                    result[label] = f"{close_val:,.2f}"
+                    result[label] = f"{price:,.2f}"
 
             self.cache.set(cache_key, result)
             logger.info("📈 Fetched fresh market indices")
