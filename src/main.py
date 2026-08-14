@@ -70,7 +70,6 @@ from src.services.document_memory_service import (
 )
 from src.services.gemini_service import gemini_service
 from src.services.harmful_content_detector import harmful_content_detector
-from src.services.receipt_bridge import scan_receipt_for_app
 from src.services.hermes_service import hermes_service
 from src.services.hf_inference_service import hf_inference_service
 from src.services.history_log_service import (
@@ -97,6 +96,7 @@ from src.services.openrouter_service import openrouter_service
 from src.services.persistent_storage import is_persistent_storage_available
 from src.services.profiler_session_manager import profiler_session_manager
 from src.services.rate_limiter import rate_limiter
+from src.services.receipt_bridge import scan_receipt_for_app
 from src.services.reminder_service import reminder_service
 from src.services.scheduler_service import scheduler_service
 from src.services.startup_data_loader import startup_loader
