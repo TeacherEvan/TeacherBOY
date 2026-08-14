@@ -9,7 +9,7 @@ import pytest
 # Ensure src/ is importable
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.services.receipt_bridge import scan_receipt_for_app
+from src.services.receipt_bridge import scan_receipt_for_app, ingest_receipt
 
 
 class _FakeResponse:
@@ -289,3 +289,60 @@ def test_receipt_scan_success_returns_200(client, monkeypatch):
     )
     assert resp.status_code == 200
     assert resp.json()["success"] is True
+
+
+# ---------------------------------------------------------------------------
+# ingest_receipt: LINE path through the shared _post_to_convex helper
+# ---------------------------------------------------------------------------
+
+
+async def test_ingest_receipt_returns_404_for_unknown_user(monkeypatch, patch_settings):
+    """LINE user ID reaches Convex; a 404 maps to 'User not found'."""
+    class _Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, url, headers=None, json=None):
+            return _FakeResponse(404, {"error": "User not found"})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: _Client())
+
+    result = await ingest_receipt(
+        line_user_id="U_line_user",
+        payload={"lines": [{"text": "MERCHANT CAFE", "conf": 85.0, "y": 0.0, "words": []}]},
+        idempotency_key="line_msg_999",
+    )
+
+    assert result["success"] is False
+    assert result["error"] == "User not found"
+
+
+async def test_ingest_receipt_success_does_not_include_source(monkeypatch, patch_settings):
+    """The LINE path must NOT include a 'source' field (unlike app-camera)."""
+    captured = {}
+
+    class _Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, url, headers=None, json=None):
+            captured.update({"url": url, "headers": headers, "json": json})
+            return _FakeResponse(200, {"success": True, "draftId": "draft_line"})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: _Client())
+
+    result = await ingest_receipt(
+        line_user_id="U_line_user",
+        payload={"lines": []},
+        idempotency_key="line_msg_888",
+    )
+
+    assert result["success"] is True
+    assert "source" not in captured["json"]
+    assert captured["json"]["lineUserId"] == "U_line_user"

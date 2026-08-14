@@ -5,6 +5,7 @@ high-performance async I/O, and production-ready error handling.
 """
 
 import asyncio
+import hmac
 import logging
 import time
 import uuid
@@ -1661,7 +1662,7 @@ async def receipt_scan(request: Request) -> JSONResponse:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     expected = settings.budgetboss_sync_token
-    if not expected or auth_header[7:] != expected:
+    if not expected or not hmac.compare_digest(auth_header[7:], expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     # 2. Parse body
