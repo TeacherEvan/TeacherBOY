@@ -269,12 +269,10 @@ def test_ocr_payload_declares_provenance_and_nullable_currency_hint():
 def test_fetch_image_bytes_detects_png_mime():
     """PNG signature should be detected correctly."""
     from base64 import b64encode
-    from unittest.mock import MagicMock, patch
 
-    agent = ReceiptAgent()
     # PNG signature: 0x89 0x50 0x4E 0x47
     png_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
-    b64 = b64encode(png_bytes).decode("utf-8")
+    b64encode(png_bytes).decode("utf-8")
 
     # We can't easily mock the full LINE SDK flow, but we can verify the
     # mime detection logic by testing the guard itself.

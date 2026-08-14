@@ -1,6 +1,5 @@
 """Tests for Flex receipt bubble builder."""
 
-import pytest
 
 from src.utils.flex_receipt_builder import build_receipt_bubble
 
@@ -59,7 +58,12 @@ def test_build_receipt_bubble_thb_currency():
     }
 
     bubble = build_receipt_bubble(result)
-    body_texts = [c.text for box in bubble.body.contents if hasattr(c, "text") for c in (box.contents if hasattr(box, "contents") else [])]
+    body_texts = []
+    for box in bubble.body.contents:
+        if hasattr(box, "contents") and box.contents:
+            for c in box.contents:
+                if hasattr(c, "text"):
+                    body_texts.append(c.text)
     # Total text should contain ฿
     total_text = [t for t in body_texts if "฿" in t]
     assert len(total_text) == 1
@@ -83,7 +87,7 @@ def test_build_receipt_bubble_unknown_currency():
     # Find total text in body
     found = False
     for box in bubble.body.contents:
-        if hasattr(box, "contents"):
+        if hasattr(box, "contents") and box.contents:
             for item in box.contents:
                 if hasattr(item, "text") and "XYZ" in item.text:
                     assert "100.00" in item.text

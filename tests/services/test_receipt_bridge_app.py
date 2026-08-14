@@ -9,7 +9,7 @@ import pytest
 # Ensure src/ is importable
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.services.receipt_bridge import scan_receipt_for_app, ingest_receipt
+from src.services.receipt_bridge import ingest_receipt, scan_receipt_for_app
 
 
 class _FakeResponse:
