@@ -69,10 +69,17 @@ class ReceiptAgent(BaseAgent):
     async def _is_user_linked(self, line_user_id: str) -> bool:
         """Check if LINE user is linked to a Budget Boss account.
 
-        For now, we assume any user can send receipts. In production,
-        this could check against a linked users table.
+        NOTE: link verification is not yet implemented. Until the linked-users
+        table exists, this returns True so the receipt flow is usable in dev.
+        TODO(security): implement real link check against Budget Boss; gate
+        behind RECEIPT_REQUIRE_LINKED (env) so production can enforce it.
         """
-        return True
+        if not getattr(settings, "receipt_require_linked", False):
+            return True
+        # TODO(security): query linked-users table here. Until then, deny when
+        # enforcement is enabled rather than silently allowing everyone.
+        logger.warning("ReceiptAgent: RECEIPT_REQUIRE_LINKED set but link check unimplemented")
+        return False
 
     async def _is_receipt_enabled(self, chat_id: str) -> bool:
         """Check if receipt feature is enabled."""
@@ -220,11 +227,11 @@ class ReceiptAgent(BaseAgent):
                 b64 = base64.b64encode(content).decode("utf-8")
                 # Detect mime type from first bytes or default
                 mime = "image/jpeg"
-                if content[:4] == b"\x89PNG":
+                if len(content) >= 4 and content[:4] == b"\x89PNG":
                     mime = "image/png"
-                elif content[:2] == b"\xff\xd8":
+                elif len(content) >= 2 and content[:2] == b"\xff\xd8":
                     mime = "image/jpeg"
-                elif content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+                elif len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
                     mime = "image/webp"
 
                 return f"data:{mime};base64,{b64}"

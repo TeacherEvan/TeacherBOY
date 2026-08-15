@@ -45,6 +45,60 @@ def gemini_text_to_ocr_payload(text: str, country_hint: str = "TH") -> dict:
     }
 
 
+def _get_convex_config() -> tuple[str | None, str | None]:
+    """Read Convex URL + sync token from settings without a top-level import cycle."""
+    settings = __import__("src.config", fromlist=["settings"]).settings
+    return (
+        getattr(settings, "budgetboss_convex_url", None),
+        getattr(settings, "budgetboss_sync_token", None),
+    )
+
+
+async def _post_to_convex(
+    url: str,
+    sync_token: str,
+    body: dict,
+    timeout_seconds: float,
+    label: str,
+    not_found_error: str = "Route not found",
+) -> dict:
+    """POST a receipt payload to a Convex /receipts/* endpoint.
+
+    Shared by both the LINE path (ingest_receipt) and the app path
+    (scan_receipt_for_app) so the HTTP client, headers, status handling, and
+    exception handling cannot drift apart. `label` is a short human tag used in
+    log lines (e.g. "ingest" vs "app ingest"). `not_found_error` lets callers
+    keep their original 404 wording (the app path historically returned
+    "User not found").
+    """
+    headers = {
+        "Authorization": f"Bearer {sync_token}",
+        "Content-Type": "application/json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            response = await client.post(url, headers=headers, json=body)
+
+            if response.status_code == 200:
+                return {"success": True, **response.json()}
+            elif response.status_code == 401:
+                logger.error(f"Budget Boss {label}: unauthorized (bad sync token)")
+                return {"success": False, "error": "Unauthorized"}
+            elif response.status_code == 404:
+                logger.error(f"Budget Boss {label}: {not_found_error.lower()} (deploy needed)")
+                return {"success": False, "error": not_found_error}
+            else:
+                logger.error(f"Budget Boss {label}: {response.status_code} {response.text}")
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+
+    except httpx.TimeoutException:
+        logger.error(f"Budget Boss {label}: timeout")
+        return {"success": False, "error": "Timeout"}
+    except Exception as e:  # noqa: BLE001 - surface any transport failure as a dict
+        logger.error(f"Budget Boss {label}: {e}")
+        return {"success": False, "error": str(e)}
+
+
 async def ingest_receipt(
     line_user_id: str,
     payload: dict,
@@ -63,47 +117,20 @@ async def ingest_receipt(
     Returns:
         Dict with keys: success, draftId, fields, confidence, questions, error
     """
-    convex_url = getattr(__import__("src.config", fromlist=["settings"]).settings, "budgetboss_convex_url", None)
-    sync_token = getattr(__import__("src.config", fromlist=["settings"]).settings, "budgetboss_sync_token", None)
+    convex_url, sync_token = _get_convex_config()
 
     if not convex_url or not sync_token:
         logger.error("BUDGETBOSS_CONVEX_URL or BUDGETBOSS_SYNC_TOKEN not configured")
         return {"success": False, "error": "Bridge not configured"}
 
     url = f"{convex_url.rstrip('/')}/receipts/ingest"
-    headers = {
-        "Authorization": f"Bearer {sync_token}",
-        "Content-Type": "application/json",
-    }
     body = {
         "lineUserId": line_user_id,
         "payload": payload,
         "idempotencyKey": idempotency_key,
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-            response = await client.post(url, headers=headers, json=body)
-
-            if response.status_code == 200:
-                data = response.json()
-                return {"success": True, **data}
-            elif response.status_code == 401:
-                logger.error("Budget Boss ingest: unauthorized (bad sync token)")
-                return {"success": False, "error": "Unauthorized"}
-            elif response.status_code == 404:
-                logger.error("Budget Boss ingest: route not found (deploy needed)")
-                return {"success": False, "error": "Route not found"}
-            else:
-                logger.error(f"Budget Boss ingest: {response.status_code} {response.text}")
-                return {"success": False, "error": f"HTTP {response.status_code}"}
-
-    except httpx.TimeoutException:
-        logger.error("Budget Boss ingest: timeout")
-        return {"success": False, "error": "Timeout"}
-    except Exception as e:
-        logger.error(f"Budget Boss ingest: {e}")
-        return {"success": False, "error": str(e)}
+    return await _post_to_convex(url, sync_token, body, timeout_seconds, "ingest")
 
 
 async def scan_receipt_for_app(
@@ -147,18 +174,13 @@ async def scan_receipt_for_app(
 
     payload = gemini_text_to_ocr_payload(scraped_text, country_hint)
 
-    convex_url = getattr(__import__("src.config", fromlist=["settings"]).settings, "budgetboss_convex_url", None)
-    sync_token = getattr(__import__("src.config", fromlist=["settings"]).settings, "budgetboss_sync_token", None)
+    convex_url, sync_token = _get_convex_config()
 
     if not convex_url or not sync_token:
         logger.error("BUDGETBOSS_CONVEX_URL or BUDGETBOSS_SYNC_TOKEN not configured")
         return {"success": False, "error": "Bridge not configured"}
 
     url = f"{convex_url.rstrip('/')}/receipts/ingest"
-    headers = {
-        "Authorization": f"Bearer {sync_token}",
-        "Content-Type": "application/json",
-    }
     body = {
         "lineUserId": f"app:{convex_user_id}",
         "payload": payload,
@@ -166,25 +188,11 @@ async def scan_receipt_for_app(
         "source": "app-camera",
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-            response = await client.post(url, headers=headers, json=body)
-
-            if response.status_code == 200:
-                return {"success": True, **response.json()}
-            elif response.status_code == 401:
-                logger.error("Budget Boss app ingest: unauthorized (bad sync token)")
-                return {"success": False, "error": "Unauthorized"}
-            elif response.status_code == 404:
-                logger.error("Budget Boss app ingest: user not found")
-                return {"success": False, "error": "User not found"}
-            else:
-                logger.error(f"Budget Boss app ingest: {response.status_code} {response.text}")
-                return {"success": False, "error": f"HTTP {response.status_code}"}
-
-    except httpx.TimeoutException:
-        logger.error("Budget Boss app ingest: timeout")
-        return {"success": False, "error": "Timeout"}
-    except Exception as e:
-        logger.error(f"Budget Boss app ingest: {e}")
-        return {"success": False, "error": str(e)}
+    return await _post_to_convex(
+        url,
+        sync_token,
+        body,
+        timeout_seconds,
+        "app ingest",
+        not_found_error="User not found",
+    )
