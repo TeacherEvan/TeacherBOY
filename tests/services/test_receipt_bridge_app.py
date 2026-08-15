@@ -72,9 +72,7 @@ def patch_gemini(monkeypatch):
     monkeypatch.setattr(bridge, "chat_completion_with_vision_fallback", fake_vision)
 
 
-async def test_scan_for_app_posts_app_prefix_and_source(
-    monkeypatch, patch_settings, patch_gemini
-):
+async def test_scan_for_app_posts_app_prefix_and_source(monkeypatch, patch_settings, patch_gemini):
     captured = {}
 
     class _Client:
@@ -106,9 +104,7 @@ async def test_scan_for_app_posts_app_prefix_and_source(
     assert captured["headers"]["Authorization"] == "Bearer test-sync-secret"
 
 
-async def test_scan_for_app_returns_404_when_user_not_found(
-    monkeypatch, patch_settings, patch_gemini
-):
+async def test_scan_for_app_returns_404_when_user_not_found(monkeypatch, patch_settings, patch_gemini):
     class _Client:
         async def __aenter__(self):
             return self
@@ -131,9 +127,7 @@ async def test_scan_for_app_returns_404_when_user_not_found(
     assert result["error"] == "User not found"
 
 
-async def test_scan_for_app_returns_false_when_gemini_empty(
-    monkeypatch, patch_settings
-):
+async def test_scan_for_app_returns_false_when_gemini_empty(monkeypatch, patch_settings):
     import src.utils.llm_fallback as llm_fallback
 
     async def fake_empty(*args, **kwargs):
@@ -151,9 +145,7 @@ async def test_scan_for_app_returns_false_when_gemini_empty(
     assert "no text" in result["error"]
 
 
-async def test_scan_for_app_returns_false_when_bridge_not_configured(
-    monkeypatch, patch_gemini
-):
+async def test_scan_for_app_returns_false_when_bridge_not_configured(monkeypatch, patch_gemini):
     import src.config as config_mod
 
     class _Settings:

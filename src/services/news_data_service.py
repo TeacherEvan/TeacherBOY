@@ -701,10 +701,7 @@ class NewsDataService:
 
         try:
             for label, symbol in symbol_map.items():
-                url = (
-                    "https://query1.finance.yahoo.com/v8/finance/chart/"
-                    f"{quote(symbol)}?interval=1d&range=1d"
-                )
+                url = "https://query1.finance.yahoo.com/v8/finance/chart/" f"{quote(symbol)}?interval=1d&range=1d"
                 resp = await self.client.get(url, headers=headers, timeout=10.0)
                 resp.raise_for_status()
 
