@@ -202,9 +202,7 @@ async def test_receipt_agent_yields_to_real_image_analyzer_session(source):
     await image_analyzer_session_manager.start_session(analyzer_key, user_id=source.user_id)
     try:
         # The gate ReceiptAgent actually performs, with its own key.
-        assert await image_analyzer_session_manager.is_waiting_for_image(
-            agent._get_chat_id(event), source.user_id
-        )
+        assert await image_analyzer_session_manager.is_waiting_for_image(agent._get_chat_id(event), source.user_id)
 
         with patch.object(agent, "_has_vision_provider", return_value=True):
             assert await agent.should_handle(event, "") is False
@@ -222,9 +220,7 @@ async def test_receipt_agent_yields_to_real_profiler_session():
 
     profiler_session_manager.request_profiling(profiler_key, source.user_id)
     try:
-        assert profiler_session_manager.is_waiting_for_image(
-            agent._get_chat_id(event), source.user_id
-        )
+        assert profiler_session_manager.is_waiting_for_image(agent._get_chat_id(event), source.user_id)
 
         with patch.object(agent, "_has_vision_provider", return_value=True):
             assert await agent.should_handle(event, "") is False
@@ -335,4 +331,3 @@ async def test_receipt_agent_enabled_by_default():
                 with patch("src.agents.receipt_agent.settings") as mock_settings:
                     mock_settings.receipt_agent_enabled = True
                     assert await agent.should_handle(event, "") is True
-

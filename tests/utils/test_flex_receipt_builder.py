@@ -1,6 +1,5 @@
 """Tests for Flex receipt bubble builder."""
 
-
 from src.utils.flex_receipt_builder import build_receipt_bubble
 
 

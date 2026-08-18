@@ -113,3 +113,69 @@ jobs:
           else
             git push hf HEAD:main
           fi
+
+  # Best-practice CI failure→issue trigger.
+  # Fires only when the lint/format/type gate fails (merge stays blocked on main),
+  # opens a deduplicated GitHub issue and records what the agent should do.
+  lint-failure-issue:
+    name: Open issue on lint failure
+    needs: lint-and-type
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update CI failure issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ref = context.payload.pull_request
+              ? context.payload.pull_request.head.ref
+              : context.ref.replace('refs/heads/', '');
+            const title = `🚨 CI Lint Failure: ${ref}`;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const sha = context.sha;
+            const actor = context.actor;
+
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const existing = issues.find((i) => i.title === title && !i.pull_request);
+
+            const body = `## CI Lint/Format gate failed
+
+            **Branch/ref:** \`${ref}\`
+            **Commit:** \`${sha}\`
+            **Triggered by:** @${actor}
+            **Run:** ${runUrl}
+
+            The \`lint-and-type\` job failed (Ruff lint, Ruff format, or Mypy). This blocks merge to \`main\` (required status check).
+
+            ### Agent handling (auto-remediation)
+            1. Reproduce locally with the **pinned** linter: \`pip install ruff==0.4.8\` then \`ruff check --fix src/ tests/ && ruff format src/ tests/\`.
+            2. Commit the fix and open/refresh the fix PR.
+            3. Comment resolution on this issue once the \`lint-and-type\` check is green.
+
+            _Auto-created by the CI failure trigger._`;
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: `Recurred at ${runUrl} (commit \`${sha}\`, actor @${actor}).`,
+              });
+              console.log(`Updated existing issue #${existing.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['ci-failure', 'lint', 'automated'],
+              });
+              console.log(`Created issue #${created.data.number}`);
+            }
