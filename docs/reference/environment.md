@@ -110,6 +110,14 @@ This returns the bot to the existing local/HF-backed path without deleting local
 
 - `BOT_IDENTITY_STORAGE_PATH`
 
+## Group Access Control
+
+Controls which groups/rooms non-admin users may invoke `Ms. Green` commands in. Field names are legacy (`zeus_*`) but remain the active env vars.
+
+- `ZEUS_GROUP_ACCESS_MODE` (default: `all`; options: `all`, `allowlist`, `denylist`)
+- `ZEUS_ALLOWED_GROUP_IDS` (comma-separated group/room IDs; used in `allowlist` mode)
+- `ZEUS_DENIED_GROUP_IDS` (comma-separated group/room IDs; used in `denylist` mode)
+
 ## Document Memory
 
 - `DOCUMENT_MEMORY_ENABLED`
@@ -201,12 +209,12 @@ This returns the bot to the existing local/HF-backed path without deleting local
 Example mounted-volume paths:
 
 ```env
-CONVERSATION_STORAGE_PATH=/data/ms-sunshine/conversations
-DOCUMENT_STORAGE_PATH=/data/ms-sunshine/documents
-HISTORY_LOG_PATH=/data/ms-sunshine/logs
-CALENDAR_DATA_PATH=/data/ms-sunshine/calendar
-BOT_IDENTITY_STORAGE_PATH=/data/ms-sunshine/bot_identity/profile.json
-STAFF_MEMORY_STORAGE_PATH=/data/ms-sunshine/staff_memory/staff_memory.json
+CONVERSATION_STORAGE_PATH=/data/ms-green/conversations
+DOCUMENT_STORAGE_PATH=/data/ms-green/documents
+HISTORY_LOG_PATH=/data/ms-green/logs
+CALENDAR_DATA_PATH=/data/ms-green/calendar
+BOT_IDENTITY_STORAGE_PATH=/data/ms-green/bot_identity/profile.json
+STAFF_MEMORY_STORAGE_PATH=/data/ms-green/staff_memory/staff_memory.json
 ```
 
 ## Local Storage Paths
@@ -221,21 +229,21 @@ feature sections above.
 - **Description:** Local working/cache directory used by the HF-backed
   conversation memory sync path; by itself it does not enable restart
   persistence
-- **Example:** `CONVERSATION_STORAGE_PATH=/data/ms-sunshine/conversations`
+- **Example:** `CONVERSATION_STORAGE_PATH=/data/ms-green/conversations`
 
 ### `BOT_IDENTITY_STORAGE_PATH`
 
 - **Type:** String
 - **Default:** `./data/bot_identity/profile.json`
 - **Description:** Local JSON file for runtime bot identity name and alias overrides
-- **Example:** `BOT_IDENTITY_STORAGE_PATH=/data/ms-sunshine/bot_identity/profile.json`
+- **Example:** `BOT_IDENTITY_STORAGE_PATH=/data/ms-green/bot_identity/profile.json`
 
 ### `STAFF_MEMORY_STORAGE_PATH`
 
 - **Type:** String
 - **Default:** `./data/staff_memory/staff_memory.json`
 - **Description:** Local JSON file for review-agent staff memory on the mounted volume
-- **Example:** `STAFF_MEMORY_STORAGE_PATH=/data/ms-sunshine/staff_memory/staff_memory.json`
+- **Example:** `STAFF_MEMORY_STORAGE_PATH=/data/ms-green/staff_memory/staff_memory.json`
 
 ## Calendar & Reminder Configuration
 

@@ -122,6 +122,10 @@ def register_all_agents():
     AgentFactory.register("news", __import_news_agent)
     AgentFactory.register("special_news", __import_special_news_agent)
 
+    # Conditional: Receipt agent (requires vision provider and Budget Boss config)
+    if settings.is_any_vision_provider_configured() and settings.budgetboss_convex_url and settings.budgetboss_sync_token:
+        AgentFactory.register("receipt", __import_receipt_agent)
+
     logger.info(f"✅ Registered {len(AgentFactory._registry)} agent classes")
 
 
@@ -180,3 +184,9 @@ def __import_special_news_agent():
     from .special_news_agent import SpecialNewsAgent
 
     return SpecialNewsAgent()
+
+
+def __import_receipt_agent():
+    from .receipt_agent import ReceiptAgent
+
+    return ReceiptAgent()
