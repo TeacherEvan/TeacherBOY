@@ -110,7 +110,7 @@ export default defineSchema({
     validatedByCalendar: v.boolean(), // True if Maton API confirmed details
     ...timestampFields,
   })
-    .index("by_date_chat", ["date", "chatId"])
+    .index("by_date_chat", ["chatId", "date"])
     .index("by_teacher", ["teacher"]),
 
   // Moderator Mode state per group
