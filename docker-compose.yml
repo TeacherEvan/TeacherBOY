@@ -11,6 +11,8 @@ services:
       - LIBRETRANSLATE_API_URL=${LIBRETRANSLATE_API_URL}
       - LIBRETRANSLATE_API_KEY=${LIBRETRANSLATE_API_KEY}
       - MCP_SERVER_URL=${MCP_SERVER_URL}
+      - TZ=Asia/Bangkok
+      - PYTHONUNBUFFERED=1
     env_file:
       - .env
     volumes:

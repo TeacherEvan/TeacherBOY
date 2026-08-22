@@ -454,17 +454,19 @@ class DocumentMemoryService(HFStorageMixin):
                 logger.info("📄 No existing documents found in HF Hub")
                 return 0
 
+            assert self.storage_path is not None
             downloaded = 0
             for file_path in files:
                 if file_path.endswith(".tmp"):
                     continue
-                local_target = self.storage_path / file_path
-                local_target.parent.mkdir(parents=True, exist_ok=True)
+                # CRITICAL FIX: storage_path ("./data/documents") already maps to
+                # hf_path_in_repo ("documents/"). Downloading "documents/..." INTO
+                # it double-nests. Use the PARENT so the subfolder is created once.
                 hf_hub_download(
                     repo_id=self.hf_repo_id,
                     repo_type="dataset",
                     filename=file_path,
-                    local_dir=str(self.storage_path),
+                    local_dir=str(self.storage_path.parent),
                     local_dir_use_symlinks=False,
                     token=self.hf_token,
                 )

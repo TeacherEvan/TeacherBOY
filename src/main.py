@@ -5,6 +5,7 @@ high-performance async I/O, and production-ready error handling.
 """
 
 import asyncio
+import hmac
 import logging
 import time
 import uuid
@@ -96,6 +97,7 @@ from src.services.openrouter_service import openrouter_service
 from src.services.persistent_storage import is_persistent_storage_available
 from src.services.profiler_session_manager import profiler_session_manager
 from src.services.rate_limiter import rate_limiter
+from src.services.receipt_bridge import scan_receipt_for_app
 from src.services.reminder_service import reminder_service
 from src.services.scheduler_service import scheduler_service
 from src.services.startup_data_loader import startup_loader
@@ -1639,3 +1641,65 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run("src.main:app", host=settings.host, port=settings.port, reload=settings.debug)
+
+
+@app.post("/receipt/scan", tags=["Budget Boss App"])
+async def receipt_scan(request: Request) -> JSONResponse:
+    """
+    Receipt scanning endpoint for the Budget Boss app (not LINE).
+
+    Receives a base64 receipt image, runs Gemini vision via the shared
+    receipt bridge, and forwards the OcrPayload to Convex /receipts/ingest
+    with source="app-camera".
+
+    Auth: same Bearer token as the LINE bridge (CONVEX_SYNC_SECRET). The app
+    reaches this via the Convex proxyReceiptScan action, which adds the token
+    server-side — the secret never ships in the client bundle.
+    """
+    # 1. Verify Bearer token
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    expected = settings.budgetboss_sync_token
+    if not expected or not hmac.compare_digest(auth_header[7:], expected):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # 2. Parse body
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    image = body.get("image")
+    user_id = body.get("userId")
+    idempotency_key = body.get("idempotencyKey")
+    country_hint = body.get("countryHint", "TH")
+
+    if not image or not user_id or not idempotency_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing required field: image, userId, or idempotencyKey",
+        )
+
+    # 3. Feature flag
+    if not settings.receipt_agent_enabled:
+        raise HTTPException(status_code=503, detail="Receipt scanning is disabled")
+
+    # 4. Scan via the shared bridge (Gemini vision -> Convex ingest)
+    result = await scan_receipt_for_app(
+        image_base64=image,
+        convex_user_id=user_id,
+        idempotency_key=idempotency_key,
+        country_hint=country_hint,
+    )
+
+    if not result.get("success"):
+        error = result.get("error", "Scan failed")
+        if error == "User not found":
+            raise HTTPException(status_code=404, detail=error)
+        if error == "Bridge not configured":
+            raise HTTPException(status_code=503, detail=error)
+        raise HTTPException(status_code=502, detail=error)
+
+    return JSONResponse(content=result, status_code=200)
