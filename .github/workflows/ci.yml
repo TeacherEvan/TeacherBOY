@@ -117,3 +117,5 @@ jobs:
           else
             git push hf HEAD:main
           fi
+
+# CI fix applied: ruff gate + valid dummy LINE creds (run 1786499269)
