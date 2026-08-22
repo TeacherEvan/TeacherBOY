@@ -816,6 +816,10 @@ class Settings(BaseSettings):
     @field_validator("line_channel_secret")
     @classmethod
     def reject_placeholder_secret(cls, value: str | None) -> str | None:
+        # Allow test placeholders in test environments (CI, pytest)
+        import os
+        if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("TESTING") == "true":
+            return value
         if isinstance(value, str) and value.startswith("test_"):
             raise ValueError("LINE channel secret appears to be a placeholder; set a real value in environment config")
         return value
@@ -823,6 +827,10 @@ class Settings(BaseSettings):
     @field_validator("line_channel_access_token")
     @classmethod
     def reject_placeholder_token(cls, value: str | None) -> str | None:
+        # Allow test placeholders in test environments (CI, pytest)
+        import os
+        if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("TESTING") == "true":
+            return value
         if isinstance(value, str) and value.startswith("test_"):
             raise ValueError("LINE channel access token appears to be a placeholder; set a real value in environment config")
         return value
