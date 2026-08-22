@@ -16,7 +16,8 @@ os.environ["DEBUG"] = "false"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 # Now import and patch settings at module level
-from src.config import settings
+from src.config import settings  # noqa: E402
+
 settings.line_channel_secret = "testsecret123"
 settings.line_channel_access_token = "testtoken456"
 
