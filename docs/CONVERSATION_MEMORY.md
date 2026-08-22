@@ -47,7 +47,7 @@ For production deployments with a mounted volume, configure both the local path 
 ```bash
 HF_MEMORY_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 HF_MEMORY_REPO_ID=your-username/ms-green-memory
-CONVERSATION_STORAGE_PATH=/data/ms-sunshine/conversations
+CONVERSATION_STORAGE_PATH=/data/ms-green/conversations
 ```
 
 For the full storage contract and mounted-volume examples, see [Environment variables](reference/environment.md).

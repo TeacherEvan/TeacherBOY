@@ -1097,6 +1097,29 @@ class Settings(BaseSettings):
         """Check if the psychological profiler feature is enabled."""
         return bool(self.profiler_enabled)
 
+    # ============================================================================
+    # Budget Boss Receipt Bridge Configuration
+    # ============================================================================
+    budgetboss_convex_url: str | None = Field(
+        default=None,
+        description="Budget Boss Convex deployment URL (e.g., https://xxx.convex.site)",
+        validation_alias="BUDGETBOSS_CONVEX_URL",
+    )
+    budgetboss_sync_token: str | None = Field(
+        default=None,
+        description="Budget Boss Convex sync token (Bearer token for /receipts/ingest)",
+        validation_alias="BUDGETBOSS_SYNC_TOKEN",
+    )
+    budgetboss_app_url: str | None = Field(
+        default=None,
+        description="Budget Boss app URL for deep links (e.g., https://budgetboss.app)",
+        validation_alias="BUDGETBOSS_APP_URL",
+    )
+    receipt_agent_enabled: bool = Field(
+        default=True,
+        description="Enable receipt scanning agent in TeacherBOY",
+    )
+
     def is_any_vision_provider_configured(self) -> bool:
         """Check if any vision-capable LLM provider is configured.
 

@@ -1,0 +1,9 @@
+# Ignore intentional test/dummy credentials committed for CI + test fixtures.
+# These are non-secret placeholders; GitGuardian false-positives otherwise block all PRs.
+paths-ignore:
+  - '**/tests/**'
+  - '**/test_*.py'
+  - '**/*_test.py'
+matches-ignore:
+  - name: "CI placeholder LINE credentials"
+    match: 'ZXhhbXBsZXNlY3JldGZvcmNpMjAyNg==|dW1teWNyZWRlbnRpYWx0b2tlZW5mb3JjaWl0ZXN0aW5nMjAyNg==|examplesecretforci2026|dummycredentialtokenforciitesting2026|testsecret123|testtoken456'
