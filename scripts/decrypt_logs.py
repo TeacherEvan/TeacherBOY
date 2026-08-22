@@ -7,11 +7,10 @@ import argparse
 import base64
 import getpass
 import hashlib
-import json
 import os
 import sys
-from datetime import datetime
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Ensure we can import cryptography
@@ -41,7 +40,7 @@ def decrypt_line(fernet: Fernet, line: str) -> str:
     line_stripped = line.strip()
     if not line_stripped:
         return line
-        
+
     # Fernet tokens usually start with gAAAAA or Z0FBQUFB (base64url of gAAAAA)
     # Check both raw Fernet format and the base64-wrapped format in HistoryLogService
     try:
@@ -65,32 +64,32 @@ def main():
     parser.add_argument("-r", "--repo", help="HF log repository ID (falls back to HISTORY_LOG_HF_REPO_ID env var)")
     parser.add_argument("-t", "--token", help="HF API token (falls back to HF_TOKEN or HF_MEMORY_TOKEN env var)")
     parser.add_argument("-o", "--out", default="./data/logs/decrypted", help="Output directory for decrypted logs")
-    
+
     args = parser.parse_args()
-    
+
     # Load env files
     load_dotenv()
     load_dotenv(".env.local")
-    
+
     # Resolve parameters
     token = args.token or os.getenv("HF_TOKEN") or os.getenv("HF_MEMORY_TOKEN")
     repo_id = args.repo or os.getenv("HISTORY_LOG_HF_REPO_ID")
     encryption_key = args.key or os.getenv("HISTORY_LOG_ENCRYPTION_KEY")
-    
+
     if not token:
         print("❌ Error: Hugging Face API token is required. Set HF_TOKEN env var or use --token.")
         sys.exit(1)
-        
+
     if not repo_id:
         print("❌ Error: Repository ID is required. Set HISTORY_LOG_HF_REPO_ID env var or use --repo.")
         sys.exit(1)
-        
+
     if not encryption_key:
         print("🔐 Logs may be encrypted. Please enter the encryption key.")
         encryption_key = getpass.getpass("Encryption Key: ").strip()
         if not encryption_key:
             print("⚠️ No encryption key provided. Decryption will be skipped; files will be downloaded as-is.")
-            
+
     # Set up decryptor if key is provided
     fernet = None
     if encryption_key:
@@ -101,46 +100,40 @@ def main():
         except Exception as e:
             print(f"❌ Failed to initialize decryptor: {e}")
             sys.exit(1)
-            
+
     # Create output directory
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    
+
     print(f"☁️ Connecting to Hugging Face repository: {repo_id}...")
     try:
         files = list_repo_files(repo_id=repo_id, repo_type="dataset", token=token)
     except Exception as e:
         print(f"❌ Failed to list repository files: {e}")
         sys.exit(1)
-        
+
     log_files = [f for f in files if f.endswith(".jsonl")]
     if not log_files:
         print("📭 No log files (*.jsonl) found in the repository.")
         sys.exit(0)
-        
+
     print(f"📂 Found {len(log_files)} log files. Starting download and decryption...")
-    
+
     for filename in log_files:
         print(f"\n📥 Downloading: {filename}")
         try:
             # Download file
-            local_path = hf_hub_download(
-                repo_id=repo_id,
-                filename=filename,
-                repo_type="dataset",
-                token=token
-            )
-            
+            local_path = hf_hub_download(repo_id=repo_id, filename=filename, repo_type="dataset", token=token)
+
             # Determine local output path
             out_filename = Path(filename).name
             out_filepath = out_dir / out_filename
-            
+
             print(f"🔓 Decrypting to: {out_filepath}")
             decrypted_count = 0
             plain_count = 0
-            
-            with open(local_path, "r", encoding="utf-8") as infile, \
-                 open(out_filepath, "w", encoding="utf-8") as outfile:
+
+            with open(local_path, encoding="utf-8") as infile, open(out_filepath, "w", encoding="utf-8") as outfile:
                 for line in infile:
                     if not line.strip():
                         continue
@@ -154,12 +147,12 @@ def main():
                     else:
                         outfile.write(line)
                         plain_count += 1
-                        
+
             print(f"✅ Finished: {decrypted_count} entries decrypted, {plain_count} skipped/plain-text.")
-            
+
         except Exception as e:
             print(f"⚠️ Error processing file {filename}: {e}")
-            
+
     print(f"\n🎉 Done! Decrypted log files are stored in: {out_dir.resolve()}")
 
 

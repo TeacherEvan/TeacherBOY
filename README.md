@@ -169,9 +169,13 @@ For the full variable reference and mounted-volume examples, see [Environment va
 
 - **Framework:** Python 3.11+, FastAPI
 - **Platform:** LINE Messaging API v3 (Async)
-- **Translation:** Shared AI translation service backed by Gemini free tier
-- **Architecture:** Multi-agent system with modular design
-- **Libraries:** `line-bot-sdk`, `httpx`, `pydantic`
+- **Translation:** Shared AI translation service backed by Gemini free tier (OpenRouter fallback)
+- **LLM Fallback Chain:** Gemini → Hermes → OpenRouter → GitHub Models (`LLM_PROVIDER_PRIORITY`)
+- **Architecture:** Multi-agent system with modular design (priority-ordered agent router)
+- **Libraries:** `line-bot-sdk`, `httpx`, `pydantic`, `pydantic-settings`
+- **Persistence:** Local/HF Hub by default; optional Convex backend for structured data
+- **Observability:** OpenTelemetry tracing (OTLP)
+- **Integrations:** Brave Search, Open-Meteo (weather), Hugging Face Hub (storage), Convex (optional structured store)
 
 ## ⚙️ Quick Start
 
@@ -190,6 +194,19 @@ LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
 GEMINI_API_KEY=your_gemini_api_key
 OPENROUTER_API_KEY=your_openrouter_api_key  # Optional fallback
 
+# LLM agent (Gemini-first fallback chain)
+LLM_TEMPERATURE=1.15
+# Group/room policy for non-admin Ms. Green usage: all|allowlist|denylist
+# (env var names are legacy but remain active)
+ZEUS_GROUP_ACCESS_MODE=all
+ZEUS_ALLOWED_GROUP_IDS=
+ZEUS_DENIED_GROUP_IDS=
+# Optional: override Ms. Green persona
+# LLM_SYSTEM_PROMPT=
+
+# Web search (Search Agent)
+BRAVE_SEARCH_API_KEY=your_brave_api_key
+
 # Structured persistence backend
 PERSISTENCE_BACKEND=local  # set to convex to use Convex as primary
 CONVEX_DEPLOYMENT_URL=
@@ -206,11 +223,12 @@ CONVEX_REQUIRE_HEALTHCHECK_ON_STARTUP=false
 ADDITIONAL_AGENTS=
 
 # Ms. Green AI (optional)
-LLM_TEMPERATURE=1.0
+LLM_TEMPERATURE=1.15
 # Group/room policy for non-admin Ms. Green usage: all|allowlist|denylist
-MS_GREEN_GROUP_ACCESS_MODE=all
-GREEN_ALLOWED_GROUP_IDS=
-GREEN_DENIED_GROUP_IDS=
+# (env var names are legacy but remain active)
+ZEUS_GROUP_ACCESS_MODE=all
+ZEUS_ALLOWED_GROUP_IDS=
+ZEUS_DENIED_GROUP_IDS=
 # Optional: override Ms. Green persona
 # LLM_SYSTEM_PROMPT=
 
@@ -300,7 +318,7 @@ Ms. Green uses a **modular multi-agent architecture** where messages are
 routed to specialized agents based on content and context.
 
 ```text
-LINE Webhook → Agent Router → [TranslationAgent | MathAgent | CodeAgent | ...]
+LINE Webhook → Agent Router → [ModModeAgent | HelpAgent | AdminAgent | CalendarAgent | HannibalProfileAgent | ProfilerAgent | ImageAnalyzerAgent | DocumentMemoryAgent | SearchAgent | LLMAgent | TranslationAgent | SpecialNewsAgent | NewsAgent]
 ```
 
 **Want to understand how it all works?**
@@ -421,3 +439,4 @@ See **[Deployment Guide](docs/guides/deployment.md)** for complete instructions 
 ## 📄 License
 
 MIT
+# CI trigger

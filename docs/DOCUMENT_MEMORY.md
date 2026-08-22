@@ -117,7 +117,7 @@ HF_MEMORY_TOKEN=hf_xxxxxxxxxxxx
 For HF Spaces or Kubernetes with persistent volumes:
 
 ```env
-DOCUMENT_STORAGE_PATH=/data/ms-sunshine/documents
+DOCUMENT_STORAGE_PATH=/data/ms-green/documents
 DOCUMENT_HF_REPO_ID=username/ms-green-documents
 HF_MEMORY_TOKEN=hf_xxxxxxxxxxxx
 ```

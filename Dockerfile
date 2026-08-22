@@ -8,7 +8,12 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
+
+# Set timezone and disable python output buffering for real-time logging
+ENV TZ=Asia/Bangkok
+ENV PYTHONUNBUFFERED=1
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
