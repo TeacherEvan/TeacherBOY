@@ -247,93 +247,28 @@ class ReceiptAgent(BaseAgent):
     async def _reply_success(self, line_bot_api: MessagingApi, event: MessageEvent, result: dict) -> None:
         """Reply with Flex card showing receipt summary and deep link."""
         try:
-            from linebot.v3.messaging import (
-                FlexBox,
-                FlexBubble,
-                FlexButton,
-                FlexMessage,
-                FlexSeparator,
-                FlexText,
-                ReplyMessageRequest,
-                URIAction,
-            )
+            from linebot.v3.messaging import FlexMessage, ReplyMessageRequest
 
-            fields = result.get("fields", {})
-            merchant = fields.get("merchant", {}).get("value", "Unknown")
-            total = fields.get("total", {}).get("value", 0)
-            category = fields.get("category", {}).get("value", "other")
-            currency = fields.get("currency", {}).get("value", "USD")
-            confidence = result.get("confidence", {})
-            total_conf = confidence.get("total", 0)
+            from src.utils.flex_receipt_builder import build_receipt_bubble
 
-            # Format currency
-            currency_symbols = {"USD": "$", "EUR": "€", "GBP": "£", "THB": "฿", "JPY": "¥", "ZAR": "R"}
-            symbol = currency_symbols.get(currency, currency)
-
-            # Build Flex bubble
-            bubble = FlexBubble(
-                header=FlexBox(
-                    layout="vertical",
-                    contents=[
-                        FlexText(text="🧾 Receipt Scanned", weight="bold", size="lg", color="#1a1a2e"),
-                        FlexText(text=f"via {result.get('source', 'LINE')}", size="xs", color="#888"),
-                    ],
-                ),
-                body=FlexBox(
-                    layout="vertical",
-                    spacing="md",
-                    contents=[
-                        FlexBox(
-                            layout="horizontal",
-                            contents=[
-                                FlexText(text="Merchant", size="sm", color="#666", flex=1),
-                                FlexText(text=str(merchant), size="sm", weight="bold", flex=2, wrap=True),
-                            ],
-                        ),
-                        FlexBox(
-                            layout="horizontal",
-                            contents=[
-                                FlexText(text="Total", size="sm", color="#666", flex=1),
-                                FlexText(text=f"{symbol}{total:.2f}", size="lg", weight="bold", color="#fbbf24", flex=2),
-                            ],
-                        ),
-                        FlexBox(
-                            layout="horizontal",
-                            contents=[
-                                FlexText(text="Category", size="sm", color="#666", flex=1),
-                                FlexText(text=str(category).capitalize(), size="sm", flex=2),
-                            ],
-                        ),
-                        FlexSeparator(),
-                        FlexText(
-                            text=f"Confidence: {int(total_conf * 100)}%",
-                            size="xs",
-                            color="#34d399" if total_conf > 0.7 else "#fbbf24" if total_conf > 0.5 else "#f87171",
-                        ),
-                    ],
-                ),
-                footer=FlexBox(
-                    layout="vertical",
-                    spacing="sm",
-                    contents=[
-                        FlexButton(
-                            action=URIAction(
-                                label="Open in Budget Boss",
-                                uri=f"{settings.budgetboss_app_url or 'https://budgetboss.app'}/receipts/{result.get('draftId', '')}",
-                            ),
-                            style="primary",
-                            color="#fbbf24",
-                        ),
-                    ],
-                ),
-            )
+            bubble = build_receipt_bubble(result, app_url=getattr(settings, "budgetboss_app_url", None))
 
             flex_msg = FlexMessage(alt_text="Receipt scanned", contents=bubble)
             await line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[flex_msg]))
         except Exception as e:
             logger.error(f"ReceiptAgent: failed to send success reply: {e}")
             # Fallback to simple text
-            await self._reply_text(line_bot_api, event, f"✅ Receipt scanned: {merchant} — {symbol}{total:.2f} ({category})")
+            fields = result.get("fields", {})
+            merchant = fields.get("merchant", {}).get("value", "Unknown")
+            total = fields.get("total", {}).get("value", 0)
+            category = fields.get("category", {}).get("value", "other")
+            currency = fields.get("currency", {}).get("value", "USD")
+            from src.utils.flex_receipt_builder import CURRENCY_SYMBOLS
+
+            symbol = CURRENCY_SYMBOLS.get(currency, currency)
+            await self._reply_text(
+                line_bot_api, event, f"✅ Receipt scanned: {merchant} — {symbol}{float(total):.2f} ({category})"
+            )
 
     async def _reply_error(self, line_bot_api: MessagingApi, event: MessageEvent, message: str) -> None:
         """Reply with error message."""
