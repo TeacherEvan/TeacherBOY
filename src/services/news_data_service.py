@@ -666,6 +666,11 @@ class NewsDataService:
         Source: Yahoo Finance chart endpoint (stooq.com's free CSV quote
         endpoint was discontinued and 404s for all symbols).
 
+        ⚠️ RISK: Yahoo Finance v8 endpoint is undocumented and can change
+        without notice. If it 429s or 404s, all indices return "N/A".
+        Consider adding a secondary source (e.g. Alpha Vantage, stooq HTML)
+        or caching stale values longer during outage windows.
+
         Returns:
             Dict of index labels to formatted strings.
         """
