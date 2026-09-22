@@ -225,9 +225,6 @@ async def lifespan(app: FastAPI):
     logger.info(f"🚀 {_service_display_name()} Multi-Agent System - Starting Up")
     logger.info("=" * 80)
 
-    # Tracing (OpenTelemetry) - optional, controlled by settings.enable_tracing
-    setup_tracing(app, settings)
-
     # ========================================================================
     # PHASE 1: Bot Identity Detection (Prevent Infinite Loop)
     # ========================================================================
@@ -763,6 +760,14 @@ async def lifespan(app: FastAPI):
 # ============================================================================
 # FastAPI Application Initialization
 # ============================================================================
+
+# CRITICAL: setup_tracing MUST be called BEFORE the app starts serving requests.
+# Starlette ≥0.24 made build_middleware_stack() lazy — once the app begins
+# serving (lifespan yields, first request arrives), add_middleware() raises
+# RuntimeError("Cannot add middleware after an application has started").
+# Calling setup_tracing here (module level, before lifespan runs) ensures
+# FastAPIInstrumentor.instrument_app() runs while the middleware stack is
+# still mutable. See: https://github.com/open-telemetry/opentelemetry-python-contrib/issues/2042
 app = FastAPI(
     title=f"{_service_display_name()} - Multi-Agent Translation Bot",
     description="Production-grade Thai/English translation bot for LINE with intelligent agent routing",
@@ -771,6 +776,12 @@ app = FastAPI(
     docs_url="/docs" if settings.debug else None,  # Disable docs in production
     redoc_url="/redoc" if settings.debug else None,
 )
+
+# Initialize tracing BEFORE any middleware or lifespan code runs.
+# This must happen at module scope, not inside lifespan(), because
+# instrument_app() calls add_middleware() which is a no-op once the
+# app has started (Starlette ≥0.24 lazy middleware stack).
+setup_tracing(app, settings)
 
 # Add CORS middleware for API access (if needed)
 if settings.debug:

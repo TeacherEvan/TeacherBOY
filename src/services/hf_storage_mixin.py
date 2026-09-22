@@ -227,7 +227,6 @@ class HFStorageMixin:
                         repo_type=self.hf_repo_type,
                         token=self.hf_token,
                         local_dir=local_dir,
-                        local_dir_use_symlinks=False,
                     )
 
                     import json
