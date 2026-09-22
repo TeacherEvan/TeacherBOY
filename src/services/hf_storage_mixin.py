@@ -75,6 +75,7 @@ class HFStorageMixin:
 
             self._hf_sync_folder = self.storage_path
             self._hf_sync_folder.mkdir(parents=True, exist_ok=True)
+            self._heal_stale_cache()
 
             # Ensure the dataset repo exists
             try:
@@ -100,6 +101,7 @@ class HFStorageMixin:
                 private=self.hf_private,
                 squash_history=self.hf_squash_history,
                 path_in_repo=self.hf_path_in_repo,
+                ignore_patterns=[".cache/*", "*.tmp", "*.metadata"],
             )
 
             logger.info(
@@ -114,6 +116,15 @@ class HFStorageMixin:
         except Exception as e:
             logger.error(f"Failed to initialize HF storage: {e}")
             self._hf_enabled = False
+
+    def _heal_stale_cache(self) -> None:
+        if self._hf_sync_folder is None:
+            return
+        stale = self._hf_sync_folder / ".cache"
+        if stale.exists():
+            import shutil
+            shutil.rmtree(stale, ignore_errors=True)
+            logger.info(f"Removed stale HF download cache at {stale}")
 
     def stop_hf_storage(self) -> None:
         """Stop the commit scheduler (call during shutdown)."""

@@ -1130,6 +1130,52 @@ class Settings(BaseSettings):
         description="Enable receipt scanning agent in TeacherBOY",
     )
 
+    # ============================================================================
+    # External Vision API Configuration (token-protected, for other projects)
+    # ============================================================================
+    external_api_enabled: bool = Field(
+        default=True,
+        description="Enable the token-protected /api/v1 analysis API for external projects.",
+    )
+    external_api_token: str | None = Field(
+        default=None,
+        description=(
+            "Bearer token required by /api/v1 endpoints. Falls back to "
+            "BUDGETBOSS_SYNC_TOKEN when unset so existing projects keep working."
+        ),
+        validation_alias=AliasChoices("EXTERNAL_API_TOKEN"),
+    )
+    external_api_rate_limit_per_minute: int = Field(
+        default=30,
+        ge=1,
+        le=600,
+        description="Per-IP request budget for /api/v1 endpoints (sliding 60s window).",
+    )
+    external_api_max_image_mb: float = Field(
+        default=6.0,
+        ge=0.1,
+        le=20.0,
+        description="Maximum accepted decoded image size for /api/v1 requests.",
+    )
+    external_api_timeout_seconds: float = Field(
+        default=60.0,
+        ge=5,
+        le=180,
+        description="Hard deadline for a single /api/v1 analysis call.",
+    )
+    external_api_image_hosts: str | None = Field(
+        default=None,
+        description="Extra comma-separated hosts allowed for image.url fetches (SSRF allowlist extension).",
+    )
+
+    def get_external_api_token(self) -> str | None:
+        """Token that /api/v1 endpoints accept (EXTERNAL_API_TOKEN, else Budget Boss token)."""
+        return self.external_api_token or self.budgetboss_sync_token
+
+    def get_external_api_image_hosts(self) -> set[str]:
+        """Extra hosts (beyond default allowed hosts) allowed for image.url fetches."""
+        return {h.strip().lower() for h in (self.external_api_image_hosts or "").split(",") if h.strip()}
+
     def is_any_vision_provider_configured(self) -> bool:
         """Check if any vision-capable LLM provider is configured.
 
