@@ -1,0 +1,111 @@
+flowchart TD
+    subgraph Inbound["📥 Inbound"]
+        LINE["LINE Webhook\n(/webhook)"]
+        HTTP["HTTP Client Pool\n(httpx, 100 conn)"]
+    end
+
+    subgraph App["🚀 FastAPI App"]
+        App["app = FastAPI()\nlifespan=lifespan"]
+        CORS["CORSMiddleware\n(debug only)"]
+        Health["/health\n/readiness\n/metrics"]
+    end
+
+    subgraph Router["🧠 Agent Router"]
+        Router["AgentRouter\n(priority-ordered)"]
+        ModMode["ModModeAgent\n(P1:4)"]
+        Help["HelpAgent\n(P1:5)"]
+        Admin["AdminAgent\n(P1:5)"]
+        Calendar["CalendarAgent\n(P1:6)"]
+        Hannibal["HannibalProfileAgent\n(P1:6)"]
+        Profiler["ProfilerAgent\n(P1:7)"]
+        Image["ImageAnalyzerAgent\n(P1:7)"]
+        DocMem["DocumentMemoryAgent\n(P1:8)"]
+        Search["SearchAgent\n(P1:8)"]
+        LLM["LLMAgent\n(P1:9)"]
+        Translate["TranslationAgent\n(P1:10)"]
+        SpecialNews["SpecialNewsAgent\n(P1:12)"]
+        News["NewsAgent\n(P1:15)"]
+    end
+
+    subgraph Services["🛠️ Services"]
+        TransSvc["translation_service"]
+        GeminiSvc["gemini_service"]
+        OpenRouterSvc["openrouter_service"]
+        HermesSvc["hermes_service"]
+        HFInference["hf_inference_service"]
+        NousSvc["nous_inference_service"]
+        BraveSvc["brave_search_service"]
+        CalendarSvc["calendar_service"]
+        ConvSvc["conversation_memory"]
+        DocSvc["document_memory"]
+        HistorySvc["history_log"]
+        ModSvc["mod_mode_service\nban_list_service\nwarning_service"]
+        RateLimiter["rate_limiter"]
+        Metrics["metrics_service"]
+        N1Detector["n1_detector"]
+    end
+
+    subgraph Storage["💾 Persistence"]
+        HFHub["HF Hub\n(CommitScheduler)"]
+        Convex["Convex\n(optional)"]
+        LocalFS["Local FS\n./data/"]
+    end
+
+    subgraph LLM["🤖 LLM Providers"]
+        Gemini["Gemini\n(gemini-2.5-flash)"]
+        OpenRouter["OpenRouter\n(nemotron-3-ultra)"]
+        Hermes["Hermes\n(OpenAI-compat)"]
+        HFInf["HF Inference\n(llama-3.2-90b-vision)"]
+        Nous["NOUS Portal\n(Hermes-3-Llama-70B)"]
+        Ollama["Ollama\n(local, optional)"]
+    end
+
+    subgraph Obs["📊 Observability"]
+        Tracing["OpenTelemetry\n(OTLP → localhost:4318)"]
+        MetricsEP["/metrics endpoint"]
+        HistoryLog["History Log\n(audit trail)"]
+    end
+
+    LINE -->|"POST /webhook\n+ signature"| App
+    App --> Router
+    Router -->|"routes to"| ModMode
+    Router --> Help
+    Router --> Admin
+    Router --> Calendar
+    Router --> Hannibal
+    Router --> Profiler
+    Router --> Image
+    Router --> DocMem
+    Router --> Search
+    Router --> LLM
+    Router --> Translate
+    Router --> SpecialNews
+    Router --> News
+
+    ModMode --> ModSvc
+    Calendar --> CalendarSvc
+    DocMem --> DocSvc
+    LLM -->|"fallback chain"| Gemini
+    LLM --> OpenRouter
+    LLM --> Hermes
+    LLM --> HFInf
+    LLM --> Nous
+    LLM --> Ollama
+    Translate --> TransSvc
+    TransSvc -->|"primary"| Gemini
+    TransSvc -->|"fallback"| OpenRouter
+
+    App --> Services
+    Services --> Storage
+    Services --> LLM
+    Services --> Obs
+
+    App --> Health
+    App --> CORS
+    HTTP -->|"shared pool"| Services
+
+    style App fill:#161b22,stroke:#58a6ff
+    style Router fill:#161b22,stroke:#f0883e
+    style Storage fill:#161b22,stroke:#3fb950
+    style LLM fill:#161b22,stroke:#bc8cff
+    style Obs fill:#161b22,stroke:#f85149

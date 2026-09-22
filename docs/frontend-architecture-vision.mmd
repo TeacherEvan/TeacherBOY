@@ -1,0 +1,7 @@
+flowchart TD
+    UserInput["Image + Prompt"] --> AgentRouter["Agent Router"]
+    AgentRouter -->|"priority 7"| ProfilerAgent["ProfilerAgent"]
+    AgentRouter -->|"priority 7"| ImageAnalyzerAgent["ImageAnalyzerAgent"]
+    ProfilerAgent --> VisionProviders
+    ImageAnalyzerAgent --> VisionProviders
+    VisionProviders --> Response["LINE / JSON Response"]

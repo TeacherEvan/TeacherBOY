@@ -53,6 +53,7 @@ from src.handlers.message_handler import (
     handle_member_left_event,
 )
 from src.services.ban_list_service import init_ban_list_service
+from src.utils.logging_hygiene import silence_noisy_loggers
 
 if TYPE_CHECKING:
     from src.agents.mod_mode_agent import ModModeAgent
@@ -119,6 +120,11 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Cap noisy third-party loggers at WARNING so production logs stay readable
+# (and so full URLs — including API keys passed as path segments — never
+# leak into the HF Space run logs).
+silence_noisy_loggers()
 
 
 def _service_display_name() -> str:

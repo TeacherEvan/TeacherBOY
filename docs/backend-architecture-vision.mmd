@@ -1,0 +1,13 @@
+flowchart TD
+    subgraph VisionProviders["Vision Provider Chain (Actual)"]
+        P1["Gemini<br/>gemini-2.5-flash"]
+        P2["HF Inference<br/>meta/llama-3.2-90b-vision"]
+        P3["OpenRouter<br/>google/gemini-flash-1.5"]
+        P4["Hermes<br/>vision endpoint"]
+        P5["NOUS Portal<br/>free vision"]
+        P1 -->|"primary"| EndNode["Vision Analysis"]
+        P2 -->|"fallback"| EndNode
+        P3 -->|"profiler vision"| EndNode
+        P4 -->|"optional"| EndNode
+        P5 -->|"optional"| EndNode
+    end

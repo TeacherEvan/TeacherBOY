@@ -1,0 +1,71 @@
+flowchart LR
+    subgraph Client["📱 Client (LINE)"]
+        User["User\n(LINE app)"]
+        Group["Group Chat\n(LINE group)"]
+    end
+
+    subgraph Webhook["🔗 Webhook Layer"]
+        SigCheck["Signature\nValidation\n(HMAC)"]
+        RateLimit["IP Rate Limiter\n(100 req/min)"]
+        Parse["Event Parser\n(LINE SDK v3)"]
+        CorrID["Correlation ID\n(uuid4)"]
+    end
+
+    subgraph Routing["🧠 Message Routing"]
+        TextMsg["TextMessageContent"]
+        ImgMsg["ImageMessageContent"]
+        Follow["FollowEvent"]
+        Join["JoinEvent"]
+        Leave["LeaveEvent"]
+        Postback["PostbackEvent"]
+    end
+
+    subgraph Agents["🤖 Agent Dispatch"]
+        ModModeA["ModModeAgent\n(kick/warn/ban)"]
+        HelpA["HelpAgent\n(/help)"]
+        AdminA["AdminAgent\n(/admin)"]
+        CalendarA["CalendarAgent\n(events)"]
+        TranslateA["TranslationAgent\n(Thai↔EN)"]
+        NewsA["NewsAgent\n(weather+news)"]
+        ProfilerA["ProfilerAgent\n(psych analysis)"]
+        ImageA["ImageAnalyzerAgent\n(image Q&A)"]
+        SearchA["SearchAgent\n(web search)"]
+        LLMA["LLMAgent\n(general chat)"]
+        DocMemA["DocumentMemoryAgent\n(PDF/DOCX)"]
+        SpecialNewsA["SpecialNewsAgent\n(DM carousel)"]
+        HannibalA["HannibalProfileAgent\n(msg history)"]
+    end
+
+    subgraph Response["📤 Response"]
+        TextReply["TextMessage\n(reply/push)"]
+        FlexReply["FlexMessage\n(dashboard/card)"]
+        QuickReply["QuickReply\n(buttons)"]
+        WelcomeMsg["Welcome Message\n(on Follow)"]
+    end
+
+    User -->|"sends message"| Webhook
+    Group -->|"sends message"| Webhook
+
+    Webhook -->|"validate + parse"| Routing
+    Routing -->|"text"| TextMsg
+    Routing -->|"image"| ImgMsg
+    Routing -->|"add bot"| Follow
+    Routing -->|"bot joins"| Join
+    Routing -->|"bot leaves"| Leave
+    Routing -->|"button click"| Postback
+
+    TextMsg -->|"route by priority"| Agents
+    ImgMsg -->|"download + route"| Agents
+    Follow -->|"welcome + metrics"| WelcomeMsg
+    Join -->|"handle_join_event"| Agents
+    Postback -->|"admin/mod dashboard"| Agents
+
+    Agents -->|"format response"| Response
+    Response -->|"LINE Messaging API"| User
+    Response -->|"LINE Messaging API"| Group
+
+    style Client fill:#161b22,stroke:#58a6ff
+    style Webhook fill:#161b22,stroke:#f0883e
+    style Routing fill:#161b22,stroke:#bc8cff
+    style Agents fill:#161b22,stroke:#3fb950
+    style Response fill:#161b22,stroke:#d29922

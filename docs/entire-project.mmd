@@ -1,0 +1,80 @@
+flowchart TB
+    subgraph External["🌍 External"]
+        LINEAPI["LINE Messaging API\n(webhook + push)"]
+        GoogleAPI["Google Translate\n(legacy)"]
+        BraveAPI["Brave Search API"]
+        OpenMeteo["Open-Meteo\n(weather)"]
+        GeminiAPI["Gemini API\n(gemini-2.5-flash)"]
+        OpenRouterAPI["OpenRouter API\n(nemotron-3-ultra)"]
+        HFHub["HuggingFace Hub\n(datasets)"]
+        ConvexAPI["Convex\n(optional)"]
+    end
+
+    subgraph Deployment["🚀 Deployment"]
+        Docker["Docker\n(python:3.11-slim)"]
+        HFSpaces["HF Spaces\n(auto-deploy)"]
+        Uvicorn["Uvicorn\n(port 8000)"]
+    end
+
+    subgraph AppCore["⚙️ Application Core"]
+        FastAPI["FastAPI 3.0.0\n lifespan + 13 agents"]
+        AgentRouter["Agent Router\n(priority 4-15)"]
+        Config["Pydantic Settings\n(1203 lines)"]
+        Tracing["OpenTelemetry\n(OTLP, optional)"]
+    end
+
+    subgraph DataLayer["💾 Data & Persistence"]
+        ConvMem["Conversation Memory\n(HF Hub sync)"]
+        DocMem["Document Memory\n(PDF/DOCX)"]
+        Calendar["Calendar + Reminders\n(HF Hub sync)"]
+        HistoryLog["History Log\n(encrypted, HF sync)"]
+        ModData["Mod Mode Data\n(Convex or local)"]
+        BotIdentity["Bot Identity\n(JSON, local)"]
+        StaffMem["Staff Memory\n(review agent)"]
+    end
+
+    subgraph LLMProvider["🤖 LLM Provider Layer"]
+        Gemini["Gemini\nPrimary translation"]
+        OpenRouter["OpenRouter\nLLM fallback"]
+        Hermes["Hermes\nOpenAI-compat fallback"]
+        HFInference["HF Inference\nVision fallback"]
+        Nous["NOUS Portal\nVision fallback"]
+        Ollama["Ollama\nLocal (optional)"]
+        LibreTrans["LibreTranslate\n(optional fallback)"]
+    end
+
+    subgraph Agents13["🤖 13 Agents"]
+        A1["ModModeAgent\nP4"]
+        A2["HelpAgent\nP5"]
+        A3["AdminAgent\nP5"]
+        A4["CalendarAgent\nP6"]
+        A5["HannibalProfileAgent\nP6"]
+        A6["ProfilerAgent\nP7"]
+        A7["ImageAnalyzerAgent\nP7"]
+        A8["DocumentMemoryAgent\nP8"]
+        A9["SearchAgent\nP8"]
+        A10["LLMAgent\nP9"]
+        A11["TranslationAgent\nP10"]
+        A12["SpecialNewsAgent\nP12"]
+        A13["NewsAgent\nP15"]
+    end
+
+    External -->|"webhook"| Deployment
+    External -->|"API calls"| LLMProvider
+    External -->|"storage"| DataLayer
+
+    Deployment --> AppCore
+    AppCore --> Agents13
+    AppCore --> DataLayer
+    AppCore --> LLMProvider
+    AppCore --> Tracing
+
+    Agents13 -->|"use"| DataLayer
+    Agents13 -->|"use"| LLMProvider
+
+    style External fill:#161b22,stroke:#58a6ff
+    style Deployment fill:#161b22,stroke:#f0883e
+    style AppCore fill:#161b22,stroke:#bc8cff
+    style DataLayer fill:#161b22,stroke:#3fb950
+    style LLMProvider fill:#161b22,stroke:#d29922
+    style Agents13 fill:#161b22,stroke:#f85149
