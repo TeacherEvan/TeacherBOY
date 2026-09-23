@@ -43,10 +43,9 @@ from linebot.v3.webhooks import (
     UnfollowEvent,
 )
 
-from src.api.external_vision import router as external_vision_router
-
 from src.agents.agent_router import AgentRouter
 from src.agents.mod_mode.dashboard import ModDashboardBuilder
+from src.api.external_vision import router as external_vision_router
 from src.config import settings
 from src.handlers.message_handler import (
     handle_join_event,

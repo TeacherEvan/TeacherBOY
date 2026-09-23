@@ -123,7 +123,7 @@ async def analyze_image_task(
             ),
             timeout=timeout_seconds,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         raise RuntimeError(f"Vision analysis timed out after {timeout_seconds}s")
     latency_ms = int((time.monotonic() - started) * 1000)
     if result is None:

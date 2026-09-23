@@ -1,5 +1,7 @@
 import time
 from collections import defaultdict
+
+
 class IpRateLimiter:
     def __init__(self, max_requests: int, window_seconds: int = 60) -> None:
         self.max_requests = max_requests; self.window_seconds = window_seconds

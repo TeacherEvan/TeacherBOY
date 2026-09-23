@@ -1,8 +1,15 @@
 """External Vision API router."""
-import asyncio, base64, binascii, hmac, logging, uuid
+import asyncio
+import base64
+import binascii
+import hmac
+import logging
+import uuid
+
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
+
 from src.config import settings
 from src.services.external_vision_service import SUPPORTED_TASKS, analyze_image_task
 from src.utils.ip_rate_limiter import IpRateLimiter
