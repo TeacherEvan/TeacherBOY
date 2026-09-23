@@ -43,6 +43,8 @@ from linebot.v3.webhooks import (
     UnfollowEvent,
 )
 
+from src.api.external_vision import router as external_vision_router
+
 from src.agents.agent_router import AgentRouter
 from src.agents.mod_mode.dashboard import ModDashboardBuilder
 from src.config import settings
@@ -789,6 +791,9 @@ app = FastAPI(
 # app has started (Starlette ≥0.24 lazy middleware stack).
 setup_tracing(app, settings)
 
+# External Vision API (/api/v1) — token-protected image analysis for other projects
+app.include_router(external_vision_router)
+
 # Add CORS middleware for API access (if needed)
 if settings.debug:
     app.add_middleware(
@@ -848,6 +853,9 @@ async def health_check() -> dict[str, Any]:
             "conversation_memory": memory_svc.get_stats() if memory_svc else {"enabled": False},
             "document_memory": document_svc.get_stats() if document_svc else {"enabled": False},
             "history_log": history_svc.get_stats() if history_svc else {"enabled": False},
+            "external_api": {
+                "enabled": bool(settings.external_api_enabled) and bool(settings.get_external_api_token()),
+            },
             "calendar": calendar_service.get_stats()
             if hasattr(calendar_service, "get_stats") and settings.is_calendar_configured()
             else {"enabled": settings.is_calendar_configured()},

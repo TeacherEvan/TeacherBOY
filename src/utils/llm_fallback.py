@@ -268,6 +268,27 @@ async def chat_completion_with_fallback(
     return None
 
 
+async def chat_completion_with_vision_fallback_ex(
+    messages: VisionMessages,
+    *,
+    model: str | None = None,
+    temperature: float = 0.7,
+    max_tokens: int | None = None,
+) -> tuple[str, str] | None:
+    priority = settings.get_llm_provider_priority()
+    for provider in priority:
+        result = await _run_one_vision_provider(
+            provider=provider,
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        if result:
+            return (result, provider)
+    return None
+
+
 async def chat_completion_with_vision_fallback(
     messages: VisionMessages,
     *,
