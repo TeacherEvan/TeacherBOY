@@ -36,12 +36,12 @@ OCR_PROMPT = (
 )
 
 ARTICLE_PROMPT = (
-    'You are reading an image of an article, clipping, or document. '
-    'Return STRICT JSON only (no prose, no code fences) with keys: '
+    "You are reading an image of an article, clipping, or document. "
+    "Return STRICT JSON only (no prose, no code fences) with keys: "
     '"title" (string), "publication" (string or null), "date" (ISO date or null), '
     '"byline" (string or null), "summary" (string, max 120 words), '
     '"key_points" (array of 3-6 short strings), "language" (short code like "en" or "th"). '
-    'If a field is not visible, use null and do not guess.'
+    "If a field is not visible, use null and do not guess."
 )
 
 NEWS_PROMPT = (

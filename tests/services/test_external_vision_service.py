@@ -18,6 +18,7 @@ def test_parse_structured_json():
 async def test_analyze_receipt(monkeypatch):
     async def fake(messages, **kw):
         return ("COFFEE 45 THB", "gemini")
+
     monkeypatch.setattr(svc, "chat_completion_with_vision_fallback_ex", fake)
     out = await svc.analyze_image_task(image_data_url="data:img", task="receipt")
     assert out["provider"] == "gemini"

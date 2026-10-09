@@ -123,6 +123,7 @@ class HFStorageMixin:
         stale = self._hf_sync_folder / ".cache"
         if stale.exists():
             import shutil
+
             shutil.rmtree(stale, ignore_errors=True)
             logger.info(f"Removed stale HF download cache at {stale}")
 
