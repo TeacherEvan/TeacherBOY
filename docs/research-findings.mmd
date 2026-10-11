@@ -1,0 +1,56 @@
+flowchart TD
+    subgraph Findings["🔍 Investigation Findings"]
+        F1["F1: OTLP RuntimeError\nCannot add middleware\nafter app started"]
+        F2["F2: HF Path Recursion\n6 nested/corrupted files\nconversations/conversations/"]
+        F3["F3: Deprecated HF SDK\nlocal_dir_use_symlinks\nparameter removed"]
+        F4["F4: Dependency Conflict\nrequests vs urllib3 2.x\nincompatibility warning"]
+        F5["F5: Hermes Fallback\nMissing env vars\nnot documented"]
+    end
+
+    subgraph RootCause["ROOT CAUSE ANALYSIS"]
+        RC1["setup_tracing() called\ninside lifespan()\n→ app already started"]
+        RC2["load_from_hub():\nlocal_dir = sync_folder.parent\n→ double-nests files"]
+        RC3["local_dir_use_symlinks=False\nstill passed to hf_hub_download()\n→ deprecated param"]
+        RC4["requests 2.33.0\nurllib3 2.7.0\nnot pinned in requirements"]
+        RC5[".env.example missing\nHERMES_* vars\n→ silent misconfiguration"]
+    end
+
+    subgraph Community["📚 External Research"]
+        C1["OTel issue #2042:\nStarlette ≥0.24 lazy\nmiddleware stack\n→ instrument BEFORE app starts"]
+        C2["HF Hub docs:\nCommitScheduler\npath_in_repo must\nmatch folder structure"]
+        C3["urllib3 v2 migration:\nrequests ≥2.32.0\nrequired for urllib3 2.x"]
+        C4["HF Spaces forum:\ncold boot ~2min\nmemory pressure\ncauses auto-restart"]
+        C5["FastAPI docs:\nlifespan() runs\nAFTER app creation\n→ middleware locked"]
+    end
+
+    subgraph Fix["🛠️ Recommended Fixes"]
+        X1["Move setup_tracing()\nto module level\nBEFORE app = FastAPI()"]
+        X2["Fix local_dir logic:\nuse sync_folder directly\nwhen hf_path_in_repo set"]
+        X3["Remove local_dir_use_symlinks\nparameter entirely\nfrom all download calls"]
+        X4["Pin requests>=2.32.0\nor urllib3<2.0.0\nin requirements.txt"]
+        X5["Add HERMES_* vars\nto .env.example\nwith documentation"]
+    end
+
+    F1 --> RC1
+    F2 --> RC2
+    F3 --> RC3
+    F4 --> RC4
+    F5 --> RC5
+
+    RC1 -->|"confirmed by"| C1
+    RC1 -->|"confirmed by"| C5
+    RC2 -->|"confirmed by"| C2
+    RC3 -->|"confirmed by"| C2
+    RC4 -->|"confirmed by"| C3
+    RC5 -->|"confirmed by"| C5
+
+    RC1 --> X1
+    RC2 --> X2
+    RC3 --> X3
+    RC4 --> X4
+    RC5 --> X5
+
+    style Findings fill:#161b22,stroke:#f85149
+    style RootCause fill:#161b22,stroke:#d29922
+    style Community fill:#161b22,stroke:#58a6ff
+    style Fix fill:#161b22,stroke:#3fb950

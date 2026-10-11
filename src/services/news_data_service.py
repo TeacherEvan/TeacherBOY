@@ -273,12 +273,19 @@ class NewsDataService:
                 logger.debug(f"📰 Entry {i + 1}: title='{title[:TITLE_TRUNCATE_LENGTH]}...', url={link}")
 
             return articles
+        except httpx.HTTPStatusError as e:
+            logger.warning(f"📰 RSS feed unavailable (HTTP {e.response.status_code}) for {url}")
+            return self._rss_fallback_items()
         except Exception as e:
             logger.error(f"📰 RSS parse error for {url}: {e}", exc_info=True)
-            return [
-                {"title": "News unavailable", "url": ""},
-                {"title": "Visit Bangkok Post", "url": "https://www.bangkokpost.com"},
-            ]
+            return self._rss_fallback_items()
+
+    @staticmethod
+    def _rss_fallback_items() -> list[dict[str, str]]:
+        return [
+            {"title": "News unavailable", "url": ""},
+            {"title": "Visit Bangkok Post", "url": "https://www.bangkokpost.com"},
+        ]
 
     async def get_color_of_day(self) -> dict[str, str]:
         """

@@ -467,7 +467,6 @@ class DocumentMemoryService(HFStorageMixin):
                     repo_type="dataset",
                     filename=file_path,
                     local_dir=str(self.storage_path.parent),
-                    local_dir_use_symlinks=False,
                     token=self.hf_token,
                 )
                 downloaded += 1

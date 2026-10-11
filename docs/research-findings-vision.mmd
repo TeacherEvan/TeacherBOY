@@ -1,0 +1,11 @@
+flowchart TB
+    User["Lea / Hermes"] --> Plan{"Plan: Use TeacherBOY space<br/>as default vision model"}
+    Plan -->|"Conceptual mismatch"| Gap["CRITICAL GAP<br/>Space = LINE bot app<br/>NOT vision endpoint"]
+    Gap --> Providers["Actual vision providers<br/>inside TeacherBOY<br/>Gemini / HF Inference / OpenRouter / NOUS / Hermes"]
+    Providers --> RecA["RECOMMENDATION A<br/>Adopt providers directly<br/>in Hermes config"]
+    Providers --> RecB["RECOMMENDATION B<br/>Build /vision/analyze endpoint<br/>in TeacherBOY space"]
+    RecA --> Config["Config change only<br/>No space build needed"]
+    RecB --> Deploy["Build endpoint → deploy<br/>git push hf HEAD:main"]
+    style Gap fill:#161b22,stroke:#f85149,stroke-width:3px,color:#e6edf3
+    style RecA fill:#161b22,stroke:#3fb950,stroke-width:2px,color:#e6edf3
+    style RecB fill:#161b22,stroke:#d29922,stroke-width:2px,color:#e6edf3

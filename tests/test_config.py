@@ -40,3 +40,30 @@ def test_validator_applies_to_all_hf_repos():
     ]:
         with pytest.raises(ValidationError):
             Settings(**{field: "baduser/bad-repo"})
+
+
+def test_external_api_token_falls_back_to_budgetboss_token(monkeypatch):
+    from src.config import Settings
+
+    monkeypatch.setenv("BUDGETBOSS_SYNC_TOKEN", "bb-token")
+    monkeypatch.delenv("EXTERNAL_API_TOKEN", raising=False)
+    assert Settings().get_external_api_token() == "bb-token"
+    monkeypatch.setenv("EXTERNAL_API_TOKEN", "ext-token")
+    assert Settings().get_external_api_token() == "ext-token"
+
+
+def test_external_api_image_hosts_parses_extras(monkeypatch):
+    from src.config import Settings
+
+    monkeypatch.setenv("EXTERNAL_API_IMAGE_HOSTS", "cdn.example.com, img.example.org")
+    assert Settings().get_external_api_image_hosts() == {"cdn.example.com", "img.example.org"}
+
+
+def test_external_api_defaults():
+    from src.config import Settings
+
+    s = Settings()
+    assert s.external_api_enabled is True
+    assert s.external_api_rate_limit_per_minute == 30
+    assert s.external_api_max_image_mb == 6.0
+    assert s.external_api_timeout_seconds == 60.0

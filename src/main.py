@@ -45,6 +45,7 @@ from linebot.v3.webhooks import (
 
 from src.agents.agent_router import AgentRouter
 from src.agents.mod_mode.dashboard import ModDashboardBuilder
+from src.api.external_vision import router as external_vision_router
 from src.config import settings
 from src.handlers.message_handler import (
     handle_join_event,
@@ -53,6 +54,7 @@ from src.handlers.message_handler import (
     handle_member_left_event,
 )
 from src.services.ban_list_service import init_ban_list_service
+from src.utils.logging_hygiene import silence_noisy_loggers
 
 if TYPE_CHECKING:
     from src.agents.mod_mode_agent import ModModeAgent
@@ -119,6 +121,11 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Cap noisy third-party loggers at WARNING so production logs stay readable
+# (and so full URLs — including API keys passed as path segments — never
+# leak into the HF Space run logs).
+silence_noisy_loggers()
 
 
 def _service_display_name() -> str:
@@ -224,9 +231,6 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 80)
     logger.info(f"🚀 {_service_display_name()} Multi-Agent System - Starting Up")
     logger.info("=" * 80)
-
-    # Tracing (OpenTelemetry) - optional, controlled by settings.enable_tracing
-    setup_tracing(app, settings)
 
     # ========================================================================
     # PHASE 1: Bot Identity Detection (Prevent Infinite Loop)
@@ -763,6 +767,14 @@ async def lifespan(app: FastAPI):
 # ============================================================================
 # FastAPI Application Initialization
 # ============================================================================
+
+# CRITICAL: setup_tracing MUST be called BEFORE the app starts serving requests.
+# Starlette ≥0.24 made build_middleware_stack() lazy — once the app begins
+# serving (lifespan yields, first request arrives), add_middleware() raises
+# RuntimeError("Cannot add middleware after an application has started").
+# Calling setup_tracing here (module level, before lifespan runs) ensures
+# FastAPIInstrumentor.instrument_app() runs while the middleware stack is
+# still mutable. See: https://github.com/open-telemetry/opentelemetry-python-contrib/issues/2042
 app = FastAPI(
     title=f"{_service_display_name()} - Multi-Agent Translation Bot",
     description="Production-grade Thai/English translation bot for LINE with intelligent agent routing",
@@ -771,6 +783,15 @@ app = FastAPI(
     docs_url="/docs" if settings.debug else None,  # Disable docs in production
     redoc_url="/redoc" if settings.debug else None,
 )
+
+# Initialize tracing BEFORE any middleware or lifespan code runs.
+# This must happen at module scope, not inside lifespan(), because
+# instrument_app() calls add_middleware() which is a no-op once the
+# app has started (Starlette ≥0.24 lazy middleware stack).
+setup_tracing(app, settings)
+
+# External Vision API (/api/v1) — token-protected image analysis for other projects
+app.include_router(external_vision_router)
 
 # Add CORS middleware for API access (if needed)
 if settings.debug:
@@ -831,6 +852,9 @@ async def health_check() -> dict[str, Any]:
             "conversation_memory": memory_svc.get_stats() if memory_svc else {"enabled": False},
             "document_memory": document_svc.get_stats() if document_svc else {"enabled": False},
             "history_log": history_svc.get_stats() if history_svc else {"enabled": False},
+            "external_api": {
+                "enabled": bool(settings.external_api_enabled) and bool(settings.get_external_api_token()),
+            },
             "calendar": calendar_service.get_stats()
             if hasattr(calendar_service, "get_stats") and settings.is_calendar_configured()
             else {"enabled": settings.is_calendar_configured()},

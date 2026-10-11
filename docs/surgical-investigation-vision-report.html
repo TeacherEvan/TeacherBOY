@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Vision Plan Investigation — TeacherBOY (Fenrie)</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true,theme:'dark',themeVariables:{primaryColor:'#58a6ff',primaryTextColor:'#e6edf3',primaryBorderColor:'#30363d',lineColor:'#8b949e',secondaryColor:'#161b22',tertiaryColor:'#0d1117',background:'#0d1117',cardBackground:'#161b22',mainBkg:'#0d1117'}});</script>
+    <style>
+        body { font-family: 'Segoe UI', -apple-system, sans-serif; background:#0d1117; color:#e6edf3; line-height:1.6; max-width:1000px; margin:0 auto; padding:2rem 1.5rem; }
+        h1 { font-size:1.8rem; letter-spacing:-0.02em; background:linear-gradient(135deg,#58a6ff,#cBCC4F); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+        .meta { color:#8b949e; font-size:0.9rem; margin-bottom:2rem; }
+        .card { background:#161b22; border:1px solid #30363d; border-radius:10px; padding:1.25rem; margin-bottom:1rem; }
+        .card h2 { font-size:1.1rem; color:#58a6ff; margin-top:0; border-bottom:1px solid #30363d; padding-bottom:0.5rem; }
+        .find { padding:0.75rem; border-left:3px solid; border-radius:6px; margin:0.5rem 0; background:rgba(255,255,255,0.02); }
+        .find.high { border-color:#f85149; background:rgba(248,81,73,0.06); }
+        .find.good { border-color:#3fb950; }
+        .find.warn { border-color:#d29922; }
+        .tag { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; padding:0.15rem 0.45rem; border-radius:4px; margin-bottom:0.3rem; display:inline-block; }
+        .high .tag { background:rgba(248,81,73,0.2); color:#f85149; }
+        .good .tag { background:rgba(63,185,80,0.2); color:#3fb950; }
+        .rec { border:1px solid #58a6ff; border-radius:8px; padding:1rem; margin:0.75rem 0; background:#161b22; }
+        .rec-header { font-weight:700; font-size:1.05rem; }
+        a { color:#58a6ff; }
+        footer { text-align:center; color:#8b949e; font-size:0.8rem; margin-top:3rem; border-top:1px solid #30363d; padding-top:2rem; }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>🐺 Surgical Investigation — Vision Plan</h1>
+    <div class="meta">Target: EvilEvan/TeacherBOY (HF Space) | Mode: <strong>Investigator</strong> | By: Fenrie | Date: 2026-09-17</div>
+</div>
+
+<div class="card">
+    <h2>🎯 Mission</h2>
+    <p><strong>Stated:</strong> Use <code>huggingface.co/spaces/EvilEvan/TeacherBOY</code> as default vision model for Hermes and other apps.</p>
+    <p><strong>Actual:</strong> The space is a <strong>FastAPI LINE bot</strong> (product: Ms. Green / TeacherBOY) — application, not inference endpoint. It uses vision <em>internally</em> (Gemini 2.5 flash, HF Inference, OpenRouter) through <code>ProfilerAgent</code> and <code>ImageAnalyzerAgent</code>, but exposes no vision API.</p>
+    <div class="find high"><span class="tag">HIGH GAP</span> Conceptual mismatch. Plan requires either adopting vision providers directly or building a new endpoint.</div>
+</div>
+
+<div class="card">
+    <h2>📊 Dependency / Provider Audit</h2>
+    <table style="width:100%;font-size:0.9rem;border-collapse:collapse;"><thead><tr style="text-align:left;border-bottom:1px solid #30363d;"><th>Provider</th><th>Config Key</th><th>Default Model</th><th>Status</th></tr></thead><tbody>
+    <tr style="border-bottom:1px solid #30363d;"><td>Gemini</td><td><code>gemini_vision_model</code></td><td><code>gemini-2.5-flash</code></td><td>Primary (key required)</td></tr>
+    <tr style="border-bottom:1px solid #30363d;"><td>HF Inference</td><td><code>hf_inference_vision_model</code></td><td><code>meta/llama-3.2-90b-vision-instruct</code></td><td>Free serverless (token required)</td></tr>
+    <tr style="border-bottom:1px solid #30363d;"><td>OpenRouter</td><td><code>openrouter_vision_model</code></td><td><code>google/gemini-flash-1.5</code></td><td>Fallback (key required)</td></tr>
+    <tr><td>Hermes</td><td>Implied</td><td>—</td><td>Optional vision endpoint</td></tr>
+    </tbody></table>
+</div>
+
+<div class="card">
+    <h2>📐 Research Findings (Diagram)</h2>
+    <div class="mermaid">
+        flowchart TB
+            U["Plan: Space as vision model"] --> G["GAP: Space = LINE bot app"]
+            G --> P["Actual providers inside space"]
+            P --> A["Adopt providers directly"]
+            P --> B["Build /vision/analyze endpoint"]
+            A --> C["Config change — low effort"]
+            B --> D["Endpoint build — medium effort"]
+    </div>
+</div>
+
+<div class="card">
+    <h2>💡 Recommendations</h2>
+    <div class="rec"><div class="rec-header" style="font-weight:700;color:#f85149;">HIGH — Adopt providers directly</div><p>Configure Hermes to use the same vision providers (Gemini 2.5 flash primary, HF Inference fallback) rather than calling the space. Source: <code>src/config.py</code>, architecture docs.</p></div>
+    <div class="rec"><div class="rec-header" style="font-weight:700;color:#d29922;">MEDIUM — Build endpoint (only if needed)</div><p>If a space-level vision endpoint is required, add <code>/vision/analyze</code> to <code>src/main.py</code> with JSON response format, deploy via <code>git push hf HEAD:main</code>.</p></div>
+    <div class="rec"><div class="rec-header" style="font-weight:700;color:#58a6ff;">MEDIUM — Align Hermes vision config</div><p>Set Hermes vision defaults: <code>gemini-2.5-flash</code>, temperature 1.15, optimized prompts enabled (<code>use_optimized_prompts=True</code>).</p></div>
+</div>
+
+<div class="card">
+    <h2>📋 Files Created</h2>
+    <ul>
+        <li><code>docs/investigation-notes/vision-plan-2026-09-17.md</code></li>
+        <li><code>docs/recommendations.md</code></li>
+        <li><code>docs/research-findings.mmd</code> (existing preserved; vision variant saved separately)</li>
+        <li><code>docs/research-findings-vision.mmd</code></li>
+        <li><code>docs/backend-architecture-vision.mmd</code></li>
+        <li><code>docs/frontend-architecture-vision.mmd</code></li>
+        <li><code>docs/surgical-investigation-vision-report.html</code> (this file)</li>
+    </ul>
+</div>
+
+<footer>
+    Surgical-Investigation Skill · Generated by Fenrie · 2026-09-17 · 🐺<br/>
+    Not verified in browser; space URL returned no live page data (external backend limitation).<br/>
+    Project manager: Evan (Ewaldt Botha) — owns EvilEvan/TeacherBOY account.
+</footer>
+</body>
+</html>
