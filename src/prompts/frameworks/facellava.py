@@ -163,6 +163,45 @@ Identify complex emotional states beyond basic emotions:
 4. **Look for incongruence**: Do facial expression and context match?
 """
 
+    @staticmethod
+    def get_for_analysis_type(analysis_type: str) -> str:
+        """
+        Get appropriate version based on analysis depth.
+
+        Args:
+            analysis_type: "quick", "standard", or "full"
+
+        Returns:
+            Framework text optimized for analysis type
+        """
+        mapping = {
+            "quick": FaceLLaVAFramework.get_short,
+            "standard": FaceLLaVAFramework.get_standard,
+            "full": FaceLLaVAFramework.get_full,
+        }
+
+        getter = mapping.get(analysis_type, FaceLLaVAFramework.get_standard)
+        return getter()
+
+    @staticmethod
+    def estimate_tokens(analysis_type: str) -> int:
+        """
+        Estimate token usage for analysis type.
+
+        Args:
+            analysis_type: "quick", "standard", or "full"
+
+        Returns:
+            Estimated token count
+        """
+        mapping = {
+            "quick": FaceLLaVAFramework.TOKENS_SHORT,
+            "standard": FaceLLaVAFramework.TOKENS_STANDARD,
+            "full": FaceLLaVAFramework.TOKENS_FULL,
+        }
+
+        return mapping.get(analysis_type, FaceLLaVAFramework.TOKENS_STANDARD)
+
 
 # Export for easy access
 FACELLAVA_FRAMEWORK_SHORT = FaceLLaVAFramework.get_short()

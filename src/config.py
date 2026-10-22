@@ -1200,6 +1200,29 @@ class Settings(BaseSettings):
             ]
         )
 
+    def is_any_llm_configured(self) -> bool:
+        """Check if any text-capable LLM provider is configured.
+
+        Used by text-only features (e.g. the Hannibal chat profile) that must
+        not be gated on a *vision* provider being present.
+
+        Returns True if at least one of the following is configured:
+        - Gemini
+        - OpenRouter
+        - Hermes
+        - Nous
+        - HuggingFace Inference API
+        """
+        return any(
+            [
+                self.is_gemini_configured(),
+                self.is_openrouter_configured(),
+                self.is_hermes_configured(),
+                self.is_nous_configured(),
+                self.is_hf_inference_configured(),
+            ]
+        )
+
     def is_calendar_configured(self) -> bool:
         """Check if calendar feature is enabled."""
         return bool(self.calendar_enabled)

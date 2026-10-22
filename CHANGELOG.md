@@ -5,6 +5,116 @@ All notable changes to TeacherBOY will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] - 2026-10-22
+
+### 🐛 Bug Fixes
+
+#### FBI Profiler - Truncated Reports
+
+- **Fixed hard truncation of the psychological profile**
+  - Issue: `ProfilerService.format_response_for_line()` cut the analysis at ~4870 characters and appended
+    "[Analysis truncated]", so the end of every long FBI/Ekman/Navarro report was never delivered
+  - Fix: Added `format_response_parts()` + shared `src/utils/text_split.py` splitter; the agent now pushes every
+    numbered part of the report
+  - Impact: The complete profile is delivered instead of the first ~4.8k characters
+  - File: `src/services/profiler_service.py`, `src/agents/profiler_agent.py`, `src/utils/text_split.py`
+
+- **Fixed the optimized prompt path returning a thin report**
+  - Issue: `VisionPromptBuilder` only had a 3-item generic output structure, and the `navarro`/`color`/`facellava`
+    frameworks were silently skipped ("Unknown framework ... skipping") even though the code existed
+  - Fix: Registered all five frameworks, added the mandatory 9-section report structure per depth, and gave
+    `navarro`/`color_psychology`/`facellava` the same `get_for_analysis_type`/`estimate_tokens` interface as the others
+  - Impact: The model now produces a full forensic report instead of a summary
+  - File: `src/prompts/builders/vision_builder.py`, `src/prompts/frameworks/*.py`
+
+- **Fixed the vision call running out of tokens mid-report**
+  - Issue: `max_tokens=4000` cut the report off mid-section
+  - Fix: Raised to 8000
+  - File: `src/agents/profiler_agent.py`
+
+- **Fixed the profiler result being dropped when there was no reply token**
+  - Issue: The result was only pushed inside an `if event.reply_token:` branch
+  - Fix: The report is always pushed to the resolved target
+  - File: `src/agents/profiler_agent.py`
+
+#### Hannibal Profile - Truncated Report & Data Set
+
+- **Fixed the profile being truncated after the first part**
+  - Issue: `_send_multipart_response()` sent part 1 and logged "Profile truncated: N parts, only first sent"
+  - Fix: The first part is a reply, every remaining part is pushed
+  - File: `src/agents/hannibal_agent.py`
+
+- **Fixed the report being built from an incomplete data set**
+  - Issue: Only the 24h in-memory buffer was used; persisted conversation history was ignored
+  - Fix: The report is now built from the buffer **and** the conversation memory (de-duplicated), with deterministic
+    statistics (message counts, verbosity, question ratio, peak hours, response gaps) injected into the prompt
+  - File: `src/agents/hannibal_agent.py`, `src/services/conversation_memory_service.py`
+
+- **Fixed a group profile broadcasting every member's analysis**
+  - Issue: `_is_group_chat()` was defined but never used, so a group-wide profile (including other members' messages)
+    was posted to the group
+  - Fix: In a group only the requester's own messages are analysed; loose triggers ("read chat") are ignored in groups
+  - File: `src/agents/hannibal_agent.py`
+
+- **Fixed "me"/"all" matching inside unrelated words**
+  - Issue: `"me" in text` matched "remember", `"all" in text` matched "overall"
+  - Fix: Word-boundary matching
+  - File: `src/agents/hannibal_agent.py`
+
+- **Fixed the missing "analyze messages" trigger**
+  - Issue: The trigger was documented but missing from the code
+  - File: `src/agents/hannibal_agent.py`
+
+#### Message Buffer
+
+- **Fixed corrupted message text in the buffer**
+  - Issue: `CalendarAgent._store_message_in_buffer()` called `store_message(chat_id, user_id, text)`, storing the
+    user id as the message body and the message as the sender id
+  - Fix: Correct argument order
+  - File: `src/agents/calendar_agent.py`
+
+- **Fixed double-stored messages**
+  - Issue: The webhook handler and the calendar agent both recorded the same event, inflating message counts
+  - Fix: The buffer drops an identical (text, user) pair recorded within 5 seconds
+  - File: `src/services/message_buffer_service.py`
+
+- **Fixed whitespace-only messages being buffered**
+  - Issue: `store_message()` accepted `"   "` (truthy), so blank entries consumed buffer slots and inflated the
+    message counts that the scrape and profile features report on
+  - Fix: Whitespace-only messages are rejected
+  - File: `src/services/message_buffer_service.py`
+
+#### Image Analyzer
+
+- **Fixed truncated image analysis**
+  - Issue: The response was cut at 4800 characters with "[Response truncated]"
+  - Fix: The response is split into numbered parts and every part is delivered
+  - File: `src/agents/image_analyzer_agent.py`
+
+#### Profiler Framework Loader
+
+- **Fixed a loader that could never find its content**
+  - Issue: `FrameworkLoader` looked for `<name>.md` files, but the frameworks are Python modules
+  - Fix: The loader resolves and loads the real framework modules
+  - File: `src/services/profiler/framework_loader.py`
+
+### 🔄 Changed
+
+- The Hannibal Profile Agent is now registered when **any** text LLM provider is configured instead of requiring a
+  vision provider (`src/main.py`, `src/config.py`)
+- A failed push of one profile part no longer discards the remaining parts; the user is told which part is missing
+  (`src/agents/hannibal_agent.py`)
+
+### 🧪 Tests
+
+- Added `tests/test_hannibal_agent.py` (29 tests) and `tests/utils/test_text_split.py` (24 tests)
+- Added regression tests for multi-part delivery, content preservation, group privacy, trigger word boundaries,
+  buffer de-duplication, the calendar buffer argument order, the vision failure path, the push failure path and the
+  token estimate
+- Ran a **real mutation campaign** (35 source mutants applied to a scratch copy): **33/35 killed (94.3 %)**, the 2
+  survivors proven equivalent by brute-force equivalence proof — i.e. 100 % of discriminating mutants are killed
+  (the first pass measured only 71 %; the survivors exposed three further defects, all fixed)
+
 ## [3.6.0] - 2026-05-30
 
 ### ✨ Added

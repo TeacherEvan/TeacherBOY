@@ -9,11 +9,12 @@ Tests the following functionality:
 5. "Dear all, meeting on Friday" pattern detection
 """
 
+import tempfile
 from datetime import date, timedelta
 
 import pytest
 
-from src.services.calendar_service import calendar_service
+from src.services.calendar_service import CalendarService
 from src.services.calendar_session_manager import CalendarState, calendar_session_manager
 from src.services.date_extraction_service import date_extraction_service
 
@@ -106,20 +107,24 @@ class TestEventDeletion:
     """Test event deletion functionality."""
 
     def setup_method(self):
-        """Clear calendar before each test."""
-        # Clear all events for test user
+        """Use an isolated calendar service with temp storage for each test.
+
+        Never write to the shared './data/calendar' store: the module-level
+        singleton persists to the real (tracked) events file.
+        """
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.calendar_service = CalendarService(local_storage_path=self._tmpdir.name)
         self.test_user_id = "test_user_deletion_123"
         self.test_chat_id = f"user_{self.test_user_id}"
 
-        # Clean up any existing events from previous tests
-        events = calendar_service.get_user_events(self.test_user_id)
-        for event in events:
-            calendar_service.remove_event(event.event_id, self.test_user_id)
+    def teardown_method(self):
+        """Remove temp storage after each test."""
+        self._tmpdir.cleanup()
 
     def test_remove_single_event(self):
         """Test removing a single event."""
         # Add an event
-        event = calendar_service.add_event(
+        event = self.calendar_service.add_event(
             user_id=self.test_user_id,
             chat_id=self.test_chat_id,
             title="Test Event to Delete",
@@ -130,21 +135,21 @@ class TestEventDeletion:
         )
 
         # Verify event was added
-        events = calendar_service.get_user_events(self.test_user_id)
+        events = self.calendar_service.get_user_events(self.test_user_id)
         assert len(events) == 1
 
         # Remove the event
-        success = calendar_service.remove_event(event.event_id, self.test_user_id)
+        success = self.calendar_service.remove_event(event.event_id, self.test_user_id)
         assert success is True
 
         # Verify event was removed
-        events = calendar_service.get_user_events(self.test_user_id)
+        events = self.calendar_service.get_user_events(self.test_user_id)
         assert len(events) == 0
 
     def test_remove_multiple_events(self):
         """Test removing multiple events by IDs."""
         # Add multiple events
-        event1 = calendar_service.add_event(
+        event1 = self.calendar_service.add_event(
             user_id=self.test_user_id,
             chat_id=self.test_chat_id,
             title="Event 1",
@@ -153,7 +158,7 @@ class TestEventDeletion:
             is_friend=True,
         )
 
-        event2 = calendar_service.add_event(
+        event2 = self.calendar_service.add_event(
             user_id=self.test_user_id,
             chat_id=self.test_chat_id,
             title="Event 2",
@@ -162,7 +167,7 @@ class TestEventDeletion:
             is_friend=True,
         )
 
-        event3 = calendar_service.add_event(
+        event3 = self.calendar_service.add_event(
             user_id=self.test_user_id,
             chat_id=self.test_chat_id,
             title="Event 3",
@@ -172,20 +177,20 @@ class TestEventDeletion:
         )
 
         # Remove two events
-        removed, failed = calendar_service.remove_events_by_ids([event1.event_id, event2.event_id], self.test_user_id)
+        removed, failed = self.calendar_service.remove_events_by_ids([event1.event_id, event2.event_id], self.test_user_id)
 
         assert removed == 2
         assert failed == 0
 
         # Verify only one event remains
-        events = calendar_service.get_user_events(self.test_user_id)
+        events = self.calendar_service.get_user_events(self.test_user_id)
         assert len(events) == 1
         assert events[0].event_id == event3.event_id
 
     def test_cannot_delete_other_users_event(self):
         """Test that users cannot delete other users' events."""
         # Add event for user 1
-        event = calendar_service.add_event(
+        event = self.calendar_service.add_event(
             user_id=self.test_user_id,
             chat_id=self.test_chat_id,
             title="User 1 Event",
@@ -196,13 +201,13 @@ class TestEventDeletion:
 
         # Try to delete as user 2
         other_user_id = "other_user_456"
-        success = calendar_service.remove_event(event.event_id, other_user_id)
+        success = self.calendar_service.remove_event(event.event_id, other_user_id)
 
         # Should fail
         assert success is False
 
         # Event should still exist
-        events = calendar_service.get_user_events(self.test_user_id)
+        events = self.calendar_service.get_user_events(self.test_user_id)
         assert len(events) == 1
 
 

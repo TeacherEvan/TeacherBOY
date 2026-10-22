@@ -1,12 +1,24 @@
 """
 Lazy Profiler Framework Loader - Load frameworks on-demand.
 Reduces startup memory by ~30MB by loading only when needed.
+
+The frameworks live as Python modules under ``src/prompts/frameworks`` (not as
+markdown files). This loader resolves them by name and caches the text.
 """
 
 import logging
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Framework name -> (module, class) inside src/prompts/frameworks
+_FRAMEWORK_MODULES: dict[str, tuple[str, str]] = {
+    "fbi_bau": ("fbi_bau", "FBIBAUFramework"),
+    "ekman_facs": ("ekman_facs", "EkmanFACSFramework"),
+    "navarro": ("navarro", "NavarroBodyLanguageFramework"),
+    "color_psychology": ("color_psychology", "ColorPsychologyFramework"),
+    "facellava": ("facellava", "FaceLLaVAFramework"),
+}
 
 
 class FrameworkLoader:
@@ -34,20 +46,53 @@ class FrameworkLoader:
         logger.info(f"🔧 Loading framework: {name}")
 
         try:
-            file_path = cls._base_path / f"{name}.md"
-            if file_path.exists():
-                content = file_path.read_text(encoding="utf-8")
+            content = cls._load_framework_text(name)
+            if content:
                 cls._frameworks[name] = content
                 logger.debug(f"✅ Loaded {name}: {len(content)} chars")
                 return content
-            else:
-                logger.warning(f"⚠️ Framework not found: {file_path}")
-                cls._frameworks[name] = None
-                return ""
+
+            logger.warning(f"⚠️ Framework not found: {name}")
+            cls._frameworks[name] = None
+            return ""
         except Exception as e:
             logger.error(f"❌ Error loading {name}: {e}")
             cls._frameworks[name] = None
             return ""
+
+    @classmethod
+    def _load_framework_text(cls, name: str) -> str:
+        """Resolve a framework module and return its text content."""
+        target = _FRAMEWORK_MODULES.get(name)
+        if not target:
+            return ""
+
+        module_name, class_name = target
+        module_path = cls._base_path / f"{module_name}.py"
+        if not module_path.exists():
+            return ""
+
+        # Import the module directly from its path so the loader keeps working
+        # regardless of how the package is installed.
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(f"_profiler_framework_{module_name}", module_path)
+        if spec is None or spec.loader is None:
+            return ""
+
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        framework_class = getattr(module, class_name, None)
+        if framework_class is None:
+            return ""
+
+        getter = getattr(framework_class, "get_for_analysis_type", None)
+        if callable(getter):
+            return getter("full")
+
+        full = getattr(framework_class, "get_full", None)
+        return full() if callable(full) else ""
 
     @classmethod
     def get_multiple(cls, *names: str) -> str:

@@ -553,6 +553,39 @@ class ConversationMemoryService(HFStorageMixin):
         messages = conv.get("messages", [])
         return [{"role": msg["role"], "content": msg["content"]} for msg in messages]
 
+    async def get_recent_entries(self, chat_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        """
+        Get raw conversation entries (role, content, timestamp, user_id).
+
+        Unlike :meth:`get_context_messages` this keeps the metadata needed for
+        analysis features (e.g. the Hannibal profile), which needs the sender
+        id and the timestamp of every message.
+
+        Args:
+            chat_id: Chat identifier
+            limit: Maximum number of entries to return (most recent first)
+
+        Returns:
+            List of dicts with keys: role, content, timestamp, user_id
+        """
+        hashed_id = self._hash_chat_id(chat_id)
+        conv = self._conversations.get(hashed_id)
+        if not conv:
+            return []
+
+        messages = conv.get("messages", [])
+        entries: list[dict[str, Any]] = []
+        for msg in messages[-limit:]:
+            entries.append(
+                {
+                    "role": msg.get("role", "user"),
+                    "content": msg.get("content", ""),
+                    "timestamp": msg.get("timestamp"),
+                    "user_id": msg.get("user_id"),
+                }
+            )
+        return entries
+
     async def clear_conversation(self, chat_id: str) -> None:
         """
         Clear conversation history for a chat.

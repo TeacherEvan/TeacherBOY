@@ -265,11 +265,19 @@ class ProfilerAgent(BaseAgent):
 
                     builder = VisionPromptBuilder().set_analysis_type(depth)
 
-                    # Add frameworks based on depth (only ekman/fbi are registered currently)
+                    # Add frameworks based on depth
                     if depth == "quick":
                         builder.add_framework("ekman")
-                    else:  # standard or full
-                        builder.add_framework("ekman").add_framework("fbi")
+                    elif depth == "standard":
+                        builder.add_framework("ekman").add_framework("fbi").add_framework("navarro")
+                    else:  # full
+                        (
+                            builder.add_framework("ekman")
+                            .add_framework("fbi")
+                            .add_framework("navarro")
+                            .add_framework("color")
+                            .add_framework("facellava")
+                        )
 
                     optimized_prompt = builder.build()
                     estimated_tokens = builder.estimate_tokens()
@@ -300,7 +308,9 @@ class ProfilerAgent(BaseAgent):
                     messages=messages,
                     model=model,
                     temperature=0.3,  # Lower temperature for analytical tasks
-                    max_tokens=4000,
+                    # A full FBI/Ekman/Navarro report needs headroom: 4000 tokens
+                    # was silently cutting the report off mid-section.
+                    max_tokens=8000,
                 )
 
                 # CRITICAL: Clear image data from memory after vision API call
@@ -318,7 +328,7 @@ class ProfilerAgent(BaseAgent):
                     return False
 
                 # Format and send response
-                formatted_response = profiler_service.format_response_for_line(analysis)
+                formatted_parts = profiler_service.format_response_parts(analysis)
 
                 # Clear profiling session after successful analysis
                 profiler_session_manager.clear_session(chat_id)
@@ -326,40 +336,46 @@ class ProfilerAgent(BaseAgent):
                 # Track metrics
                 profiler_service.increment_analysis_count()
                 span.set_attribute("profiler.success", True)
-
-                # Clear session on error
-                profiler_session_manager.clear_session(chat_id)
-
                 span.set_attribute("analysis.length", len(analysis))
+                span.set_attribute("analysis.parts", len(formatted_parts))
 
-                # Send analysis result
-                text_msg = TextMessage(
-                    text=formatted_response,
-                    quickReply=None,
-                    quoteToken=None,
+                # Send the full report. A long FBI profile is split into
+                # LINE-safe parts; every part is delivered (no truncation).
+                from linebot.v3.messaging import PushMessageRequest
+
+                group_id = getattr(event.source, "group_id", None) if event.source else None
+                room_id = getattr(event.source, "room_id", None) if event.source else None
+                target = group_id or room_id or user_id
+
+                if not target:
+                    logger.error("❌ No push target available for profiler result")
+                    return False
+
+                for index, part in enumerate(formatted_parts):
+                    text_msg = TextMessage(
+                        text=part,
+                        quickReply=None,
+                        quoteToken=None,
+                    )
+
+                    await asyncio.to_thread(
+                        line_bot_api.push_message,
+                        PushMessageRequest(
+                            to=target,
+                            messages=[text_msg],
+                            notificationDisabled=False,
+                            customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
+                        ),
+                    )
+
+                    if index < len(formatted_parts) - 1:
+                        # Small gap so LINE does not drop burst pushes.
+                        await asyncio.sleep(0.35)
+
+                logger.info(
+                    f"✅ Psychological profile sent for chat {chat_id} "
+                    f"({len(formatted_parts)} part(s), {len(analysis)} chars)"
                 )
-
-                if event.reply_token:
-                    # Note: We already used reply token for "analyzing" message
-                    # Need to use push message for the result
-                    from linebot.v3.messaging import PushMessageRequest
-
-                    group_id = getattr(event.source, "group_id", None) if event.source else None
-                    room_id = getattr(event.source, "room_id", None) if event.source else None
-                    target = group_id or room_id or user_id
-
-                    if target:
-                        await asyncio.to_thread(
-                            line_bot_api.push_message,
-                            PushMessageRequest(
-                                to=target,
-                                messages=[text_msg],
-                                notificationDisabled=False,
-                                customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
-                            ),
-                        )
-
-                logger.info(f"✅ Psychological profile sent for chat {chat_id}")
                 return True
 
             except Exception as e:

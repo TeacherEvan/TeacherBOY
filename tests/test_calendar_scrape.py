@@ -156,6 +156,47 @@ class TestMessageBufferService:
         # Should get most recent 5
         assert messages[-1].text == "Message 9"
 
+    def test_duplicate_message_is_stored_once(self):
+        """The webhook handler and the calendar agent can both record an event.
+
+        A duplicate inflates the message count that the Zeus scrape and the
+        Hannibal profile rely on, so the identical message recorded moments
+        later is dropped.
+        """
+        self.service.store_message("chat1", "same message", "user1")
+        self.service.store_message("chat1", "same message", "user1")
+
+        messages = self.service.get_recent_messages("chat1", limit=10)
+        assert len(messages) == 1
+
+    def test_empty_message_is_not_stored(self):
+        """A blank entry would inflate the message count of every report."""
+        self.service.store_message("chat1", "", "user1")
+        self.service.store_message("chat1", "   ", "user1")
+
+        messages = self.service.get_recent_messages("chat1", limit=10)
+        assert messages == []
+
+    def test_identical_text_from_different_users_is_kept(self):
+        """Two people saying "ok" is real data, not a duplicate."""
+        self.service.store_message("chat1", "ok", "user1")
+        self.service.store_message("chat1", "ok", "user2")
+
+        messages = self.service.get_recent_messages("chat1", limit=10)
+        assert len(messages) == 2
+        assert {m.user_id for m in messages} == {"user1", "user2"}
+
+    def test_repeated_identical_messages_over_time_are_kept(self):
+        """A genuine repeat (not a double write) must survive."""
+        self.service.store_message("chat1", "ok", "user1")
+        # Backdate the stored message so it falls outside the dedup window.
+        buffer = self.service._buffers["chat1"]
+        buffer.messages[-1].timestamp = buffer.messages[-1].timestamp - timedelta(minutes=5)
+        self.service.store_message("chat1", "ok", "user1")
+
+        messages = self.service.get_recent_messages("chat1", limit=10)
+        assert len(messages) == 2
+
 
 # ============================================================================
 # DateExtractionService Tests
@@ -1540,6 +1581,22 @@ class TestCalendarAgentTriggers:
     def setup_method(self):
         """Create agent for tests."""
         self.agent = CalendarAgent()
+
+    def test_store_message_in_buffer_uses_correct_argument_order(self):
+        """Regression: the buffer was filled with the user id as message body.
+
+        store_message(chat_id, text, user_id) had been called as
+        store_message(chat_id, user_id, text), which corrupted the message
+        buffer for every consumer (Zeus scrape, Hannibal profile).
+        """
+        with patch("src.agents.calendar_agent.message_buffer_service") as mock_buffer:
+            self.agent._store_message_in_buffer("group_1", "user_1", "hello there")
+
+        mock_buffer.store_message.assert_called_once()
+        kwargs = mock_buffer.store_message.call_args.kwargs
+        assert kwargs["chat_id"] == "group_1"
+        assert kwargs["text"] == "hello there"
+        assert kwargs["user_id"] == "user_1"
 
     def test_parse_inline_add_simple(self):
         """Test parsing simple 'zeus add tomorrow meeting' format."""

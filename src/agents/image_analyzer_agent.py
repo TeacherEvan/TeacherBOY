@@ -59,6 +59,7 @@ from src.services.openrouter_service import openrouter_service
 from src.services.privilege_service import privilege_service
 from src.services.rate_limiter import RateLimiter
 from src.utils.llm_fallback import chat_completion_with_vision_fallback
+from src.utils.text_split import LINE_PART_CHARS, split_text
 from src.utils.tracing import get_tracer
 
 from .base_agent import BaseAgent
@@ -1048,7 +1049,7 @@ class ImageAnalyzerAgent(BaseAgent):
                 logger.info(f"📅 Detected {len(detected_dates)} dates in image scrape")
                 span.set_attribute("dates.detected", len(detected_dates))
 
-            response = self._format_response(response)
+            response_parts = self._format_response_parts(response)
 
             # Send via push (reply token already used for "analyzing" message)
             group_id = getattr(event.source, "group_id", None) if event.source else None
@@ -1056,16 +1057,19 @@ class ImageAnalyzerAgent(BaseAgent):
             target = group_id or room_id or user_id
 
             if target:
-                text_msg = TextMessage(text=response, quickReply=None, quoteToken=None)
-                await asyncio.to_thread(
-                    line_bot_api.push_message,
-                    PushMessageRequest(
-                        to=target,
-                        messages=[text_msg],
-                        notificationDisabled=False,
-                        customAggregationUnits=None,
-                    ),
-                )
+                for index, part in enumerate(response_parts):
+                    text_msg = TextMessage(text=part, quickReply=None, quoteToken=None)
+                    await asyncio.to_thread(
+                        line_bot_api.push_message,
+                        PushMessageRequest(
+                            to=target,
+                            messages=[text_msg],
+                            notificationDisabled=False,
+                            customAggregationUnits=None,
+                        ),
+                    )
+                    if index < len(response_parts) - 1:
+                        await asyncio.sleep(0.35)
 
             logger.info(f"✅ Text extraction sent for chat {chat_id}")
 
@@ -1167,7 +1171,7 @@ class ImageAnalyzerAgent(BaseAgent):
             span.set_attribute("dates.detected", len(detected_dates))
 
         # Format and send response (strips date section)
-        response = self._format_response(analysis)
+        response_parts = self._format_response_parts(analysis)
 
         # Send via push (reply token already used for "analyzing" message)
         group_id = getattr(event.source, "group_id", None) if event.source else None
@@ -1175,16 +1179,19 @@ class ImageAnalyzerAgent(BaseAgent):
         target = group_id or room_id or user_id
 
         if target:
-            text_msg = TextMessage(text=response, quickReply=None, quoteToken=None)
-            await asyncio.to_thread(
-                line_bot_api.push_message,
-                PushMessageRequest(
-                    to=target,
-                    messages=[text_msg],
-                    notificationDisabled=False,
-                    customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
-                ),
-            )
+            for index, part in enumerate(response_parts):
+                text_msg = TextMessage(text=part, quickReply=None, quoteToken=None)
+                await asyncio.to_thread(
+                    line_bot_api.push_message,
+                    PushMessageRequest(
+                        to=target,
+                        messages=[text_msg],
+                        notificationDisabled=False,
+                        customAggregationUnits=None,  # Explicitly None to avoid SDK serialization issues
+                    ),
+                )
+                if index < len(response_parts) - 1:
+                    await asyncio.sleep(0.35)
 
         logger.info(f"✅ Image analysis sent for chat {chat_id}")
 
@@ -1260,20 +1267,37 @@ class ImageAnalyzerAgent(BaseAgent):
                 return detail
         return (None, None, None)
 
-    def _format_response(self, analysis: str) -> str:
-        """Format the analysis response for LINE (strip date detection section)."""
+    def _format_response_parts(self, analysis: str) -> list[str]:
+        """
+        Format the analysis into one or more LINE-safe messages.
+
+        Long analyses are split instead of being cut off: the previous
+        implementation truncated at 4800 characters and dropped everything
+        after it.
+        """
         header = "⚡ MS. GREEN OBSERVES ⚡\n"
         header += "━" * 20 + "\n\n"
 
         # Strip date detection section from user-visible response
         clean_analysis = self._strip_dates_section(analysis)
 
-        # Truncate if too long (LINE limit is 5000 chars)
-        max_content = 4800 - len(header)
-        if len(clean_analysis) > max_content:
-            clean_analysis = clean_analysis[:max_content] + "\n\n[Response truncated]"
+        body_parts = split_text(clean_analysis, LINE_PART_CHARS - len(header) - 80)
+        if not body_parts:
+            return [header + "(no analysis produced)"]
 
-        return header + clean_analysis
+        total = len(body_parts)
+        parts: list[str] = []
+        for index, part in enumerate(body_parts):
+            prefix = header if index == 0 else ""
+            if total > 1:
+                prefix = f"{prefix}📄 Part {index + 1}/{total}\n\n"
+            parts.append(prefix + part)
+
+        return parts
+
+    def _format_response(self, analysis: str) -> str:
+        """Format the analysis response for LINE (strip date detection section)."""
+        return self._format_response_parts(analysis)[0]
 
     def _strip_dates_section(self, analysis: str) -> str:
         """Remove the dates detection section from analysis text."""

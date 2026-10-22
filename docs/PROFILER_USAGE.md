@@ -108,8 +108,9 @@ PROFILER_ENABLED=true
 # Primary: Gemini free tier
 PROFILER_MODEL=gemini-2.5-flash
 
-# Analysis depth
-PROFILER_ANALYSIS_TYPE=full  # Options: full, quick, body, facial
+# Analysis depth (optimized modular prompt system)
+PROFILER_ANALYSIS_DEPTH=standard  # Options: quick, standard, full
+PROFILER_USE_OPTIMIZED_PROMPTS=true
 
 # Rate limiting
 PROFILER_RATE_LIMIT_PER_HOUR=3
@@ -160,6 +161,37 @@ PROFILER_MAX_IMAGE_SIZE_MB=10.0
 - Clothing color significance
 - Environmental color analysis
 - Color combination patterns
+
+#### 5. FaceLLaVA Facial Attributes (full depth only)
+
+- Age range / gender presentation / facial structure
+- Grooming, accessories, complexion
+- Compound emotion detection
+
+### Analysis Depth
+
+`PROFILER_ANALYSIS_DEPTH` selects how many frameworks are loaded and how
+detailed the report must be:
+
+| Depth | Frameworks | Report |
+|-------|-----------|--------|
+| `quick` | Ekman | 4 short sections, under 300 words |
+| `standard` | Ekman + FBI BAU + Navarro | All 9 report sections |
+| `full` | Ekman + FBI BAU + Navarro + Color + FaceLLaVA | All 9 report sections, maximum evidence |
+
+Every depth asks for the same report sections, so no section is ever summarised
+away. If a cue is not visible in the image the report says so explicitly.
+
+### Report Delivery
+
+A long profile is split into numbered parts (`📄 Part 1/3`, ...) and every part
+is delivered — the report is never truncated by the 5000-character LINE limit.
+
+> **LINE message quota:** a multi-part report costs one LINE message per part
+> (plus the "Analyzing…" reply). On the free LINE tier this counts against
+> the monthly push-message quota, so a very long report consumes several
+> messages of that quota. The parts are pushed ~0.35 s apart to avoid burst
+> throttling.
 
 ### API Requirements
 

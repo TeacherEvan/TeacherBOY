@@ -48,6 +48,7 @@ class VisionPromptBuilder:
         self.custom_instructions = ""
         self._framework_content: list[str] = []
         self._estimated_tokens = 0
+        self._custom_instruction_tokens = 0
 
     def set_analysis_type(self, analysis_type: str) -> "VisionPromptBuilder":
         """
@@ -85,13 +86,18 @@ class VisionPromptBuilder:
             Self for method chaining
         """
         # Lazy import to avoid circular dependencies
+        from src.prompts.frameworks.color_psychology import ColorPsychologyFramework
         from src.prompts.frameworks.ekman_facs import EkmanFACSFramework
+        from src.prompts.frameworks.facellava import FaceLLaVAFramework
         from src.prompts.frameworks.fbi_bau import FBIBAUFramework
+        from src.prompts.frameworks.navarro import NavarroBodyLanguageFramework
 
         framework_map: dict[str, tuple] = {
             "ekman": (EkmanFACSFramework, "Ekman FACS"),
             "fbi": (FBIBAUFramework, "FBI BAU"),
-            # Add other frameworks as they're implemented
+            "navarro": (NavarroBodyLanguageFramework, "Navarro Body Language"),
+            "color": (ColorPsychologyFramework, "Color Psychology"),
+            "facellava": (FaceLLaVAFramework, "FaceLLaVA"),
         }
 
         if framework_name not in framework_map:
@@ -127,7 +133,7 @@ class VisionPromptBuilder:
             Self for method chaining
         """
         self.custom_instructions = instructions
-        self._estimated_tokens += len(instructions) // 4  # Rough token estimate
+        self._custom_instruction_tokens = len(instructions) // 4  # Rough token estimate
         return self
 
     def estimate_tokens(self) -> int:
@@ -138,7 +144,7 @@ class VisionPromptBuilder:
             Estimated tokens (includes base + frameworks + instructions)
         """
         base_tokens = 200  # Base structure and formatting
-        return self._estimated_tokens + base_tokens + (len(self.custom_instructions) // 4)
+        return self._estimated_tokens + base_tokens + self._custom_instruction_tokens
 
     def build(self) -> str:
         """
@@ -189,17 +195,43 @@ class VisionPromptBuilder:
 
     def _build_instructions(self) -> str:
         """Build analysis instructions."""
+        # Full section structure: the report must be complete, not a summary.
+        # Each section is emitted even when evidence is thin (state "not visible").
+        full_structure = """
+## OUTPUT STRUCTURE (follow exactly, in this order)
+
+1. **SUBJECT IDENTIFICATION** - number of subjects, primary focus, brief physical description.
+2. **FACIAL ATTRIBUTES** (FaceLLaVA) - age range, gender presentation, facial structure, hair/facial hair, accessories, skin/complexion.
+3. **FACIAL EXPRESSION ANALYSIS** (Ekman FACS) - observed action units, primary emotion, intensity, secondary/compound emotions, authenticity, microexpressions.
+4. **EYE ANALYSIS** - gaze direction, eye openness (AU5/AU7), pupil/tension indicators, blink rate.
+5. **BODY LANGUAGE ANALYSIS** (Navarro) - posture, confidence markers, stress indicators, comfort level, hand position, barrier behaviours.
+6. **CLOTHING & PRESENTATION** - style, formality, colour psychology, grooming condition.
+7. **ENVIRONMENTAL CONTEXT** - setting type, environment mood, social context.
+8. **BEHAVIORAL PROFILE SUMMARY** (FBI BAU) - personality indicators, emotional state, authenticity score, key facial tells, deception indicators, cluster-based reasoning.
+9. **CONFIDENCE & LIMITATIONS** - confidence level, image quality limits, what could not be assessed.
+
+Rules:
+- Never omit a section. If a cue is not visible, write "not visible in image".
+- Support every claim with the specific cue that justifies it.
+- Use calibrated language ("suggests", "consistent with"), never "proves".
+"""
+
+        quick_structure = """
+## OUTPUT STRUCTURE (follow exactly)
+
+1. **SUBJECT IDENTIFICATION** - primary subject in one line.
+2. **PRIMARY EMOTION** - dominant emotion + observed action units.
+3. **BODY LANGUAGE** - posture, confidence, key stress marker.
+4. **OVERALL IMPRESSION** - 2-3 sentences.
+
+Rules: keep the whole answer under 300 words. If a cue is not visible, say "not visible in image".
+"""
+
         base_instructions = """
 ## ANALYSIS INSTRUCTIONS
 
 Analyze the provided image focusing on observable, evidence-based indicators.
-
-### Output Structure:
-
-1. **Subject Identification**: Number of subjects, primary focus, basic description
-2. **Primary Analysis**: Apply the frameworks above to identify key patterns
-3. **Confidence & Limitations**: State confidence level and note any image quality issues
-"""
+""" + (quick_structure if self.analysis_type == "quick" else full_structure)
 
         # Add custom instructions if provided
         if self.custom_instructions:
@@ -208,9 +240,16 @@ Analyze the provided image focusing on observable, evidence-based indicators.
         # Adjust detail level based on analysis type
         if self.analysis_type == "quick":
             base_instructions += "\n\n**Brevity Requirement**: Keep response under 300 words. Focus on most significant observable indicators only."
+        elif self.analysis_type == "standard":
+            base_instructions += (
+                "\n\n**Detail Requirement**: Cover every section above with at least one concrete, "
+                "evidence-based observation. Do not summarise sections away."
+            )
         elif self.analysis_type == "full":
             base_instructions += (
-                "\n\n**Detail Requirement**: Provide comprehensive analysis with specific evidence for each observation."
+                "\n\n**Detail Requirement**: Provide a comprehensive analysis with specific evidence "
+                "for each observation, including secondary emotions, cluster reasoning, and the "
+                "confidentiality of the assessment. Do not summarise sections away."
             )
 
         return base_instructions
@@ -258,11 +297,20 @@ def build_standard_profiler_prompt() -> str:
 
 def build_full_profiler_prompt() -> str:
     """
-    Build a comprehensive profiler prompt (~2400 tokens).
+    Build a comprehensive profiler prompt (~3,000 tokens).
 
     Use for:
     - Detailed forensic analysis
     - Academic/research applications
     - When token budget allows
     """
-    return VisionPromptBuilder().set_analysis_type("full").add_framework("ekman").add_framework("fbi").build()
+    return (
+        VisionPromptBuilder()
+        .set_analysis_type("full")
+        .add_framework("ekman")
+        .add_framework("fbi")
+        .add_framework("navarro")
+        .add_framework("color")
+        .add_framework("facellava")
+        .build()
+    )
