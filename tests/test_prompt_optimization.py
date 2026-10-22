@@ -52,7 +52,7 @@ def test_standard_prompt_token_count():
 
 
 def test_full_prompt_token_count():
-    """Verify full analysis stays under 2500 tokens."""
+    """Verify full analysis stays within a sane token budget."""
     builder = (
         VisionPromptBuilder()
         .set_analysis_type("full")
@@ -67,12 +67,23 @@ def test_full_prompt_token_count():
 
     word_count = len(prompt.split())
 
-    assert estimated < 2500, f"Full prompt too large: {estimated} tokens (word count: {word_count})"
+    # The full prompt carries four frameworks (Ekman + FBI BAU + Navarro +
+    # Color psychology) plus the mandatory output structure.
+    assert estimated < 4000, f"Full prompt too large: {estimated} tokens (word count: {word_count})"
     assert estimated > 1000, f"Full prompt too small: {estimated} tokens"
 
-    # Verify available frameworks are included (currently only ekman and fbi)
+    # Verify all four frameworks are actually included in the prompt.
+    # NOTE: each assertion uses a phrase that is UNIQUE to its framework.
+    # "LIMBIC SYSTEM" also appears in the FBI framework, so it cannot be used
+    # to prove the Navarro framework is present.
     assert "Ekman" in prompt or "FACS" in prompt
     assert "FBI" in prompt or "BAU" in prompt
+    assert "FEET AND LEGS" in prompt.upper(), "Navarro framework is missing"
+    assert "Monochromatic" in prompt, "Color psychology framework is missing"
+
+    # The report structure must be explicit, otherwise the model returns a
+    # thin summary instead of a full profile.
+    assert "OUTPUT STRUCTURE" in prompt
 
 
 def test_framework_modularity():
@@ -103,6 +114,23 @@ def test_custom_instructions():
     prompt = builder.build()
 
     assert custom_text in prompt, "Custom instructions should be included in prompt"
+
+
+def test_custom_instructions_are_counted_once():
+    """The token estimate must not count the instructions twice.
+
+    A double count hides the true prompt size from the operator's budget.
+    """
+    custom_text = "x" * 400  # ~100 tokens
+
+    builder = VisionPromptBuilder().set_analysis_type("quick").add_framework("ekman")
+    baseline = builder.estimate_tokens()
+
+    builder.add_custom_instructions(custom_text)
+    with_instructions = builder.estimate_tokens()
+
+    added = with_instructions - baseline
+    assert 90 <= added <= 110, f"custom instructions should add ~100 tokens, added {added}"
 
 
 def test_framework_errors():

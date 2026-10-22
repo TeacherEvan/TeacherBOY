@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from src.utils.text_split import LINE_MAX_CHARS, LINE_PART_CHARS, split_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -425,6 +427,14 @@ class ProfilerService:
     comprehensive psychological assessment from photos.
     """
 
+    # LINE Messaging API hard limit for a single text message.
+    LINE_TEXT_MAX_CHARS = LINE_MAX_CHARS
+    # Working size for one part of a multi-part report (leaves room for
+    # the branded header/footer and the "Part x/y" indicator).
+    LINE_PART_MAX_CHARS = LINE_PART_CHARS
+    # Body budget once header/footer/indicator are reserved.
+    LINE_BODY_BUDGET = 4380
+
     def __init__(self):
         """Initialize the profiler service."""
         self._analysis_count = 0
@@ -496,32 +506,94 @@ Keep response under 300 words. Focus on most significant observable indicators.
             }
         ]
 
-    def format_response_for_line(self, analysis: str, truncate: bool = True) -> str:
+    # ------------------------------------------------------------------
+    # LINE-safe splitting helpers
+    # ------------------------------------------------------------------
+    @classmethod
+    def split_for_line(cls, text: str, max_length: int | None = None) -> list[str]:
         """
-        Format the analysis response for LINE message constraints.
+        Split text into LINE-safe chunks **without losing content**.
 
-        LINE has a 5000 character limit for text messages.
+        Splits on the coarsest boundary that fits (paragraph → line →
+        sentence → hard cut), so a long FBI report is delivered in full
+        across several messages instead of being truncated.
+
+        Args:
+            text: Text to split
+            max_length: Maximum characters per chunk (defaults to body budget)
+
+        Returns:
+            List of chunks; joining them reproduces the original text.
+        """
+        return split_text(text, max_length or cls.LINE_BODY_BUDGET)
+
+    def format_response_parts(self, analysis: str) -> list[str]:
+        """
+        Format the analysis into one or more LINE-safe messages.
+
+        The full report is preserved: long analyses are split into numbered
+        parts instead of being cut off. The branded header is applied to the
+        first part and the disclaimer to the last part.
 
         Args:
             analysis: Raw analysis text
-            truncate: Whether to truncate for LINE limits
+
+        Returns:
+            List of ready-to-send message bodies (each <= 5000 chars).
+        """
+        header = "⚡ MS. GREEN PSYCHOLOGICAL PROFILER ⚡\n" + "━" * 28 + "\n\n"
+        footer = "\n\n" + "━" * 28 + "\n⚠️ For entertainment only. Not professional advice."
+
+        body_parts = self.split_for_line(analysis or "")
+        if not body_parts:
+            body_parts = ["(no analysis was produced)"]
+
+        total = len(body_parts)
+        formatted: list[str] = []
+
+        for index, part in enumerate(body_parts):
+            prefix = header if index == 0 else ""
+            suffix = footer if index == total - 1 else ""
+
+            if total > 1:
+                prefix = f"{prefix}📄 Part {index + 1}/{total}\n\n"
+
+            message = f"{prefix}{part}{suffix}"
+
+            # Hard safety net: never exceed the LINE limit.
+            if len(message) > self.LINE_TEXT_MAX_CHARS:
+                message = message[: self.LINE_TEXT_MAX_CHARS]
+
+            formatted.append(message)
+
+        return formatted
+
+    def format_response_for_line(self, analysis: str, truncate: bool = True) -> str:
+        """
+        Format the analysis response for a **single** LINE message.
+
+        LINE has a 5000 character limit for text messages. When the report does
+        not fit, only the first part is returned here — use
+        :meth:`format_response_parts` to deliver the complete report across
+        multiple messages.
+
+        Args:
+            analysis: Raw analysis text
+            truncate: Kept for backwards compatibility. When False the complete
+                report is still returned as one string (may exceed 5000 chars).
 
         Returns:
             Formatted response string
         """
-        # Add current assistant branding
-        header = "⚡ MS. GREEN PSYCHOLOGICAL PROFILER ⚡\n"
-        header += "━" * 28 + "\n\n"
+        parts = self.format_response_parts(analysis)
 
-        footer = "\n\n" + "━" * 28
-        footer += "\n⚠️ For entertainment only. Not professional advice."
+        if len(parts) == 1:
+            return parts[0]
 
-        available_chars = 5000 - len(header) - len(footer) - 50  # Buffer
+        if truncate:
+            return parts[0]
 
-        if truncate and len(analysis) > available_chars:
-            analysis = analysis[:available_chars] + "\n\n[Analysis truncated]"
-
-        return header + analysis + footer
+        return "\n\n".join(parts)
 
     def extract_primary_emotion(self, analysis: str) -> str:
         """Extract the primary emotion from analysis text."""

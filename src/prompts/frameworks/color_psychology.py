@@ -149,6 +149,45 @@ Analyze clothing/environmental colors:
 - **Minimal/neutral**: Organized, professional, controlled
 """
 
+    @staticmethod
+    def get_for_analysis_type(analysis_type: str) -> str:
+        """
+        Get appropriate version based on analysis depth.
+
+        Args:
+            analysis_type: "quick", "standard", or "full"
+
+        Returns:
+            Framework text optimized for analysis type
+        """
+        mapping = {
+            "quick": ColorPsychologyFramework.get_short,
+            "standard": ColorPsychologyFramework.get_standard,
+            "full": ColorPsychologyFramework.get_full,
+        }
+
+        getter = mapping.get(analysis_type, ColorPsychologyFramework.get_standard)
+        return getter()
+
+    @staticmethod
+    def estimate_tokens(analysis_type: str) -> int:
+        """
+        Estimate token usage for analysis type.
+
+        Args:
+            analysis_type: "quick", "standard", or "full"
+
+        Returns:
+            Estimated token count
+        """
+        mapping = {
+            "quick": ColorPsychologyFramework.TOKENS_SHORT,
+            "standard": ColorPsychologyFramework.TOKENS_STANDARD,
+            "full": ColorPsychologyFramework.TOKENS_FULL,
+        }
+
+        return mapping.get(analysis_type, ColorPsychologyFramework.TOKENS_STANDARD)
+
 
 # Export for easy access
 COLOR_FRAMEWORK_SHORT = ColorPsychologyFramework.get_short()

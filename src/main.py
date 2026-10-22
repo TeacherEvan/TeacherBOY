@@ -578,14 +578,15 @@ async def lifespan(app: FastAPI):
         logger.info("📄 Document Memory Agent not registered (disabled)")
 
     # Register Hannibal Profile Agent (Priority: 6 - Psychological profiling from message history)
-    if settings.is_any_vision_provider_configured():
+    # Note: this feature analyses text, so it only needs a text-capable LLM.
+    if settings.is_any_llm_configured():
         from src.agents.hannibal_agent import HannibalProfileAgent
 
         hannibal_agent = HannibalProfileAgent(http_client=http_client_pool)
         agent_router.register_agent(hannibal_agent)
         logger.info("🎭 Hannibal Profile Agent registered (message history analysis)")
     else:
-        logger.info("🎭 Hannibal Profile Agent not registered (no vision provider configured)")
+        logger.info("🎭 Hannibal Profile Agent not registered (no LLM provider configured)")
 
     # Register Profiler Agent (Priority: 7 - Handles image messages for psychological profiling)
     if settings.is_profiler_configured():

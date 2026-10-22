@@ -37,6 +37,33 @@ Ms. Green: [Returns detailed psychological profile]
 - **Language markers** - Vocabulary, syntax, pronouns, emotional words
 - **Temporal patterns** - Response timing, consistency, activity cycles
 
+### Where the Data Comes From
+
+The report is built from every chat message the bot has available for that
+chat, combining two sources:
+
+| Source | Contents | Window |
+|--------|----------|--------|
+| Live message buffer | Every incoming text message | Last 24 hours, 200 per chat |
+| Conversation memory | Persisted history (survives restarts) | Full retained history |
+
+The two sources are de-duplicated, then deterministic statistics are computed
+locally (message counts, verbosity, question ratio, peak hours, response gaps)
+and handed to the model so the report quotes **measured** numbers instead of
+inventing them.
+
+### Report Delivery
+
+Long profiles are split into numbered parts (`[Part 1/3]`, ...) and every part
+is delivered — a report is never cut short. The first part is a reply to the
+trigger, the remaining parts are pushed.
+
+> **LINE message quota:** each part is one LINE message. On the free LINE tier
+> a long profile therefore consumes several messages of the monthly push
+> quota. Parts are pushed ~0.35 s apart to avoid burst throttling. If a push
+> fails, the remaining parts are still attempted and the user is told which
+> part is missing.
+
 ### Frameworks Used
 
 1. **FBI Behavioral Analysis Unit (BAU)** methodology
@@ -60,10 +87,14 @@ Ms. Green: [Returns detailed psychological profile]
 
 | Context | Access |
 |---------|--------|
-| Private Chat (DM) | ✅ Available when AI providers configured |
-| Group/Room | ❌ Not available (privacy) |
+| Private Chat (DM) | ✅ Full report (all participants present in the chat) |
+| Group/Room | ✅ Requester's own profile only |
 
-**Note**: Only works in private chats for privacy reasons.
+**Note**: In a group the report is limited to the requesting member's own
+messages. Other members' messages are never analysed or shared, so no
+participant's profile is broadcast to the room. Loose triggers such as
+"read chat" are ignored in groups; only an explicit "hannibal" request is
+answered there.
 
 ## Rate Limits
 
@@ -142,7 +173,7 @@ NOT for professional psychological assessment, hiring, legal, or medical use.
 
 ## Privacy
 
-- Analysis runs in private chat only
+- In a group, only the requesting member's own messages are analysed
 - Results not stored permanently
 ## Troubleshooting
 
@@ -152,7 +183,9 @@ NOT for professional psychological assessment, hiring, legal, or medical use.
 
 ### "Not responding in group chat"
 
-→ This feature is private-chat only for privacy
+→ In a group only an explicit `hannibal` request is answered, and the report
+covers the requester's own messages. Loose triggers like "read chat" are
+ignored so the bot does not hijack group conversation.
 
 ### "No conversation history to analyze"
 

@@ -406,8 +406,12 @@ class CalendarAgent(BaseAgent):
         if self._has_identity_prefix(text) or text_lower in CANCEL_KEYWORDS:
             return
 
-        # Store for scrape flow
-        message_buffer_service.store_message(chat_id, user_id, text)
+        # Store for scrape flow.
+        # NOTE: store_message(chat_id, text, user_id) — the order matters.
+        # A previous version passed (chat_id, user_id, text), which stored the
+        # user id as the message body and corrupted every downstream consumer
+        # (Zeus scrape, Hannibal profile).
+        message_buffer_service.store_message(chat_id=chat_id, text=text, user_id=user_id)
 
     # =========================================================================
     # Backward Compatibility Methods (for tests)

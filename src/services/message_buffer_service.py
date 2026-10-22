@@ -155,9 +155,25 @@ class MessageBufferService:
         if not chat_id or not text:
             return
 
+        # Whitespace-only messages carry no content but still consume a buffer
+        # slot and inflate the counts that the scrape and profile features
+        # report on.
+        if not text.strip():
+            return
+
         with self._lock:
             if chat_id not in self._buffers:
                 self._buffers[chat_id] = ChatBuffer(messages=deque(maxlen=self._max_messages))
+
+            # Guard against double storage: the webhook handler and individual
+            # agents can both record the same event. A duplicate inflates the
+            # message count that analysis features (Hannibal profile, Zeus
+            # scrape) rely on, so identical (text, user) pairs recorded within
+            # a few seconds of each other are dropped.
+            buffer = self._buffers[chat_id]
+            if self._is_recent_duplicate(buffer, text, user_id):
+                logger.debug(f"📝 Skipped duplicate message in {chat_id} from {user_id}")
+                return
 
             message = BufferedMessage(
                 text=text,
@@ -165,9 +181,31 @@ class MessageBufferService:
                 message_id=message_id,
             )
 
-            self._buffers[chat_id].add_message(message)
+            buffer.add_message(message)
 
         logger.debug(f"📝 Buffered message in {chat_id}: '{text[:30]}...' from {user_id}")
+
+    @staticmethod
+    def _is_recent_duplicate(buffer: ChatBuffer, text: str, user_id: str, window_seconds: float = 5.0) -> bool:
+        """
+        Check whether the same (text, user) was recorded moments ago.
+
+        Args:
+            buffer: Chat buffer to inspect
+            text: Message text
+            user_id: Sender id
+            window_seconds: How far back to look
+
+        Returns:
+            True when a near-identical message was already stored.
+        """
+        now = datetime.now(UTC)
+        for message in reversed(buffer.messages):
+            if message.user_id != user_id or message.text != text:
+                continue
+            age = (now - message.timestamp).total_seconds()
+            return age <= window_seconds
+        return False
 
     def get_recent_messages(
         self,

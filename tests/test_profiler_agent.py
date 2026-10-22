@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.agents.profiler_agent import ProfilerAgent as ProfilerAgentUnderTest
+
 
 @pytest.fixture
 def mock_settings():
@@ -496,6 +498,195 @@ class TestProfilerService:
 
         # Should include disclaimer footer
         assert "educational" in formatted.lower() or "entertainment" in formatted.lower()
+
+
+class TestProfilerReportNotTruncated:
+    """Regression tests: a long FBI profile must be delivered in full.
+
+    The old implementation cut the analysis at ~4870 characters and appended
+    "[Analysis truncated]", so the user never saw the end of the report.
+    """
+
+    def test_format_response_parts_preserves_all_content(self):
+        from src.services.profiler_service import profiler_service
+
+        analysis = "\n\n".join(f"## SECTION {i}\n" + "observation " * 40 for i in range(12))
+
+        parts = profiler_service.format_response_parts(analysis)
+
+        assert len(parts) > 1, "a long report must be split into several messages"
+        assert all(len(p) <= 5000 for p in parts), "every part must respect the LINE limit"
+        # Nothing is lost.
+        assert "SECTION 11" in "".join(parts)
+        assert "observation" in "".join(parts)
+        assert "[Analysis truncated]" not in "".join(parts)
+
+    def test_format_response_parts_of_short_analysis(self):
+        from src.services.profiler_service import profiler_service
+
+        parts = profiler_service.format_response_parts("Short analysis.")
+
+        assert len(parts) == 1
+        assert "Short analysis." in parts[0]
+        assert "Part 1/" not in parts[0]
+
+    def test_format_response_parts_has_header_and_footer(self):
+        from src.services.profiler_service import profiler_service
+
+        analysis = "x" * 12000
+        parts = profiler_service.format_response_parts(analysis)
+
+        assert "PSYCHOLOGICAL PROFILER" in parts[0]
+        assert "Part 1/" in parts[0]
+        assert "entertainment" in parts[-1].lower()
+
+    def test_split_for_line_keeps_content(self):
+        from src.services.profiler_service import profiler_service
+
+        text = "Sentence one. Sentence two! Sentence three? " * 300
+        parts = profiler_service.split_for_line(text, 500)
+
+        assert len(parts) > 1
+        assert all(len(p) <= 500 for p in parts)
+        assert "".join(parts).replace(" ", "") == text.replace(" ", "")
+
+    def test_empty_analysis_is_handled(self):
+        from src.services.profiler_service import profiler_service
+
+        parts = profiler_service.format_response_parts("")
+
+        assert len(parts) == 1
+        assert "no analysis" in parts[0].lower()
+
+
+class TestProfilerSendsAllParts:
+    """The agent must push every part of the report, not just the first."""
+
+    @pytest.mark.asyncio
+    async def test_all_parts_are_pushed(self, mock_event, mock_line_api, mock_settings):
+        mock_settings.use_optimized_prompts = True
+        mock_settings.profiler_analysis_depth = "full"
+
+        long_analysis = "\n\n".join(f"## SECTION {i}\n" + "finding " * 60 for i in range(10))
+
+        with (
+            patch("src.agents.profiler_agent.settings", mock_settings),
+            patch("src.agents.profiler_agent.privilege_service") as mock_priv,
+            patch("src.agents.profiler_agent.profiler_session_manager"),
+            patch("src.agents.profiler_agent.profiler_service") as mock_profiler,
+            patch(
+                "src.agents.profiler_agent.chat_completion_with_vision_fallback",
+                new=AsyncMock(return_value=long_analysis),
+            ),
+            patch.object(ProfilerAgentUnderTest, "_download_image", new=AsyncMock(return_value=b"img")),
+            patch("src.agents.profiler_agent.asyncio.sleep", new=AsyncMock()),
+        ):
+            mock_priv.is_admin.return_value = True
+            mock_profiler.get_image_data_url.return_value = "data:image/jpeg;base64,AAA"
+            mock_profiler.format_response_parts.return_value = [f"PART {i}" for i in range(4)]
+            mock_profiler.increment_analysis_count.return_value = 1
+
+            agent = ProfilerAgentUnderTest()
+            result = await agent.handle(mock_event, "", mock_line_api)
+
+        assert result is True
+        assert mock_line_api.push_message.call_count == 4
+        pushed = [call.args[0].messages[0].text for call in mock_line_api.push_message.call_args_list]
+        assert pushed == ["PART 0", "PART 1", "PART 2", "PART 3"]
+
+    @pytest.mark.asyncio
+    async def test_result_is_pushed_even_without_reply_token(self, mock_event, mock_line_api, mock_settings):
+        """The report must still be delivered when there is no reply token."""
+        mock_settings.use_optimized_prompts = True
+        mock_settings.profiler_analysis_depth = "standard"
+        mock_event.reply_token = None
+
+        with (
+            patch("src.agents.profiler_agent.settings", mock_settings),
+            patch("src.agents.profiler_agent.privilege_service") as mock_priv,
+            patch("src.agents.profiler_agent.profiler_session_manager"),
+            patch("src.agents.profiler_agent.profiler_service") as mock_profiler,
+            patch(
+                "src.agents.profiler_agent.chat_completion_with_vision_fallback",
+                new=AsyncMock(return_value="analysis"),
+            ),
+            patch.object(ProfilerAgentUnderTest, "_download_image", new=AsyncMock(return_value=b"img")),
+            patch("src.agents.profiler_agent.asyncio.sleep", new=AsyncMock()),
+        ):
+            mock_priv.is_admin.return_value = True
+            mock_profiler.get_image_data_url.return_value = "data:image/jpeg;base64,AAA"
+            mock_profiler.format_response_parts.return_value = ["only part"]
+            mock_profiler.increment_analysis_count.return_value = 1
+
+            agent = ProfilerAgentUnderTest()
+            result = await agent.handle(mock_event, "", mock_line_api)
+
+        assert result is True
+        assert mock_line_api.push_message.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_vision_call_uses_higher_token_budget(self, mock_event, mock_line_api, mock_settings):
+        """4000 tokens cut the report off mid-section."""
+        mock_settings.use_optimized_prompts = True
+        mock_settings.profiler_analysis_depth = "standard"
+
+        with (
+            patch("src.agents.profiler_agent.settings", mock_settings),
+            patch("src.agents.profiler_agent.privilege_service") as mock_priv,
+            patch("src.agents.profiler_agent.profiler_session_manager"),
+            patch("src.agents.profiler_agent.profiler_service") as mock_profiler,
+            patch(
+                "src.agents.profiler_agent.chat_completion_with_vision_fallback",
+                new=AsyncMock(return_value="analysis"),
+            ) as mock_vision,
+            patch.object(ProfilerAgentUnderTest, "_download_image", new=AsyncMock(return_value=b"img")),
+            patch("src.agents.profiler_agent.asyncio.sleep", new=AsyncMock()),
+        ):
+            mock_priv.is_admin.return_value = True
+            mock_profiler.get_image_data_url.return_value = "data:image/jpeg;base64,AAA"
+            mock_profiler.format_response_parts.return_value = ["part"]
+            mock_profiler.increment_analysis_count.return_value = 1
+
+            agent = ProfilerAgentUnderTest()
+            await agent.handle(mock_event, "", mock_line_api)
+
+        assert mock_vision.call_args.kwargs["max_tokens"] >= 8000
+
+    @pytest.mark.asyncio
+    async def test_empty_vision_response_sends_an_error(self, mock_event, mock_line_api, mock_settings):
+        """A provider that returns nothing must not produce an empty report.
+
+        Regression guard: the guard was `if not analysis:` and nothing tested
+        it, so removing the guard kept the whole suite green.
+        """
+        mock_settings.use_optimized_prompts = True
+        mock_settings.profiler_analysis_depth = "standard"
+
+        with (
+            patch("src.agents.profiler_agent.settings", mock_settings),
+            patch("src.agents.profiler_agent.privilege_service") as mock_priv,
+            patch("src.agents.profiler_agent.profiler_session_manager"),
+            patch("src.agents.profiler_agent.profiler_service") as mock_profiler,
+            patch(
+                "src.agents.profiler_agent.chat_completion_with_vision_fallback",
+                new=AsyncMock(return_value=""),
+            ),
+            patch.object(ProfilerAgentUnderTest, "_download_image", new=AsyncMock(return_value=b"img")),
+            patch("src.agents.profiler_agent.asyncio.sleep", new=AsyncMock()),
+        ):
+            mock_priv.is_admin.return_value = True
+            mock_profiler.get_image_data_url.return_value = "data:image/jpeg;base64,AAA"
+            mock_profiler.increment_analysis_count.return_value = 1
+
+            agent = ProfilerAgentUnderTest()
+            result = await agent.handle(mock_event, "", mock_line_api)
+
+        assert result is False
+        # No report was built or sent; the user was told why.
+        mock_profiler.format_response_parts.assert_not_called()
+        assert mock_line_api.push_message.call_count == 1
+        text = mock_line_api.push_message.call_args.args[0].messages[0].text
+        assert "Analysis Error" in text
 
 
 class TestProfilerConfig:

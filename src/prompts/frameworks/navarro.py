@@ -186,6 +186,45 @@ Face is most consciously controlled but still reveals:
 **Baseline first**: Establish normal behavior before identifying deviations.
 """
 
+    @staticmethod
+    def get_for_analysis_type(analysis_type: str) -> str:
+        """
+        Get appropriate version based on analysis depth.
+
+        Args:
+            analysis_type: "quick", "standard", or "full"
+
+        Returns:
+            Framework text optimized for analysis type
+        """
+        mapping = {
+            "quick": NavarroBodyLanguageFramework.get_short,
+            "standard": NavarroBodyLanguageFramework.get_standard,
+            "full": NavarroBodyLanguageFramework.get_full,
+        }
+
+        getter = mapping.get(analysis_type, NavarroBodyLanguageFramework.get_standard)
+        return getter()
+
+    @staticmethod
+    def estimate_tokens(analysis_type: str) -> int:
+        """
+        Estimate token usage for analysis type.
+
+        Args:
+            analysis_type: "quick", "standard", or "full"
+
+        Returns:
+            Estimated token count
+        """
+        mapping = {
+            "quick": NavarroBodyLanguageFramework.TOKENS_SHORT,
+            "standard": NavarroBodyLanguageFramework.TOKENS_STANDARD,
+            "full": NavarroBodyLanguageFramework.TOKENS_FULL,
+        }
+
+        return mapping.get(analysis_type, NavarroBodyLanguageFramework.TOKENS_STANDARD)
+
 
 # Export for easy access
 NAVARRO_FRAMEWORK_SHORT = NavarroBodyLanguageFramework.get_short()
